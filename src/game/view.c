@@ -221,6 +221,8 @@ void game_shutdown(void) {}
 // ------------------------------------------------------------------ effects
 static void add_skid(int ki, Vec3 l, Vec3 r) {
     if (g_last_skid[ki]) {
+        float jx = l.x - g_last_l[ki].x, jz = l.z - g_last_l[ki].z;
+        if (jx * jx + jz * jz > 1.2f * 1.2f) { g_last_l[ki] = l; g_last_r[ki] = r; return; }   /* the kart was shoved: start a fresh mark */
         Skid *s = &g_skid[g_skid_n % MAX_SKID]; g_skid_n++;
         s->l0 = g_last_l[ki]; s->r0 = g_last_r[ki]; s->l1 = l; s->r1 = r; s->a = 0.55f; s->used = 1;
     }
@@ -409,7 +411,9 @@ void game_frame(const Pad *pad, float dt) {
             batch_rect(&g_b, 290, 90, 700, 540, 0.05f, 0.08f, 0.2f, 0.85f);
             batch_rect(&g_b, 296, 96, 688, 528, 0.12f, 0.2f, 0.45f, 0.9f);
             batch_text(&g_b, "RESULTS", 640 - text_width("RESULTS", 44) / 2, 110, 44, 1, 0.85f, 0.3f, 1);
-            for (int p = 0; p < r->nk; p++) { int i = r->order[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];
+            int rows[NKARTS]; for (int p = 0; p < r->nk; p++) rows[p] = r->order[p];
+            for (int a2 = 1; a2 < r->nk; a2++) { int v = rows[a2], j = a2 - 1; while (j >= 0 && r->k[rows[j]].place > r->k[v].place) { rows[j + 1] = rows[j]; j--; } rows[j + 1] = v; }
+            for (int p = 0; p < r->nk; p++) { int i = rows[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];
                 float y = 170 + p * 50; int me = i == r->player;
                 if (me) batch_rect(&g_b, 310, y - 6, 660, 44, 1, 0.85f, 0.3f, 0.25f);
                 batch_text(&g_b, place_name(q->place ? q->place : p + 1), 330, y, 30, 1, 1, 1, 1);
