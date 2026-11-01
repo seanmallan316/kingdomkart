@@ -25,6 +25,7 @@ const KartStyle KART_STYLES[NSTYLES] = {
     {"CHARIOT",  {1.05f, 0.97f, 0.94f, 1.00f}},     /* faster, wider turns */
     {"BOAT",     {0.98f, 1.00f, 1.08f, 0.95f}},     /* nimble */
     {"ARK",      {0.97f, 1.06f, 0.96f, 1.25f}},     /* heavy and quick off the line */
+    {"SLING",    {1.00f, 1.04f, 1.06f, 0.95f}},     /* David's: light, nimble, a little quicker */
 };
 static int g_player_style = 0; static unsigned g_styles = 1;
 void race_set_styles(int player_style, unsigned unlocked_styles) { g_player_style = player_style; g_styles = unlocked_styles | 1; }

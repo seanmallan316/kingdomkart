@@ -14,13 +14,16 @@ enum {
     UNLOCK_KART_CHARIOT = 1 << 6,  /* win 10 races */
     UNLOCK_KART_BOAT = 1 << 7,     /* beat the target time in Time Trial on every road */
     UNLOCK_KART_ARK = 1 << 8,      /* finish 25 races */
-    UNLOCK_COUNT = 9
+    UNLOCK_GOLIATH = 1 << 9,       /* win a race as David: opens the battle */
+    UNLOCK_KART_SLING = 1 << 10,   /* beat Goliath */
+    UNLOCK_COUNT = 11
 };
 
 typedef struct {
     int best_ms[SAVE_MAX_ROADS];   /* best time trial per road in milliseconds, 0 = none */
     int races, wins;               /* races finished, races won (Grand Prix and Single Race) */
     int gp_wins[3];                /* Grand Prix championships per difficulty */
+    int battles, battle_wins;      /* David vs Goliath fights and wins */
     unsigned win_chars;            /* bit per character that has won a race */
     unsigned unlocks;              /* UNLOCK_* bits */
     int dirty;

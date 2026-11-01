@@ -246,6 +246,22 @@ static const RoadPad HEAVEN_PADS[] = {
 };
 static const CoinRow HEAVEN_COINS[] = { {158, 5, 3, 2.5f}, {210, 6, 3, -2.5f}, {250, 5, 3, 2.5f}, {300, 6, 3, -2.5f}, {350, 6, 3, 2.5f} };
 static const Tunnel HEAVEN_TUNNELS[] = { {302, 318, 6.0f} };
+// ------------------------------------------------------------------ Valley of Elah: the battle arena (a wide, flat ring between the two camps)
+static const TrackPoint ELAH_PTS[] = {      /* a ring 80 m wide: the whole valley floor is drivable, with a great rock in the middle */
+    {    0.0, 0.0f,    0.0, 80, 0.00f },
+    {   35.4, 0.0f,   14.6, 80, 0.00f },
+    {   50.0, 0.0f,   50.0, 80, 0.00f },
+    {   35.4, 0.0f,   85.4, 80, 0.00f },
+    {    0.0, 0.0f,  100.0, 80, 0.00f },
+    {  -35.4, 0.0f,   85.4, 80, 0.00f },
+    {  -50.0, 0.0f,   50.0, 80, 0.00f },
+    {  -35.4, 0.0f,   14.6, 80, 0.00f },
+};
+static const Scenery ELAH_SCENERY[] = {
+    {"#tent", 10, 46, 6, 0}, {"#tent", 22, 46, 6, 0}, {"#rock", 36, 45, 4, 0}, {"#olive", 50, 46, 7, 0}, {"#tent", 64, 46, 6, 0}, {"#rock", 78, 46, 4, 0},
+    {"#olive", 92, 46, 7, 0}, {"#tent", 106, 46, 6, 0}, {"#rock", 120, 45, 4, 0}, {"#olive", 134, 46, 7, 0}, {"#tent", 148, 46, 6, 0}, {"#rock", 152, 46, 4, 0},
+    {"#rock", 0, -46, 14, 0}, {"#rock", 40, -46, 14, 0}, {"#rock", 80, -46, 14, 0}, {"#rock", 120, -46, 14, 0},   /* the great rock in the middle */
+};
 
 const TrackDef TRACK_DEFS[] = {
     { "Bethlehem Road", 3, BETH_PTS, (int)(sizeof BETH_PTS / sizeof BETH_PTS[0]),
@@ -310,6 +326,18 @@ const TrackDef TRACK_DEFS[] = {
       140,                                      /* the grid stands on the earth */
       "heaven_gates", 34, 70.0f, 40.0f,         /* the gates with God's open hands, standing across the plaza */
       1, HEAVEN_COINS, (int)(sizeof HEAVEN_COINS / sizeof HEAVEN_COINS[0]), HEAVEN_TUNNELS, 1 },
+    { "Valley of Elah", 99, ELAH_PTS, (int)(sizeof ELAH_PTS / sizeof ELAH_PTS[0]),
+      0.75f, 0.70f, 0.55f,                      /* dusty afternoon */
+      0.85f, 0.78f, 0.6f, 120.0f, 500.0f,
+      0.4f, 0.9f, 0.3f, 0.5f,
+      1.0f, 0.95f, 0.85f,
+      1.0f, 0.8f, 0.5f,
+      0, "elah_road", "elah_dirt", "elah_grass", "elah_wall", "elah_sky",
+      ELAH_SCENERY, (int)(sizeof ELAH_SCENERY / sizeof ELAH_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "elah", NULL, 0, NULL, 0, 0,
+      0, NULL, 0, 0, 0, 2 },                    /* bonus = 2: the battle arena, never a race road */
     { "Test Loop", 3, TEST_PTS, (int)(sizeof TEST_PTS / sizeof TEST_PTS[0]),
       0.55f, 0.75f, 0.98f,
       0.72f, 0.82f, 0.95f, 120.0f, 520.0f,

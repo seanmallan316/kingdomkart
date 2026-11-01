@@ -6,7 +6,7 @@
 
 #define NKARTS 8
 #define NCHARS 13                   /* 8 to begin with, 5 unlockable */
-#define NSTYLES 4                   /* kart bodies: standard + 3 unlockable */
+#define NSTYLES 5                   /* kart bodies: standard + 4 unlockable */
 #define MAX_BOX 24
 #define MAX_PROJ 24
 #define RACE_TIME_LIMIT 120.0f      /* every race ends within two minutes */
