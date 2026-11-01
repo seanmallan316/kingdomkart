@@ -17,7 +17,7 @@
 #define MAX_SPRITE_KINDS 16
 #define SPRITE_DRAW_DIST 340.0f
 #define NUM_GP_ROUNDS_MAX 4
-#define NUM_PLAY_TRACKS (NUM_TRACK_DEFS - 1)     /* the last road is the developers' Test Loop, not offered to players */
+#define NUM_PLAY_TRACKS (NUM_TRACK_DEFS - 2)     /* the last two are the battle arena and the developers' Test Loop, not race roads */
 #define NUM_GP_TRACKS 4                          /* the Grand Prix runs the four story roads; bonus roads are for Single Race and Time Trial */
 #ifndef KK_TOUR_ROAD
 #define KK_TOUR_ROAD 1
