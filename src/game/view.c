@@ -227,6 +227,7 @@ static float sky_noise(float x, float y) {              /* repeats every 256 pix
     float b = smooth_noise((x + 256) / 40.0f, y / 20.0f) * 0.6f + smooth_noise((x + 256) / 15.0f, y / 8.0f) * 0.4f;
     float w = x / 256.0f; return a * (1 - w) + b * w;
 }
+static float g_sky_wrap = 3.0f;   /* how many times the sky picture goes around: a wide painted sky goes around once */
 static float g_skytop[3] = {0.31f, 0.59f, 0.9f}, g_skyhor[3] = {0.78f, 0.9f, 0.98f};   /* set from the road's colors before the sky is drawn */
 static void px_sky(int x, int y, uint32_t *o) {        /* vertical gradient (road colors) with a few soft clouds */
     float t = y / 255.0f; float n = sky_noise((float)x, (float)y);
@@ -368,7 +369,7 @@ static void build_track_meshes(void) {
     for (int k = 0; k < 24; k++) {
         float a0 = k * 6.2831853f / 24, a1 = (k + 1) * 6.2831853f / 24, R = 900.0f;
         Vec3 p0 = v3(cosf(a0) * R, -60, sinf(a0) * R), p1 = v3(cosf(a1) * R, -60, sinf(a1) * R), p2 = v3(cosf(a1) * R, 420, sinf(a1) * R), p3 = v3(cosf(a0) * R, 420, sinf(a0) * R);
-        batch_quad4(&g_b, p1, p0, p3, p2, v3(0, 1, 0), k / 24.0f * 3, 1, (k + 1) / 24.0f * 3, 0, 1, 1, 1, 1);
+        batch_quad4(&g_b, p1, p0, p3, p2, v3(0, 1, 0), k / 24.0f * g_sky_wrap, 1, (k + 1) / 24.0f * g_sky_wrap, 0, 1, 1, 1, 1);
     }
     m_sky = gfx_mesh_static(g_b.v, g_b.n);
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
@@ -621,10 +622,12 @@ static void load_theme(void) {
     tx_grass = theme_tex(d->tex_grass, 128, 128, d->water ? px_water : px_grass);
     tx_wall = theme_tex(d->tex_wall, 64, 64, heaven ? px_cloud : px_wall);
     g_skytop[0] = d->sky_r * 0.8f; g_skytop[1] = d->sky_g * 0.85f; g_skytop[2] = d->sky_b; g_skyhor[0] = d->fog_r; g_skyhor[1] = d->fog_g; g_skyhor[2] = d->fog_b;
-    tx_sky = theme_tex(d->tex_sky, 256, 256, d->night ? px_sky_night : px_sky);
+    { int sw = 0, sh = 0; Texture *painted = asset_texture(d->tex_sky, 1, &sw, &sh);
+      if (painted) { tx_sky = painted; g_sky_wrap = sw >= sh * 3 ? 1.0f : 3.0f; }
+      else { tx_sky = make_tex(256, 256, 1, 0, d->night ? px_sky_night : px_sky); g_sky_wrap = 3.0f; } }
     gfx_texture_free(tx_finale); tx_finale = d->finale_img ? asset_texture(d->finale_img, 0, NULL, NULL) : NULL;
     tx_star = NULL;
-    if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star) tx_star = make_tex(64, 64, 0, 0, px_star); }
+    if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star && g_sky_wrap > 1.5f) tx_star = make_tex(64, 64, 0, 0, px_star); }
     g_nkind = 0; g_nplaced = 0;
     for (int i = 0; i < g_track.nmover; i++) g_mover_kind[i] = sprite_kind(g_track.mover[i].img);
     for (int i = 0; i < d->nscenery && g_nplaced < MAX_SCENERY; i++) {

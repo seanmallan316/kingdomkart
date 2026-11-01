@@ -14,7 +14,11 @@ RULES = [
     ("portrait_", (256, 256), "cutout"),
     ("icon_",     (128, 128), "cutout"),
     ("beth_star", (256, 256), "black"),
-    ("beth_sky",  (1024, 256), "plain"),
+    ("beth_sky",  (2048, 512), "plain"),
+    ("gal_sky",   (2048, 512), "plain"),
+    ("jeru_sky",  (2048, 512), "plain"),
+    ("tomb_sky",  (2048, 512), "plain"),
+    ("elah_sky",  (2048, 512), "plain"),
     ("beth_road", (512, 512), "plain"),
     ("beth_dirt", (512, 512), "plain"),
     ("beth_grass",(512, 512), "plain"),
@@ -22,7 +26,7 @@ RULES = [
     ("title_art", (1024, 576), "plain"),
     ("card_",     (512, 512), "plain"),      # road-select card pictures
     ("heaven_gates", (1024, 576), "plain"),
-    ("heaven_sky", (1024, 256), "plain"),
+    ("heaven_sky", (2048, 512), "plain"),
     ("",          (512, 512), "cutout"),     # everything else is scenery
 ]
 
