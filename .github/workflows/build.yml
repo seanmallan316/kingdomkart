@@ -109,6 +109,18 @@ jobs:
           EOF
       - name: Run the game in the emulator for 60 seconds and take screenshots
         run: |
+          # answer the emulator's first-run wizard ahead of time by writing its settings file
+          mkdir -p "$HOME/.config/Cemu"
+          cat > "$HOME/.config/Cemu/settings.xml" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <content>
+            <GamePaths><Entry>$PWD/title</Entry></GamePaths>
+            <check_update>false</check_update>
+            <fullscreen>true</fullscreen>
+            <Graphic><api>1</api><VSync>0</VSync></Graphic>
+            <Audio><api>0</api></Audio>
+          </content>
+          EOF
           export DISPLAY=:99
           Xvfb :99 -screen 0 1280x720x24 &
           sleep 2
