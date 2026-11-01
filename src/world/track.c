@@ -7,7 +7,7 @@ static float catmull(float p0, float p1, float p2, float p3, float t) {
 }
 
 void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, int npts, int per) {
-    t->name = name; t->laps = laps; t->n = 0;
+    t->name = name; t->laps = laps; t->n = 0; t->shortcut_from = t->shortcut_to = -1; t->shortcut_side = 0;
     int total = npts * per; if (total > TRACK_MAX_SAMPLES) { per = TRACK_MAX_SAMPLES / npts; total = npts * per; }
     for (int i = 0; i < npts; i++) {
         const TrackPoint *p0 = &pts[(i + npts - 1) % npts], *p1 = &pts[i], *p2 = &pts[(i + 1) % npts], *p3 = &pts[(i + 2) % npts];
@@ -79,32 +79,7 @@ void track_locate(const Track *t, float x, float z, int hint, TrackHit *out) {
     float a = fabsf(out->lateral);
     out->on_road = a <= width * 0.5f;
     out->on_shoulder = !out->on_road && a <= width * 0.5f + SHOULDER_W;
+    /* a shortcut: the shoulder on one side of a corner is packed dirt, as fast as the road */
+    if (out->on_shoulder && t->shortcut_from >= 0 && best >= t->shortcut_from && best <= t->shortcut_to && (out->lateral < 0 ? -1 : 1) == t->shortcut_side) out->on_road = 1;
 }
 
-// ------------------------------------------------------------------ the Milestone 2 test track
-// About 700 m: a long straight, two hills, a banked sweeper, a jump and a tight corner.
-void track_make_test(Track *t) {
-    static const TrackPoint P[] = {
-        {   0, 0.0f,    0, 14, 0.00f},   /* start/finish, heading +z */
-        {   0, 0.0f,   60, 14, 0.00f},
-        {   8, 1.5f,  120, 14, 0.00f},   /* first hill starts */
-        {  30, 4.0f,  160, 13, 0.00f},   /* top of hill 1 */
-        {  60, 2.0f,  185, 13, 0.00f},
-        { 100, 0.0f,  195, 14, 0.00f},
-        { 140, 0.0f,  180, 14, 0.25f},   /* banked sweeper */
-        { 165, 0.0f,  140, 14, 0.35f},
-        { 160, 0.0f,  100, 14, 0.20f},
-        { 135, 0.0f,   75, 13, 0.00f},
-        { 121, 0.0f,   48, 12, 0.00f},   /* ramp starts here */
-        { 118, 4.0f,   22, 12, 0.00f, 1},/* lip: the road drops away after this point */
-        { 115, 0.0f,   -8, 14, 0.00f},   /* landing */
-        { 112, 0.0f,  -40, 13, 0.00f},
-        {  95, 0.0f,  -62, 12, 0.00f},   /* tight corner */
-        {  70, 0.0f,  -72, 12, 0.00f},
-        {  40, 2.5f,  -70, 13, 0.00f},   /* hill 2 */
-        {  15, 0.5f,  -58, 14, 0.00f},
-        {   2, 0.0f,  -35, 14, 0.00f},
-    };
-
-    track_build(t, "Test Loop", 3, P, (int)(sizeof P / sizeof P[0]), 20);
-}

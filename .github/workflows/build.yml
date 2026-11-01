@@ -11,10 +11,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Drive the track with no graphics and check laps, jumps and drifting
         run: |
-          gcc -O2 -Wall -Wextra -Wno-missing-field-initializers -fsanitize=address,undefined tests/sim_test.c src/world/track.c src/sim/kart.c -lm -o sim_test
-          ./sim_test
-          gcc -O2 -Wall -Wextra -Wno-missing-field-initializers -fsanitize=address,undefined tests/race_test.c src/sim/race.c src/world/track.c src/sim/kart.c -lm -o race_test
-          ./race_test
+          SIM="src/world/track.c src/world/tracks.c src/sim/kart.c src/sim/race.c"
+          FLAGS="-O2 -Wall -Wextra -Wno-missing-field-initializers -fsanitize=address,undefined"
+          gcc $FLAGS tests/sim_test.c $SIM -lm -o sim_test && ./sim_test
+          gcc $FLAGS tests/race_test.c $SIM -lm -o race_test && ./race_test
+          gcc $FLAGS tests/track_test.c $SIM -lm -o track_test && ./track_test
 
   build:
     name: Build kingdomkart.wuhb

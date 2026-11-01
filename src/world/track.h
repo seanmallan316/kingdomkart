@@ -26,6 +26,7 @@ typedef struct {
     TrackSample s[TRACK_MAX_SAMPLES];
     float length;
     int checkpoint[TRACK_CHECKPOINTS];      /* sample index of each checkpoint gate; gate 0 is the start/finish line */
+    int shortcut_from, shortcut_to, shortcut_side;   /* samples where one shoulder is packed dirt with no slowdown; -1 = none */
 } Track;
 
 typedef struct {
@@ -42,6 +43,6 @@ void track_locate(const Track *t, float x, float z, int hint, TrackHit *out);   
 float track_surface_height(const Track *t, int idx, float lateral);
 float track_edge(const Track *t, int idx);                                      /* distance from center to the wall */
 
-/* built-in tracks */
+/* built-in tracks (see tracks.c) */
 void track_make_test(Track *t);
 #endif

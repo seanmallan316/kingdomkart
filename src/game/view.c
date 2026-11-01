@@ -3,16 +3,19 @@
 #include "../sim/race.h"
 #include "../render/gfx.h"
 #include "../render/batch.h"
+#include "../render/assets.h"
+#include "../world/theme.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define MAX_SKID 500
 #define MAX_DUST 200
-#define MAX_TREES 120
+#define MAX_SPRITE_KINDS 16
+#define SPRITE_DRAW_DIST 340.0f
 
 static int g_status;
-static Track g_track;
+static Track g_track; static const TrackDef *g_def; static int g_track_idx = 0;
 static Race g_race;
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL;
 static float g_idle;                   /* seconds since the last real controller input */
@@ -22,9 +25,9 @@ static float g_frame_ms = 16.7f;
 static float g_results_t;
 
 /* textures */
-static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_tree, *tx_blob, *tx_font, *tx_flag, *tx_sky;
+static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star;
 /* meshes */
-static Mesh *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_cube, *m_shield, *m_items, *m_trees, *m_skid, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[8192];
 static Batch g_b;
 
@@ -36,9 +39,11 @@ static Skid g_skid[MAX_SKID]; static int g_skid_n; static Vec3 g_last_l[NKARTS],
 /* dust */
 typedef struct { Vec3 p, v; float life, size; } Dust;
 static Dust g_dust[MAX_DUST];
-/* trees */
-typedef struct { Vec3 p; float h; } Tree;
-static Tree g_tree[MAX_TREES]; static int g_tree_n;
+/* scenery: cut-out pictures standing beside the road, grouped by picture */
+typedef struct { const char *img; Texture *tex; float aspect; Mesh *mesh; } SpriteKind;
+static SpriteKind g_kind[MAX_SPRITE_KINDS]; static int g_nkind;
+typedef struct { Vec3 p; float h, w, glow; int kind; } Placed;
+static Placed g_placed[MAX_SCENERY]; static int g_nplaced;
 /* mini-map */
 static float map_x0, map_z0, map_scale;
 
@@ -70,6 +75,87 @@ static void px_wall(int x, int y, uint32_t *o) {       /* stone blocks */
     int row = y / 16, off = (row & 1) * 16; int bx = (x + off) % 32, by = y % 16; int mortar = bx < 2 || by < 2;
     float n = smooth_noise(x / 6.0f, y / 6.0f); int v = 170 + (int)(n * 50) - mortar * 60;
     *o = rgba(v, v - 10, v - 30, 255);
+}
+/* ---- placeholder scenery pictures (64x96) until the real ones arrive. (x, y) in pixels, y down. */
+#define PW 64
+#define PH 96
+static int inrect(int x, int y, int x0, int y0, int x1, int y1) { return x >= x0 && x < x1 && y >= y0 && y < y1; }
+static uint32_t stone(int x, int y, int r, int g, int b) { float n = smooth_noise(x / 5.0f, y / 5.0f); return rgba(r + (int)(n * 30), g + (int)(n * 25), b + (int)(n * 20), 255); }
+static void px_house1(int x, int y, uint32_t *o) {       /* small flat-roofed stone house, one glowing window */
+    *o = 0;
+    if (inrect(x, y, 6, 30, 58, 96)) *o = stone(x, y, 185, 160, 120);
+    if (inrect(x, y, 4, 26, 60, 32)) *o = stone(x, y, 140, 115, 85);                     /* roof edge */
+    if (inrect(x, y, 26, 62, 38, 96)) *o = rgba(70, 45, 25, 255);                          /* door */
+    if (inrect(x, y, 42, 44, 52, 56)) *o = rgba(255, 190, 90, 255);                        /* window */
+}
+static void px_house2(int x, int y, uint32_t *o) {       /* two-story house with stairs, two windows */
+    *o = 0;
+    if (inrect(x, y, 4, 8, 60, 96)) *o = stone(x, y, 175, 150, 115);
+    if (inrect(x, y, 2, 4, 62, 10)) *o = stone(x, y, 130, 105, 80);
+    if (inrect(x, y, 10, 20, 20, 32)) *o = rgba(255, 190, 90, 255);
+    if (inrect(x, y, 42, 20, 52, 32)) *o = rgba(255, 180, 80, 255);
+    if (inrect(x, y, 26, 66, 38, 96)) *o = rgba(70, 45, 25, 255);
+    for (int s = 0; s < 6; s++) if (inrect(x, y, 44 + s * 3, 50 + s * 7, 64, 56 + s * 7)) *o = stone(x, y, 150, 130, 100);   /* outside stairs */
+}
+static void px_inn(int x, int y, uint32_t *o) {          /* wide inn with an arched door and a sign */
+    *o = 0;
+    if (inrect(x, y, 2, 24, 62, 96)) *o = stone(x, y, 190, 165, 125);
+    if (inrect(x, y, 0, 20, 64, 26)) *o = stone(x, y, 120, 95, 70);
+    { int dx = x - 32, dy = y - 70; if (dy >= 0 && abs(dx) < 10) *o = rgba(255, 200, 110, 255); if (dy < 0 && dx * dx + dy * dy < 100) *o = rgba(255, 200, 110, 255); }
+    if (inrect(x, y, 8, 40, 18, 52) || inrect(x, y, 46, 40, 56, 52)) *o = rgba(255, 190, 90, 255);
+    if (inrect(x, y, 22, 30, 42, 38)) *o = rgba(110, 70, 35, 255);                         /* sign */
+}
+static void px_palm(int x, int y, uint32_t *o) {         /* tall date palm */
+    *o = 0;
+    float t = (96 - y) / 96.0f; int cx = 32 + (int)(10 * t * t);
+    if (y > 28 && abs(x - cx) < 3 + (int)(2 * (1 - t))) *o = rgba(120 - (int)(y / 3), 80 - (int)(y / 4), 40, 255);
+    float dx = x - 42, dy = y - 24;
+    for (int f = 0; f < 7; f++) { float a = -2.8f + f * 0.9f; float px2 = dx * cosf(a) + dy * sinf(a), py2 = -dx * sinf(a) + dy * cosf(a);
+        if (px2 > 0 && px2 < 24 && fabsf(py2) < 2.5f + (24 - px2) * 0.12f) *o = rgba(40 + (int)(px2 * 2), 120 + (int)(px2 * 2), 40, 255); }
+}
+static void px_olive(int x, int y, uint32_t *o) {        /* gnarled olive tree */
+    *o = 0;
+    if (y > 60 && abs(x - 32 - (int)(4 * sinf(y * 0.3f))) < 4) *o = rgba(90, 70, 45, 255);
+    float dx = (x - 32) / 28.0f, dy = (y - 40) / 26.0f; float d = dx * dx + dy * dy; float n = smooth_noise(x / 4.0f, y / 4.0f);
+    if (d < 1.0f && n > 0.25f) *o = rgba(110 + (int)(n * 50), 140 + (int)(n * 50), 100 + (int)(n * 30), 255);
+}
+static void px_lantern(int x, int y, uint32_t *o) {      /* lantern post */
+    *o = 0;
+    if (abs(x - 32) < 2 && y > 20) *o = rgba(80, 55, 30, 255);
+    if (inrect(x, y, 24, 8, 40, 24)) *o = rgba(255, 205, 110, 255);
+    if (inrect(x, y, 22, 6, 42, 9) || inrect(x, y, 22, 23, 42, 26)) *o = rgba(60, 40, 20, 255);
+}
+static void px_well(int x, int y, uint32_t *o) {         /* stone well with a little roof */
+    *o = 0;
+    if (inrect(x, y, 8, 60, 56, 96)) *o = stone(x, y, 150, 140, 125);
+    if (abs(x - 14) < 2 || abs(x - 50) < 2) if (y > 24 && y < 62) *o = rgba(90, 65, 35, 255);
+    if (y >= 14 && y < 26 && abs(x - 32) < 30 - (26 - y) * 2) *o = rgba(150, 90, 50, 255);
+}
+static void px_stable(int x, int y, uint32_t *o) {       /* open stable with a glowing inside */
+    *o = 0;
+    int roof_y = 20 + abs(x - 32);
+    if (y >= roof_y && y < roof_y + 10) *o = rgba(170, 130, 70, 255);
+    if (y >= roof_y + 10 && y < 96 && x > 6 && x < 58) *o = rgba(255, 220, 150, 255);
+    if (y >= roof_y + 10 && y < 96 && (x < 12 || x > 52)) *o = rgba(110, 75, 40, 255);
+    if (inrect(x, y, 24, 72, 40, 86)) *o = rgba(200, 150, 60, 255);                        /* manger */
+}
+static void px_sheep(int x, int y, uint32_t *o) {        /* three sheep */
+    *o = 0;
+    for (int s = 0; s < 3; s++) { int cx = 12 + s * 20, cy = 60 + (s & 1) * 10; float dx = (x - cx) / 10.0f, dy = (y - cy) / 7.0f;
+        if (dx * dx + dy * dy < 1.0f) *o = rgba(235, 235, 225, 255);
+        if (inrect(x, y, cx + 6, cy - 4, cx + 12, cy + 2)) *o = rgba(40, 35, 30, 255);
+        if (inrect(x, y, cx - 6, cy + 6, cx - 3, cy + 14) || inrect(x, y, cx + 3, cy + 6, cx + 6, cy + 14)) *o = rgba(40, 35, 30, 255); }
+}
+static void px_star(int x, int y, uint32_t *o) {         /* four-pointed star with a glow; brightness is the alpha */
+    float dx = (x - 32) / 32.0f, dy = (y - 32) / 32.0f; float d = sqrtf(dx * dx + dy * dy);
+    float rays = fmaxf(0, 1 - fabsf(dx) * 6) * fmaxf(0, 1 - fabsf(dy) * 1.2f) + fmaxf(0, 1 - fabsf(dy) * 6) * fmaxf(0, 1 - fabsf(dx) * 1.2f);
+    float halo = fmaxf(0, 1 - d * 1.6f); float v = clampf(rays + halo * halo * 0.7f, 0, 1);
+    *o = rgba(255, 245, 200, (int)(v * 255));
+}
+static void px_sky_night(int x, int y, uint32_t *o) {    /* dark blue sky with stars */
+    float t = y / 255.0f; int r = (int)(6 + 30 * t), g = (int)(8 + 30 * t), b = (int)(40 + 70 * t);
+    float n = noise2(x, y); if (n > 0.985f && t < 0.75f) { int s = (int)((n - 0.985f) / 0.015f * 180) + 70; r += s; g += s; b += s; }
+    *o = rgba(r > 255 ? 255 : r, g > 255 ? 255 : g, b > 255 ? 255 : b, 255);
 }
 static void px_tree(int x, int y, uint32_t *o) {       /* 64x64 cypress-like tree on transparent background */
     float cx = (x - 32) / 32.0f, cy = (y - 44) / 40.0f; float d = cx * cx * 2.2f + cy * cy;
@@ -106,6 +192,10 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     float v0 = t->s[i].dist * vscale, v1 = (i + 1 < t->n ? t->s[j].dist : t->length) * vscale;
     /* counter-clockwise seen from above: left-near, right-near, right-far, left-far */
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
+}
+static void free_track_meshes(void) {
+    Mesh **ms[] = {&m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
+    for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
 }
 static void build_track_meshes(void) {
     const Track *t = &g_track;
@@ -144,7 +234,8 @@ static void build_track_meshes(void) {
     m_startline = gfx_mesh_static(g_b.v, g_b.n);
     /* ground: a big grass plane under everything */
     batch_clear(&g_b);
-    batch_quad(&g_b, v3(80, -2.4f, 70), v3(400, 0, 0), v3(0, 0, -400), v3(0, 1, 0), 0, 0, 80, 80, 1, 1, 1, 1);
+    { float lowest = 1e9f; for (int i = 0; i < t->n; i++) { float y = track_surface_height(t, i, track_edge(t, i)); if (y < lowest) lowest = y; y = track_surface_height(t, i, -track_edge(t, i)); if (y < lowest) lowest = y; }
+      batch_quad(&g_b, v3(0, lowest - 0.6f, 0), v3(600, 0, 0), v3(0, 0, -600), v3(0, 1, 0), 0, 0, 120, 120, 1, 1, 1, 1); }
     m_ground = gfx_mesh_static(g_b.v, g_b.n);
     /* sky: a big cylinder-ish ring far away (drawn without depth) */
     batch_clear(&g_b);
@@ -154,14 +245,6 @@ static void build_track_meshes(void) {
         batch_quad4(&g_b, p1, p0, p3, p2, v3(0, 1, 0), k / 24.0f * 3, 1, (k + 1) / 24.0f * 3, 0, 1, 1, 1, 1);
     }
     m_sky = gfx_mesh_static(g_b.v, g_b.n);
-    /* trees along the outside of the road */
-    g_tree_n = 0;
-    for (int i = 3; i < t->n && g_tree_n < MAX_TREES; i += 7) {
-        int side = ((i / 7) & 1) ? 1 : -1; float e = track_edge(t, i) + 2.5f + frand01() * 7.0f;
-        Vec3 p = road_point(t, i, side * e); p.y = fminf(-2.4f, track_surface_height(t, i, side * track_edge(t, i)) - 1.0f) + 0.3f;
-        g_tree[g_tree_n].p = p; g_tree[g_tree_n].h = 5.0f + frand01() * 4.0f; g_tree_n++;
-    }
-    m_trees = gfx_mesh_dynamic(MAX_TREES * 6);
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
     m_hud = gfx_mesh_dynamic(4096);
@@ -185,6 +268,63 @@ static void build_track_meshes(void) {
     m_shadow = gfx_mesh_dynamic(NKARTS * 6);
 }
 
+// ------------------------------------------------------------------ theme: textures and scenery pictures for the current road
+static Texture *placeholder_sprite(const char *id, float *aspect) {
+    *aspect = (float)PW / (float)PH;
+    if (!strcmp(id, "#house1")) return make_tex(PW, PH, 0, 0, px_house1);
+    if (!strcmp(id, "#house2")) return make_tex(PW, PH, 0, 0, px_house2);
+    if (!strcmp(id, "#inn")) return make_tex(PW, PH, 0, 0, px_inn);
+    if (!strcmp(id, "#palm")) return make_tex(PW, PH, 0, 0, px_palm);
+    if (!strcmp(id, "#olive")) return make_tex(PW, PH, 0, 0, px_olive);
+    if (!strcmp(id, "#lantern")) return make_tex(PW, PH, 0, 0, px_lantern);
+    if (!strcmp(id, "#well")) return make_tex(PW, PH, 0, 0, px_well);
+    if (!strcmp(id, "#stable")) return make_tex(PW, PH, 0, 0, px_stable);
+    if (!strcmp(id, "#sheep")) return make_tex(PW, PH, 0, 0, px_sheep);
+    *aspect = 1.0f;
+    return make_tex(64, 64, 0, 0, px_tree);
+}
+/* a scenery picture: Sean's file if it exists (beth_house1 for "#house1"), else the placeholder drawing */
+static int sprite_kind(const char *img) {
+    for (int i = 0; i < g_nkind; i++) if (!strcmp(g_kind[i].img, img)) return i;
+    if (g_nkind >= MAX_SPRITE_KINDS) return 0;
+    SpriteKind *k = &g_kind[g_nkind]; k->img = img; k->tex = NULL;
+    if (img[0] == '#') { char name[64]; snprintf(name, sizeof name, "%s_%s", g_track_idx == 0 ? "beth" : "test", img + 1); int w = 0, h = 0; k->tex = asset_texture(name, 0, &w, &h); if (k->tex) k->aspect = (float)w / (float)h; }
+    if (!k->tex) k->tex = placeholder_sprite(img, &k->aspect);
+    k->mesh = gfx_mesh_dynamic(MAX_SCENERY * 6);
+    return g_nkind++;
+}
+static Texture *theme_tex(const char *name, int w, int h, void (*fallback)(int, int, uint32_t *)) {
+    Texture *t = asset_texture(name, 1, NULL, NULL);
+    return t ? t : make_tex(w, h, 1, 0, fallback);
+}
+static void free_theme(void) {
+    Texture **ts[] = {&tx_road, &tx_dirt, &tx_grass, &tx_wall, &tx_sky, &tx_star};
+    for (size_t i = 0; i < sizeof ts / sizeof ts[0]; i++) { gfx_texture_free(*ts[i]); *ts[i] = NULL; }
+    for (int i = 0; i < g_nkind; i++) { gfx_texture_free(g_kind[i].tex); gfx_mesh_free(g_kind[i].mesh); }
+    g_nkind = 0; gfx_mesh_free(m_glow); m_glow = NULL;
+}
+static void load_theme(void) {
+    const TrackDef *d = g_def;
+    tx_road = theme_tex(d->tex_road, 256, 256, px_road);
+    tx_dirt = theme_tex(d->tex_dirt, 128, 128, px_dirt);
+    tx_grass = theme_tex(d->tex_grass, 128, 128, px_grass);
+    tx_wall = theme_tex(d->tex_wall, 64, 64, px_wall);
+    tx_sky = theme_tex(d->tex_sky, 256, 256, d->night ? px_sky_night : px_sky);
+    tx_star = NULL;
+    if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star) tx_star = make_tex(64, 64, 0, 0, px_star); }
+    g_nkind = 0; g_nplaced = 0;
+    for (int i = 0; i < d->nscenery && g_nplaced < MAX_SCENERY; i++) {
+        const Scenery *sc = &d->scenery[i]; int idx = sc->idx % g_track.n;
+        Placed *p = &g_placed[g_nplaced++];
+        p->kind = sprite_kind(sc->img);
+        float edge = track_edge(&g_track, idx);
+        p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * sc->side, 0, g_track.s[idx].z + g_track.s[idx].nz * sc->side);
+        p->p.y = track_surface_height(&g_track, idx, (sc->side < 0 ? -1.0f : 1.0f) * edge) - 0.2f;   /* stands on the ground just outside the wall */
+        p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow;
+    }
+    m_glow = gfx_mesh_dynamic(MAX_SCENERY * 6 + 6);
+}
+
 // ------------------------------------------------------------------ init
 static void start_race(void) {
     race_init(&g_race, &g_track, g_player_char, 5, g_difficulty);
@@ -195,7 +335,8 @@ static void start_race(void) {
 }
 int game_init(int status) {
     g_status = status;
-    track_make_test(&g_track);
+    g_def = &TRACK_DEFS[g_track_idx];
+    track_from_def(&g_track, g_def);
     /* mini-map scale: fit the track into a 200x200 box */
     { float minx = 1e9f, maxx = -1e9f, minz = 1e9f, maxz = -1e9f;
       for (int i = 0; i < g_track.n; i++) { TrackSample *s = &g_track.s[i]; if (s->x < minx) minx = s->x; if (s->x > maxx) maxx = s->x; if (s->z < minz) minz = s->z; if (s->z > maxz) maxz = s->z; }
@@ -203,15 +344,10 @@ int game_init(int status) {
     start_race();
     g_time = 0; g_idle = 99; g_demo = 1;
     if (status != GFX_OK) return 0;
-    tx_road = make_tex(256, 256, 1, 0, px_road);
-    tx_dirt = make_tex(128, 128, 1, 0, px_dirt);
-    tx_grass = make_tex(128, 128, 1, 0, px_grass);
-    tx_wall = make_tex(64, 64, 1, 0, px_wall);
-    tx_tree = make_tex(64, 64, 0, 0, px_tree);
     tx_blob = make_tex(64, 64, 0, 0, px_blob);
     tx_flag = make_tex(32, 32, 1, 1, px_flag);
-    tx_sky = make_tex(256, 256, 1, 0, px_sky);
     { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); }
+    load_theme();
     build_track_meshes();
     gfx_log("track '%s': %d samples, %.0f m", g_track.name, g_track.n, g_track.length);
     return 1;
@@ -249,7 +385,10 @@ void game_frame(const Pad *pad, float dt) {
     int real_input = pad->source && (fabsf(pad->sx) > 0.15f || pad->a || pad->b || pad->zr || pad->zl);
     if (real_input) { g_idle = 0; g_demo = 0; } else { g_idle += dt; if (g_idle > 6.0f) g_demo = 1; }
     if (g_msg_t > 0) g_msg_t -= dt;
-    if (r->state == RACE_FINISHED) { g_results_t += dt; if (pad->plus || pad->a) { if (g_results_t > 1.0f) { g_difficulty = (g_difficulty + (pad->plus ? 1 : 0)) % 3; start_race(); } } }
+    if (r->state == RACE_FINISHED) { g_results_t += dt; if ((pad->plus || pad->a || pad->b) && g_results_t > 1.0f) {
+        if (pad->plus) g_difficulty = (g_difficulty + 1) % 3;
+        if (pad->b) { g_track_idx = (g_track_idx + 1) % NUM_TRACK_DEFS; g_def = &TRACK_DEFS[g_track_idx]; track_from_def(&g_track, g_def); free_theme(); free_track_meshes(); load_theme(); build_track_meshes(); }
+        start_race(); } }
 
     /* fixed-step simulation */
     static float acc = 0; acc += dt;
@@ -303,10 +442,21 @@ void game_frame(const Pad *pad, float dt) {
     /* dynamic geometry shared by both screens: trees, skid marks, dust, shadows, items */
     float cy = cam_yaw; Vec3 ax = v3(cosf(cy), 0, -sinf(cy));
     {
+        for (int kd = 0; kd < g_nkind; kd++) {
+            batch_clear(&g_b);
+            for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->kind != kd) continue;
+                float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; if (dx * dx + dz * dz > SPRITE_DRAW_DIST * SPRITE_DRAW_DIST) continue;
+                float w = pl->w * 0.5f;
+                batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.5f, pl->p.z), v3(ax.x * w, 0, ax.z * w), v3(0, pl->h * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
+            gfx_mesh_update(g_kind[kd].mesh, g_b.v, g_b.n);
+        }
+        /* warm glows at lanterns and windows, and the Star */
         batch_clear(&g_b);
-        for (int i = 0; i < g_tree_n; i++) { Tree *tr = &g_tree[i]; float w = tr->h * 0.45f;
-            batch_quad(&g_b, v3(tr->p.x, tr->p.y + tr->h * 0.5f, tr->p.z), v3(ax.x * w, 0, ax.z * w), v3(0, tr->h * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
-        gfx_mesh_update(m_trees, g_b.v, g_b.n);
+        for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->glow <= 0) continue;
+            float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; if (dx * dx + dz * dz > SPRITE_DRAW_DIST * SPRITE_DRAW_DIST) continue;
+            float fl = 0.85f + 0.15f * sinf(g_time * 9.0f + i * 1.7f), s = pl->glow * fl;
+            batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.55f, pl->p.z), v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, g_def->glow_r, g_def->glow_g, g_def->glow_b, 0.55f); }
+        gfx_mesh_update(m_glow, g_b.v, g_b.n);
         batch_clear(&g_b);
         for (int i = 0; i < MAX_SKID; i++) if (g_skid[i].used) { Skid *s = &g_skid[i];
             batch_quad4(&g_b, s->l0, s->l1, s->r1, s->r0, v3(0, 1, 0), 0, 0, 1, 1, 0.05f, 0.05f, 0.05f, s->a); }
@@ -333,21 +483,29 @@ void game_frame(const Pad *pad, float dt) {
     for (int drc = 0; drc < 2; drc++) {
         if (g_status == GFX_NO_COMPILER) { gfx_view_begin(drc, 1.0f, 0.5f, 0.0f); gfx_view_end(drc); continue; }
         if (g_status == GFX_SHADER_FAILED) { gfx_view_begin(drc, 0.8f, 0.05f, 0.05f); gfx_view_end(drc); continue; }
-        gfx_view_begin(drc, 0.55f, 0.75f, 0.98f);
+        gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 view = m4_look_at(eye, at, v3(0, 1, 0));
         Mat4 proj = m4_perspective(cam_fov * 3.14159265f / 180.0f, gfx_aspect(drc), 0.3f, 1200.0f);
         Mat4 vp = m4_mul(proj, view);
         Mat4 id = m4_identity();
-        gfx_camera(&vp, v3(0.35f, 1.0f, 0.5f), 1.0f, 0.72f, 0.82f, 0.95f, 1e6f, 2e6f);
+        Vec3 ldir = v3(g_def->light_x, g_def->light_y, g_def->light_z);
+        gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f);
         gfx_state(ST_BLEND); gfx_bind(tx_sky); { Mat4 sm = m4_translate(cam_x, -30.0f, cam_z); gfx_draw(m_sky, &sm, 1, 1, 1, 1); }
-        gfx_camera(&vp, v3(0.35f, 1.0f, 0.5f), 0.45f, 0.72f, 0.82f, 0.95f, 120.0f, 520.0f);
+        if (tx_star) { gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_star);
+            batch_clear(&g_b); float ss = g_def->star_size * (0.95f + 0.05f * sinf(g_time * 3.0f));
+            Vec3 sp = v3(cam_x + g_def->star_x, g_def->star_y, cam_z + g_def->star_z);
+            batch_quad(&g_b, sp, v3(ax.x * ss, 0, ax.z * ss), v3(0, ss, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
+            static Mesh *m_star = NULL; if (!m_star) m_star = gfx_mesh_dynamic(12); gfx_mesh_update(m_star, g_b.v, g_b.n); gfx_draw(m_star, &id, 1, 1, 1, 1); }
+        gfx_camera(&vp, ldir, g_def->ambient, g_def->fog_r, g_def->fog_g, g_def->fog_b, g_def->fog_start, g_def->fog_end);
         gfx_state(ST_SOLID);
-        gfx_bind(tx_grass); gfx_draw(m_ground, &id, 1, 1, 1, 1);
-        gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, 1, 1, 1, 1);
-        gfx_bind(tx_road); gfx_draw(m_road, &id, 1, 1, 1, 1);
-        gfx_bind(tx_flag); gfx_draw(m_startline, &id, 1, 1, 1, 1);
-        gfx_bind(tx_wall); gfx_draw(m_wall, &id, 1, 1, 1, 1);
-        gfx_state(ST_CUTOUT); gfx_bind(tx_tree); gfx_draw(m_trees, &id, 1, 1, 1, 1);
+        float sr = g_def->sun_r, sg = g_def->sun_g, sb = g_def->sun_b;
+        gfx_bind(tx_grass); gfx_draw(m_ground, &id, sr, sg, sb, 1);
+        gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
+        gfx_bind(tx_road); gfx_draw(m_road, &id, sr, sg, sb, 1);
+        gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1);
+        gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
+        gfx_state(ST_CUTOUT);
+        for (int kd = 0; kd < g_nkind; kd++) { gfx_bind(g_kind[kd].tex); gfx_draw(g_kind[kd].mesh, &id, g_def->sun_r, g_def->sun_g, g_def->sun_b, 1); }
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_skid, &id, 1, 1, 1, 1);
         gfx_bind(tx_blob); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
         /* item boxes: spinning cubes */
@@ -371,7 +529,7 @@ void game_frame(const Pad *pad, float dt) {
             Mat4 m = m4_mul(m4_translate(q->x, q->y, q->z), m4_rotate_y(g_time * 2.0f));
             gfx_draw(m_shield, &m, 0.4f, 0.8f, 1.0f, 0.25f + 0.1f * sinf(g_time * 8)); }
         gfx_bind(tx_blob); gfx_draw(m_items, &id, 1, 1, 1, 1);
-        gfx_state(ST_TRANSPARENT | ST_ADD); gfx_draw(m_dust, &id, 1, 1, 1, 1);
+        gfx_state(ST_TRANSPARENT | ST_ADD); gfx_draw(m_dust, &id, 1, 1, 1, 1); gfx_draw(m_glow, &id, 1, 1, 1, 1);
 
         /* ---- HUD */
         gfx_camera_2d(); gfx_state(ST_HUD);
@@ -403,7 +561,7 @@ void game_frame(const Pad *pad, float dt) {
               batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - sz / 2, mz - (q->z - map_z0) * map_scale - sz / 2, sz, sz, c->r, c->g, c->b, 1);
               if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - 3, mz - (q->z - map_z0) * map_scale - 3, 6, 6, 1, 1, 1, 1); } }
         /* messages */
-        if (r->state == RACE_COUNTDOWN) { int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); batch_text(&g_b, buf, 640 - text_width(buf, 110) / 2, 250, 110, 1, 0.9f, 0.3f, 1); } }
+        if (r->state == RACE_COUNTDOWN) { batch_text(&g_b, g_track.name, 640 - text_width(g_track.name, 34) / 2, 180, 34, 1, 1, 1, 1); int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); batch_text(&g_b, buf, 640 - text_width(buf, 110) / 2, 250, 110, 1, 0.9f, 0.3f, 1); } }
         if (g_msg_t > 0) batch_text(&g_b, g_msg, 640 - text_width(g_msg, 60) / 2, 260, 60, 1, 0.95f, 0.4f, 1);
         if (k->wrongway_t > WRONGWAY_DELAY && ((int)(g_time * 4) & 1)) batch_text(&g_b, "WRONG WAY", 640 - text_width("WRONG WAY", 56) / 2, 330, 56, 1, 0.3f, 0.2f, 1);
         /* results */
@@ -421,7 +579,7 @@ void game_frame(const Pad *pad, float dt) {
                 batch_text(&g_b, c->short_name, 480, y, 30, me ? 1.0f : 0.9f, me ? 0.95f : 0.9f, me ? 0.5f : 0.9f, 1);
                 if (q->lap > g_track.laps) fmt_time(buf, sizeof buf, q->total_time); else snprintf(buf, sizeof buf, "--:--.--");
                 batch_text(&g_b, buf, 800, y, 30, 1, 1, 1, 1); }
-            batch_text(&g_b, "A: RACE AGAIN   +: NEXT DIFFICULTY", 640 - text_width("A: RACE AGAIN   +: NEXT DIFFICULTY", 20) / 2, 585, 20, 0.9f, 0.95f, 1, 1);
+            batch_text(&g_b, "A: AGAIN   B: NEXT ROAD   +: DIFFICULTY", 640 - text_width("A: AGAIN   B: NEXT ROAD   +: DIFFICULTY", 20) / 2, 585, 20, 0.9f, 0.95f, 1, 1);
         }
         { const char *dn[3] = {"EASY", "NORMAL", "HARD"}; batch_text(&g_b, dn[g_difficulty], 40, 690, 16, 0.8f, 0.8f, 0.8f, 0.7f); }
         if (g_demo && r->state != RACE_FINISHED) batch_text(&g_b, "DEMO - MOVE THE STICK TO DRIVE", 640 - text_width("DEMO - MOVE THE STICK TO DRIVE", 20) / 2, 680, 20, 1, 1, 1, 0.8f);
