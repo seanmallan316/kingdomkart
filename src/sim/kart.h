@@ -8,7 +8,7 @@
 #define WRONGWAY_DELAY 1.5f    /* seconds of driving backwards before the warning shows */
 
 typedef struct { float steer; int gas, brake, drift, item; } KartInput;   /* steer -1..1 (left negative); item = use the held item */
-enum { ITEM_NONE = 0, ITEM_MANNA, ITEM_STAFF, ITEM_STONE, ITEM_OIL, ITEM_COUNT };
+enum { ITEM_NONE = 0, ITEM_MANNA, ITEM_STAFF, ITEM_STONE, ITEM_OIL, ITEM_TRUMPET, ITEM_FIRE, ITEM_LOCUSTS, ITEM_DOVE, ITEM_COUNT };
 
 typedef struct {
     float top_speed, accel, handling, weight;    /* per character stats, 1.0 = average */
@@ -33,6 +33,10 @@ typedef struct {
     float stun;                /* seconds left spinning out, no control */
     float shield;              /* seconds of shield left (blocks one hit) */
     float spin_vis;            /* visual spin angle while stunned */
+    float slow_t;              /* seconds left crawling through a locust swarm */
+    float pad_cd;              /* cooldown so one pad fires once per pass */
+    float obstacle_cd;         /* seconds before an obstacle can hit this kart again */
+    int pad_flag;              /* PAD_BOOST / PAD_BOUNCE for the step a pad fired, else 0 */
     int blocked_flag, hit_flag;/* set for one step when the shield blocks a hit / the kart is hit */
     /* race */
     int lap, next_cp; float wrongway_t, lap_time, total_time, best_lap, lap_times[MAX_LAPS]; int finished, place;

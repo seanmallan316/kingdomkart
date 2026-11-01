@@ -28,6 +28,10 @@ typedef struct {
     const Scenery *scenery; int nscenery;
     float star_x, star_y, star_z, star_size;   /* 0 size = no star */
     int shortcut_from, shortcut_to, shortcut_side;   /* samples where the shoulder on one side is packed dirt (no slowdown); -1 = none */
+    const char *prefix;                   /* picture name prefix: "#house1" on a "beth" road loads content/img/beth_house1.png */
+    const RoadPad *pads; int npads;
+    const Mover *movers; int nmovers;
+    int water;
 } TrackDef;
 
 extern const TrackDef TRACK_DEFS[];

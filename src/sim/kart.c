@@ -62,7 +62,10 @@ int kart_hit(Kart *k, float stun_seconds) {
 
 void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     const KartStats *st = &k->st;
-    k->skid = 0; k->mini_turbo_tier = 0; k->blocked_flag = 0; k->hit_flag = 0;
+    k->skid = 0; k->mini_turbo_tier = 0; k->blocked_flag = 0; k->hit_flag = 0; k->pad_flag = 0;
+    if (k->slow_t > 0) k->slow_t -= dt;
+    if (k->pad_cd > 0) k->pad_cd -= dt;
+    if (k->obstacle_cd > 0) k->obstacle_cd -= dt;
     if (k->item) k->item_hold += dt;
     if (k->shield > 0) k->shield -= dt;
     KartInput stunned_in; const KartInput *in = in_real;
@@ -75,6 +78,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     float top = BASE_TOP * st->top_speed * k->boost_mul;
     int on_road = k->hit.on_road;
     if (!on_road && !k->air) top *= OFFROAD_MUL;
+    if (k->slow_t > 0) top *= 0.62f;
     float accel = BASE_ACCEL * st->accel * (k->boost_t > 0 ? 1.8f : 1.0f);
     float steer = clampf1(in->steer, -1, 1);
 
@@ -145,6 +149,18 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
         k->drifting = 0;
     }
     advance_progress(k, t, prev_idx);
+
+    /* ---- pads painted on the road */
+    if (!k->air && k->pad_cd <= 0 && k->stun <= 0) {
+        for (int p = 0; p < t->npad; p++) {
+            const RoadPad *pd = &t->pad[p]; int d = k->hit.idx - pd->idx; if (d > t->n / 2) d -= t->n; if (d < -t->n / 2) d += t->n;
+            if (d < -1 || d > 1 || fabsf(k->hit.lateral - pd->lateral) > pd->halfw) continue;
+            k->pad_cd = 0.6f; k->pad_flag = pd->kind;
+            if (pd->kind == PAD_BOOST) { k->boost_t = fmaxf(k->boost_t, 1.3f); k->boost_mul = fmaxf(k->boost_mul, 1.4f); k->speed = fmaxf(k->speed, BASE_TOP * st->top_speed * 1.1f); }
+            else if (pd->kind == PAD_BOUNCE) { k->air = 1; k->air_t = 0; k->vy = 12.0f; k->drifting = 0; }
+            break;
+        }
+    }
 
     /* ---- vertical: follow the ground, or fly */
     float ground = k->hit.height;

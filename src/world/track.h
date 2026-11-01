@@ -19,6 +19,13 @@ typedef struct {
     float dist;             /* distance from the start line along the road */
 } TrackSample;
 
+/* things on the road */
+enum { PAD_BOOST = 1, PAD_BOUNCE = 2 };
+typedef struct { int idx; float lateral, halfw; int kind; } RoadPad;               /* a boost arrow or a bounce pad painted on the road */
+typedef struct { const char *img; int idx; float lateral, amp, speed, phase, radius, height; } Mover;   /* an obstacle crossing the road: lateral + amp*sin(time*speed+phase) */
+#define MAX_PADS 32
+#define MAX_MOVERS 16
+
 typedef struct {
     const char *name;
     int laps;
@@ -27,6 +34,9 @@ typedef struct {
     float length;
     int checkpoint[TRACK_CHECKPOINTS];      /* sample index of each checkpoint gate; gate 0 is the start/finish line */
     int shortcut_from, shortcut_to, shortcut_side;   /* samples where one shoulder is packed dirt with no slowdown; -1 = none */
+    RoadPad pad[MAX_PADS]; int npad;
+    Mover mover[MAX_MOVERS]; int nmover;
+    int water;                              /* off-road is water (splashes instead of dust) */
 } Track;
 
 typedef struct {
@@ -42,6 +52,7 @@ void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, in
 void track_locate(const Track *t, float x, float z, int hint, TrackHit *out);   /* hint = last known index, -1 for a full search */
 float track_surface_height(const Track *t, int idx, float lateral);
 float track_edge(const Track *t, int idx);                                      /* distance from center to the wall */
+void  track_mover_pos(const Track *t, const Mover *m, float time, float *x, float *y, float *z);
 
 /* built-in tracks (see tracks.c) */
 void track_make_test(Track *t);

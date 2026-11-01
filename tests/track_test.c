@@ -23,7 +23,11 @@ int main(void) {
         Race r; race_init(&r, &t, 0, 5, DIFF_NORMAL, NKARTS); KartInput in; memset(&in, 0, sizeof in); float time = 0;
         while (r.state != RACE_FINISHED && time < 200) { race_step(&r, &in, 1, SIM_DT); time += SIM_DT; }
         int finished = 0; for (int i = 0; i < NKARTS; i++) finished += r.k[i].lap > t.laps;
-        printf("  race ended at %.1fs, %d/8 crossed the line, winner time %.1fs, pickups %d, hits %d\n", r.race_t, finished, r.k[r.order[0]].total_time, r.stat_pickups, r.stat_hits);
+        printf("  race ended at %.1fs, %d/8 crossed the line, winner time %.1fs, pickups %d, hits %d (by obstacles %d), pads %d, items:", r.race_t, finished, r.k[r.order[0]].total_time, r.stat_pickups, r.stat_hits, r.stat_mover_hits, r.stat_pads);
+        for (int it = 1; it < ITEM_COUNT; it++) printf(" %s %d", item_name(it), r.stat_item_used[it]); printf("\n");
+        for (int p = 0; p < t.npad; p++) CHECK(fabsf(t.pad[p].lateral) + t.pad[p].halfw <= t.s[t.pad[p].idx].width * 0.5f + 0.1f, "pad %d is off the road", p);
+        for (int m = 0; m < t.nmover; m++) CHECK(fabsf(t.mover[m].lateral) + t.mover[m].amp <= track_edge(&t, t.mover[m].idx) + 0.1f, "obstacle %d (%s) swings outside the walls", m, t.mover[m].img);
+        CHECK(t.npad == 0 || r.stat_pads > 0, "nobody touched a pad on %s", t.name);
         CHECK(r.state == RACE_FINISHED && r.race_t < RACE_TIME_LIMIT, "race on %s did not end in time", t.name);
         CHECK(finished >= 2, "fewer than 2 finished on %s", t.name);
     }

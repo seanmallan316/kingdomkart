@@ -24,12 +24,13 @@ LIBS    := -lwut -lm
 
 all: $(TARGET).wuhb
 
-tour: $(TARGET)-tour.rpx
+TOUR_ROAD ?= 1
+tour: $(TARGET)-tour$(TOUR_ROAD).rpx
 
-$(TARGET)-tour.elf: $(SRCS) $(HDRS)
-	$(CC) $(CFLAGS) -DKK_TOUR $(SRCS) $(LDFLAGS) $(LIBS) -o $@
+$(TARGET)-tour$(TOUR_ROAD).elf: $(SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -DKK_TOUR -DKK_TOUR_ROAD=$(TOUR_ROAD) $(SRCS) $(LDFLAGS) $(LIBS) -o $@
 
-$(TARGET)-tour.rpx: $(TARGET)-tour.elf
+$(TARGET)-tour$(TOUR_ROAD).rpx: $(TARGET)-tour$(TOUR_ROAD).elf
 	$(DEVKITPRO)/tools/bin/elf2rpl $< $@
 
 $(TARGET).elf: $(SRCS) $(HDRS)
@@ -43,6 +44,6 @@ $(TARGET).wuhb: $(TARGET).rpx content/hello.txt content/icon.png
 		--short-name "Kingdom Kart" --author "Sean" --icon content/icon.png $< $@
 
 clean:
-	rm -f $(TARGET).elf $(TARGET).rpx $(TARGET).wuhb $(TARGET)-tour.elf $(TARGET)-tour.rpx
+	rm -f $(TARGET).elf $(TARGET).rpx $(TARGET).wuhb $(TARGET)-tour*.elf $(TARGET)-tour*.rpx
 
 .PHONY: all clean tour

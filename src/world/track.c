@@ -83,3 +83,10 @@ void track_locate(const Track *t, float x, float z, int hint, TrackHit *out) {
     if (out->on_shoulder && t->shortcut_from >= 0 && best >= t->shortcut_from && best <= t->shortcut_to && (out->lateral < 0 ? -1 : 1) == t->shortcut_side) out->on_road = 1;
 }
 
+
+void track_mover_pos(const Track *t, const Mover *m, float time, float *x, float *y, float *z) {
+    int idx = m->idx % t->n; const TrackSample *s = &t->s[idx];
+    float lat = m->lateral + m->amp * sinf(time * m->speed + m->phase);
+    float lim = track_edge(t, idx) - 0.5f; if (lat > lim) lat = lim; if (lat < -lim) lat = -lim;
+    *x = s->x + s->nx * lat; *z = s->z + s->nz * lat; *y = track_surface_height(t, idx, lat);
+}

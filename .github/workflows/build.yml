@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the game
-        run: make && make tour
+        run: make && make tour TOUR_ROAD=0 && make tour TOUR_ROAD=1 && make tour TOUR_ROAD=2 && make tour TOUR_ROAD=3
       - name: Save the finished game file
         uses: actions/upload-artifact@v4
         with:
@@ -36,7 +36,7 @@ jobs:
           name: KingdomKart-rpx
           path: |
             kingdomkart.rpx
-            kingdomkart-tour.rpx
+            kingdomkart-tour*.rpx
             content/
 
   emulator-screenshot:
@@ -46,6 +46,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        road: [0, 1, 2, 3]
     permissions:
       contents: write
     steps:
@@ -77,7 +81,7 @@ jobs:
       - name: Prepare a title folder the emulator can load
         run: |
           mkdir -p title/code title/content title/meta
-          cp game/kingdomkart-tour.rpx title/code/kingdomkart.rpx
+          cp game/kingdomkart-tour${{ matrix.road }}.rpx title/code/kingdomkart.rpx
           cp -r game/content/* title/content/
           cat > title/code/app.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -167,15 +171,15 @@ jobs:
         run: |
           mkdir -p shots && cp screenshot_*.png cemu_log.txt cemu_internal_log.txt shots/ 2>/dev/null || true
           cd shots
-          git init -q -b ci-screenshots
+          git init -q -b ci-screenshots-road${{ matrix.road }}
           git config user.name "github-actions"; git config user.email "actions@github.com"
           git add -A && git commit -q -m "Emulator screenshots for ${{ github.sha }}" || true
-          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" ci-screenshots 2>&1 | tail -n 2 || true
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" ci-screenshots-road${{ matrix.road }} 2>&1 | tail -n 2 || true
       - name: Save the screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: EmulatorScreenshots
+          name: EmulatorScreenshots-road${{ matrix.road }}
           path: |
             screenshot_*.png
             cemu_log.txt

@@ -64,7 +64,8 @@ def fit(im, box):
 def main():
     os.makedirs(DST, exist_ok=True)
     n = 0
-    for root, _, files in os.walk(SRC):
+    for root, dirs, files in os.walk(SRC):
+        dirs[:] = [d for d in dirs if d != 'raw']          # assets/raw holds originals that are not game pictures
         for f in files:
             if not f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")): continue
             name = os.path.splitext(f)[0].lower()

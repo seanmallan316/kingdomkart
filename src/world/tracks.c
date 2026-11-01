@@ -68,6 +68,127 @@ static const Scenery BETH_SCENERY[] = {
     {"#inn", 296, -13, 9, 4}, {"#lantern", 302, 11, 4, 3}, {"#house1", 308, 12, 7, 0}, {"#house2", 312, -12, 9, 0}, {"#lantern", 316, -11, 4, 3}, {"#house1", 318, 12, 7, 0},
 };
 
+static const RoadPad BETH_PADS[] = {
+    {26, -2.5f, 2.2f, PAD_BOOST}, {30, 2.5f, 2.2f, PAD_BOOST},       /* main street: two arrows */
+    {78, 0.0f, 3.0f, PAD_BOUNCE},                                    /* a hop in the village square */
+    {150, -3.0f, 2.0f, PAD_BOOST},                                    /* help up the hill */
+    {250, 0.0f, 2.5f, PAD_BOOST},                                     /* down the switchback */
+};
+static const Mover BETH_MOVERS[] = {
+    {"#sheep", 136, 0.0f, 7.0f, 0.55f, 0.0f, 1.6f, 2.0f},            /* sheep wandering across the hill road */
+    {"#sheep", 198, 0.0f, 6.0f, 0.45f, 2.0f, 1.6f, 2.0f},
+};
+
+// ------------------------------------------------------------------ Sea of Galilee: a bright day on the shore, out along the causeway over the water
+// Start on the beach road, swing out onto the stone causeway across the water, jump the gap at its end onto the
+// sandbar, loop back through the fishing village and the palm grove.
+static const TrackPoint GAL_PTS[] = {
+    {    0, 0.0f,    0, 13, 0.00f},   /* start: beach road */
+    {    5, 0.0f,   55, 13, 0.00f},
+    {   25, 0.0f,  100, 13, 0.10f},
+    {   70, 0.0f,  125, 12, 0.00f},   /* onto the causeway */
+    {  125, 0.0f,  130, 11, 0.00f},
+    {  175, 1.5f,  120, 11, 0.00f},   /* the causeway rises to the jump */
+    {  205, 3.0f,  100, 11, 0.00f, 1},/* jump the broken end onto the sandbar */
+    {  215, 0.0f,   60, 13, 0.00f},
+    {  200, 0.0f,   15, 13, 0.20f},   /* banked sweep on the sand */
+    {  165, 0.0f,  -15, 13, 0.00f},
+    {  120, 0.0f,  -25, 12, 0.00f},   /* fishing village street */
+    {   85, 0.0f,  -50, 12, 0.00f},
+    {   55, 0.0f,  -75, 12, 0.00f},   /* palm grove */
+    {   20, 0.0f,  -70, 13, 0.00f},
+    {    0, 0.0f,  -40, 13, 0.00f},
+};
+static const Scenery GAL_SCENERY[] = {
+    {"#palm", 8, -12, 11, 0}, {"#hut", 16, 12, 6, 0}, {"#net", 24, -12, 4, 0}, {"#palm", 34, 12, 12, 0}, {"#rock", 44, -12, 3, 0},
+    {"#boat", 70, 14, 4, 0}, {"#boat", 92, -16, 4, 0}, {"#rock", 104, 12, 3, 0}, {"#boat", 118, 15, 4, 0}, {"#boat", 140, -15, 4, 0},
+    {"#rock", 160, 12, 3, 0}, {"#palm", 180, -13, 11, 0}, {"#rock", 190, 13, 3, 0},
+    {"#hut", 206, -12, 6, 0}, {"#net", 214, 12, 4, 0}, {"#hut", 222, 12, 6, 0}, {"#boat", 232, -13, 4, 0}, {"#hut", 240, -12, 6, 0}, {"#net", 248, 12, 4, 0},
+    {"#palm", 258, -12, 11, 0}, {"#palm", 266, 13, 12, 0}, {"#palm", 274, -13, 11, 0}, {"#palm", 282, 12, 12, 0}, {"#rock", 290, -12, 3, 0}, {"#palm", 296, 12, 11, 0},
+};
+static const RoadPad GAL_PADS[] = {
+    {12, 0.0f, 2.5f, PAD_BOOST}, {18, 0.0f, 2.5f, PAD_BOOST},         /* beach straight */
+    {118, 0.0f, 2.5f, PAD_BOOST},                                      /* run-up to the causeway jump */
+    {175, -3.0f, 2.0f, PAD_BOUNCE},                                     /* hop on the sand */
+    {272, 2.5f, 2.0f, PAD_BOOST},
+};
+static const Mover GAL_MOVERS[] = {
+    {"#net", 92, 0.0f, 5.5f, 0.5f, 0.0f, 1.4f, 2.4f},                 /* fishermen hauling nets across the causeway */
+    {"#net", 222, 0.0f, 5.0f, 0.6f, 1.5f, 1.4f, 2.4f},
+};
+
+// ------------------------------------------------------------------ Jerusalem Road: golden afternoon, up through the gate into the city streets
+static const TrackPoint JERU_PTS[] = {
+    {    0, 0.0f,    0, 13, 0.00f},   /* start on the pilgrim road below the walls */
+    {    0, 1.0f,   55, 13, 0.00f},
+    {  -15, 3.0f,  100, 13, 0.00f},   /* climbing to the gate */
+    {  -45, 5.0f,  125, 12, 0.00f},
+    {  -85, 6.0f,  120, 11, 0.00f},   /* through the gate: narrow */
+    { -115, 6.0f,   95, 11, 0.00f},   /* market street */
+    { -130, 6.0f,   60, 11, 0.15f},
+    { -125, 8.0f,   25, 11, 0.00f},   /* up the temple steps */
+    { -110, 9.0f,   -5, 12, 0.00f, 1},/* jump off the top of the stairs */
+    {  -90, 5.0f,  -35, 12, 0.00f},
+    {  -70, 3.0f,  -65, 12, 0.10f},
+    {  -40, 1.0f,  -80, 13, 0.00f},   /* back outside the walls, olive slope */
+    {  -10, 0.0f,  -70, 13, 0.00f},
+    {    3, 0.0f,  -35, 13, 0.00f},
+};
+static const Scenery JERU_SCENERY[] = {
+    {"#cypress", 8, -12, 8, 0}, {"#pillar", 14, 12, 5, 0}, {"#cypress", 22, 12, 8, 0}, {"#pillar", 30, -12, 5, 0}, {"#cypress", 38, -12, 8, 0},
+    {"#tower", 52, 12, 14, 0}, {"#wallseg", 60, -13, 9, 0}, {"#tower", 68, -13, 14, 0}, {"#arch", 78, 13, 12, 0}, {"#wallseg", 84, 12, 9, 0},
+    {"#stall", 96, -12, 5, 0}, {"#house2", 102, 12, 9, 0}, {"#stall", 108, 12, 5, 0}, {"#house1", 114, -12, 7, 0}, {"#stall", 120, -12, 5, 0}, {"#house2", 126, 12, 9, 0},
+    {"#pillar", 134, -12, 5, 0}, {"#pillar", 140, 12, 5, 0}, {"#pillar", 146, -12, 5, 0}, {"#pillar", 152, 12, 5, 0},
+    {"#tower", 164, 13, 14, 0}, {"#cypress", 176, -12, 8, 0}, {"#wallseg", 184, 12, 9, 0},
+    {"#olive", 196, -12, 6, 0}, {"#olive", 204, 12, 7, 0}, {"#olive", 212, -13, 6, 0}, {"#olive", 222, 12, 7, 0}, {"#olive", 232, -12, 6, 0},
+    {"#cypress", 244, 12, 8, 0}, {"#olive", 252, -12, 6, 0}, {"#cypress", 262, 12, 8, 0}, {"#pillar", 270, -12, 5, 0},
+};
+static const RoadPad JERU_PADS[] = {
+    {16, -2.5f, 2.0f, PAD_BOOST}, {20, 2.5f, 2.0f, PAD_BOOST},         /* the pilgrim road, palm branches waving */
+    {90, 0.0f, 2.5f, PAD_BOOST},                                       /* through the gate */
+    {150, 0.0f, 2.5f, PAD_BOOST},                                      /* run-up to the stairs jump */
+    {230, 0.0f, 3.0f, PAD_BOUNCE},                                     /* a hop on the olive slope */
+};
+static const Mover JERU_MOVERS[] = {
+    {"#cart", 106, 0.0f, 5.0f, 0.7f, 0.0f, 1.8f, 2.6f},               /* market carts crossing the street */
+    {"#cart", 124, 0.0f, 5.0f, 0.6f, 2.5f, 1.8f, 2.6f},
+};
+
+// ------------------------------------------------------------------ Sunrise at the Empty Tomb: dawn in the garden, the stone rolled away
+static const TrackPoint TOMB_PTS[] = {
+    {    0, 0.0f,    0, 13, 0.00f},   /* start on the garden path */
+    {    0, 0.5f,   50, 13, 0.00f},
+    {   15, 2.0f,   95, 13, 0.00f},
+    {   50, 4.0f,  120, 12, 0.00f},   /* climbing past the olive trees */
+    {   95, 5.0f,  115, 12, 0.10f},
+    {  125, 5.5f,   85, 12, 0.00f, 1},/* the garden wall: a jump down */
+    {  130, 1.0f,   45, 13, 0.00f},
+    {  115, 0.0f,    5, 14, 0.00f},   /* the tomb clearing, wide */
+    {   85, 0.0f,  -25, 13, 0.00f},
+    {   50, 1.0f,  -45, 12, 0.00f},
+    {   15, 2.5f,  -60, 12, 0.15f},   /* banked bend below the three hills */
+    {  -20, 1.5f,  -50, 12, 0.00f},
+    {  -25, 0.0f,  -15, 13, 0.00f},
+};
+static const Scenery TOMB_SCENERY[] = {
+    {"#olive", 6, -12, 6, 0}, {"#lily", 12, 12, 2, 0}, {"#olive", 20, 12, 7, 0}, {"#lily", 28, -12, 2, 0}, {"#olive", 36, -12, 6, 0}, {"#lily", 44, 12, 2, 0},
+    {"#olive", 54, 12, 7, 0}, {"#rock", 62, -12, 3, 0}, {"#olive", 70, -12, 6, 0}, {"#olive", 80, 12, 7, 0}, {"#rock", 90, -12, 3, 0},
+    {"#rock", 100, 12, 3, 0}, {"#olive", 106, -12, 6, 0},
+    {"#lily", 124, -13, 2, 0}, {"#lily", 130, 13, 2, 0}, {"#tomb", 142, 14, 8, 6}, {"angel", 146, 11, 5, 4}, {"#lily", 150, -12, 2, 0}, {"#rock", 156, -12, 3, 0},
+    {"#olive", 166, 12, 7, 0}, {"#lily", 172, -12, 2, 0}, {"#olive", 180, -12, 6, 0}, {"#crosses", 196, -16, 10, 0}, {"#olive", 206, 12, 7, 0},
+    {"#rock", 216, -12, 3, 0}, {"#olive", 226, 12, 6, 0}, {"#lily", 236, -12, 2, 0}, {"#olive", 246, 12, 7, 0}, {"#lily", 254, -12, 2, 0},
+};
+static const RoadPad TOMB_PADS[] = {
+    {14, 0.0f, 2.5f, PAD_BOOST},
+    {92, 0.0f, 2.5f, PAD_BOOST},                                       /* run-up to the wall jump */
+    {140, -3.0f, 2.0f, PAD_BOUNCE}, {140, 3.0f, 2.0f, PAD_BOUNCE},     /* two hops by the tomb */
+    {200, 0.0f, 2.5f, PAD_BOOST},
+};
+static const Mover TOMB_MOVERS[] = {
+    {"#stone", 160, 0.0f, 5.5f, 0.9f, 0.0f, 1.5f, 2.2f},              /* rolling stones */
+    {"#stone", 214, 0.0f, 5.0f, 0.8f, 2.0f, 1.5f, 2.2f},
+};
+
 const TrackDef TRACK_DEFS[] = {
     { "Bethlehem Road", 3, BETH_PTS, (int)(sizeof BETH_PTS / sizeof BETH_PTS[0]),
       0.03f, 0.04f, 0.14f,                      /* sky */
@@ -78,7 +199,41 @@ const TrackDef TRACK_DEFS[] = {
       1, "beth_road", "beth_dirt", "beth_grass", "beth_wall", "beth_sky",
       BETH_SCENERY, (int)(sizeof BETH_SCENERY / sizeof BETH_SCENERY[0]),
       -230.0f, 120.0f, 60.0f, 46.0f,            /* the Star, high over the hill */
-      300, 335, -1 },                           /* alley shortcut: inside of the tight corner */
+      300, 335, -1,                             /* alley shortcut: inside of the tight corner */
+      "beth", BETH_PADS, (int)(sizeof BETH_PADS / sizeof BETH_PADS[0]), BETH_MOVERS, (int)(sizeof BETH_MOVERS / sizeof BETH_MOVERS[0]), 0 },
+    { "Sea of Galilee", 3, GAL_PTS, (int)(sizeof GAL_PTS / sizeof GAL_PTS[0]),
+      0.50f, 0.74f, 0.98f,                      /* clear blue sky */
+      0.78f, 0.88f, 0.98f, 140.0f, 520.0f,      /* light haze */
+      0.30f, 1.0f, 0.45f, 0.50f,                /* high sun */
+      1.0f, 0.98f, 0.92f,
+      1.0f, 0.95f, 0.8f,
+      0, "gal_road", "gal_sand", "gal_water", "gal_wall", "gal_sky",
+      GAL_SCENERY, (int)(sizeof GAL_SCENERY / sizeof GAL_SCENERY[0]),
+      0, 0, 0, 0,
+      150, 185, 1,                              /* sandbar shortcut on the outside of the sweep */
+      "gal", GAL_PADS, (int)(sizeof GAL_PADS / sizeof GAL_PADS[0]), GAL_MOVERS, (int)(sizeof GAL_MOVERS / sizeof GAL_MOVERS[0]), 1 },
+    { "Jerusalem Road", 3, JERU_PTS, (int)(sizeof JERU_PTS / sizeof JERU_PTS[0]),
+      0.80f, 0.62f, 0.45f,                      /* golden afternoon */
+      0.90f, 0.74f, 0.52f, 90.0f, 420.0f,
+      -0.6f, 0.7f, -0.3f, 0.42f,                /* low warm sun */
+      1.0f, 0.90f, 0.72f,
+      1.0f, 0.85f, 0.5f,
+      0, "jeru_road", "jeru_dirt", "jeru_grass", "jeru_wall", "jeru_sky",
+      JERU_SCENERY, (int)(sizeof JERU_SCENERY / sizeof JERU_SCENERY[0]),
+      0, 0, 0, 0,
+      232, 262, -1,                             /* side alley on the olive slope */
+      "jeru", JERU_PADS, (int)(sizeof JERU_PADS / sizeof JERU_PADS[0]), JERU_MOVERS, (int)(sizeof JERU_MOVERS / sizeof JERU_MOVERS[0]), 0 },
+    { "Sunrise at the Empty Tomb", 3, TOMB_PTS, (int)(sizeof TOMB_PTS / sizeof TOMB_PTS[0]),
+      0.95f, 0.70f, 0.60f,                      /* pink dawn */
+      0.98f, 0.80f, 0.70f, 80.0f, 380.0f,
+      0.7f, 0.45f, 0.5f, 0.45f,                 /* sun just over the hills */
+      1.0f, 0.88f, 0.80f,
+      1.0f, 0.95f, 0.75f,
+      0, "tomb_road", "tomb_dirt", "tomb_grass", "tomb_wall", "tomb_sky",
+      TOMB_SCENERY, (int)(sizeof TOMB_SCENERY / sizeof TOMB_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "tomb", TOMB_PADS, (int)(sizeof TOMB_PADS / sizeof TOMB_PADS[0]), TOMB_MOVERS, (int)(sizeof TOMB_MOVERS / sizeof TOMB_MOVERS[0]), 0 },
     { "Test Loop", 3, TEST_PTS, (int)(sizeof TEST_PTS / sizeof TEST_PTS[0]),
       0.55f, 0.75f, 0.98f,
       0.72f, 0.82f, 0.95f, 120.0f, 520.0f,
@@ -88,12 +243,16 @@ const TrackDef TRACK_DEFS[] = {
       0, "test_road", "test_dirt", "test_grass", "test_wall", "test_sky",
       TEST_SCENERY, (int)(sizeof TEST_SCENERY / sizeof TEST_SCENERY[0]),
       0, 0, 0, 0,
-      -1, -1, 0 },
+      -1, -1, 0,
+      "test", NULL, 0, NULL, 0, 0 },
 };
 const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 
 void track_from_def(Track *t, const TrackDef *d) {
     track_build(t, d->name, d->laps, d->points, d->npoints, 20);
     t->shortcut_from = d->shortcut_from; t->shortcut_to = d->shortcut_to; t->shortcut_side = d->shortcut_side;
+    t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx %= t->n; t->npad++; }
+    t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx %= t->n; t->nmover++; }
+    t->water = d->water;
 }
-void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[1]); }
+void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[NUM_TRACK_DEFS - 1]); }
