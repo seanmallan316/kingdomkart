@@ -19,7 +19,7 @@
 #include "../render/gfx.h"
 #include "../game/game.h"
 
-#define KK_VERSION "M4-0.1"
+#define KK_VERSION "M5-0.1"
 void gfx_set_logfile(FILE *f);
 
 static void read_pad(Pad *p) {
@@ -29,6 +29,8 @@ static void read_pad(Pad *p) {
         p->sx = vs.leftStick.x; p->sy = vs.leftStick.y;
         if (vs.hold & VPAD_BUTTON_LEFT) p->sx = -1;
         if (vs.hold & VPAD_BUTTON_RIGHT) p->sx = 1;
+        if (vs.hold & VPAD_BUTTON_UP) p->sy = 1;
+        if (vs.hold & VPAD_BUTTON_DOWN) p->sy = -1;
         p->a = !!(vs.hold & VPAD_BUTTON_A); p->b = !!(vs.hold & VPAD_BUTTON_B);
         p->x = !!(vs.hold & VPAD_BUTTON_X); p->y = !!(vs.hold & VPAD_BUTTON_Y);
         p->zl = !!(vs.hold & (VPAD_BUTTON_ZL | VPAD_BUTTON_L)); p->zr = !!(vs.hold & (VPAD_BUTTON_ZR | VPAD_BUTTON_R));
@@ -39,14 +41,19 @@ static void read_pad(Pad *p) {
     if (KPADReadEx(WPAD_CHAN_0, &ks, 1, &ke) > 0 && ke == KPAD_ERROR_OK && ks.extensionType == WPAD_EXT_PRO_CONTROLLER) {
         if (fabsf(ks.pro.leftStick.x) > 0.1f) p->sx = ks.pro.leftStick.x;
         if (fabsf(ks.pro.leftStick.y) > 0.1f) p->sy = ks.pro.leftStick.y;
+        if (ks.pro.hold & WPAD_PRO_BUTTON_LEFT) p->sx = -1;
+        if (ks.pro.hold & WPAD_PRO_BUTTON_RIGHT) p->sx = 1;
+        if (ks.pro.hold & WPAD_PRO_BUTTON_UP) p->sy = 1;
+        if (ks.pro.hold & WPAD_PRO_BUTTON_DOWN) p->sy = -1;
         p->a |= !!(ks.pro.hold & WPAD_PRO_BUTTON_A); p->b |= !!(ks.pro.hold & WPAD_PRO_BUTTON_B);
         p->x |= !!(ks.pro.hold & WPAD_PRO_BUTTON_X); p->y |= !!(ks.pro.hold & WPAD_PRO_BUTTON_Y);
         p->zl |= !!(ks.pro.hold & (WPAD_PRO_TRIGGER_ZL | WPAD_PRO_TRIGGER_L)); p->zr |= !!(ks.pro.hold & (WPAD_PRO_TRIGGER_ZR | WPAD_PRO_TRIGGER_R));
         p->plus |= !!(ks.pro.trigger & WPAD_PRO_BUTTON_PLUS);
         p->source |= 2;
     }
-    p->sx = clampf(p->sx, -1, 1);
+    p->sx = clampf(p->sx, -1, 1); p->sy = clampf(p->sy, -1, 1);
     if (fabsf(p->sx) < 0.12f) p->sx = 0;
+    if (fabsf(p->sy) < 0.12f) p->sy = 0;
 }
 
 int main(int argc, char **argv) {

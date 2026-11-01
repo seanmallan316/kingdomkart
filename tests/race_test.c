@@ -11,7 +11,7 @@ int main(void) {
     Track t; track_make_test(&t);
     int wins[8] = {0};
     for (int diff = 0; diff < 3; diff++) for (int rep = 0; rep < 4; rep++) {
-        Race r; race_init(&r, &t, rep * 2 % 8, 5, diff);
+        Race r; race_init(&r, &t, rep * 2 % 8, 5, diff, NKARTS);
         float time = 0; int nan = 0; float max_jump_back = 0;
         float last_dist[NKARTS]; for (int i = 0; i < NKARTS; i++) last_dist[i] = r.k[i].dist; int steps = 0;
         KartInput in; memset(&in, 0, sizeof in);

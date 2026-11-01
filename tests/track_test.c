@@ -20,7 +20,7 @@ int main(void) {
             CHECK(sc->idx >= 0 && sc->idx < t.n, "scenery %d off the track (%d)", s, sc->idx);
             CHECK(fabsf(sc->side) >= track_edge(&t, sc->idx % t.n) - 0.1f, "scenery %d (%s) stands inside the walls at sample %d (side %.1f, edge %.1f)", s, sc->img, sc->idx, sc->side, track_edge(&t, sc->idx % t.n)); }
         /* a full race must end in time on every road */
-        Race r; race_init(&r, &t, 0, 5, DIFF_NORMAL); KartInput in; memset(&in, 0, sizeof in); float time = 0;
+        Race r; race_init(&r, &t, 0, 5, DIFF_NORMAL, NKARTS); KartInput in; memset(&in, 0, sizeof in); float time = 0;
         while (r.state != RACE_FINISHED && time < 200) { race_step(&r, &in, 1, SIM_DT); time += SIM_DT; }
         int finished = 0; for (int i = 0; i < NKARTS; i++) finished += r.k[i].lap > t.laps;
         printf("  race ended at %.1fs, %d/8 crossed the line, winner time %.1fs, pickups %d, hits %d\n", r.race_t, finished, r.k[r.order[0]].total_time, r.stat_pickups, r.stat_hits);

@@ -35,7 +35,7 @@ typedef struct {
     int stat_pickups, stat_hits, stat_blocks, stat_uses, stat_stones, stat_oils;
 } Race;
 
-void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty);
+void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk);   /* nk = 1 for a time trial */
 void race_step(Race *r, const KartInput *player_in, int player_auto, float dt);
 void race_rank(Race *r);
 const char *item_name(int item);

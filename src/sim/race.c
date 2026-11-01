@@ -21,28 +21,32 @@ static float rr(Race *r) { r->rng ^= r->rng << 13; r->rng ^= r->rng >> 17; r->rn
 static void push_event(Race *r, int type, int kart) { if (r->nev < 32) { r->ev[r->nev].type = type; r->ev[r->nev].kart = kart; r->nev++; } }
 static float wrap_pi(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (a < -3.14159265f) a += 6.2831853f; return a; }
 
-void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty) {
+void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk) {
     memset(r, 0, sizeof *r);
-    r->track = t; r->nk = NKARTS; r->player = player_slot; r->difficulty = difficulty; r->rng = 0xC0FFEE11u + (uint32_t)player_character * 7919u;
+    if (nk < 1) nk = 1;
+    if (nk > NKARTS) nk = NKARTS;
+    if (player_slot >= nk) player_slot = 0;
+    r->track = t; r->nk = nk; r->player = player_slot; r->difficulty = difficulty; r->rng = 0xC0FFEE11u + (uint32_t)player_character * 7919u;
     /* hand out characters: the player's pick, then the rest in order */
     int pool[8], np = 0;
     for (int c = 0; c < 8; c++) if (c != player_character) pool[np++] = c;
     for (int i = np - 1; i > 0; i--) { int j = (int)(rr(r) * (float)(i + 1)); if (j > i) j = i; int tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }   /* random grid */
     int next = 0;
     for (int i = 0; i < NKARTS; i++) r->character[i] = (i == player_slot) ? player_character : pool[next++];
+    for (int i = 0; i < NKARTS; i++) r->order[i] = i;
     float base = difficulty == DIFF_EASY ? 0.55f : (difficulty == DIFF_NORMAL ? 0.78f : 0.95f);
-    for (int i = 0; i < NKARTS; i++) {
+    for (int i = 0; i < r->nk; i++) {
         Kart *k = &r->k[i];
         memset(k, 0, sizeof *k);
         k->st = CHARACTERS[r->character[i]].st;
-        kart_reset(k, t, i);
+        kart_reset(k, t, r->nk == 1 ? 0 : i);
         r->ai_skill[i] = base + (rr(r) - 0.5f) * 0.16f;
         r->ai_wobble[i] = rr(r) * 6.28f;
     }
     /* item boxes: rows of four across the road at three places */
     static const float at[3] = {0.11f, 0.42f, 0.74f};
     r->nbox = 0;
-    for (int row = 0; row < 3; row++) {
+    for (int row = 0; row < 3 && nk > 1; row++) {
         int idx = (int)(at[row] * (float)t->n) % t->n;
         for (int c = 0; c < 4; c++) {
             ItemBox *b = &r->box[r->nbox++];
