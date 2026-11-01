@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #define STB_IMAGE_IMPLEMENTATION
+#define STBI_NO_THREAD_LOCALS       /* the Wii U executable format has no thread-local storage */
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #define STBI_NO_STDIO
