@@ -37,6 +37,7 @@ typedef struct {
     RoadPad pad[MAX_PADS]; int npad;
     Mover mover[MAX_MOVERS]; int nmover;
     int water;                              /* off-road is water (splashes instead of dust) */
+    int grid_idx;                           /* sample the grid lines up at; > 0 means the race starts partway (finish at sample 0) */
 } Track;
 
 typedef struct {

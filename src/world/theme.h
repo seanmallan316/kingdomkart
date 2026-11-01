@@ -32,6 +32,10 @@ typedef struct {
     const RoadPad *pads; int npads;
     const Mover *movers; int nmovers;
     int water;
+    int grid_idx;                         /* 0 = a normal loop; else the grid is at this sample and the race is one run to the finish at sample 0 */
+    const char *finale_img;               /* a big picture standing across the road past the finish (the gates of Heaven) */
+    int finale_idx; float finale_w, finale_h;
+    int bonus;                            /* unlockable road */
 } TrackDef;
 
 extern const TrackDef TRACK_DEFS[];

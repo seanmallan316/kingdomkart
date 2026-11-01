@@ -189,6 +189,53 @@ static const Mover TOMB_MOVERS[] = {
     {"#stone", 214, 0.0f, 5.0f, 0.8f, 2.0f, 1.5f, 2.2f},
 };
 
+// ------------------------------------------------------------------ Road to Heaven (bonus): one run from the earth up through the clouds to the gates
+// Sample 0 is the finish line in Heaven. The road then comes back down the east side (nobody races that part),
+// the grid stands on the earth at the bottom, and the race climbs the west side.
+static const TrackPoint HEAVEN_PTS[] = {
+    {    0, 88.0f,  300, 16, 0.00f},   /* FINISH: the plaza before the gates */
+    {   60, 88.0f,  335, 16, 0.00f},
+    {  125, 82.0f,  300, 14, 0.00f},   /* the way back down (unused by the race) */
+    {  155, 62.0f,  215, 13, 0.00f},
+    {  155, 40.0f,  125, 13, 0.00f},
+    {  120, 18.0f,   55, 13, 0.00f},
+    {   60,  4.0f,   15, 13, 0.00f},
+    {    0,  0.0f,    0, 13, 0.00f},   /* EARTH: the grid stands here, heading west */
+    {  -70,  2.0f,    5, 13, 0.00f},
+    { -130,  8.0f,   35, 13, 0.10f},   /* the climb begins */
+    { -160, 18.0f,   95, 13, 0.00f},
+    { -130, 28.0f,  150, 12, 0.15f},   /* switchback */
+    {  -70, 36.0f,  175, 12, 0.00f},
+    {  -20, 46.0f,  215, 12, 0.15f},   /* switchback, into the clouds */
+    {  -70, 58.0f,  255, 12, 0.00f},
+    { -130, 68.0f,  275, 13, 0.10f},
+    { -150, 80.0f,  320, 13, 0.00f},
+    { -100, 90.0f,  360, 14, 0.00f},
+    {  -45, 94.0f,  345, 15, 0.00f, 1},/* the last rise: a leap over the threshold into Heaven */
+};
+static const Scenery HEAVEN_SCENERY[] = {
+    /* heaven: angels line the plaza, trumpets at the gate */
+    {"angel", 4, -14, 7, 3}, {"angel", 4, 14, 7, 3}, {"shofar", 10, -13, 4, 2}, {"shofar", 10, 13, 4, 2}, {"angel", 16, -14, 7, 3}, {"angel", 16, 14, 7, 3},
+    {"#gpillar", 24, -14, 9, 0}, {"#gpillar", 24, 14, 9, 0}, {"angel", 30, -14, 7, 3}, {"angel", 30, 14, 7, 3},
+    /* the way down: clouds */
+    {"#cloud", 60, -16, 8, 0}, {"#cloud", 80, 16, 9, 0}, {"#cloud", 100, -16, 8, 0}, {"#cloud", 120, 16, 9, 0},
+    /* earth */
+    {"#olive", 126, -12, 6, 0}, {"#cypress", 132, 12, 8, 0}, {"#house1", 138, 12, 7, 0}, {"#olive", 148, -12, 6, 0}, {"#cypress", 154, 12, 8, 0},
+    {"#olive", 162, -12, 6, 0}, {"#house2", 168, 12, 9, 0}, {"#olive", 176, -12, 6, 0}, {"#cypress", 184, 12, 8, 0}, {"#olive", 194, -12, 6, 0},
+    /* the climb: clouds gather */
+    {"#cloud", 206, -16, 7, 0}, {"#cloud", 216, 16, 8, 0}, {"#cloud", 228, -17, 9, 0}, {"#cloud", 240, 16, 8, 0}, {"#cloud", 252, -16, 9, 0}, {"#cloud", 264, 17, 10, 0},
+    {"#cloud", 276, -16, 8, 0}, {"#cloud", 288, 16, 9, 0}, {"#cloud", 300, -17, 9, 0}, {"#cloud", 312, 16, 8, 0},
+    {"angel", 322, -14, 7, 3}, {"#cloud", 330, 16, 9, 0}, {"angel", 338, 14, 7, 3}, {"#gpillar", 346, -14, 9, 0}, {"#gpillar", 346, 14, 9, 0},
+    {"angel", 356, -14, 7, 3}, {"angel", 356, 14, 7, 3}, {"shofar", 366, -14, 4, 2}, {"shofar", 366, 14, 4, 2}, {"angel", 374, -14, 7, 3}, {"angel", 374, 14, 7, 3},
+};
+static const RoadPad HEAVEN_PADS[] = {
+    {152, 0.0f, 2.5f, PAD_BOOST},                                       /* leaving the earth */
+    {196, -2.5f, 2.0f, PAD_BOOST}, {202, 2.5f, 2.0f, PAD_BOOST},        /* up the climb */
+    {236, 0.0f, 2.5f, PAD_BOOST},
+    {272, 0.0f, 3.0f, PAD_BOUNCE},                                      /* a hop among the clouds */
+    {296, 0.0f, 2.5f, PAD_BOOST}, {340, 0.0f, 2.5f, PAD_BOOST},
+};
+
 const TrackDef TRACK_DEFS[] = {
     { "Bethlehem Road", 3, BETH_PTS, (int)(sizeof BETH_PTS / sizeof BETH_PTS[0]),
       0.03f, 0.04f, 0.14f,                      /* sky */
@@ -234,6 +281,20 @@ const TrackDef TRACK_DEFS[] = {
       0, 0, 0, 0,
       -1, -1, 0,
       "tomb", TOMB_PADS, (int)(sizeof TOMB_PADS / sizeof TOMB_PADS[0]), TOMB_MOVERS, (int)(sizeof TOMB_MOVERS / sizeof TOMB_MOVERS[0]), 0 },
+    { "Road to Heaven", 1, HEAVEN_PTS, (int)(sizeof HEAVEN_PTS / sizeof HEAVEN_PTS[0]),
+      0.80f, 0.88f, 1.00f,                      /* bright pale sky */
+      0.98f, 0.95f, 0.85f, 120.0f, 600.0f,      /* golden haze */
+      0.2f, 1.0f, 0.3f, 0.60f,                  /* light from above */
+      1.0f, 0.98f, 0.90f,
+      1.0f, 0.92f, 0.6f,
+      0, "heaven_road", "heaven_cloud", "heaven_earth", "heaven_cloudwall", "heaven_sky",
+      HEAVEN_SCENERY, (int)(sizeof HEAVEN_SCENERY / sizeof HEAVEN_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "heaven", HEAVEN_PADS, (int)(sizeof HEAVEN_PADS / sizeof HEAVEN_PADS[0]), NULL, 0, 0,
+      140,                                      /* the grid stands on the earth */
+      "heaven_gates", 34, 70.0f, 40.0f,         /* the gates with God's open hands, standing across the plaza */
+      1 },
     { "Test Loop", 3, TEST_PTS, (int)(sizeof TEST_PTS / sizeof TEST_PTS[0]),
       0.55f, 0.75f, 0.98f,
       0.72f, 0.82f, 0.95f, 120.0f, 520.0f,
@@ -253,6 +314,6 @@ void track_from_def(Track *t, const TrackDef *d) {
     t->shortcut_from = d->shortcut_from; t->shortcut_to = d->shortcut_to; t->shortcut_side = d->shortcut_side;
     t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx %= t->n; t->npad++; }
     t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx %= t->n; t->nmover++; }
-    t->water = d->water;
+    t->water = d->water; t->grid_idx = d->grid_idx % t->n;
 }
 void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[NUM_TRACK_DEFS - 1]); }

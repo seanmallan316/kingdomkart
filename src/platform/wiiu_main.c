@@ -18,8 +18,9 @@
 #include <math.h>
 #include "../render/gfx.h"
 #include "../game/game.h"
+#include "../game/save.h"
 
-#define KK_VERSION "M6-0.1"
+#define KK_VERSION "M6-0.2"
 void gfx_set_logfile(FILE *f);
 
 static void read_pad(Pad *p) {
@@ -64,6 +65,7 @@ int main(int argc, char **argv) {
     if (WHBMountSdCard()) {
         char path[256]; snprintf(path, sizeof path, "%s/wiiu/kingdomkart_log.txt", WHBGetSdCardMountPath());
         logfile = fopen(path, "w"); gfx_set_logfile(logfile);
+        snprintf(path, sizeof path, "%s/wiiu/kingdomkart_save.txt", WHBGetSdCardMountPath()); save_set_path(path);
     }
     gfx_log("Kingdom Kart %s starting", KK_VERSION);
     KPADInit(); WPADEnableURCC(TRUE);

@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 /* stats: top speed, acceleration, handling, weight (1.0 = average). Balanced so no one wins every race. */
-const Character CHARACTERS[8] = {
+const Character CHARACTERS[NCHARS] = {
     {"Jesus",  "JESUS",  {1.00f, 1.00f, 1.00f, 1.00f}, 0.98f, 0.98f, 0.92f},   /* white and gold */
     {"Moses",  "MOSES",  {1.04f, 0.92f, 0.94f, 1.15f}, 0.25f, 0.50f, 0.95f},   /* parted-waters blue */
     {"David",  "DAVID",  {0.97f, 1.05f, 1.06f, 0.88f}, 0.75f, 0.52f, 0.25f},   /* wood and gold */
@@ -12,7 +12,19 @@ const Character CHARACTERS[8] = {
     {"Paul",   "PAUL",   {0.98f, 1.08f, 0.98f, 0.98f}, 0.80f, 0.22f, 0.18f},   /* red and bronze */
     {"Mary",   "MARY",   {0.96f, 1.06f, 1.05f, 0.90f}, 0.55f, 0.80f, 0.98f},   /* light blue */
     {"Daniel", "DANIEL", {1.06f, 0.94f, 0.97f, 1.05f}, 0.92f, 0.70f, 0.20f},   /* gold and blue */
+    {"Noah",   "NOAH",   {0.95f, 0.96f, 0.98f, 1.30f}, 0.45f, 0.32f, 0.20f, 1}, /* bonus: ark wood, heaviest of all */
+    {"Elijah", "ELIJAH", {1.10f, 1.02f, 0.92f, 0.95f}, 1.00f, 0.45f, 0.10f, 1}, /* bonus: chariot-of-fire orange, fastest of all */
 };
+static unsigned g_unlocked = 0xFF;      /* the computer drives only unlocked characters */
+void race_set_unlocked(unsigned mask) { g_unlocked = mask | 0xFF; }
+const KartStyle KART_STYLES[NSTYLES] = {
+    {"STANDARD", {1.00f, 1.00f, 1.00f, 1.00f}},
+    {"CHARIOT",  {1.05f, 0.97f, 0.94f, 1.00f}},     /* faster, wider turns */
+    {"BOAT",     {0.98f, 1.00f, 1.08f, 0.95f}},     /* nimble */
+    {"ARK",      {0.97f, 1.06f, 0.96f, 1.25f}},     /* heavy and quick off the line */
+};
+static int g_player_style = 0; static unsigned g_styles = 1;
+void race_set_styles(int player_style, unsigned unlocked_styles) { g_player_style = player_style; g_styles = unlocked_styles | 1; }
 
 const char *item_name(int item) {
     switch (item) { case ITEM_MANNA: return "MANNA"; case ITEM_STAFF: return "STAFF"; case ITEM_STONE: return "STONE"; case ITEM_OIL: return "OIL JAR";
@@ -29,8 +41,8 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
     if (player_slot >= nk) player_slot = 0;
     r->track = t; r->nk = nk; r->player = player_slot; r->difficulty = difficulty; r->rng = 0xC0FFEE11u + (uint32_t)player_character * 7919u;
     /* hand out characters: the player's pick, then the rest in order */
-    int pool[8], np = 0;
-    for (int c = 0; c < 8; c++) if (c != player_character) pool[np++] = c;
+    int pool[NCHARS], np = 0;
+    for (int c = 0; c < NCHARS; c++) if (c != player_character && (g_unlocked >> c) & 1) pool[np++] = c;
     for (int i = np - 1; i > 0; i--) { int j = (int)(rr(r) * (float)(i + 1)); if (j > i) j = i; int tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }   /* random grid */
     int next = 0;
     for (int i = 0; i < NKARTS; i++) r->character[i] = (i == player_slot) ? player_character : pool[next++];
@@ -40,6 +52,9 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
         Kart *k = &r->k[i];
         memset(k, 0, sizeof *k);
         k->st = CHARACTERS[r->character[i]].st;
+        if (i == player_slot) r->style[i] = g_player_style;
+        else { int opts[NSTYLES], no = 0; for (int sty = 0; sty < NSTYLES; sty++) if ((g_styles >> sty) & 1) opts[no++] = sty; r->style[i] = opts[(int)(rr(r) * no) % no]; }
+        const KartStats *m = &KART_STYLES[r->style[i]].mul; k->st.top_speed *= m->top_speed; k->st.accel *= m->accel; k->st.handling *= m->handling; k->st.weight *= m->weight;
         kart_reset(k, t, r->nk == 1 ? 0 : i);
         r->ai_skill[i] = base + (rr(r) - 0.5f) * 0.16f;
         r->ai_wobble[i] = rr(r) * 6.28f;
@@ -48,7 +63,7 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
     static const float at[3] = {0.11f, 0.42f, 0.74f};
     r->nbox = 0;
     for (int row = 0; row < 3 && nk > 1; row++) {
-        int idx = (int)(at[row] * (float)t->n) % t->n;
+        int idx = (t->grid_idx + (int)(at[row] * (float)(t->n - t->grid_idx))) % t->n;   /* on a one-way road, spread over the raced part */
         for (int c = 0; c < 4; c++) {
             ItemBox *b = &r->box[r->nbox++];
             float lat = (c - 1.5f) * (t->s[idx].width * 0.22f);

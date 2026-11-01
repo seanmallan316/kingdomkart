@@ -17,9 +17,9 @@ void kart_reset(Kart *k, const Track *t, int slot) {
     k->st = st;
     if (k->st.top_speed <= 0) { k->st.top_speed = 1; k->st.accel = 1; k->st.handling = 1; k->st.weight = 1; }
     /* grid: two columns, behind the start line */
-    const TrackSample *s0 = &t->s[0];
+    const TrackSample *s0 = &t->s[t->grid_idx];
     float back = 6.0f + (float)(slot / 2) * 5.0f, side = (slot % 2) ? 2.8f : -2.8f;
-    int idx = (t->n - (int)(back / (t->length / (float)t->n))) % t->n; if (idx < 0) idx += t->n;
+    int idx = (t->grid_idx + t->n - (int)(back / (t->length / (float)t->n))) % t->n; if (idx < 0) idx += t->n;
     const TrackSample *s = &t->s[idx];
     k->x = s->x + s->nx * side; k->z = s->z + s->nz * side;
     k->yaw = atan2f(s0->tx, s0->tz);
@@ -27,6 +27,10 @@ void kart_reset(Kart *k, const Track *t, int slot) {
     k->y = k->hit.height;
     k->next_cp = 0; k->lap = 0; k->best_lap = 0;
     k->dist = -back;
+    if (t->grid_idx > 0) {      /* a one-way road: the lap is already under way, the next gate is the first one past the grid */
+        k->lap = 1; k->next_cp = 0;
+        for (int c = 1; c < TRACK_CHECKPOINTS; c++) if (t->checkpoint[c] > t->grid_idx + 2) { k->next_cp = c; break; }
+    }
     k->boost_mul = 1.0f;
 }
 

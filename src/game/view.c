@@ -1,5 +1,6 @@
 // view.c - draws the race: track, eight karts, items, effects, HUD, results. The rules live in sim/race.c.
 #include "game.h"
+#include "save.h"
 #include "../sim/race.h"
 #include "../render/gfx.h"
 #include "../render/batch.h"
@@ -15,6 +16,7 @@
 #define SPRITE_DRAW_DIST 340.0f
 #define NUM_GP_ROUNDS_MAX 4
 #define NUM_PLAY_TRACKS (NUM_TRACK_DEFS - 1)     /* the last road is the developers' Test Loop, not offered to players */
+#define NUM_GP_TRACKS 4                          /* the Grand Prix runs the four story roads; bonus roads are for Single Race and Time Trial */
 #ifndef KK_TOUR_ROAD
 #define KK_TOUR_ROAD 1
 #endif
@@ -24,16 +26,26 @@ static Track g_track; static const TrackDef *g_def; static int g_track_idx = 0;
 static Race g_race;
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL;
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP };
 enum { MODE_GP, MODE_SINGLE, MODE_TT };
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
-static int g_gp_round = 0, g_gp_points[8], g_gp_order[NUM_GP_ROUNDS_MAX];
-static float g_best_time[8];                 /* best time trial time per road, this session */
-static Texture *tx_portrait[8];
+static int char_unlocked(int c) { return !CHARACTERS[c].bonus || (c == 8 && (g_save.unlocks & UNLOCK_NOAH)) || (c == 9 && (g_save.unlocks & UNLOCK_ELIJAH)); }
+static int char_lock_bit(int c) { return c == 8 ? UNLOCK_NOAH : (c == 9 ? UNLOCK_ELIJAH : 0); }
+static int style_lock_bit(int sty) { return sty == 1 ? UNLOCK_KART_CHARIOT : (sty == 2 ? UNLOCK_KART_BOAT : (sty == 3 ? UNLOCK_KART_ARK : 0)); }
+static int style_unlocked(int sty) { return sty == 0 || (g_save.unlocks & style_lock_bit(sty)); }
+static unsigned unlocked_styles(void) { unsigned m = 0; for (int i = 0; i < NSTYLES; i++) if (style_unlocked(i)) m |= 1u << i; return m; }
+static int g_player_style = 0;
+static int track_unlocked(int d) { return !TRACK_DEFS[d].bonus || (g_save.unlocks & UNLOCK_HEAVEN); }
+static unsigned unlocked_mask(void) { unsigned m = 0; for (int c = 0; c < NCHARS; c++) if (char_unlocked(c)) m |= 1u << c; return m; }
+static int g_gp_round = 0, g_gp_points[NCHARS], g_gp_order[NUM_GP_ROUNDS_MAX];
+static float g_best_time[8];                 /* best time trial time per road (loaded from the save file) */
+static Texture *tx_portrait[NCHARS];
+static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
+static Texture *tx_finale; static Mesh *m_finale;
 static Texture *tx_item[ITEM_COUNT];        /* item pictures for the HUD slot, when Sean's files exist */
 static Pad g_prev; static float g_nav_t, g_screen_t;
 static const int GP_POINTS[8] = {10, 8, 6, 5, 4, 3, 2, 1};
-typedef struct { float x[120], z[120]; int n; } Preview;
+typedef struct { float x[80], z[80]; int n; } Preview;
 static Preview g_preview[8];
 static float g_idle;                   /* seconds since the last real controller input */
 static int g_demo;                     /* autopilot driving the player's kart */
@@ -44,7 +56,7 @@ static float g_results_t;
 /* textures */
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star;
 /* meshes */
-static Mesh *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[8192];
 static Batch g_b;
 
@@ -91,6 +103,14 @@ static void px_dirt(int x, int y, uint32_t *o) { float n = smooth_noise(x / 12.0
 static void px_grass(int x, int y, uint32_t *o) { float n = smooth_noise(x / 16.0f, y / 16.0f) * 0.6f + smooth_noise(x / 5.0f, y / 5.0f) * 0.4f; *o = rgba(70 + (int)(n * 50), 140 + (int)(n * 70), 50 + (int)(n * 30), 255); }
 static void px_sand(int x, int y, uint32_t *o) { float n = smooth_noise(x / 10.0f, y / 10.0f) * 0.6f + smooth_noise(x / 3.0f, y / 3.0f) * 0.4f; *o = rgba(222 + (int)(n * 25), 200 + (int)(n * 25), 150 + (int)(n * 25), 255); }
 static void px_water(int x, int y, uint32_t *o) { float n = smooth_noise(x / 14.0f, y / 9.0f) * 0.7f + smooth_noise(x / 5.0f, y / 3.0f) * 0.3f; int f = n > 0.72f ? 70 : 0; *o = rgba(40 + (int)(n * 40) + f, 120 + (int)(n * 60) + f, 190 + (int)(n * 50) + f / 2, 255); }
+static void px_gold(int x, int y, uint32_t *o) {       /* streets of gold: polished tiles */
+    int ex = (x % 32) < 2 || (y % 32) < 2; float n = smooth_noise(x / 9.0f, y / 9.0f);
+    *o = ex ? rgba(200, 150, 50, 255) : rgba(235 + (int)(n * 20), 195 + (int)(n * 40), 90 + (int)(n * 40), 255);
+}
+static void px_cloud(int x, int y, uint32_t *o) {      /* soft white cloud tops */
+    float n = smooth_noise(x / 18.0f, y / 18.0f) * 0.6f + smooth_noise(x / 6.0f, y / 6.0f) * 0.4f;
+    *o = rgba(225 + (int)(n * 30), 228 + (int)(n * 27), 240 + (int)(n * 15), 255);
+}
 static void px_wall(int x, int y, uint32_t *o) {       /* stone blocks */
     int row = y / 16, off = (row & 1) * 16; int bx = (x + off) % 32, by = y % 16; int mortar = bx < 2 || by < 2;
     float n = smooth_noise(x / 6.0f, y / 6.0f); int v = 170 + (int)(n * 50) - mortar * 60;
@@ -191,9 +211,10 @@ static float sky_noise(float x, float y) {              /* repeats every 256 pix
     float b = smooth_noise((x + 256) / 40.0f, y / 20.0f) * 0.6f + smooth_noise((x + 256) / 15.0f, y / 8.0f) * 0.4f;
     float w = x / 256.0f; return a * (1 - w) + b * w;
 }
-static void px_sky(int x, int y, uint32_t *o) {        /* vertical gradient with a few soft clouds */
+static float g_skytop[3] = {0.31f, 0.59f, 0.9f}, g_skyhor[3] = {0.78f, 0.9f, 0.98f};   /* set from the road's colors before the sky is drawn */
+static void px_sky(int x, int y, uint32_t *o) {        /* vertical gradient (road colors) with a few soft clouds */
     float t = y / 255.0f; float n = sky_noise((float)x, (float)y);
-    int r = (int)(80 + 120 * t), g = (int)(150 + 80 * t), b = (int)(230 + 20 * t);
+    int r = (int)(255 * (g_skytop[0] + (g_skyhor[0] - g_skytop[0]) * t)), g = (int)(255 * (g_skytop[1] + (g_skyhor[1] - g_skytop[1]) * t)), b = (int)(255 * (g_skytop[2] + (g_skyhor[2] - g_skytop[2]) * t));
     float cloud = clampf((n - 0.55f) * 4.0f, 0, 1) * (t > 0.25f && t < 0.75f ? 1.0f : 0.0f) * 0.8f;
     r = (int)(r + (250 - r) * cloud); g = (int)(g + (250 - g) * cloud); b = (int)(b + (255 - b) * cloud);
     *o = rgba(r > 255 ? 255 : r, g > 255 ? 255 : g, b > 255 ? 255 : b, 255);
@@ -214,8 +235,9 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
-    Mesh **ms[] = {&m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
+    for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
 }
 static void build_track_meshes(void) {
     const Track *t = &g_track;
@@ -271,6 +293,13 @@ static void build_track_meshes(void) {
         Vec3 ax3 = v3(ax2.x * 0.55f, 0, ax2.z * 0.55f), ay3 = v3(ay2.x * 0.55f, 0, ay2.z * 0.55f); c.y += 0.01f;
         batch_quad(&g_b, c, ax3, ay3, v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
     m_bouncepads = gfx_mesh_static(g_b.v, g_b.n);
+    /* the finale picture (the gates of Heaven): a tall quad across the road, facing the racers */
+    batch_clear(&g_b);
+    if (g_def->finale_img) { int fi = g_def->finale_idx % t->n; const TrackSample *fs = &t->s[fi];
+        float hw = g_def->finale_w * 0.5f, hh = g_def->finale_h;
+        Vec3 c = v3(fs->x, fs->y - 2.0f, fs->z);
+        batch_quad(&g_b, v3(c.x, c.y + hh * 0.5f, c.z), v3(fs->nx * hw, 0, fs->nz * hw), v3(0, hh * 0.5f, 0), v3(-fs->tx, 0, -fs->tz), 0, 0, 1, 1, 1, 1, 1, 1); }
+    m_finale = gfx_mesh_static(g_b.v, g_b.n);
     /* ground: a big grass plane under everything */
     batch_clear(&g_b);
     { float lowest = 1e9f; for (int i = 0; i < t->n; i++) { float y = track_surface_height(t, i, track_edge(t, i)); if (y < lowest) lowest = y; y = track_surface_height(t, i, -track_edge(t, i)); if (y < lowest) lowest = y; }
@@ -286,19 +315,57 @@ static void build_track_meshes(void) {
     m_sky = gfx_mesh_static(g_b.v, g_b.n);
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
-    m_hud = gfx_mesh_dynamic(4096);
+    m_hud = gfx_mesh_dynamic(8192);
     /* placeholder kart: boxes until the character art arrives. The body is white and tinted with the character's color. */
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.42f, 0), v3(0.75f, 0.17f, 1.05f), 1, 1, 1);                    /* body (tinted) */
     batch_box(&g_b, v3(0, 0.48f, 0.95f), v3(0.6f, 0.12f, 0.2f), 1, 1, 1);                  /* front bumper */
     batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);          /* driver robe (tinted) */
-    m_kart_body = gfx_mesh_static(g_b.v, g_b.n);
+    m_kart_body = gfx_mesh_static(g_b.v, g_b.n); m_body_style[0] = m_kart_body;
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.62f, -0.15f), v3(0.55f, 0.08f, 0.55f), 0.2f, 0.2f, 0.25f);     /* seat */
     batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);   /* head */
     for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
         batch_box(&g_b, v3(wx * 0.85f, 0.32f, wz * 0.78f), v3(0.14f, 0.32f, 0.32f), 0.12f, 0.12f, 0.12f);
-    m_kart_rest = gfx_mesh_static(g_b.v, g_b.n);
+    m_kart_rest = gfx_mesh_static(g_b.v, g_b.n); m_rest_style[0] = m_kart_rest;
+    /* CHARIOT: a low open car on two big back wheels, a rail in front */
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 0.45f, -0.2f), v3(0.6f, 0.12f, 0.8f), 1, 1, 1);
+    batch_box(&g_b, v3(0, 0.85f, 0.55f), v3(0.6f, 0.3f, 0.06f), 1, 1, 1);                   /* the front wall */
+    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);
+    m_body_style[1] = gfx_mesh_static(g_b.v, g_b.n);
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);
+    batch_box(&g_b, v3(0, 0.5f, 1.1f), v3(0.08f, 0.08f, 0.5f), 0.75f, 0.6f, 0.3f);           /* the shaft, gold */
+    for (int wx = -1; wx <= 1; wx += 2) batch_box(&g_b, v3(wx * 0.8f, 0.5f, -0.5f), v3(0.1f, 0.5f, 0.5f), 0.85f, 0.65f, 0.2f);   /* big gold wheels */
+    for (int wx = -1; wx <= 1; wx += 2) batch_box(&g_b, v3(wx * 0.7f, 0.25f, 0.8f), v3(0.1f, 0.25f, 0.25f), 0.12f, 0.12f, 0.12f);
+    m_rest_style[1] = gfx_mesh_static(g_b.v, g_b.n);
+    /* BOAT: a hull with a pointed bow and a little mast */
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 0.45f, -0.1f), v3(0.7f, 0.2f, 0.9f), 1, 1, 1);
+    batch_box(&g_b, v3(0, 0.5f, 1.0f), v3(0.4f, 0.18f, 0.35f), 1, 1, 1);
+    batch_box(&g_b, v3(0, 0.55f, 1.35f), v3(0.15f, 0.15f, 0.2f), 1, 1, 1);                   /* bow */
+    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);
+    m_body_style[2] = gfx_mesh_static(g_b.v, g_b.n);
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);
+    batch_box(&g_b, v3(0, 1.3f, 0.5f), v3(0.05f, 0.7f, 0.05f), 0.5f, 0.35f, 0.2f);           /* mast */
+    batch_box(&g_b, v3(0.3f, 1.4f, 0.5f), v3(0.3f, 0.45f, 0.02f), 0.95f, 0.93f, 0.85f);       /* sail */
+    for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
+        batch_box(&g_b, v3(wx * 0.8f, 0.3f, wz * 0.7f), v3(0.12f, 0.3f, 0.3f), 0.12f, 0.12f, 0.12f);
+    m_rest_style[2] = gfx_mesh_static(g_b.v, g_b.n);
+    /* ARK: a big wooden box with a roof */
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 0.6f, 0), v3(0.85f, 0.35f, 1.1f), 1, 1, 1);
+    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);
+    m_body_style[3] = gfx_mesh_static(g_b.v, g_b.n);
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);
+    batch_box(&g_b, v3(0, 1.1f, 0.5f), v3(0.9f, 0.12f, 0.6f), 0.45f, 0.3f, 0.18f);           /* the roof over the front */
+    batch_box(&g_b, v3(0, 1.4f, 0.5f), v3(0.5f, 0.2f, 0.4f), 0.5f, 0.35f, 0.2f);
+    for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
+        batch_box(&g_b, v3(wx * 0.95f, 0.32f, wz * 0.85f), v3(0.14f, 0.32f, 0.32f), 0.12f, 0.12f, 0.12f);
+    m_rest_style[3] = gfx_mesh_static(g_b.v, g_b.n);
     /* item box: a cube */
     batch_clear(&g_b); batch_box(&g_b, v3(0, 0, 0), v3(0.65f, 0.65f, 0.65f), 1, 1, 1); m_cube = gfx_mesh_static(g_b.v, g_b.n);
     /* shield: a bigger cube drawn transparent around the kart */
@@ -390,6 +457,17 @@ static void px_crosses(int x, int y, uint32_t *o) {      /* three crosses on the
         if (inrect(x, y, cx - 2, top, cx + 2, 96)) *o = rgba(70, 50, 35, 255);
         if (inrect(x, y, cx - 9, top + 12, cx + 9, top + 16)) *o = rgba(70, 50, 35, 255); }
 }
+static void px_cloudpuff(int x, int y, uint32_t *o) {    /* a puffy cloud (scenery) */
+    *o = 0;
+    for (int c = 0; c < 4; c++) { static const int cx[4] = {18, 32, 46, 30}, cy[4] = {70, 60, 70, 76}, cr[4] = {14, 18, 14, 20};
+        float dx = (float)(x - cx[c]) / cr[c], dy = (float)(y - cy[c]) / (cr[c] * 0.8f); if (dx * dx + dy * dy < 1.0f) *o = rgba(245, 246, 252, 255); }
+}
+static void px_gpillar(int x, int y, uint32_t *o) {      /* a golden column with a flame on top */
+    *o = 0;
+    if (inrect(x, y, 26, 22, 38, 92)) *o = rgba(235 + ((x & 2) ? 0 : 15), 195, 80, 255);
+    if (inrect(x, y, 20, 14, 44, 22) || inrect(x, y, 20, 90, 44, 96)) *o = rgba(210, 165, 50, 255);
+    float dx = (x - 32) / 7.0f, dy = (y - 8) / 8.0f; if (dx * dx + dy * dy < 1.0f) *o = rgba(255, 240, 180, 255);
+}
 static void px_stone(int x, int y, uint32_t *o) {        /* a rolling round stone */
     *o = 0; float dx = (x - 32) / 30.0f, dy = (y - 64) / 30.0f;
     if (dx * dx + dy * dy < 1.0f) *o = stone(x, y, 150 - (int)(dy * 40), 140 - (int)(dy * 40), 130 - (int)(dy * 40));
@@ -399,7 +477,7 @@ static Texture *placeholder_sprite(const char *id, float *aspect) {
     static const struct { const char *id; void (*fn)(int, int, uint32_t *); } table[] = {
         {"#hut", px_hut}, {"#net", px_net}, {"#rock", px_rock}, {"#boat", px_boat}, {"#cypress", px_cypress}, {"#pillar", px_pillar},
         {"#tower", px_tower}, {"#wallseg", px_wallseg}, {"#arch", px_arch}, {"#stall", px_stall}, {"#cart", px_cart}, {"#lily", px_lily},
-        {"#tomb", px_tomb}, {"#crosses", px_crosses}, {"#stone", px_stone} };
+        {"#tomb", px_tomb}, {"#crosses", px_crosses}, {"#stone", px_stone}, {"#cloud", px_cloudpuff}, {"#gpillar", px_gpillar} };
     for (size_t i = 0; i < sizeof table / sizeof table[0]; i++) if (!strcmp(id, table[i].id)) return make_tex(PW, PH, 0, 0, table[i].fn);
     if (!strcmp(id, "#house1")) return make_tex(PW, PH, 0, 0, px_house1);
     if (!strcmp(id, "#house2")) return make_tex(PW, PH, 0, 0, px_house2);
@@ -437,11 +515,14 @@ static void free_theme(void) {
 }
 static void load_theme(void) {
     const TrackDef *d = g_def;
-    tx_road = theme_tex(d->tex_road, 256, 256, px_road);
-    tx_dirt = theme_tex(d->tex_dirt, 128, 128, d->water ? px_sand : px_dirt);
+    int heaven = d->grid_idx > 0;
+    tx_road = theme_tex(d->tex_road, 256, 256, heaven ? px_gold : px_road);
+    tx_dirt = theme_tex(d->tex_dirt, 128, 128, d->water ? px_sand : (heaven ? px_cloud : px_dirt));
     tx_grass = theme_tex(d->tex_grass, 128, 128, d->water ? px_water : px_grass);
-    tx_wall = theme_tex(d->tex_wall, 64, 64, px_wall);
+    tx_wall = theme_tex(d->tex_wall, 64, 64, heaven ? px_cloud : px_wall);
+    g_skytop[0] = d->sky_r * 0.8f; g_skytop[1] = d->sky_g * 0.85f; g_skytop[2] = d->sky_b; g_skyhor[0] = d->fog_r; g_skyhor[1] = d->fog_g; g_skyhor[2] = d->fog_b;
     tx_sky = theme_tex(d->tex_sky, 256, 256, d->night ? px_sky_night : px_sky);
+    gfx_texture_free(tx_finale); tx_finale = d->finale_img ? asset_texture(d->finale_img, 0, NULL, NULL) : NULL;
     tx_star = NULL;
     if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star) tx_star = make_tex(64, 64, 0, 0, px_star); }
     g_nkind = 0; g_nplaced = 0;
@@ -482,18 +563,24 @@ static void build_previews(void) {
         float minx = 1e9f, maxx = -1e9f, minz = 1e9f, maxz = -1e9f;
         for (int i = 0; i < tmp.n; i++) { if (tmp.s[i].x < minx) minx = tmp.s[i].x; if (tmp.s[i].x > maxx) maxx = tmp.s[i].x; if (tmp.s[i].z < minz) minz = tmp.s[i].z; if (tmp.s[i].z > maxz) maxz = tmp.s[i].z; }
         float span = fmaxf(maxx - minx, maxz - minz) + 10.0f; Preview *pv = &g_preview[d]; pv->n = 0;
-        for (int i = 0; i < tmp.n && pv->n < 120; i += (tmp.n / 120 + 1)) { pv->x[pv->n] = (tmp.s[i].x - (minx + maxx) * 0.5f) / span; pv->z[pv->n] = (tmp.s[i].z - (minz + maxz) * 0.5f) / span; pv->n++; }
+        for (int i = 0; i < tmp.n && pv->n < 80; i += (tmp.n / 80 + 1)) { pv->x[pv->n] = (tmp.s[i].x - (minx + maxx) * 0.5f) / span; pv->z[pv->n] = (tmp.s[i].z - (minz + maxz) * 0.5f) / span; pv->n++; }
     }
 }
 int game_init(int status) {
     g_status = status;
+    save_load(); save_check_unlocks(); save_store();
+#ifdef KK_TOUR
+    if (KK_TOUR_ROAD >= 4) g_save.unlocks = 0xFFFF;      /* the CI tour of the bonus road */
+#endif
+    for (int d = 0; d < 8 && d < NUM_TRACK_DEFS; d++) g_best_time[d] = g_save.best_ms[d] / 1000.0f;
+    race_set_unlocked(unlocked_mask()); race_set_styles(0, unlocked_styles());
     build_previews();
     if (status == GFX_OK) {
         tx_blob = make_tex(64, 64, 0, 0, px_blob);
         tx_flag = make_tex(32, 32, 1, 1, px_flag);
         { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); }
-        static const char *pn[8] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel"};
-        for (int i = 0; i < 8; i++) tx_portrait[i] = asset_texture(pn[i], 0, NULL, NULL);
+        static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel", "portrait_noah", "portrait_elijah"};
+        for (int i = 0; i < NCHARS; i++) tx_portrait[i] = asset_texture(pn[i], 0, NULL, NULL);
         static const char *in[ITEM_COUNT] = {"", "item_manna", "item_staff", "item_stone", "item_oil", "shofar", "item_fire", "item_locusts", "item_dove"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
     }
@@ -543,7 +630,7 @@ static void menu_item(const char *s, float y, int selected, float size) {
 static void stat_bar(float x, float y, const char *label, float v) {
     batch_text(&g_b, label, x, y, 14, 0.85f, 0.9f, 1, 1);
     batch_rect(&g_b, x + 80, y + 2, 100, 10, 0.05f, 0.08f, 0.2f, 0.9f);
-    float f = clampf((v - 0.8f) / 0.4f, 0.1f, 1.0f);
+    float f = clampf((v - 0.8f) / 0.5f, 0.1f, 1.0f);
     batch_rect(&g_b, x + 80, y + 2, 100 * f, 10, 0.3f + 0.6f * f, 0.85f, 0.3f, 1);
 }
 static void draw_preview(const Preview *pv, float cx, float cy, float size, float r, float g, float b) {
@@ -608,44 +695,113 @@ static void hud_main(void) {
     snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]); menu_item(buf, 430, g_menu_sel == 3, 30);
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 520, 16, 0.8f, 0.85f, 1, 1);
 }
+static void char_card_pos(int i, float *x, float *y) { *x = 40 + (i % 5) * 245, *y = 95 + (i / 5) * 290; }
 static void hud_char(void) {
     text_c("CHOOSE YOUR CHARACTER", 30, 40, 1, 0.85f, 0.3f, 1);
-    for (int i = 0; i < 8; i++) {
-        const Character *c = &CHARACTERS[i]; int sel = i == g_player_char;
-        float x = 70 + (i % 4) * 295, y = 95 + (i / 4) * 290, w = 260, h = 262;
+    for (int i = 0; i < NCHARS; i++) {
+        const Character *c = &CHARACTERS[i]; int sel = i == g_player_char, open = char_unlocked(i);
+        float x, y, w = 225, h = 262; char_card_pos(i, &x, &y);
         if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
         batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
+        if (!open) {
+            batch_rect(&g_b, x + 10, y + 10, 120, 120, 0.2f, 0.22f, 0.3f, 1);
+            batch_text(&g_b, "?", x + 70 - text_width("?", 80) / 2, y + 30, 80, 0.5f, 0.55f, 0.7f, 1);
+            batch_text(&g_b, "LOCKED", x + 140, y + 20, 20, 0.8f, 0.8f, 0.9f, 1);
+            /* the hint, wrapped onto a few short lines */
+            const char *hint = unlock_hint(char_lock_bit(i)); char line[24]; int li = 0, row = 0;
+            for (const char *q = hint; ; q++) { if (*q == ' ' || *q == 0) { if (li > 0 && (q - hint) > 0) { line[li] = 0; } 
+                    if (*q == 0 || li >= 13) { line[li] = 0; batch_text(&g_b, line, x + 10, y + 150 + row * 20, 14, 1, 0.9f, 0.5f, 1); row++; li = 0; if (*q == 0) break; continue; } }
+                if (li < 22) line[li++] = *q; }
+            continue;
+        }
         /* portrait or a colored card with the initial */
-        if (tx_portrait[i]) { batch_rect(&g_b, x + 10, y + 10, 140, 140, c->r, c->g, c->b, 1); }    /* placeholder behind the portrait */
-        else { batch_rect(&g_b, x + 10, y + 10, 140, 140, c->r, c->g, c->b, 1); char ini[2] = {c->short_name[0], 0}; batch_text(&g_b, ini, x + 80 - text_width(ini, 90) / 2, y + 35, 90, 0.1f, 0.1f, 0.15f, 0.8f); }
-        batch_text(&g_b, c->short_name, x + 160, y + 20, 24, 1, 1, 1, 1);
-        stat_bar(x + 10, y + 160, "SPEED", c->st.top_speed);
-        stat_bar(x + 10, y + 185, "ACCEL", c->st.accel);
-        stat_bar(x + 10, y + 210, "HANDLE", c->st.handling);
-        stat_bar(x + 10, y + 235, "WEIGHT", c->st.weight);
+        batch_rect(&g_b, x + 10, y + 10, 120, 120, c->r, c->g, c->b, 1);
+        if (!tx_portrait[i]) { char ini[2] = {c->short_name[0], 0}; batch_text(&g_b, ini, x + 70 - text_width(ini, 80) / 2, y + 30, 80, 0.1f, 0.1f, 0.15f, 0.8f); }
+        batch_text(&g_b, c->short_name, x + 140, y + 20, 20, 1, 1, 1, 1);
+        if (c->bonus) batch_text(&g_b, "BONUS", x + 140, y + 48, 14, 1, 0.85f, 0.3f, 1);
+        stat_bar(x + 10, y + 150, "SPEED", c->st.top_speed);
+        stat_bar(x + 10, y + 175, "ACCEL", c->st.accel);
+        stat_bar(x + 10, y + 200, "HANDLE", c->st.handling);
+        stat_bar(x + 10, y + 225, "WEIGHT", c->st.weight);
     }
     text_c("A: CHOOSE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
 }
 static void draw_portraits(void) {   /* the real portraits are separate textures, drawn after the HUD batch */
     Mat4 id = m4_identity();
-    for (int i = 0; i < 8; i++) { if (!tx_portrait[i]) continue;
-        float x = 70 + (i % 4) * 295, y = 95 + (i / 4) * 290;
-        batch_clear(&g_b); batch_rect_uv(&g_b, x + 10, y + 10, 140, 140, 0, 0, 1, 1, 1, 1, 1, 1);
+    for (int i = 0; i < NCHARS; i++) { if (!tx_portrait[i] || !char_unlocked(i)) continue;
+        float x, y; char_card_pos(i, &x, &y);
+        batch_clear(&g_b); batch_rect_uv(&g_b, x + 10, y + 10, 120, 120, 0, 0, 1, 1, 1, 1, 1, 1);
         static Mesh *pm = NULL; if (!pm) pm = gfx_mesh_dynamic(6);
         gfx_mesh_update(pm, g_b.v, g_b.n); gfx_bind(tx_portrait[i]); gfx_draw(pm, &id, 1, 1, 1, 1); }
+}
+static void hud_kart(void) {
+    text_c("CHOOSE YOUR KART", 30, 40, 1, 0.85f, 0.3f, 1);
+    static const char *desc[NSTYLES][2] = {{"THE EVERYDAY KART", "BALANCED"}, {"BUILT FOR SPEED", "WIDER TURNS"}, {"LIGHT AND NIMBLE", "QUICK TURNS"}, {"HEAVY AND STURDY", "FAST OFF THE LINE"}};
+    for (int i = 0; i < NSTYLES; i++) {
+        int sel = i == g_player_style, open = style_unlocked(i); float x = 100 + i * 290, y = 150, w = 260, h = 360;
+        if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
+        batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
+        if (!open) {
+            batch_rect(&g_b, x + 20, y + 20, 220, 160, 0.2f, 0.22f, 0.3f, 1);
+            batch_text(&g_b, "?", x + 130 - text_width("?", 90) / 2, y + 55, 90, 0.5f, 0.55f, 0.7f, 1);
+            batch_text(&g_b, "LOCKED", x + 20, y + 200, 20, 0.8f, 0.8f, 0.9f, 1);
+            const char *hint = unlock_hint(style_lock_bit(i)); char line[24]; int li = 0, row = 0;
+            for (const char *q = hint; ; q++) { if ((*q == ' ' || *q == 0) && li >= 12) { line[li] = 0; batch_text(&g_b, line, x + 20, y + 235 + row * 20, 14, 1, 0.9f, 0.5f, 1); row++; li = 0; if (*q == 0) break; continue; }
+                if (*q == 0) { line[li] = 0; if (li) batch_text(&g_b, line, x + 20, y + 235 + row * 20, 14, 1, 0.9f, 0.5f, 1); break; }
+                if (li < 22) line[li++] = *q; }
+            continue;
+        }
+        batch_rect(&g_b, x + 20, y + 20, 220, 160, 0.05f, 0.08f, 0.2f, 1);       /* the kart itself is drawn in 3D over this window */
+        batch_text(&g_b, KART_STYLES[i].name, x + 20, y + 195, 22, 1, 1, 1, 1);
+        batch_text(&g_b, desc[i][0], x + 20, y + 225, 13, 0.8f, 0.9f, 1, 1); batch_text(&g_b, desc[i][1], x + 20, y + 243, 13, 0.8f, 0.9f, 1, 1);
+        const KartStats *c = &CHARACTERS[g_player_char].st, *m = &KART_STYLES[i].mul;
+        stat_bar(x + 20, y + 270, "SPEED", c->top_speed * m->top_speed);
+        stat_bar(x + 20, y + 292, "ACCEL", c->accel * m->accel);
+        stat_bar(x + 20, y + 314, "HANDLE", c->handling * m->handling);
+        stat_bar(x + 20, y + 336, "WEIGHT", c->weight * m->weight);
+    }
+    text_c("A: CHOOSE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
+}
+static void draw_kart_models(void) {    /* little 3D karts turning in the kart-select windows */
+    const Character *c = &CHARACTERS[g_player_char];
+    for (int i = 0; i < NSTYLES; i++) { if (!style_unlocked(i)) continue;
+        float x = 100 + i * 290 + 130, y = 150 + 110;
+        /* a tiny perspective view into the window: the kart at the origin, camera in front */
+        Mat4 view = m4_look_at(v3(3.2f * sinf(g_time * 0.8f), 1.6f, 3.2f * cosf(g_time * 0.8f)), v3(0, 0.7f, 0), v3(0, 1, 0));
+        Mat4 proj = m4_perspective(40.0f * 3.14159265f / 180.0f, 220.0f / 160.0f, 0.3f, 50.0f);
+        Mat4 vp = m4_mul(proj, view);
+        /* squeeze it into the window: scale and shift in clip space */
+        Mat4 win = m4_identity(); win.m[0] = 220.0f / 1280.0f; win.m[5] = 160.0f / 720.0f; win.m[12] = (x / 640.0f) - 1.0f; win.m[13] = 1.0f - (y / 360.0f);
+        Mat4 full = m4_mul(win, vp);
+        gfx_camera(&full, v3(0.3f, 1, 0.5f), 0.5f, 0, 0, 0, 1e6f, 2e6f);
+        gfx_state(ST_DEPTH | ST_DEPTH_WRITE | ST_CULL); gfx_bind(NULL); Mat4 id = m4_identity();
+        gfx_draw(m_body_style[i], &id, c->r, c->g, c->b, 1); gfx_draw(m_rest_style[i], &id, 1, 1, 1, 1); }
 }
 static void hud_track(void) {
     text_c("CHOOSE A ROAD", 30, 40, 1, 0.85f, 0.3f, 1);
     for (int d = 0; d < NUM_PLAY_TRACKS; d++) {
-        int sel = d == g_track_idx; float x = 100 + d * 300, y = 110, w = 270, h = 420;
+        int sel = d == g_track_idx, open = track_unlocked(d); float x = 40 + d * 245, y = 110, w = 225, h = 400;
         if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
         batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
-        const TrackDef *td = &TRACK_DEFS[d];
-        batch_rect(&g_b, x + 15, y + 15, 240, 240, td->sky_r, td->sky_g, td->sky_b, 1);
-        draw_preview(&g_preview[d], x + 135, y + 135, 210, 0.95f, 0.95f, 0.95f);
-        batch_text(&g_b, td->name, x + 15, y + 270, 20, 1, 1, 1, 1);
-        char buf[48]; snprintf(buf, sizeof buf, "%d LAPS", td->laps); batch_text(&g_b, buf, x + 15, y + 300, 16, 0.8f, 0.9f, 1, 1);
-        if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 15, y + 325, 16, 1, 0.9f, 0.5f, 1); }
+        const TrackDef *td = &TRACK_DEFS[d]; char buf[48];
+        if (!open) {
+            batch_rect(&g_b, x + 12, y + 12, 200, 200, 0.2f, 0.22f, 0.3f, 1);
+            batch_text(&g_b, "?", x + 112 - text_width("?", 90) / 2, y + 60, 90, 0.5f, 0.55f, 0.7f, 1);
+            batch_text(&g_b, "BONUS ROAD", x + 12, y + 225, 18, 1, 0.85f, 0.3f, 1);
+            batch_text(&g_b, "WIN THE", x + 12, y + 255, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "GRAND PRIX", x + 12, y + 275, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "ON NORMAL", x + 12, y + 295, 14, 0.9f, 0.9f, 1, 1);
+            continue;
+        }
+        batch_rect(&g_b, x + 12, y + 12, 200, 200, td->sky_r, td->sky_g, td->sky_b, 1);
+        draw_preview(&g_preview[d], x + 112, y + 112, 175, 0.95f, 0.95f, 0.95f);
+        /* the name, split onto two lines when long */
+        const char *nm = td->name; size_t len = strlen(nm);
+        if (text_width(nm, 18) > w - 24) { size_t cut = len / 2; while (cut > 0 && nm[cut] != ' ') cut--; char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
+            batch_text(&g_b, l1, x + 12, y + 225, 18, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, y + 248, 18, 1, 1, 1, 1); }
+        else batch_text(&g_b, nm, x + 12, y + 225, 18, 1, 1, 1, 1);
+        snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : "%d LAPS", td->laps); batch_text(&g_b, buf, x + 12, y + 280, 14, 0.8f, 0.9f, 1, 1);
+        if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, y + 305, 14, 1, 0.9f, 0.5f, 1); }
+        if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, y + 328, 14, 0.7f, 0.95f, 0.8f, 1); }
+        if (td->bonus) batch_text(&g_b, "BONUS ROAD", x + 12, y + 360, 14, 1, 0.85f, 0.3f, 1);
     }
     text_c("A: RACE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
 }
@@ -675,20 +831,26 @@ static void hud_results(void) {
     if (g_mode == MODE_TT) { Kart *k = &r->k[r->player]; fmt_time(buf, sizeof buf, k->best_lap); char line[96]; snprintf(line, sizeof line, "BEST LAP %s", buf); text_c(line, 240, 28, 0.9f, 0.95f, 1, 1);
         if (g_best_time[g_track_idx] > 0 && k->total_time <= g_best_time[g_track_idx] + 0.001f) text_c("NEW RECORD!", 300, 40, 1, 0.9f, 0.3f, 1); }
     text_c(g_mode == MODE_GP ? "A: NEXT ROAD" : "A: RACE AGAIN   B: MENU", 585, 20, 0.9f, 0.95f, 1, 1);
+    if (g_fresh_unlocks) {      /* a banner for what this race unlocked */
+        float yb = 640; batch_rect(&g_b, 240, yb, 800, 70, 1, 0.85f, 0.3f, 0.95f); batch_rect(&g_b, 246, yb + 6, 788, 58, 0.08f, 0.14f, 0.36f, 1);
+        char line[96] = "UNLOCKED: "; int first = 1;
+        for (int b = 0; b < UNLOCK_COUNT; b++) if (g_fresh_unlocks & (1u << b)) { if (!first) strncat(line, ", ", sizeof line - strlen(line) - 1); strncat(line, unlock_name(1 << b), sizeof line - strlen(line) - 1); first = 0; }
+        float sz = text_width(line, 24) > 760 ? 16 : 24; text_c(line, yb + 35 - sz / 2, sz, 1, 0.95f, 0.5f, (int)(g_time * 3) & 1 ? 1.0f : 0.8f);
+    }
 }
 static void hud_gp(void) {
     panel(290, 80, 700, 560); char buf[64];
-    text_c(g_gp_round >= NUM_PLAY_TRACKS ? "GRAND PRIX CHAMPION" : "STANDINGS", 100, 40, 1, 0.85f, 0.3f, 1);
-    int ord[8]; for (int i = 0; i < 8; i++) ord[i] = i;
-    for (int a2 = 1; a2 < 8; a2++) { int v = ord[a2], j = a2 - 1; while (j >= 0 && g_gp_points[ord[j]] < g_gp_points[v]) { ord[j + 1] = ord[j]; j--; } ord[j + 1] = v; }
-    for (int p = 0; p < 8; p++) { int c = ord[p]; float y = 160 + p * 50; int me = c == g_player_char;
+    text_c(g_gp_round >= NUM_GP_TRACKS ? "GRAND PRIX CHAMPION" : "STANDINGS", 100, 40, 1, 0.85f, 0.3f, 1);
+    int ord[NKARTS]; for (int i = 0; i < NKARTS; i++) ord[i] = g_race.character[i];
+    for (int a2 = 1; a2 < NKARTS; a2++) { int v = ord[a2], j = a2 - 1; while (j >= 0 && g_gp_points[ord[j]] < g_gp_points[v]) { ord[j + 1] = ord[j]; j--; } ord[j + 1] = v; }
+    for (int p = 0; p < NKARTS; p++) { int c = ord[p]; float y = 160 + p * 50; int me = c == g_player_char;
         if (me) batch_rect(&g_b, 310, y - 6, 660, 44, 1, 0.85f, 0.3f, 0.25f);
         batch_text(&g_b, place_name(p + 1), 330, y, 30, 1, 1, 1, 1);
         batch_rect(&g_b, 440, y + 2, 26, 26, CHARACTERS[c].r, CHARACTERS[c].g, CHARACTERS[c].b, 1);
         batch_text(&g_b, CHARACTERS[c].short_name, 480, y, 30, me ? 1.0f : 0.9f, me ? 0.95f : 0.9f, me ? 0.5f : 0.9f, 1);
         snprintf(buf, sizeof buf, "%d PTS", g_gp_points[c]); batch_text(&g_b, buf, 780, y, 30, 1, 0.9f, 0.4f, 1); }
-    if (g_gp_round >= NUM_PLAY_TRACKS) { if (ord[0] == g_player_char) text_c("YOU ARE THE CHAMPION!", 570, 28, 1, 0.9f, 0.3f, 1); text_c("A: MENU", 610, 20, 0.9f, 0.95f, 1, 1); }
-    else { snprintf(buf, sizeof buf, "A: ROAD %d OF %d", g_gp_round + 1, NUM_PLAY_TRACKS); text_c(buf, 600, 20, 0.9f, 0.95f, 1, 1); }
+    if (g_gp_round >= NUM_GP_TRACKS) { if (ord[0] == g_player_char) text_c("YOU ARE THE CHAMPION!", 570, 28, 1, 0.9f, 0.3f, 1); text_c("A: MENU", 610, 20, 0.9f, 0.95f, 1, 1); }
+    else { snprintf(buf, sizeof buf, "A: ROAD %d OF %d", g_gp_round + 1, NUM_GP_TRACKS); text_c(buf, 600, 20, 0.9f, 0.95f, 1, 1); }
 }
 
 // ------------------------------------------------------------------ per-frame update
@@ -696,8 +858,8 @@ static void hud_gp(void) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pad(Pad *p, float t) {
     static const struct { float t; char key; } script[] = {
-        {8, 'A'}, {11, 'D'}, {14, 'A'}, {17, 'R'}, {24, 'A'},
-        {27, KK_TOUR_ROAD >= 1 ? 'R' : 0}, {29, KK_TOUR_ROAD >= 2 ? 'R' : 0}, {31, KK_TOUR_ROAD >= 3 ? 'R' : 0}, {36, 'A'},
+        {8, 'A'}, {11, 'D'}, {14, 'A'}, {17, 'R'}, {22, 'A'}, {26, 'A'},
+        {27, KK_TOUR_ROAD >= 1 ? 'R' : 0}, {29, KK_TOUR_ROAD >= 2 ? 'R' : 0}, {31, KK_TOUR_ROAD >= 3 ? 'R' : 0}, {33, KK_TOUR_ROAD >= 4 ? 'R' : 0}, {36, 'A'},
         {70, 'P'}, {84, 'P'} };
     memset(p, 0, sizeof *p);
     for (unsigned i = 0; i < sizeof script / sizeof script[0]; i++) {
@@ -737,15 +899,21 @@ void game_frame(const Pad *pad, float dt) {
         if (pb) { g_screen = SCR_TITLE; g_screen_t = 0; }
         break;
     case SCR_CHAR:
-        if (mx) g_player_char = (g_player_char / 4) * 4 + ((g_player_char % 4) + mx + 4) % 4;
-        if (my) g_player_char = (g_player_char + 4) % 8;
-        if (pa) { if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_PLAY_TRACKS; i++) g_gp_order[i] = i; begin_player_race(); g_screen_t = 0; } else { g_screen = SCR_TRACK; g_screen_t = 0; } }
+        if (mx) g_player_char = (g_player_char / 5) * 5 + ((g_player_char % 5) + mx + 5) % 5;
+        if (my) g_player_char = (g_player_char + 5) % NCHARS;
+        if (pa && char_unlocked(g_player_char)) { g_screen = SCR_KART; g_screen_t = 0; }
         if (pb) { g_screen = SCR_MAIN; g_screen_t = 0; }
         break;
-    case SCR_TRACK:
-        if (mx) { set_track((g_track_idx + mx + NUM_PLAY_TRACKS) % NUM_PLAY_TRACKS); start_race(1); }
-        if (pa) { begin_player_race(); g_screen_t = 0; }
+    case SCR_KART:
+        if (mx) g_player_style = (g_player_style + mx + NSTYLES) % NSTYLES;
+        if (pa && style_unlocked(g_player_style)) { race_set_styles(g_player_style, unlocked_styles());
+            if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = i; begin_player_race(); g_screen_t = 0; } else { g_screen = SCR_TRACK; g_screen_t = 0; } }
         if (pb) { g_screen = SCR_CHAR; g_screen_t = 0; }
+        break;
+    case SCR_TRACK:
+        if (mx) { int d = (g_track_idx + mx + NUM_PLAY_TRACKS) % NUM_PLAY_TRACKS; g_track_idx = d; if (track_unlocked(d)) { set_track(d); start_race(1); } }
+        if (pa && track_unlocked(g_track_idx)) { begin_player_race(); g_screen_t = 0; }
+        if (pb) { g_screen = SCR_KART; g_screen_t = 0; }
         break;
     case SCR_RACE:
         if (pplus && r->state != RACE_FINISHED && g_screen_t > 0.5f) { g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; }
@@ -753,7 +921,13 @@ void game_frame(const Pad *pad, float dt) {
             g_results_t += dt;
             if (g_results_t > 1.5f) {
                 if (g_mode == MODE_GP) { race_rank(r); for (int p = 0; p < r->nk; p++) { Kart *q = &r->k[r->order[p]]; int pl = q->place ? q->place : p + 1; g_gp_points[r->character[r->order[p]]] += GP_POINTS[pl - 1]; } }
-                if (g_mode == MODE_TT) { Kart *k = &r->k[r->player]; if (k->lap > g_track.laps && (g_best_time[g_track_idx] <= 0 || k->total_time < g_best_time[g_track_idx])) g_best_time[g_track_idx] = k->total_time; }
+                if (g_mode == MODE_TT) { Kart *k = &r->k[r->player]; if (k->lap > g_track.laps && (g_best_time[g_track_idx] <= 0 || k->total_time < g_best_time[g_track_idx])) { g_best_time[g_track_idx] = k->total_time; if (g_track_idx < SAVE_MAX_ROADS) { g_save.best_ms[g_track_idx] = (int)(k->total_time * 1000); g_save.dirty = 1; } } }
+                else if (!g_demo) { Kart *k = &r->k[r->player]; g_save.races++; if (k->place == 1) { g_save.wins++; g_save.win_chars |= 1u << g_player_char; } g_save.dirty = 1; }
+                g_fresh_unlocks = 0;
+                if (g_mode == MODE_GP && g_gp_round + 1 >= NUM_GP_TRACKS && !g_demo) {   /* the championship is decided */
+                    int best = 0; for (int c = 1; c < NCHARS; c++) if (g_gp_points[c] > g_gp_points[best]) best = c;
+                    if (best == g_player_char) { g_save.gp_wins[g_difficulty]++; g_save.dirty = 1; } }
+                g_fresh_unlocks = save_check_unlocks(); save_store(); race_set_unlocked(unlocked_mask()); race_set_styles(g_player_style, unlocked_styles());
                 g_screen = SCR_RESULTS; g_screen_t = 0;
             }
         }
@@ -773,7 +947,7 @@ void game_frame(const Pad *pad, float dt) {
         if (pb && g_mode != MODE_GP) { start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
         break;
     case SCR_GP:
-        if (pa) { if (g_gp_round >= NUM_PLAY_TRACKS) { start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
+        if (pa) { if (g_gp_round >= NUM_GP_TRACKS) { start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
         break;
     }
     /* the attract-mode race restarts itself when it ends */
@@ -797,7 +971,7 @@ void game_frame(const Pad *pad, float dt) {
             switch (ev->type) {
                 case EV_GO: snprintf(g_msg, sizeof g_msg, "GO!"); g_msg_t = 1.0f; break;
                 case EV_FINAL_LAP: if (mine) { snprintf(g_msg, sizeof g_msg, "FINAL LAP!"); g_msg_t = 2.0f; } break;
-                case EV_FINISH: if (mine) { snprintf(g_msg, sizeof g_msg, "FINISH!"); g_msg_t = 3.0f; } break;
+                case EV_FINISH: if (mine) { snprintf(g_msg, sizeof g_msg, g_def->grid_idx ? "WELCOME HOME!" : "FINISH!"); g_msg_t = 3.0f; } break;
                 case EV_HIT: if (mine) { snprintf(g_msg, sizeof g_msg, "OUCH!"); g_msg_t = 0.8f; } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 2.0f, 3.0f); break;
                 case EV_BLOCK: if (mine) { snprintf(g_msg, sizeof g_msg, "BLOCKED!"); g_msg_t = 0.8f; } break;
                 case EV_PICKUP: if (mine) { snprintf(g_msg, sizeof g_msg, "%s", item_name(r->k[ev->kart].item)); g_msg_t = 1.0f; } break;
@@ -917,6 +1091,8 @@ void game_frame(const Pad *pad, float dt) {
           gfx_state(ST_SOLID); }
         gfx_state(ST_CUTOUT);
         for (int kd = 0; kd < g_nkind; kd++) { gfx_bind(g_kind[kd].tex); gfx_draw(g_kind[kd].mesh, &id, g_def->sun_r, g_def->sun_g, g_def->sun_b, 1); }
+        if (tx_finale && m_finale) { gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f); gfx_state(ST_CUTOUT); gfx_bind(tx_finale); gfx_draw(m_finale, &id, 1, 1, 1, 1);
+            gfx_camera(&vp, ldir, g_def->ambient, g_def->fog_r, g_def->fog_g, g_def->fog_b, g_def->fog_start, g_def->fog_end); }
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_skid, &id, 1, 1, 1, 1);
         gfx_bind(tx_blob); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
         /* item boxes: spinning cubes */
@@ -933,8 +1109,9 @@ void game_frame(const Pad *pad, float dt) {
             float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f;
             float sq = 1.0f - q->squash * 0.25f;
             Mat4 m = m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f, q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.04f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f)))));
-            gfx_draw(m_kart_body, &m, c->r, c->g, c->b, 1);
-            gfx_draw(m_kart_rest, &m, 1, 1, 1, 1); }
+            int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
+            gfx_draw(m_body_style[sty], &m, c->r, c->g, c->b, 1);
+            gfx_draw(m_rest_style[sty], &m, 1, 1, 1, 1); }
         /* shields */
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; if (q->shield <= 0) continue;
@@ -947,12 +1124,13 @@ void game_frame(const Pad *pad, float dt) {
         /* ---- HUD and menus */
         gfx_camera_2d(); gfx_state(ST_HUD);
         batch_clear(&g_b);
-        int menu_screen = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_TRACK || g_screen == SCR_GP;
+        int menu_screen = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_GP;
         if (menu_screen) batch_rect(&g_b, 0, 0, 1280, 720, 0.02f, 0.03f, 0.1f, g_screen == SCR_TITLE ? 0.25f : 0.55f);
         switch (g_screen) {
             case SCR_TITLE: hud_title(); break;
             case SCR_MAIN: hud_main(); break;
             case SCR_CHAR: hud_char(); break;
+            case SCR_KART: hud_kart(); break;
             case SCR_TRACK: hud_track(); break;
             case SCR_RACE: hud_race(pad); break;
             case SCR_PAUSE: hud_race(pad); hud_pause(); break;
@@ -966,6 +1144,7 @@ void game_frame(const Pad *pad, float dt) {
         gfx_mesh_update(m_hud, g_b.v, g_b.n);
         gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
         if (g_screen == SCR_CHAR) draw_portraits();
+        if (g_screen == SCR_KART) { draw_kart_models(); gfx_camera_2d(); gfx_state(ST_HUD); }
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
             if (it > 0 && it < ITEM_COUNT && tx_item[it]) { static Mesh *im = NULL; if (!im) im = gfx_mesh_dynamic(6);
                 batch_clear(&g_b); batch_rect_uv(&g_b, 48, 146, 134, 48, 0, 0, 1, 1, 1, 1, 1, 1);
