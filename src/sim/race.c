@@ -303,10 +303,10 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
             if (rel > 4.0f) { a->speed *= 0.97f; b->speed *= 0.97f; push_event(r, EV_BUMP, i); }
         }
     }
-    /* the race ends 3 s after the player finishes, when everyone finishes, or at the time limit */
+    /* the race ends 5 s after the player finishes, when everyone finishes, or at the time limit */
     Kart *pk = &r->k[r->player];
     if (pk->finished) r->after_t += dt;
-    if (r->after_t > 3.0f || r->nfin >= r->nk || r->race_t >= RACE_TIME_LIMIT) {
+    if (r->after_t > 5.0f || r->nfin >= r->nk || r->race_t >= RACE_TIME_LIMIT) {
         /* anyone who has not finished gets a place by progress */
         race_rank(r);
         for (int p = 0; p < r->nk; p++) { Kart *k = &r->k[r->order[p]]; if (!k->finished) { k->finished = 1; k->place = ++r->nfin; } }

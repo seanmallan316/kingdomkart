@@ -259,9 +259,9 @@ static const TrackPoint ELAH_PTS[] = {      /* a ring 80 m wide: the whole valle
 };
 static const Scenery ELAH_SCENERY[] = {
     /* Israel's camp along one side of the valley, the Philistines along the other, all watching */
-    {"#israelite", 2, 46, 5, 0}, {"#israelite", 8, 47, 5, 0}, {"#tent", 14, 50, 6, 0}, {"#israelite", 20, 46, 5, 0}, {"#israelite", 26, 47, 5, 0}, {"#banner_israel", 32, 48, 8, 0},
+    {"#israelite", 2, 46, 5, 0}, {"#israelite", 8, 47, 5, 0}, {"#tent", 14, 50, 6, 0}, {"#camp", 17, 52, 5, 0}, {"#israelite", 20, 46, 5, 0}, {"#israelite", 26, 47, 5, 0}, {"#banner_israel", 32, 48, 8, 0},
     {"#israelite", 38, 46, 5, 0}, {"#tent", 44, 50, 6, 0}, {"#israelite", 50, 47, 5, 0}, {"#israelite", 56, 46, 5, 0}, {"#banner_israel", 62, 48, 8, 0}, {"#israelite", 68, 47, 5, 0}, {"#tent", 74, 50, 6, 0},
-    {"#philistine", 82, 46, 5, 0}, {"#philistine", 88, 47, 5, 0}, {"#tent", 94, 50, 6, 0}, {"#philistine", 100, 46, 5, 0}, {"#banner_philistine", 106, 48, 8, 0}, {"#philistine", 112, 47, 5, 0},
+    {"#philistine", 82, 46, 5, 0}, {"#philistine", 88, 47, 5, 0}, {"#tent", 94, 50, 6, 0}, {"#camp", 97, 52, 5, 0}, {"#philistine", 100, 46, 5, 0}, {"#banner_philistine", 106, 48, 8, 0}, {"#philistine", 112, 47, 5, 0},
     {"#philistine", 118, 46, 5, 0}, {"#tent", 124, 50, 6, 0}, {"#philistine", 130, 47, 5, 0}, {"#banner_philistine", 136, 48, 8, 0}, {"#philistine", 142, 46, 5, 0}, {"#philistine", 148, 47, 5, 0}, {"#tent", 154, 50, 6, 0},
     {"#rock", 0, -46, 14, 0}, {"#rock", 40, -46, 14, 0}, {"#rock", 80, -46, 14, 0}, {"#rock", 120, -46, 14, 0},   /* the great rock in the middle */
 };
