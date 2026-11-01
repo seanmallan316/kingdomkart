@@ -731,14 +731,14 @@ static void hud_char(void) {
     }
     text_c("A: CHOOSE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
 }
-static void draw_portraits(void) {   /* the real portraits are separate textures, drawn after the HUD batch */
-    Mat4 id = m4_identity();
+static void draw_portraits(void) {   /* the real portraits are separate textures, drawn after the HUD batch; one mesh each (a dynamic mesh can only be filled once per frame) */
+    static Mesh *pm[NCHARS]; Mat4 id = m4_identity();
     for (int i = 0; i < NCHARS; i++) { if (!tx_portrait[i] || !char_unlocked(i)) continue;
-        float x, y; char_card_pos(i, &x, &y);
-        float a = g_portrait_aspect[i], pw = a < 1 ? 120 * a : 120, ph = a < 1 ? 120 : 120 / a;
-        batch_clear(&g_b); batch_rect_uv(&g_b, x + 10 + (120 - pw) / 2, y + 10 + (120 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
-        static Mesh *pm = NULL; if (!pm) pm = gfx_mesh_dynamic(6);
-        gfx_mesh_update(pm, g_b.v, g_b.n); gfx_bind(tx_portrait[i]); gfx_draw(pm, &id, 1, 1, 1, 1); }
+        if (!pm[i]) { float x, y; char_card_pos(i, &x, &y);
+            float a = g_portrait_aspect[i], pw = a < 1 ? 120 * a : 120, ph = a < 1 ? 120 : 120 / a;
+            batch_clear(&g_b); batch_rect_uv(&g_b, x + 10 + (120 - pw) / 2, y + 10 + (120 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
+            pm[i] = gfx_mesh_static(g_b.v, g_b.n); }
+        gfx_bind(tx_portrait[i]); gfx_draw(pm[i], &id, 1, 1, 1, 1); }
 }
 static void hud_kart(void) {
     text_c("CHOOSE YOUR KART", 30, 40, 1, 0.85f, 0.3f, 1);
