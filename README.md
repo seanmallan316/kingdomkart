@@ -1,43 +1,51 @@
 # Kingdom Kart: Road to Glory
 
-An original 3D kart racing game for the modded Wii U (Aroma homebrew), with Bible characters and a story that follows Jesus from Bethlehem to the empty tomb.
+An original 3D kart racing game for the modded Wii U (Aroma homebrew), with Bible characters and a story that follows
+Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
 
-## Where the project is right now: Milestone 1, the foundation test
+## What is in the game right now
+- **Eight characters** (Jesus, Moses, David, Esther, Peter, Paul, Mary, Daniel) with different speed, acceleration, handling
+  and weight, plus two to unlock (Noah, Elijah). Four kart bodies (Standard, Chariot, Boat, Ark), three to unlock.
+- **Four story roads**: Bethlehem Road (night, under the Star), Sea of Galilee (causeway over the water), Jerusalem Road
+  (into the city), Sunrise at the Empty Tomb — and the unlockable **Road to Heaven**, one run from the earth up through the
+  clouds to the gates.
+- Drifting with mini-turbos, jumps, boost arrows, bounce pads, hidden shortcuts, tunnels with crystals, coins, obstacles
+  crossing the road (sheep, nets, carts, rolling stones).
+- **Eight power-ups**: Manna, Staff, Stone, Oil Jar, Shofar, Chariot of Fire, Locusts, Dove.
+- Modes: Grand Prix (four roads, points, standings), Single Race, Time Trial (records saved), with Easy / Normal / Hard
+  computer drivers that never cheat. Every race is under two minutes.
+- Achievements that unlock the bonus characters, karts and road; progress saved on the SD card.
+- Sound effects for everything (music is on hold).
 
-This build is **not the game yet**. It is a small test that proves the hard parts work on a real Wii U before the game is built on top of them:
-
-- real 3D graphics on the Wii U's own graphics chip (a lit, textured cube on a checkered ground, drawn on the TV and the GamePad)
-- the shader compiler that the 3D graphics depend on
-- GamePad and Pro Controller input
-- reading files packed inside the game file
-- measuring how long each frame takes
-
-### What you should see
-A sky-blue screen with a gold-and-blue cube sitting on a checkered green ground, with eight white pillars around it.
-Move the left stick to turn, hold **A** to drive forward, **B** to back up, **ZR** to spin the cube fast, **ZL** to tilt it. Press **HOME** to leave.
-
-- Bottom of the screen: a bar that shows how long each frame takes. **Green** means the frame budget for 60 frames per second is met; **red** means it is over.
-- Top-left: a small square. **Blue** = GamePad is being read, **gold** = Pro Controller is being read, **grey** = no controller yet.
-
-### If the screen is a solid color instead
-- **Solid orange**: the shader compiler file is missing. Copy `glslcompiler.rpl` to `sd:/wiiu/libs/` (see below).
-- **Solid red**: the shader compiler was found but failed. Send me the log file `sd:/wiiu/kingdomkart_log.txt`.
-- **Black screen or back to the menu**: the program crashed. Send me the log file if it exists, and tell me what you saw.
+## Controls (GamePad or Pro Controller)
+Left stick / D-pad steer and move through menus · **A** gas / choose · **B** brake / back · **ZR** hold to drift
+(let go for a turbo) · **ZL** (or X / Y) use the item · **+** pause · **HOME** quit.
 
 ## Install (Mac or PC, same steps)
-1. Get `kingdomkart.wuhb` from GitHub (see the next section) and copy it into the `wiiu/apps` folder on your SD card.
-2. Download `glslcompiler.rpl` from the CafeGLSL releases page (https://github.com/Exzap/CafeGLSL/releases) and copy it into the `wiiu/libs` folder on your SD card (create `libs` if it does not exist). This is a one-time step; every future build uses the same file.
+1. Download `kingdomkart.wuhb` from GitHub (next section) and copy it into the `wiiu/apps` folder on the SD card.
+2. One-time: download `glslcompiler.rpl` from https://github.com/Exzap/CafeGLSL/releases and copy it into `wiiu/libs`
+   on the SD card (make the `libs` folder if it is not there).
 3. Put the card in the Wii U and start **Kingdom Kart** from the Aroma menu.
-4. After trying it, the file `wiiu/kingdomkart_log.txt` on the SD card has everything I need to diagnose a problem.
+4. If anything goes wrong, the file `wiiu/kingdomkart_log.txt` on the SD card says what happened. Progress lives in
+   `wiiu/kingdomkart_save.txt`; delete it to start over.
 
-## How the game file gets built (GitHub does it)
-1. Make a free account at github.com and create a new empty repository called `kingdomkart`.
-2. Upload everything in this folder (including the hidden `.github` folder) to it.
-3. Open the **Actions** tab. A job called "Build Wii U game" runs by itself and takes a few minutes.
-4. When it finishes, open it and download **KingdomKart** at the bottom. Unzip it to get `kingdomkart.wuhb`.
+### If the screen is a solid color
+- **Orange**: `glslcompiler.rpl` is missing from `sd:/wiiu/libs/`.
+- **Red**: the shader compiler was found but failed; send the log file.
 
-The job also tries to run the build inside a Wii U emulator and save screenshots (an "EmulatorScreenshots" download). That part is experimental and may fail; the game file is still good if it does.
+## Getting the game file from GitHub
+Open the repository's **Actions** tab. Every change builds itself ("Build Wii U game", a few minutes). Open the newest
+green run and download **KingdomKart** at the bottom; unzip it to get `kingdomkart.wuhb`.
 
-## Honest status
-- Nothing in this repository has been run on a real Wii U yet. It compiles against the real Wii U library headers, and it is built the same way as an existing homebrew 3D demo, but the first real test is yours.
-- The frame-time bar reads the console's own clock, so it is the true number, not an estimate.
+The same run also plays the game in a Wii U emulator and photographs every screen (the `ci-screenshots-road0` … `road4`
+branches). That is how the game is checked without a console; it has not yet been run on a real Wii U.
+
+## Adding pictures
+Drop pictures into `assets/` (see `assets/README.txt` and the Art List for the exact file names), run
+`python3 tools/prep_assets.py`, and commit the small files it writes into `content/img/`. The game uses a picture
+whenever one exists and draws its own placeholder otherwise.
+
+## Project layout
+`src/sim` kart physics and the race (no graphics, runs in tests on a PC) · `src/world` roads and themes · `src/render`
+GX2 drawing · `src/game` screens and the race view · `src/audio` sound synthesizer · `src/platform` Wii U entry point,
+input, sound output · `tests/` host tests · `docs/` milestone checklists.
