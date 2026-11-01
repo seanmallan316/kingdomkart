@@ -143,6 +143,7 @@ jobs:
             <Audio><api>0</api></Audio>
           </content>
           EOF
+          mkdir -p "$HOME/.local/share/Cemu/sdcard/wiiu"      # so the game can write its log and save file to the virtual SD card
           export DISPLAY=:99
           Xvfb :99 -screen 0 1280x720x24 &
           sleep 2
@@ -165,13 +166,15 @@ jobs:
           ls -la *.png || true
           tail -n 50 cemu_log.txt || true
           cp -r "$HOME/.local/share/Cemu/log.txt" cemu_internal_log.txt 2>/dev/null || true
+          cp "$HOME/.local/share/Cemu/sdcard/wiiu/kingdomkart_log.txt" game_log.txt 2>/dev/null || true
+          cp "$HOME/.local/share/Cemu/sdcard/wiiu/kingdomkart_save.txt" game_save.txt 2>/dev/null || true
           echo "::group::Cemu internal log"; cat cemu_internal_log.txt 2>/dev/null | tail -n 80 || true; echo "::endgroup::"
       - name: Store the screenshots in the repository (branch ci-screenshots)
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p shots && cp screenshot_*.png cemu_log.txt cemu_internal_log.txt shots/ 2>/dev/null || true
+          mkdir -p shots && cp screenshot_*.png cemu_log.txt cemu_internal_log.txt game_log.txt game_save.txt shots/ 2>/dev/null || true
           cd shots
           git init -q -b ci-screenshots-road${{ matrix.road }}
           git config user.name "github-actions"; git config user.email "actions@github.com"
