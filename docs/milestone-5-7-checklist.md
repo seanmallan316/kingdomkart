@@ -7,7 +7,7 @@ menu walk-through) and photographed in the Cemu emulator by the CI "tour" build.
 |---|---|
 | Title screen (checkered bands, blue/gold panel, PRESS A) over a live demo race | done |
 | Main menu: Grand Prix / Single Race / Time Trial / Difficulty (Easy, Normal, Hard) | done |
-| Pilgrim select: 8 cards with Speed / Accel / Handle / Weight bars; uses content/img/portrait_<name>.png when present | done |
+| Character select: 8 cards with Speed / Accel / Handle / Weight bars; uses content/img/portrait_<name>.png when present | done |
 | Road select: cards with a map preview of every road, lap count, time trial record | done |
 | Race HUD, pause menu (+): Continue / Restart / Quit to menu | done |
 | Results table sorted by place, with Grand Prix points | done |

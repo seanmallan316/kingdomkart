@@ -485,7 +485,7 @@ static void hud_main(void) {
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 520, 16, 0.8f, 0.85f, 1, 1);
 }
 static void hud_char(void) {
-    text_c("CHOOSE YOUR PILGRIM", 30, 40, 1, 0.85f, 0.3f, 1);
+    text_c("CHOOSE YOUR CHARACTER", 30, 40, 1, 0.85f, 0.3f, 1);
     for (int i = 0; i < 8; i++) {
         const Character *c = &CHARACTERS[i]; int sel = i == g_player_char;
         float x = 70 + (i % 4) * 295, y = 95 + (i / 4) * 290, w = 260, h = 262;
