@@ -14,6 +14,7 @@ const BattleQuote BATTLE_QUOTES[BATTLE_NQUOTES] = {
     {"", "SO DAVID PREVAILED OVER THE PHILISTINE WITH A SLING AND WITH A STONE", "1 SAMUEL 17:50"},
 };
 static void say(Battle *b, int q) { if (b->quotes_said & (1 << q)) return; b->quotes_said |= 1 << q; b->quote = q; b->quote_t = 5.0f; bev(b, BEV_QUOTE); }
+static float brand(Battle *b) { uint32_t *x = &b->race.rng; *x ^= *x << 13; *x ^= *x >> 17; *x ^= *x << 5; return (*x & 0xFFFF) / 65536.0f; }
 static float wrap_pi(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (a < -3.14159265f) a += 6.2831853f; return a; }
 
 void battle_init(Battle *b, const Track *arena, int difficulty) {
@@ -90,7 +91,7 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
         case GOL_STALK:
             b->gyaw += wrap_pi(to_david - b->gyaw) * fminf(1.0f, 2.0f * dt);
             b->gspeed = 7.0f * speed_scale;
-            if (b->gtimer <= 0) { b->gstate = (dist < 45.0f && ((int)(b->t * 7) & 1)) || dist < 12.0f ? GOL_WINDUP : GOL_THROW; b->gtimer = b->gstate == GOL_WINDUP ? 0.8f : 0.5f; if (b->gstate == GOL_WINDUP) bev(b, BEV_ROAR); }
+            if (b->gtimer <= 0) { b->gstate = (dist < 45.0f && brand(b) < 0.5f) || dist < 12.0f ? GOL_WINDUP : GOL_THROW; b->gtimer = b->gstate == GOL_WINDUP ? 0.8f : 0.5f; if (b->gstate == GOL_WINDUP) bev(b, BEV_ROAR); }
             break;
         case GOL_WINDUP:          /* stops, roars, then charges where David is now */
             b->gspeed = 0; b->gyaw += wrap_pi(to_david - b->gyaw) * fminf(1.0f, 4.0f * dt);
@@ -107,8 +108,8 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
                     /* lead the target a little */
                     float lead = dist / 26.0f * (r->difficulty == DIFF_EASY ? 0.3f : (r->difficulty == DIFF_HARD ? 0.9f : 0.6f)); float tx = k->x + sinf(k->yaw) * k->speed * lead, tz = k->z + cosf(k->yaw) * k->speed * lead;
                     float ax = tx - b->gx, az = tz - b->gz, l = sqrtf(ax * ax + az * az) + 1e-3f;
-                    m->alive = 1; m->x = b->gx + ax / l * 2.0f; m->z = b->gz + az / l * 2.0f; m->y = 3.0f; m->vx = ax / l * 26.0f * speed_scale; m->vz = az / l * 26.0f * speed_scale; m->life = 2.5f; bev(b, BEV_SPEAR); break; }
-                b->gstate = GOL_STALK; b->gtimer = 3.0f / speed_scale;
+                    m->alive = 1; m->x = b->gx + ax / l * 2.0f; m->z = b->gz + az / l * 2.0f; m->y = 3.0f; m->vx = ax / l * 28.0f * speed_scale; m->vz = az / l * 28.0f * speed_scale; m->life = 2.5f; bev(b, BEV_SPEAR); break; }
+                b->gstate = GOL_STALK; b->gtimer = (2.0f + brand(b) * 1.5f) / speed_scale;
             }
             break;
         case GOL_STUNNED:
@@ -133,7 +134,7 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *m = &b->stone[i]; if (!m->alive) continue;
         m->x += m->vx * dt; m->z += m->vz * dt; m->life -= dt; if (m->life <= 0) m->alive = 0;
         float sx = m->x - b->gx, sz = m->z - b->gz;
-        if (sx * sx + sz * sz < 2.6f * 2.6f && b->gstate != GOL_DOWN) { m->alive = 0; b->hits_on_goliath++; b->gstate = GOL_STUNNED; b->gstun = 1.5f; bev(b, BEV_GOLIATH_HIT);
+        if (sx * sx + sz * sz < 2.6f * 2.6f && b->gstate != GOL_DOWN) { m->alive = 0; b->hits_on_goliath++; b->gstate = GOL_STUNNED; b->gstun = r->difficulty == DIFF_EASY ? 1.8f : (r->difficulty == DIFF_HARD ? 0.8f : 1.3f); bev(b, BEV_GOLIATH_HIT);
             if (b->hits_on_goliath >= BATTLE_WIN_HITS) { b->gstate = GOL_DOWN; b->over = 1; b->won = 1; r->state = RACE_FINISHED; k->finished = 1; k->place = 1; bev(b, BEV_WIN); b->quotes_said &= ~(1 << 5); say(b, 5); b->quote_t = 30.0f; } }
     }
     /* spears */

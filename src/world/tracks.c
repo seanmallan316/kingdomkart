@@ -248,22 +248,22 @@ static const CoinRow HEAVEN_COINS[] = { {158, 5, 3, 2.5f}, {210, 6, 3, -2.5f}, {
 static const Tunnel HEAVEN_TUNNELS[] = { {302, 318, 6.0f} };
 // ------------------------------------------------------------------ Valley of Elah: the battle arena (a wide, flat ring between the two camps)
 static const TrackPoint ELAH_PTS[] = {      /* a ring 80 m wide: the whole valley floor is drivable, with a great rock in the middle */
-    {    0.0, 0.0f,    0.0, 80, 0.00f },
-    {   35.4, 0.0f,   14.6, 80, 0.00f },
-    {   50.0, 0.0f,   50.0, 80, 0.00f },
-    {   35.4, 0.0f,   85.4, 80, 0.00f },
-    {    0.0, 0.0f,  100.0, 80, 0.00f },
-    {  -35.4, 0.0f,   85.4, 80, 0.00f },
-    {  -50.0, 0.0f,   50.0, 80, 0.00f },
-    {  -35.4, 0.0f,   14.6, 80, 0.00f },
+    {    0.0, 0.0f,    0.0, 64, 0.00f },
+    {   35.4, 0.0f,   14.6, 64, 0.00f },
+    {   50.0, 0.0f,   50.0, 64, 0.00f },
+    {   35.4, 0.0f,   85.4, 64, 0.00f },
+    {    0.0, 0.0f,  100.0, 64, 0.00f },
+    {  -35.4, 0.0f,   85.4, 64, 0.00f },
+    {  -50.0, 0.0f,   50.0, 64, 0.00f },
+    {  -35.4, 0.0f,   14.6, 64, 0.00f },
 };
 static const Scenery ELAH_SCENERY[] = {
     /* Israel's camp along one side of the valley, the Philistines along the other, all watching */
-    {"#israelite", 2, 46, 5, 0}, {"#israelite", 8, 47, 5, 0}, {"#tent", 14, 50, 6, 0}, {"#camp", 17, 52, 5, 0}, {"#israelite", 20, 46, 5, 0}, {"#israelite", 26, 47, 5, 0}, {"#banner_israel", 32, 48, 8, 0},
-    {"#israelite", 38, 46, 5, 0}, {"#tent", 44, 50, 6, 0}, {"#israelite", 50, 47, 5, 0}, {"#israelite", 56, 46, 5, 0}, {"#banner_israel", 62, 48, 8, 0}, {"#israelite", 68, 47, 5, 0}, {"#tent", 74, 50, 6, 0},
-    {"#philistine", 82, 46, 5, 0}, {"#philistine", 88, 47, 5, 0}, {"#tent", 94, 50, 6, 0}, {"#camp", 97, 52, 5, 0}, {"#philistine", 100, 46, 5, 0}, {"#banner_philistine", 106, 48, 8, 0}, {"#philistine", 112, 47, 5, 0},
-    {"#philistine", 118, 46, 5, 0}, {"#tent", 124, 50, 6, 0}, {"#philistine", 130, 47, 5, 0}, {"#banner_philistine", 136, 48, 8, 0}, {"#philistine", 142, 46, 5, 0}, {"#philistine", 148, 47, 5, 0}, {"#tent", 154, 50, 6, 0},
-    {"#rock", 0, -46, 14, 0}, {"#rock", 40, -46, 14, 0}, {"#rock", 80, -46, 14, 0}, {"#rock", 120, -46, 14, 0},   /* the great rock in the middle */
+    {"#israelite", 2, 37, 5, 0}, {"#israelite", 8, 37, 5, 0}, {"#tent", 14, 42, 6, 0}, {"#camp", 17, 44, 5, 0}, {"#israelite", 20, 37, 5, 0}, {"#israelite", 26, 37, 5, 0}, {"#banner_israel", 32, 39, 8, 0},
+    {"#israelite", 38, 37, 5, 0}, {"#tent", 44, 42, 6, 0}, {"#israelite", 50, 37, 5, 0}, {"#israelite", 56, 37, 5, 0}, {"#banner_israel", 62, 39, 8, 0}, {"#israelite", 68, 37, 5, 0}, {"#tent", 74, 42, 6, 0},
+    {"#philistine", 82, 37, 5, 0}, {"#philistine", 88, 37, 5, 0}, {"#tent", 94, 42, 6, 0}, {"#camp", 97, 44, 5, 0}, {"#philistine", 100, 37, 5, 0}, {"#banner_philistine", 106, 39, 8, 0}, {"#philistine", 112, 37, 5, 0},
+    {"#philistine", 118, 37, 5, 0}, {"#tent", 124, 42, 6, 0}, {"#philistine", 130, 37, 5, 0}, {"#banner_philistine", 136, 39, 8, 0}, {"#philistine", 142, 37, 5, 0}, {"#philistine", 148, 37, 5, 0}, {"#tent", 154, 42, 6, 0},
+    {"#rock", 0, -37, 14, 0}, {"#rock", 40, -37, 14, 0}, {"#rock", 80, -37, 14, 0}, {"#rock", 120, -37, 14, 0},   /* the great rock in the middle */
 };
 
 const TrackDef TRACK_DEFS[] = {

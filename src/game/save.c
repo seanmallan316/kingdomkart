@@ -6,7 +6,7 @@
 
 Save g_save;
 static char g_path[256] = "kingdomkart_save.txt";
-static const float PAR_TIME[SAVE_MAX_ROADS] = {80.0f, 86.0f, 78.0f, 80.0f, 0, 0, 0, 0};   /* time trial targets per road, seconds (0 = no target) */
+static const float PAR_TIME[SAVE_MAX_ROADS] = {78.0f, 84.0f, 70.0f, 78.0f, 50.0f, 0, 0, 0};   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
 
 void save_set_path(const char *path) { snprintf(g_path, sizeof g_path, "%s", path); }
 

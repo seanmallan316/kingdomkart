@@ -11,7 +11,7 @@ int main(void) {
     static Track t; track_from_def(&t, &TRACK_DEFS[arena]);
     int wins = 0, losses = 0;
     for (int diff = 0; diff < 3; diff++) for (int rep = 0; rep < 3; rep++) {
-        static Battle b; battle_init(&b, &t, diff);
+        static Battle b; battle_init(&b, &t, diff); b.race.rng ^= (uint32_t)(rep * 0x9E3779B9u);
         KartInput in; memset(&in, 0, sizeof in); float time = 0; int thrown = 0, ghits = 0, dhits = 0, spears = 0;
         while (!b.over && time < 130) { battle_step(&b, &in, 1, SIM_DT); time += SIM_DT;
             for (int e = 0; e < b.nev; e++) { thrown += b.ev[e] == BEV_STONE_THROWN; ghits += b.ev[e] == BEV_GOLIATH_HIT; dhits += b.ev[e] == BEV_DAVID_HIT; spears += b.ev[e] == BEV_SPEAR; } }
