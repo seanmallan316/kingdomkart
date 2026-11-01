@@ -19,8 +19,9 @@
 #include "../render/gfx.h"
 #include "../game/game.h"
 #include "../game/save.h"
+#include "wiiu_audio.h"
 
-#define KK_VERSION "M6-0.2"
+#define KK_VERSION "M8-0.1"
 void gfx_set_logfile(FILE *f);
 
 static void read_pad(Pad *p) {
@@ -72,6 +73,7 @@ int main(int argc, char **argv) {
     int status = gfx_init();
     gfx_log("graphics status %d (0 = ok)", status);
     game_init(status);
+    wiiu_audio_start();
 
     OSTime last = OSGetTime(); uint64_t frames = 0; double acc_ms = 0, worst_ms = 0; Pad pad;
     while (WHBProcIsRunning()) {
@@ -84,6 +86,7 @@ int main(int argc, char **argv) {
         game_frame(&pad, dt);
     }
     gfx_log("shutting down after %llu frames", (unsigned long long)frames);
+    wiiu_audio_stop();
     game_shutdown();
     gfx_shutdown();
     KPADShutdown();

@@ -1,6 +1,7 @@
 // view.c - draws the race: track, eight karts, items, effects, HUD, results. The rules live in sim/race.c.
 #include "game.h"
 #include "save.h"
+#include "../audio/sfx.h"
 #include "../sim/race.h"
 #include "../render/gfx.h"
 #include "../render/batch.h"
@@ -76,6 +77,7 @@ static SpriteKind g_kind[MAX_SPRITE_KINDS]; static int g_nkind;
 typedef struct { Vec3 p; float h, w, glow; int kind; } Placed;
 static Placed g_placed[MAX_SCENERY]; static int g_nplaced;
 static int g_mover_kind[MAX_MOVERS];
+static int g_was_air[NKARTS];
 /* mini-map */
 static float map_x0, map_z0, map_scale;
 
@@ -616,6 +618,14 @@ static void add_dust(Vec3 p, float spread, float up) {
         return;
     }
 }
+/* a sound coming from a kart: quieter when far from the player, panned to its side */
+static void sfx_at(int id, Kart *q, float vol) {
+    Race *r = &g_race; Kart *k = &r->k[r->player];
+    float dx = q->x - k->x, dz = q->z - k->z, d = sqrtf(dx * dx + dz * dz);
+    float g = vol / (1.0f + d * 0.05f); if (g < 0.05f) return;
+    float side = -(dx * cosf(cam_yaw) - dz * sinf(cam_yaw));           /* screen-right is -x when facing +z */
+    sfx_play(id, g, clampf(side * 0.05f, -0.8f, 0.8f));
+}
 static const char *place_name(int p) { static const char *n[] = {"", "1ST", "2ND", "3RD", "4TH", "5TH", "6TH", "7TH", "8TH"}; return p >= 1 && p <= 8 ? n[p] : ""; }
 static void fmt_time(char *buf, size_t n, float t) { snprintf(buf, n, "%d:%02d.%02d", (int)(t / 60), (int)t % 60, (int)(t * 100) % 100); }
 
@@ -899,29 +909,32 @@ void game_frame(const Pad *pad, float dt) {
 
     int sim_running = 1;
     switch (g_screen) {
-    case SCR_TITLE: if (pa) { g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; } break;
+    case SCR_TITLE: if (pa) { g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; sfx_play(SFX_MENU_OK, 1, 0); } break;
     case SCR_MAIN:
-        if (my) { g_menu_sel = (g_menu_sel - my + 4) % 4; }
+        if (my) { g_menu_sel = (g_menu_sel - my + 4) % 4; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (g_menu_sel == 3 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
-        if (pa) { if (g_menu_sel == 3) g_difficulty = (g_difficulty + 1) % 3; else { g_mode = g_menu_sel == 0 ? MODE_GP : (g_menu_sel == 1 ? MODE_SINGLE : MODE_TT); g_screen = SCR_CHAR; g_screen_t = 0; } }
-        if (pb) { g_screen = SCR_TITLE; g_screen_t = 0; }
+        if (pa) { sfx_play(SFX_MENU_OK, 1, 0); if (g_menu_sel == 3) g_difficulty = (g_difficulty + 1) % 3; else { g_mode = g_menu_sel == 0 ? MODE_GP : (g_menu_sel == 1 ? MODE_SINGLE : MODE_TT); g_screen = SCR_CHAR; g_screen_t = 0; } }
+        if (pb) { g_screen = SCR_TITLE; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_CHAR:
-        if (mx) g_player_char = (g_player_char / 5) * 5 + ((g_player_char % 5) + mx + 5) % 5;
-        if (my) g_player_char = (g_player_char + 5) % NCHARS;
+        if (mx) { g_player_char = (g_player_char / 5) * 5 + ((g_player_char % 5) + mx + 5) % 5; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (my) { g_player_char = (g_player_char + 5) % NCHARS; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (pa) sfx_play(char_unlocked(g_player_char) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && char_unlocked(g_player_char)) { g_screen = SCR_KART; g_screen_t = 0; }
-        if (pb) { g_screen = SCR_MAIN; g_screen_t = 0; }
+        if (pb) { g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_KART:
-        if (mx) g_player_style = (g_player_style + mx + NSTYLES) % NSTYLES;
+        if (mx) { g_player_style = (g_player_style + mx + NSTYLES) % NSTYLES; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (pa) sfx_play(style_unlocked(g_player_style) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && style_unlocked(g_player_style)) { race_set_styles(g_player_style, unlocked_styles());
             if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = i; begin_player_race(); g_screen_t = 0; } else { g_screen = SCR_TRACK; g_screen_t = 0; } }
-        if (pb) { g_screen = SCR_CHAR; g_screen_t = 0; }
+        if (pb) { g_screen = SCR_CHAR; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_TRACK:
-        if (mx) { int d = (g_track_idx + mx + NUM_PLAY_TRACKS) % NUM_PLAY_TRACKS; g_track_idx = d; if (track_unlocked(d)) { set_track(d); start_race(1); } }
+        if (mx) { sfx_play(SFX_MENU_MOVE, 1, 0); int d = (g_track_idx + mx + NUM_PLAY_TRACKS) % NUM_PLAY_TRACKS; g_track_idx = d; if (track_unlocked(d)) { set_track(d); start_race(1); } }
+        if (pa) sfx_play(track_unlocked(g_track_idx) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && track_unlocked(g_track_idx)) { begin_player_race(); g_screen_t = 0; }
-        if (pb) { g_screen = SCR_KART; g_screen_t = 0; }
+        if (pb) { g_screen = SCR_KART; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_RACE:
         if (pplus && r->state != RACE_FINISHED && g_screen_t > 0.5f) { g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; }
@@ -936,13 +949,14 @@ void game_frame(const Pad *pad, float dt) {
                     int best = 0; for (int c = 1; c < NCHARS; c++) if (g_gp_points[c] > g_gp_points[best]) best = c;
                     if (best == g_player_char) { g_save.gp_wins[g_difficulty]++; g_save.dirty = 1; } }
                 g_fresh_unlocks = save_check_unlocks(); save_store(); race_set_unlocked(unlocked_mask()); race_set_styles(g_player_style, unlocked_styles());
+                if (g_fresh_unlocks) sfx_play(SFX_UNLOCK, 1, 0); else if (!g_demo && r->k[r->player].place == 1) sfx_play(SFX_WIN, 1, 0);
                 g_screen = SCR_RESULTS; g_screen_t = 0;
             }
         }
         break;
     case SCR_PAUSE:
         sim_running = 0;
-        if (my) g_pause_sel = (g_pause_sel - my + 3) % 3;
+        if (my) { g_pause_sel = (g_pause_sel - my + 3) % 3; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa || pplus) {
             if (g_pause_sel == 0 || pplus) { g_screen = SCR_RACE; g_screen_t = 0; }
             else if (g_pause_sel == 1) { start_race(0); g_screen = SCR_RACE; g_screen_t = 0; }
@@ -966,6 +980,9 @@ void game_frame(const Pad *pad, float dt) {
         if (real_input) { g_idle = 0; g_demo = 0; } else { g_idle += dt; if (g_idle > 8.0f) g_demo = 1; }
     }
     if (g_msg_t > 0) g_msg_t -= dt;
+    { Kart *pk = &r->k[r->player]; int racing = (g_screen == SCR_RACE) && !g_attract && r->state != RACE_FINISHED;
+      sfx_engine(fabsf(pk->speed) / (36.0f * pk->st.top_speed), pk->drifting, pk->boost_t > 0, !pk->hit.on_road, pk->air, g_track.water, racing);
+      static float ww_t = 0; if (racing && pk->wrongway_t > WRONGWAY_DELAY) { ww_t += dt; if (ww_t > 1.0f) { ww_t = 0; sfx_play(SFX_WRONG_WAY, 0.8f, 0); } } else ww_t = 1.0f; }
 
     /* fixed-step simulation */
     static float acc = 0; if (sim_running) acc += dt; else acc = 0;
@@ -977,16 +994,23 @@ void game_frame(const Pad *pad, float dt) {
         for (int e = 0; e < r->nev && !g_attract; e++) {
             RaceEvent *ev = &r->ev[e]; int mine = ev->kart == r->player;
             switch (ev->type) {
-                case EV_GO: snprintf(g_msg, sizeof g_msg, "GO!"); g_msg_t = 1.0f; break;
-                case EV_FINAL_LAP: if (mine) { snprintf(g_msg, sizeof g_msg, "FINAL LAP!"); g_msg_t = 2.0f; } break;
-                case EV_FINISH: if (mine) { snprintf(g_msg, sizeof g_msg, g_def->grid_idx ? "WELCOME HOME!" : "FINISH!"); g_msg_t = 3.0f; } break;
-                case EV_HIT: if (mine) { snprintf(g_msg, sizeof g_msg, "OUCH!"); g_msg_t = 0.8f; } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 2.0f, 3.0f); break;
-                case EV_BLOCK: if (mine) { snprintf(g_msg, sizeof g_msg, "BLOCKED!"); g_msg_t = 0.8f; } break;
-                case EV_PICKUP: if (mine) { snprintf(g_msg, sizeof g_msg, "%s", item_name(r->k[ev->kart].item)); g_msg_t = 1.0f; } break;
-                case EV_PAD_BOOST: if (mine) { snprintf(g_msg, sizeof g_msg, "BOOST!"); g_msg_t = 0.7f; } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 1.0f, 2.0f); break;
-                case EV_PAD_BOUNCE: if (mine) { snprintf(g_msg, sizeof g_msg, "BOING!"); g_msg_t = 0.7f; } break;
+                case EV_COUNT_TICK: sfx_play(SFX_COUNT_TICK, 1, 0); break;
+                case EV_GO: snprintf(g_msg, sizeof g_msg, "GO!"); g_msg_t = 1.0f; sfx_play(SFX_GO, 1, 0); break;
+                case EV_LAP: if (mine) sfx_play(SFX_LAP, 1, 0); break;
+                case EV_FINAL_LAP: if (mine) { snprintf(g_msg, sizeof g_msg, "FINAL LAP!"); g_msg_t = 2.0f; sfx_play(SFX_FINAL_LAP, 1, 0); } break;
+                case EV_FINISH: if (mine) { snprintf(g_msg, sizeof g_msg, g_def->grid_idx ? "WELCOME HOME!" : "FINISH!"); g_msg_t = 3.0f; sfx_play(g_def->grid_idx ? SFX_WELCOME_HOME : SFX_FINISH, 1, 0); } break;
+                case EV_HIT: if (mine) { snprintf(g_msg, sizeof g_msg, "OUCH!"); g_msg_t = 0.8f; } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 2.0f, 3.0f); sfx_at(SFX_HIT, &r->k[ev->kart], 1.0f); break;
+                case EV_BLOCK: if (mine) { snprintf(g_msg, sizeof g_msg, "BLOCKED!"); g_msg_t = 0.8f; } sfx_at(SFX_BLOCK, &r->k[ev->kart], 0.9f); break;
+                case EV_BUMP: sfx_at(SFX_BUMP, &r->k[ev->kart], 0.7f); break;
+                case EV_PICKUP: if (mine) { snprintf(g_msg, sizeof g_msg, "%s", item_name(r->k[ev->kart].item)); g_msg_t = 1.0f; sfx_play(SFX_PICKUP, 1, 0); } break;
+                case EV_USE_MANNA: case EV_USE_STAFF: sfx_at(SFX_USE_ITEM, &r->k[ev->kart], 0.9f); break;
+                case EV_USE_STONE: case EV_USE_OIL: case EV_USE_DOVE: sfx_at(ev->type == EV_USE_DOVE ? SFX_DOVE : SFX_THROW, &r->k[ev->kart], 0.9f); break;
+                case EV_USE_FIRE: sfx_at(SFX_FIRE, &r->k[ev->kart], 1.0f); break;
+                case EV_USE_LOCUSTS: sfx_at(SFX_LOCUSTS, &r->k[ev->kart], 1.0f); break;
+                case EV_PAD_BOOST: if (mine) { snprintf(g_msg, sizeof g_msg, "BOOST!"); g_msg_t = 0.7f; } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 1.0f, 2.0f); sfx_at(SFX_BOOST_PAD, &r->k[ev->kart], 0.9f); break;
+                case EV_PAD_BOUNCE: if (mine) { snprintf(g_msg, sizeof g_msg, "BOING!"); g_msg_t = 0.7f; } sfx_at(SFX_BOUNCE, &r->k[ev->kart], 0.9f); break;
                 case EV_SLOWED: if (mine) { snprintf(g_msg, sizeof g_msg, "LOCUSTS!"); g_msg_t = 1.5f; } break;
-                case EV_USE_TRUMPET: for (int q = 0; q < 10; q++) add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y + 1, r->k[ev->kart].z), 6.0f, 2.5f); break;
+                case EV_USE_TRUMPET: for (int q = 0; q < 10; q++) add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y + 1, r->k[ev->kart].z), 6.0f, 2.5f); sfx_at(SFX_SHOFAR, &r->k[ev->kart], 1.0f); break;
                 default: break;
             }
         }
@@ -995,7 +1019,9 @@ void game_frame(const Pad *pad, float dt) {
             float hx = sinf(q->yaw + q->slide), hz = cosf(q->yaw + q->slide), rx = cosf(q->yaw + q->slide), rz = -sinf(q->yaw + q->slide);
             if (q->skid && !q->air) add_skid(i, v3(q->x - rx * 0.85f - hx * 0.8f, q->y + 0.04f, q->z - rz * 0.85f - hz * 0.8f), v3(q->x + rx * 0.85f - hx * 0.8f, q->y + 0.04f, q->z + rz * 0.85f - hz * 0.8f));
             else g_last_skid[i] = 0;
-            if (i == r->player && q->mini_turbo_tier && !g_attract) { snprintf(g_msg, sizeof g_msg, q->mini_turbo_tier == 2 ? "SUPER TURBO!" : "MINI TURBO!"); g_msg_t = 1.2f; }
+            if (i == r->player && q->mini_turbo_tier && !g_attract) { snprintf(g_msg, sizeof g_msg, q->mini_turbo_tier == 2 ? "SUPER TURBO!" : "MINI TURBO!"); g_msg_t = 1.2f; sfx_play(q->mini_turbo_tier == 2 ? SFX_SUPER_TURBO : SFX_MINI_TURBO, 1, 0); }
+            if (i == r->player && !g_attract && g_was_air[i] && !q->air) sfx_play(g_track.water && !q->hit.on_road ? SFX_SPLASH : SFX_LAND, 0.8f, 0);
+            g_was_air[i] = q->air;
         }
     }
     if (steps == 8) acc = 0;

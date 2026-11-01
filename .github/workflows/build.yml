@@ -16,6 +16,7 @@ jobs:
           gcc $FLAGS tests/sim_test.c $SIM -lm -o sim_test && ./sim_test
           gcc $FLAGS tests/race_test.c $SIM -lm -o race_test && ./race_test
           gcc $FLAGS tests/track_test.c $SIM -lm -o track_test && ./track_test
+          gcc $FLAGS tests/sfx_test.c src/audio/sfx.c -lm -o sfx_test && ./sfx_test
 
   build:
     name: Build kingdomkart.wuhb
