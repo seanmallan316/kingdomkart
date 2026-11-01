@@ -11,7 +11,7 @@ from PIL import Image
 SRC, DST = "assets", "content/img"
 # how big each kind of picture is allowed to be in the game (width, height); 0 = keep aspect, fit inside
 RULES = [
-    ("portrait_", (384, 384), "cutout"),
+    ("portrait_", (256, 256), "cutout"),
     ("icon_",     (128, 128), "cutout"),
     ("beth_star", (256, 256), "black"),
     ("beth_sky",  (1024, 256), "plain"),
@@ -82,6 +82,16 @@ def main():
             im.save(os.path.join(DST, name + ".png"), optimize=True)
             print(f"{f} -> {DST}/{name}.png {im.size}")
             n += 1
+            if name.startswith("char_") and not os.path.exists(os.path.join(SRC, "portrait_" + name[5:] + ".png")):
+                # a head-and-shoulders portrait cut from the top of the figure
+                big = key_background(Image.open(os.path.join(root, f)), "cutout"); big = big.crop(big.getbbox())
+                w, h = big.size; top = big.crop((0, 0, w, int(h * 0.16)))
+                xs = [x for x in range(w) if any(top.getpixel((x, y))[3] > 128 for y in range(0, top.size[1], 4))]
+                cx = (min(xs) + max(xs)) // 2 if xs else w // 2
+                side = int(h * 0.36); x0 = max(0, min(w - side, cx - side // 2))
+                por = big.crop((x0, 0, x0 + side, side)).resize((256, 256), Image.LANCZOS)
+                por.save(os.path.join(DST, "portrait_" + name[5:] + ".png"), optimize=True)
+                print(f"   portrait_{name[5:]}.png cut from the head")
     print(f"{n} pictures prepared")
 
 if __name__ == "__main__":
