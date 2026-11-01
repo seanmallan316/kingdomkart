@@ -5,7 +5,8 @@
 #include <stdint.h>
 
 #define NKARTS 8
-#define NCHARS 13                   /* 8 to begin with, 5 unlockable */
+#define NCHARS 12                   /* 7 to begin with, 5 unlockable */
+#define NMAIN 7
 #define NSTYLES 5                   /* kart bodies: standard + 4 unlockable */
 #define MAX_BOX 24
 #define MAX_PROJ 24

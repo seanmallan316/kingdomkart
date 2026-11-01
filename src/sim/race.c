@@ -4,22 +4,21 @@
 
 /* stats: top speed, acceleration, handling, weight (1.0 = average). Balanced so no one wins every race. */
 const Character CHARACTERS[NCHARS] = {
-    {"Jesus",  "JESUS",  {1.00f, 1.00f, 1.00f, 1.00f}, 0.98f, 0.98f, 0.92f},   /* white and gold */
+    {"Jesus",  "JESUS",  {1.01f, 1.00f, 1.01f, 1.00f}, 0.98f, 0.98f, 0.92f},   /* white and gold */
     {"Moses",  "MOSES",  {1.04f, 0.92f, 0.94f, 1.15f}, 0.25f, 0.50f, 0.95f},   /* parted-waters blue */
     {"David",  "DAVID",  {0.97f, 1.05f, 1.06f, 0.88f}, 0.75f, 0.52f, 0.25f},   /* wood and gold */
     {"Esther", "ESTHER", {0.99f, 0.98f, 1.08f, 0.92f}, 0.60f, 0.25f, 0.75f},   /* royal purple */
     {"Peter",  "PETER",  {1.01f, 0.97f, 0.96f, 1.10f}, 0.20f, 0.42f, 0.70f},   /* fishing blue */
-    {"Paul",   "PAUL",   {0.98f, 1.08f, 0.98f, 0.98f}, 0.80f, 0.22f, 0.18f},   /* red and bronze */
     {"Mary",   "MARY",   {0.96f, 1.06f, 1.05f, 0.90f}, 0.55f, 0.80f, 0.98f},   /* light blue */
-    {"Daniel", "DANIEL", {1.06f, 0.94f, 0.97f, 1.05f}, 0.92f, 0.70f, 0.20f},   /* gold and blue */
+    {"Daniel", "DANIEL", {1.03f, 0.94f, 1.00f, 1.05f}, 0.92f, 0.70f, 0.20f},   /* gold and blue */
     {"Samson", "SAMSON", {1.00f, 0.98f, 0.90f, 1.40f}, 0.75f, 0.20f, 0.15f, 1}, /* bonus: the strongest, heaviest of all */
     {"Noah",   "NOAH",   {0.95f, 0.96f, 1.00f, 1.25f}, 0.30f, 0.40f, 0.75f, 1}, /* bonus: steady and heavy, ark blue */
     {"Joseph", "JOSEPH", {1.00f, 1.06f, 1.02f, 0.92f}, 0.90f, 0.55f, 0.20f, 1}, /* bonus: coat of many colors, quick off the line */
     {"Jonah",  "JONAH",  {0.97f, 1.00f, 1.08f, 0.98f}, 0.25f, 0.55f, 0.90f, 1}, /* bonus: sea blue, the best handling */
     {"John",   "JOHN",   {1.08f, 1.00f, 0.94f, 1.00f}, 0.60f, 0.42f, 0.22f, 1}, /* bonus: John the Baptist, the fastest of all */
 };
-static unsigned g_unlocked = 0xFF;      /* the computer drives only unlocked characters */
-void race_set_unlocked(unsigned mask) { g_unlocked = mask | 0xFF; }
+static unsigned g_unlocked = 0x7F;      /* the computer drives only unlocked characters */
+void race_set_unlocked(unsigned mask) { g_unlocked = mask | 0x7F; }
 const KartStyle KART_STYLES[NSTYLES] = {
     {"STANDARD", {1.00f, 1.00f, 1.00f, 1.00f}},
     {"CHARIOT",  {1.05f, 0.97f, 0.94f, 1.00f}},     /* faster, wider turns */
@@ -43,13 +42,14 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
     if (nk < 1) nk = 1;
     if (nk > NKARTS) nk = NKARTS;
     if (player_slot >= nk) player_slot = 0;
+    { int avail = 1; for (int c = 0; c < NCHARS; c++) if (c != player_character && (g_unlocked >> c) & 1) avail++; if (nk > avail) nk = avail; if (player_slot >= nk) player_slot = nk - 1; }   /* no more karts than characters to drive them */
     r->track = t; r->nk = nk; r->player = player_slot; r->difficulty = difficulty; r->rng = 0xC0FFEE11u + (uint32_t)player_character * 7919u;
     /* hand out characters: the player's pick, then the rest in order */
     int pool[NCHARS], np = 0;
     for (int c = 0; c < NCHARS; c++) if (c != player_character && (g_unlocked >> c) & 1) pool[np++] = c;
     for (int i = np - 1; i > 0; i--) { int j = (int)(rr(r) * (float)(i + 1)); if (j > i) j = i; int tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }   /* random grid */
     int next = 0;
-    for (int i = 0; i < NKARTS; i++) r->character[i] = (i == player_slot) ? player_character : pool[next++];
+    for (int i = 0; i < NKARTS; i++) r->character[i] = (i == player_slot) ? player_character : (next < np ? pool[next++] : player_character);
     for (int i = 0; i < NKARTS; i++) r->order[i] = i;
     float base = difficulty == DIFF_EASY ? 0.55f : (difficulty == DIFF_NORMAL ? 0.78f : 0.95f);
     for (int i = 0; i < r->nk; i++) {

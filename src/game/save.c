@@ -46,7 +46,7 @@ unsigned save_check_unlocks(void) {
     unsigned want = g_save.unlocks;
     if (g_save.wins >= 5) want |= UNLOCK_SAMSON;
     if (g_save.gp_wins[0] + g_save.gp_wins[1] + g_save.gp_wins[2] >= 1) want |= UNLOCK_NOAH;
-    if ((g_save.win_chars & 0xFF) == 0xFF) want |= UNLOCK_JOSEPH;
+    if ((g_save.win_chars & 0x7F) == 0x7F) want |= UNLOCK_JOSEPH;
     if (PAR_TIME[1] > 0 && g_save.best_ms[1] > 0 && g_save.best_ms[1] <= (int)(PAR_TIME[1] * 1000)) want |= UNLOCK_JONAH;
     if (g_save.gp_wins[2] >= 1) want |= UNLOCK_JOHN;
     if (g_save.gp_wins[1] + g_save.gp_wins[2] >= 1) want |= UNLOCK_HEAVEN;
@@ -73,7 +73,7 @@ const char *unlock_name(int bit) {
 }
 const char *unlock_hint(int bit) {
     switch (bit) {
-        case UNLOCK_SAMSON: return "WIN 5 RACES"; case UNLOCK_NOAH: return "WIN A GRAND PRIX"; case UNLOCK_JOSEPH: return "WIN WITH ALL 8 CHARACTERS";
+        case UNLOCK_SAMSON: return "WIN 5 RACES"; case UNLOCK_NOAH: return "WIN A GRAND PRIX"; case UNLOCK_JOSEPH: return "WIN WITH ALL 7 CHARACTERS";
         case UNLOCK_JONAH: return "BEAT THE TARGET ON THE SEA OF GALILEE"; case UNLOCK_JOHN: return "WIN THE GRAND PRIX ON HARD"; case UNLOCK_HEAVEN: return "WIN THE GRAND PRIX ON NORMAL";
         case UNLOCK_KART_CHARIOT: return "WIN 10 RACES"; case UNLOCK_KART_BOAT: return "BEAT THE TARGET TIME ON EVERY ROAD"; case UNLOCK_KART_ARK: return "FINISH 25 RACES";
         case UNLOCK_GOLIATH: return "WIN A RACE AS DAVID"; case UNLOCK_KART_SLING: return "BEAT GOLIATH";
