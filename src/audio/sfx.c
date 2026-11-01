@@ -85,6 +85,7 @@ static void fire(int id, float g, float p) {
     case SFX_DOVE:      v = N(W_NOISE, 0, 0, 0.8f, 0.05f, 0.8f, 0.3f, 0); v->am_rate = 14; v->lp = 2000; N(W_SINE, 1800, 2600, 0.5f, 0.05f, 0.5f, 0.15f, 0); break;
     case SFX_UNLOCK:    { static const float f[4] = {1047, 1319, 1568, 2093}; for (int i = 0; i < 4; i++) N(W_SINE, f[i], f[i], i == 3 ? 1.0f : 0.25f, 0.002f, i == 3 ? 1.0f : 0.25f, 0.35f, i * 0.12f); } break;
     case SFX_WELCOME_HOME: { static const float f[4] = {523, 659, 784, 1047}; for (int i = 0; i < 4; i++) { N(W_TRI, f[i], f[i], 3.0f, 0.3f, 3.0f, 0.22f, 0); N(W_SINE, f[i] * 2, f[i] * 2, 3.0f, 0.5f, 3.0f, 0.1f, 0.3f); } } break;
+    case SFX_COIN:      N(W_SQUARE, 1760, 1760, 0.05f, 0.002f, 0.05f, 0.25f, 0); N(W_SQUARE, 2349, 2349, 0.25f, 0.002f, 0.25f, 0.25f, 0.05f); break;
     case SFX_WRONG_WAY: N(W_SQUARE, 400, 400, 0.15f, 0.002f, 0.15f, 0.25f, 0); N(W_SQUARE, 300, 300, 0.2f, 0.002f, 0.2f, 0.25f, 0.18f); break;
     default: break;
     }

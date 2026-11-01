@@ -37,6 +37,7 @@ typedef struct {
     float pad_cd;              /* cooldown so one pad fires once per pass */
     float obstacle_cd;         /* seconds before an obstacle can hit this kart again */
     int pad_flag;              /* PAD_BOOST / PAD_BOUNCE for the step a pad fired, else 0 */
+    int coins;                 /* collected coins, up to 10: each one adds 1% top speed */
     int blocked_flag, hit_flag;/* set for one step when the shield blocks a hit / the kart is hit */
     /* race */
     int lap, next_cp; float wrongway_t, lap_time, total_time, best_lap, lap_times[MAX_LAPS]; int finished, place;

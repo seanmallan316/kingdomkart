@@ -61,7 +61,7 @@ static float g_results_t;
 /* textures */
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star;
 /* meshes */
-static Mesh *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[8192];
 static Batch g_b;
 
@@ -79,7 +79,7 @@ static Spark g_spark[MAX_SPARK]; static Mesh *m_spark;
 /* scenery: cut-out pictures standing beside the road, grouped by picture */
 typedef struct { const char *img; Texture *tex; float aspect; Mesh *mesh; } SpriteKind;
 static SpriteKind g_kind[MAX_SPRITE_KINDS]; static int g_nkind;
-typedef struct { Vec3 p; float h, w, glow; int kind; } Placed;
+typedef struct { Vec3 p; float h, w, glow; int kind; int purple, falls; } Placed;
 static Placed g_placed[MAX_SCENERY]; static int g_nplaced;
 static int g_mover_kind[MAX_MOVERS];
 static int g_was_air[NKARTS];
@@ -244,7 +244,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
-    Mesh **ms[] = {&m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -311,6 +311,40 @@ static void build_track_meshes(void) {
         Vec3 c = v3(fs->x, fs->y - 2.0f, fs->z);
         batch_quad(&g_b, v3(c.x, c.y + hh * 0.5f, c.z), v3(fs->nx * hw, 0, fs->nz * hw), v3(0, hh * 0.5f, 0), v3(-fs->tx, 0, -fs->tz), 0, 0, 1, 1, 1, 1, 1, 1); }
     m_finale = gfx_mesh_static(g_b.v, g_b.n);
+    /* tunnels: a roof over the road and walls up to it, with an arch ring at each end */
+    batch_clear(&g_b);
+    for (int tn = 0; tn < t->ntunnel; tn++) { const Tunnel *tu = &t->tunnel[tn]; int len = (tu->to - tu->from + t->n) % t->n;
+        for (int q = 0; q <= len; q++) { int i = (tu->from + q) % t->n, j = (i + 1) % t->n; float e = track_edge(t, i), ej = track_edge(t, j);
+            Vec3 a = road_point(t, i, -e), b = road_point(t, j, -ej), c = road_point(t, j, ej), d = road_point(t, i, e);
+            Vec3 at = v3(a.x, a.y + tu->height, a.z), bt = v3(b.x, b.y + tu->height, b.z), ct = v3(c.x, c.y + tu->height, c.z), dt2 = v3(d.x, d.y + tu->height, d.z);
+            float v0 = t->s[i].dist / 4.0f, v1 = t->s[j].dist / 4.0f;
+            if (q < len) {
+                batch_quad4(&g_b, at, dt2, ct, bt, v3(0, -1, 0), 0, v0, 2, v1, 0.45f, 0.42f, 0.5f, 1);                          /* roof, seen from below */
+                batch_quad4(&g_b, a, b, bt, at, v3(t->s[i].nx, 0, t->s[i].nz), v0, 0, v1, 1.5f, 0.55f, 0.5f, 0.6f, 1);          /* left wall */
+                batch_quad4(&g_b, d, dt2, ct, c, v3(-t->s[i].nx, 0, -t->s[i].nz), v0, 0, v1, 1.5f, 0.55f, 0.5f, 0.6f, 1);      /* right wall */
+            }
+            if (q == 0 || q == len) {    /* the arch ring: a band of stone around the mouth */
+                for (int sd = -1; sd <= 1; sd += 2) { Vec3 base = road_point(t, i, sd * (e + 0.6f)); batch_box(&g_b, v3(base.x, base.y + tu->height * 0.5f, base.z), v3(0.7f, tu->height * 0.5f + 0.6f, 0.7f), 0.6f, 0.55f, 0.5f); }
+                Vec3 mid = road_point(t, i, 0); batch_box(&g_b, v3(mid.x, mid.y + tu->height + 0.5f, mid.z), v3(e + 1.3f, 0.6f, 0.7f), 0.6f, 0.55f, 0.5f);
+            } } }
+    m_tunnel = gfx_mesh_static(g_b.v, g_b.n);
+    /* the start/finish arch: two pillars and a checkered banner across the road */
+    batch_clear(&g_b);
+    { int i = 0; float e = track_edge(t, i);
+      for (int sd = -1; sd <= 1; sd += 2) { Vec3 base = road_point(t, i, sd * (e + 0.5f)); batch_box(&g_b, v3(base.x, base.y + 3.2f, base.z), v3(0.45f, 3.2f, 0.45f), 0.95f, 0.85f, 0.4f); }
+      Vec3 mid = road_point(t, i, 0); batch_box(&g_b, v3(mid.x, mid.y + 6.1f, mid.z), v3(e + 1.0f, 0.75f, 0.3f), 1, 1, 1); }
+    m_arch = gfx_mesh_static(g_b.v, g_b.n);
+    /* a coin: a thin golden eight-sided disc, drawn spinning at every coin spot */
+    batch_clear(&g_b);
+    { Vec3 c = v3(0, 0, 0); float rad = 0.55f, hw = 0.06f;
+      for (int q = 0; q < 8; q++) { float a0 = q * 6.2831853f / 8, a1 = (q + 1) * 6.2831853f / 8;
+          Vec3 p0 = v3(cosf(a0) * rad, sinf(a0) * rad, hw), p1 = v3(cosf(a1) * rad, sinf(a1) * rad, hw), p2 = v3(cosf(a1) * rad, sinf(a1) * rad, -hw), p3 = v3(cosf(a0) * rad, sinf(a0) * rad, -hw);
+          batch_quad4(&g_b, p0, p1, p2, p3, v3(cosf((a0 + a1) * 0.5f), sinf((a0 + a1) * 0.5f), 0), 0, 0, 1, 1, 0.9f, 0.7f, 0.2f, 1);
+          Vertex f0 = {c.x, c.y, hw, 0, 0, 1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, f1 = {p0.x, p0.y, hw, 0, 0, 1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, f2 = {p1.x, p1.y, hw, 0, 0, 1, 0, 0, 1.0f, 0.85f, 0.35f, 1};
+          Vertex b0 = {c.x, c.y, -hw, 0, 0, -1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, b1 = {p1.x, p1.y, -hw, 0, 0, -1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, b2 = {p0.x, p0.y, -hw, 0, 0, -1, 0, 0, 1.0f, 0.85f, 0.35f, 1};
+          if (g_b.n + 6 <= g_b.cap) { g_b.v[g_b.n++] = f0; g_b.v[g_b.n++] = f1; g_b.v[g_b.n++] = f2; g_b.v[g_b.n++] = b0; g_b.v[g_b.n++] = b1; g_b.v[g_b.n++] = b2; } } }
+    m_coin = gfx_mesh_static(g_b.v, g_b.n);
+    m_coins = gfx_mesh_dynamic(MAX_COINS * 6);
     /* ground: a big grass plane under everything */
     batch_clear(&g_b);
     { float lowest = 1e9f; for (int i = 0; i < t->n; i++) { float y = track_surface_height(t, i, track_edge(t, i)); if (y < lowest) lowest = y; y = track_surface_height(t, i, -track_edge(t, i)); if (y < lowest) lowest = y; }
@@ -482,6 +516,17 @@ static void px_gpillar(int x, int y, uint32_t *o) {      /* a golden column with
     if (inrect(x, y, 20, 14, 44, 22) || inrect(x, y, 20, 90, 44, 96)) *o = rgba(210, 165, 50, 255);
     float dx = (x - 32) / 7.0f, dy = (y - 8) / 8.0f; if (dx * dx + dy * dy < 1.0f) *o = rgba(255, 240, 180, 255);
 }
+static void px_crystal(int x, int y, uint32_t *o) {      /* a cluster of purple crystals */
+    *o = 0;
+    for (int c = 0; c < 3; c++) { static const int cx[3] = {20, 34, 46}, top[3] = {30, 14, 40}, hw[3] = {8, 10, 7};
+        int h = 96 - top[c]; if (y < top[c]) continue; float w = (float)hw[c] * (float)(y - top[c]) / (float)h;
+        if (fabsf((float)(x - cx[c])) < w) *o = rgba(170 + ((x + y) & 8 ? 40 : 0), 80, 220 + ((x - y) & 8 ? 30 : 0), 255); }
+}
+static void px_waterfall(int x, int y, uint32_t *o) {    /* falling water: vertical streaks, tiles vertically */
+    float n = smooth_noise(x / 6.0f, y / 40.0f) * 0.7f + smooth_noise(x / 2.5f, y / 12.0f) * 0.3f;
+    int a = x < 4 || x > 59 ? 0 : 230; int w = n > 0.6f ? 60 : 0;
+    *o = rgba(170 + w, 215 + w / 2, 255, a);
+}
 static void px_stone(int x, int y, uint32_t *o) {        /* a rolling round stone */
     *o = 0; float dx = (x - 32) / 30.0f, dy = (y - 64) / 30.0f;
     if (dx * dx + dy * dy < 1.0f) *o = stone(x, y, 150 - (int)(dy * 40), 140 - (int)(dy * 40), 130 - (int)(dy * 40));
@@ -491,7 +536,8 @@ static Texture *placeholder_sprite(const char *id, float *aspect) {
     static const struct { const char *id; void (*fn)(int, int, uint32_t *); } table[] = {
         {"#hut", px_hut}, {"#net", px_net}, {"#rock", px_rock}, {"#boat", px_boat}, {"#cypress", px_cypress}, {"#pillar", px_pillar},
         {"#tower", px_tower}, {"#wallseg", px_wallseg}, {"#arch", px_arch}, {"#stall", px_stall}, {"#cart", px_cart}, {"#lily", px_lily},
-        {"#tomb", px_tomb}, {"#crosses", px_crosses}, {"#stone", px_stone}, {"#cloud", px_cloudpuff}, {"#gpillar", px_gpillar} };
+        {"#tomb", px_tomb}, {"#crosses", px_crosses}, {"#stone", px_stone}, {"#cloud", px_cloudpuff}, {"#gpillar", px_gpillar}, {"#crystal", px_crystal} };
+    if (!strcmp(id, "#waterfall")) { *aspect = 0.5f; return make_tex(64, 128, 1, 0, px_waterfall); }
     for (size_t i = 0; i < sizeof table / sizeof table[0]; i++) if (!strcmp(id, table[i].id)) return make_tex(PW, PH, 0, 0, table[i].fn);
     if (!strcmp(id, "#house1")) return make_tex(PW, PH, 0, 0, px_house1);
     if (!strcmp(id, "#house2")) return make_tex(PW, PH, 0, 0, px_house2);
@@ -548,7 +594,7 @@ static void load_theme(void) {
         float edge = track_edge(&g_track, idx);
         p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * sc->side, 0, g_track.s[idx].z + g_track.s[idx].nz * sc->side);
         p->p.y = track_surface_height(&g_track, idx, (sc->side < 0 ? -1.0f : 1.0f) * edge) - 0.2f;   /* stands on the ground just outside the wall */
-        p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow;
+        p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
     }
     m_glow = gfx_mesh_dynamic(MAX_SCENERY * 6 + 6);
 }
@@ -681,6 +727,7 @@ static void hud_race(const Pad *pad) {
         batch_text(&g_b, place_name(mypos), 1240 - text_width(place_name(mypos), 64), 24, 64, 1, 0.9f, 0.3f, 1);
     }
     snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); batch_text(&g_b, buf, 1240 - text_width(buf, 24), 96, 24, 1, 1, 1, 1);
+    if (g_track.ncoin) { batch_rect(&g_b, 40, 215, 16, 16, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, 62, 214, 18, 1, 0.9f, 0.5f, 1); }
     if (g_mode != MODE_TT) {
         batch_rect(&g_b, 40, 140, 150, 60, 0.05f, 0.1f, 0.25f, 0.7f);
         batch_rect(&g_b, 43, 143, 144, 54, 0.15f, 0.3f, 0.6f, 0.7f);
@@ -1024,6 +1071,7 @@ void game_frame(const Pad *pad, float dt) {
                 case EV_USE_LOCUSTS: sfx_at(SFX_LOCUSTS, &r->k[ev->kart], 1.0f); break;
                 case EV_PAD_BOOST: if (mine) { snprintf(g_msg, sizeof g_msg, "BOOST!"); g_msg_t = 0.7f; } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 1.0f, 2.0f); sfx_at(SFX_BOOST_PAD, &r->k[ev->kart], 0.9f); break;
                 case EV_PAD_BOUNCE: if (mine) { snprintf(g_msg, sizeof g_msg, "BOING!"); g_msg_t = 0.7f; } sfx_at(SFX_BOUNCE, &r->k[ev->kart], 0.9f); break;
+                case EV_COIN: if (mine) sfx_play(SFX_COIN, 0.8f, 0); break;
                 case EV_SLOWED: if (mine) { snprintf(g_msg, sizeof g_msg, "LOCUSTS!"); g_msg_t = 1.5f; } break;
                 case EV_USE_TRUMPET: for (int q = 0; q < 10; q++) add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y + 1, r->k[ev->kart].z), 6.0f, 2.5f); sfx_at(SFX_SHOFAR, &r->k[ev->kart], 1.0f); break;
                 default: break;
@@ -1081,7 +1129,8 @@ void game_frame(const Pad *pad, float dt) {
             for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->kind != kd) continue;
                 float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; if (dx * dx + dz * dz > SPRITE_DRAW_DIST * SPRITE_DRAW_DIST) continue;
                 float w = pl->w * 0.5f;
-                batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.5f, pl->p.z), v3(ax.x * w, 0, ax.z * w), v3(0, pl->h * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
+                float v0 = pl->falls ? g_time * 1.5f : 0.0f;
+                batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.5f, pl->p.z), v3(ax.x * w, 0, ax.z * w), v3(0, pl->h * 0.5f, 0), v3(0, 1, 0), 0, v0, 1, v0 + (pl->falls ? pl->h / 3.0f : 1.0f), 1, 1, 1, 1); }
             for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd) continue; const Mover *mv = &g_track.mover[m];
                 float mx, my, mz; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); float w = mv->height * g_kind[kd].aspect * 0.5f;
                 batch_quad(&g_b, v3(mx, my + mv->height * 0.5f, mz), v3(ax.x * w, 0, ax.z * w), v3(0, mv->height * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
@@ -1092,7 +1141,8 @@ void game_frame(const Pad *pad, float dt) {
         for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->glow <= 0) continue;
             float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; if (dx * dx + dz * dz > SPRITE_DRAW_DIST * SPRITE_DRAW_DIST) continue;
             float fl = 0.85f + 0.15f * sinf(g_time * 9.0f + i * 1.7f), s = pl->glow * fl;
-            batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.55f, pl->p.z), v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, g_def->glow_r, g_def->glow_g, g_def->glow_b, 0.55f); }
+            if (pl->purple) batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.55f, pl->p.z), v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.7f, 0.35f, 1.0f, 0.6f);
+            else batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.55f, pl->p.z), v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, g_def->glow_r, g_def->glow_g, g_def->glow_b, 0.55f); }
         gfx_mesh_update(m_glow, g_b.v, g_b.n);
         batch_clear(&g_b);
         for (int i = 0; i < MAX_SKID; i++) if (g_skid[i].used) { Skid *s = &g_skid[i];
@@ -1149,6 +1199,8 @@ void game_frame(const Pad *pad, float dt) {
         gfx_bind(tx_road); gfx_draw(m_road, &id, sr, sg, sb, 1);
         gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1);
         gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
+        gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1);
+        gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1);
         { float pulse = 0.75f + 0.25f * sinf(g_time * 6.0f);
           gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_boostpads, &id, pulse, pulse, pulse, 1);
           gfx_bind(tx_blob); gfx_draw(m_bouncepads, &id, 1, 1, 1, 0.9f);
@@ -1165,6 +1217,12 @@ void game_frame(const Pad *pad, float dt) {
             Mat4 m = m4_mul(m4_translate(bx->x, bx->y + 0.15f * sinf(g_time * 2.0f + b), bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_rotate_x(0.6f)));
             gfx_draw(m_cube, &m, 0.3f, 0.6f, 1.0f, 0.55f);
             Mat4 m2 = m4_mul(m, m4_scale(0.5f, 0.5f, 0.5f)); gfx_draw(m_cube, &m2, 1.0f, 0.85f, 0.3f, 0.9f); }
+        /* coins: spinning discs */
+        gfx_state(ST_SOLID); gfx_bind(NULL);
+        for (int c = 0; c < g_track.ncoin; c++) { if (r->coin_respawn[c] > 0) continue; const Coin *cn = &g_track.coin[c]; const TrackSample *cs = &g_track.s[cn->idx];
+            float cx = cs->x + cs->nx * cn->lateral, cz = cs->z + cs->nz * cn->lateral; float ddx = cx - cam_x, ddz = cz - cam_z; if (ddx * ddx + ddz * ddz > 160.0f * 160.0f) continue;
+            Mat4 m = m4_mul(m4_translate(cx, track_surface_height(&g_track, cn->idx, cn->lateral) + 1.0f + 0.1f * sinf(g_time * 3.0f + c), cz), m4_rotate_y(g_time * 3.0f + c * 0.7f));
+            gfx_draw(m_coin, &m, 1, 1, 1, 1); }
         /* the karts */
         gfx_state(ST_SOLID); gfx_bind(NULL);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];

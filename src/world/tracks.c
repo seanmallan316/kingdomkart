@@ -65,6 +65,7 @@ static const Scenery BETH_SCENERY[] = {
     {"#olive", 216, -12, 6, 0}, {"#lantern", 226, 10, 4, 3}, {"#olive", 236, 12, 7, 0}, {"#house1", 248, -12, 7, 0}, {"#olive", 258, 13, 6, 0},
     {"#olive", 270, -12, 7, 0}, {"#lantern", 280, 11, 4, 3}, {"#house2", 292, 13, 9, 0},
     /* the inn and the alley back to the start */
+    {"#crystal", 230, -12, 3, 2}, {"#crystal", 238, 12, 3, 2}, {"#crystal", 244, -12, 2.5f, 2},
     {"#inn", 296, -13, 9, 4}, {"#lantern", 302, 11, 4, 3}, {"#house1", 308, 12, 7, 0}, {"#house2", 312, -12, 9, 0}, {"#lantern", 316, -11, 4, 3}, {"#house1", 318, 12, 7, 0},
 };
 
@@ -74,6 +75,8 @@ static const RoadPad BETH_PADS[] = {
     {150, -3.0f, 2.0f, PAD_BOOST},                                    /* help up the hill */
     {250, 0.0f, 2.5f, PAD_BOOST},                                     /* down the switchback */
 };
+static const CoinRow BETH_COINS[] = { {44, 5, 3, 2.5f}, {100, 5, 3, -3.0f}, {160, 4, 4, 3.0f}, {212, 5, 3, -2.5f}, {262, 5, 3, 2.0f} };
+static const Tunnel BETH_TUNNELS[] = { {226, 246, 5.5f} };
 static const Mover BETH_MOVERS[] = {
     {"#sheep", 136, 0.0f, 7.0f, 0.55f, 0.0f, 1.6f, 2.0f},            /* sheep wandering across the hill road */
     {"#sheep", 198, 0.0f, 6.0f, 0.45f, 2.0f, 1.6f, 2.0f},
@@ -101,10 +104,10 @@ static const TrackPoint GAL_PTS[] = {
 };
 static const Scenery GAL_SCENERY[] = {
     {"#palm", 8, -12, 11, 0}, {"#hut", 16, 12, 6, 0}, {"#net", 24, -12, 4, 0}, {"#palm", 34, 12, 12, 0}, {"#rock", 44, -12, 3, 0},
-    {"#boat", 70, 14, 4, 0}, {"#boat", 92, -16, 4, 0}, {"#rock", 104, 12, 3, 0}, {"#boat", 118, 15, 4, 0}, {"#boat", 140, -15, 4, 0},
+    {"#boat", 70, 14, 4, 0}, {"#waterfall", 86, -17, 9, 0}, {"#boat", 92, -16, 4, 0}, {"#rock", 104, 12, 3, 0}, {"#boat", 118, 15, 4, 0}, {"#boat", 140, -15, 4, 0},
     {"#rock", 160, 12, 3, 0}, {"#palm", 180, -13, 11, 0}, {"#rock", 190, 13, 3, 0},
     {"#hut", 206, -12, 6, 0}, {"#net", 214, 12, 4, 0}, {"#hut", 222, 12, 6, 0}, {"#boat", 232, -13, 4, 0}, {"#hut", 240, -12, 6, 0}, {"#net", 248, 12, 4, 0},
-    {"#palm", 258, -12, 11, 0}, {"#palm", 266, 13, 12, 0}, {"#palm", 274, -13, 11, 0}, {"#palm", 282, 12, 12, 0}, {"#rock", 290, -12, 3, 0}, {"#palm", 296, 12, 11, 0},
+    {"#crystal", 258, -12, 3, 2}, {"#crystal", 264, 13, 3, 2}, {"#crystal", 270, -13, 2.5f, 2}, {"#palm", 282, 12, 12, 0}, {"#rock", 290, -12, 3, 0}, {"#palm", 296, 12, 11, 0},
 };
 static const RoadPad GAL_PADS[] = {
     {12, 0.0f, 2.5f, PAD_BOOST}, {18, 0.0f, 2.5f, PAD_BOOST},         /* beach straight */
@@ -112,6 +115,8 @@ static const RoadPad GAL_PADS[] = {
     {175, -3.0f, 2.0f, PAD_BOUNCE},                                     /* hop on the sand */
     {272, 2.5f, 2.0f, PAD_BOOST},
 };
+static const CoinRow GAL_COINS[] = { {30, 5, 3, -3.0f}, {84, 6, 3, 2.5f}, {150, 5, 3, -2.5f}, {200, 5, 3, 3.0f}, {280, 5, 3, -2.0f} };
+static const Tunnel GAL_TUNNELS[] = { {254, 272, 5.5f} };
 static const Mover GAL_MOVERS[] = {
     {"#net", 92, 0.0f, 5.5f, 0.5f, 0.0f, 1.4f, 2.4f},                 /* fishermen hauling nets across the causeway */
     {"#net", 222, 0.0f, 5.0f, 0.6f, 1.5f, 1.4f, 2.4f},
@@ -136,11 +141,11 @@ static const TrackPoint JERU_PTS[] = {
 };
 static const Scenery JERU_SCENERY[] = {
     {"#cypress", 8, -12, 8, 0}, {"#pillar", 14, 12, 5, 0}, {"#cypress", 22, 12, 8, 0}, {"#pillar", 30, -12, 5, 0}, {"#cypress", 38, -12, 8, 0},
-    {"#tower", 52, 12, 14, 0}, {"#wallseg", 60, -13, 9, 0}, {"#tower", 68, -13, 14, 0}, {"#arch", 78, 13, 12, 0}, {"#wallseg", 84, 12, 9, 0},
+    {"#tower", 52, 12, 14, 0}, {"#wallseg", 60, -13, 9, 0}, {"#tower", 62, -13, 14, 0}, {"#lantern", 72, 12, 4, 3}, {"#lantern", 78, -12, 4, 3}, {"#wallseg", 86, 12, 9, 0},
     {"#stall", 96, -12, 5, 0}, {"#house2", 102, 12, 9, 0}, {"#stall", 108, 12, 5, 0}, {"#house1", 114, -12, 7, 0}, {"#stall", 120, -12, 5, 0}, {"#house2", 126, 12, 9, 0},
-    {"#pillar", 134, -12, 5, 0}, {"#pillar", 140, 12, 5, 0}, {"#pillar", 146, -12, 5, 0}, {"#pillar", 152, 12, 5, 0},
+    {"#pillar", 134, -12, 5, 0}, {"#waterfall", 138, 16, 8, 0}, {"#pillar", 146, -12, 5, 0}, {"#pillar", 152, 12, 5, 0},
     {"#tower", 164, 13, 14, 0}, {"#cypress", 176, -12, 8, 0}, {"#wallseg", 184, 12, 9, 0},
-    {"#olive", 196, -12, 6, 0}, {"#olive", 204, 12, 7, 0}, {"#olive", 212, -13, 6, 0}, {"#olive", 222, 12, 7, 0}, {"#olive", 232, -12, 6, 0},
+    {"#olive", 196, -12, 6, 0}, {"#olive", 204, 12, 7, 0}, {"#olive", 212, -13, 6, 0}, {"#olive", 222, 12, 7, 0}, {"#crystal", 240, -12, 3, 2}, {"#crystal", 246, 12, 3, 2},
     {"#cypress", 244, 12, 8, 0}, {"#olive", 252, -12, 6, 0}, {"#cypress", 262, 12, 8, 0}, {"#pillar", 270, -12, 5, 0},
 };
 static const RoadPad JERU_PADS[] = {
@@ -149,6 +154,8 @@ static const RoadPad JERU_PADS[] = {
     {150, 0.0f, 2.5f, PAD_BOOST},                                      /* run-up to the stairs jump */
     {230, 0.0f, 3.0f, PAD_BOUNCE},                                     /* a hop on the olive slope */
 };
+static const CoinRow JERU_COINS[] = { {26, 5, 3, 2.5f}, {100, 5, 3, -2.5f}, {134, 6, 3, 2.5f}, {196, 5, 3, -3.0f}, {250, 5, 3, 2.5f} };
+static const Tunnel JERU_TUNNELS[] = { {66, 84, 6.0f}, {236, 250, 5.0f} };
 static const Mover JERU_MOVERS[] = {
     {"#cart", 106, 0.0f, 5.0f, 0.7f, 0.0f, 1.8f, 2.6f},               /* market carts crossing the street */
     {"#cart", 124, 0.0f, 5.0f, 0.6f, 2.5f, 1.8f, 2.6f},
@@ -172,8 +179,8 @@ static const TrackPoint TOMB_PTS[] = {
 };
 static const Scenery TOMB_SCENERY[] = {
     {"#olive", 6, -12, 6, 0}, {"#lily", 12, 12, 2, 0}, {"#olive", 20, 12, 7, 0}, {"#lily", 28, -12, 2, 0}, {"#olive", 36, -12, 6, 0}, {"#lily", 44, 12, 2, 0},
-    {"#olive", 54, 12, 7, 0}, {"#rock", 62, -12, 3, 0}, {"#olive", 70, -12, 6, 0}, {"#olive", 80, 12, 7, 0}, {"#rock", 90, -12, 3, 0},
-    {"#rock", 100, 12, 3, 0}, {"#olive", 106, -12, 6, 0},
+    {"#crystal", 44, 12, 3, 2}, {"#crystal", 50, -12, 3, 2}, {"#olive", 70, -12, 6, 0}, {"#olive", 80, 12, 7, 0}, {"#rock", 90, -12, 3, 0},
+    {"#waterfall", 98, 16, 10, 0}, {"#rock", 100, -12, 3, 0}, {"#olive", 106, -12, 6, 0},
     {"#lily", 124, -13, 2, 0}, {"#lily", 130, 13, 2, 0}, {"#tomb", 142, 14, 8, 6}, {"angel", 146, 11, 5, 4}, {"#lily", 150, -12, 2, 0}, {"#rock", 156, -12, 3, 0},
     {"#olive", 166, 12, 7, 0}, {"#lily", 172, -12, 2, 0}, {"#olive", 180, -12, 6, 0}, {"#crosses", 196, -16, 10, 0}, {"#olive", 206, 12, 7, 0},
     {"#rock", 216, -12, 3, 0}, {"#olive", 226, 12, 6, 0}, {"#lily", 236, -12, 2, 0}, {"#olive", 246, 12, 7, 0}, {"#lily", 254, -12, 2, 0},
@@ -184,6 +191,8 @@ static const RoadPad TOMB_PADS[] = {
     {140, -3.0f, 2.0f, PAD_BOUNCE}, {140, 3.0f, 2.0f, PAD_BOUNCE},     /* two hops by the tomb */
     {200, 0.0f, 2.5f, PAD_BOOST},
 };
+static const CoinRow TOMB_COINS[] = { {26, 5, 3, 2.5f}, {70, 5, 3, -2.5f}, {120, 5, 3, 3.0f}, {176, 5, 3, -2.5f}, {236, 5, 3, 2.5f} };
+static const Tunnel TOMB_TUNNELS[] = { {40, 56, 5.5f} };
 static const Mover TOMB_MOVERS[] = {
     {"#stone", 160, 0.0f, 5.5f, 0.9f, 0.0f, 1.5f, 2.2f},              /* rolling stones */
     {"#stone", 214, 0.0f, 5.0f, 0.8f, 2.0f, 1.5f, 2.2f},
@@ -223,8 +232,8 @@ static const Scenery HEAVEN_SCENERY[] = {
     {"#olive", 126, -12, 6, 0}, {"#cypress", 132, 12, 8, 0}, {"#house1", 138, 12, 7, 0}, {"#olive", 148, -12, 6, 0}, {"#cypress", 154, 12, 8, 0},
     {"#olive", 162, -12, 6, 0}, {"#house2", 168, 12, 9, 0}, {"#olive", 176, -12, 6, 0}, {"#cypress", 184, 12, 8, 0}, {"#olive", 194, -12, 6, 0},
     /* the climb: clouds gather */
-    {"#cloud", 206, -16, 7, 0}, {"#cloud", 216, 16, 8, 0}, {"#cloud", 228, -17, 9, 0}, {"#cloud", 240, 16, 8, 0}, {"#cloud", 252, -16, 9, 0}, {"#cloud", 264, 17, 10, 0},
-    {"#cloud", 276, -16, 8, 0}, {"#cloud", 288, 16, 9, 0}, {"#cloud", 300, -17, 9, 0}, {"#cloud", 312, 16, 8, 0},
+    {"#waterfall", 200, 16, 12, 0}, {"#cloud", 206, -16, 7, 0}, {"#cloud", 216, 16, 8, 0}, {"#cloud", 228, -17, 9, 0}, {"#cloud", 240, 16, 8, 0}, {"#cloud", 252, -16, 9, 0}, {"#cloud", 264, 17, 10, 0},
+    {"#cloud", 276, -16, 8, 0}, {"#cloud", 288, 16, 9, 0}, {"#crystal", 306, -13, 3, 2}, {"#crystal", 312, 13, 3, 2},
     {"angel", 322, -14, 7, 3}, {"#cloud", 330, 16, 9, 0}, {"angel", 338, 14, 7, 3}, {"#gpillar", 346, -14, 9, 0}, {"#gpillar", 346, 14, 9, 0},
     {"angel", 356, -14, 7, 3}, {"angel", 356, 14, 7, 3}, {"shofar", 366, -14, 4, 2}, {"shofar", 366, 14, 4, 2}, {"angel", 374, -14, 7, 3}, {"angel", 374, 14, 7, 3},
 };
@@ -235,6 +244,8 @@ static const RoadPad HEAVEN_PADS[] = {
     {272, 0.0f, 3.0f, PAD_BOUNCE},                                      /* a hop among the clouds */
     {296, 0.0f, 2.5f, PAD_BOOST}, {340, 0.0f, 2.5f, PAD_BOOST},
 };
+static const CoinRow HEAVEN_COINS[] = { {158, 5, 3, 2.5f}, {210, 6, 3, -2.5f}, {250, 5, 3, 2.5f}, {300, 6, 3, -2.5f}, {350, 6, 3, 2.5f} };
+static const Tunnel HEAVEN_TUNNELS[] = { {302, 318, 6.0f} };
 
 const TrackDef TRACK_DEFS[] = {
     { "Bethlehem Road", 3, BETH_PTS, (int)(sizeof BETH_PTS / sizeof BETH_PTS[0]),
@@ -247,7 +258,8 @@ const TrackDef TRACK_DEFS[] = {
       BETH_SCENERY, (int)(sizeof BETH_SCENERY / sizeof BETH_SCENERY[0]),
       -230.0f, 120.0f, 60.0f, 46.0f,            /* the Star, high over the hill */
       300, 335, -1,                             /* alley shortcut: inside of the tight corner */
-      "beth", BETH_PADS, (int)(sizeof BETH_PADS / sizeof BETH_PADS[0]), BETH_MOVERS, (int)(sizeof BETH_MOVERS / sizeof BETH_MOVERS[0]), 0 },
+      "beth", BETH_PADS, (int)(sizeof BETH_PADS / sizeof BETH_PADS[0]), BETH_MOVERS, (int)(sizeof BETH_MOVERS / sizeof BETH_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 0, BETH_COINS, (int)(sizeof BETH_COINS / sizeof BETH_COINS[0]), BETH_TUNNELS, 1 },
     { "Sea of Galilee", 3, GAL_PTS, (int)(sizeof GAL_PTS / sizeof GAL_PTS[0]),
       0.50f, 0.74f, 0.98f,                      /* clear blue sky */
       0.78f, 0.88f, 0.98f, 140.0f, 520.0f,      /* light haze */
@@ -258,7 +270,8 @@ const TrackDef TRACK_DEFS[] = {
       GAL_SCENERY, (int)(sizeof GAL_SCENERY / sizeof GAL_SCENERY[0]),
       0, 0, 0, 0,
       150, 185, 1,                              /* sandbar shortcut on the outside of the sweep */
-      "gal", GAL_PADS, (int)(sizeof GAL_PADS / sizeof GAL_PADS[0]), GAL_MOVERS, (int)(sizeof GAL_MOVERS / sizeof GAL_MOVERS[0]), 1 },
+      "gal", GAL_PADS, (int)(sizeof GAL_PADS / sizeof GAL_PADS[0]), GAL_MOVERS, (int)(sizeof GAL_MOVERS / sizeof GAL_MOVERS[0]), 1,
+      0, NULL, 0, 0, 0, 0, GAL_COINS, (int)(sizeof GAL_COINS / sizeof GAL_COINS[0]), GAL_TUNNELS, 1 },
     { "Jerusalem Road", 3, JERU_PTS, (int)(sizeof JERU_PTS / sizeof JERU_PTS[0]),
       0.80f, 0.62f, 0.45f,                      /* golden afternoon */
       0.90f, 0.74f, 0.52f, 90.0f, 420.0f,
@@ -269,7 +282,8 @@ const TrackDef TRACK_DEFS[] = {
       JERU_SCENERY, (int)(sizeof JERU_SCENERY / sizeof JERU_SCENERY[0]),
       0, 0, 0, 0,
       232, 262, -1,                             /* side alley on the olive slope */
-      "jeru", JERU_PADS, (int)(sizeof JERU_PADS / sizeof JERU_PADS[0]), JERU_MOVERS, (int)(sizeof JERU_MOVERS / sizeof JERU_MOVERS[0]), 0 },
+      "jeru", JERU_PADS, (int)(sizeof JERU_PADS / sizeof JERU_PADS[0]), JERU_MOVERS, (int)(sizeof JERU_MOVERS / sizeof JERU_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 0, JERU_COINS, (int)(sizeof JERU_COINS / sizeof JERU_COINS[0]), JERU_TUNNELS, 2 },
     { "Sunrise at the Empty Tomb", 3, TOMB_PTS, (int)(sizeof TOMB_PTS / sizeof TOMB_PTS[0]),
       0.95f, 0.70f, 0.60f,                      /* pink dawn */
       0.98f, 0.80f, 0.70f, 80.0f, 380.0f,
@@ -280,7 +294,8 @@ const TrackDef TRACK_DEFS[] = {
       TOMB_SCENERY, (int)(sizeof TOMB_SCENERY / sizeof TOMB_SCENERY[0]),
       0, 0, 0, 0,
       -1, -1, 0,
-      "tomb", TOMB_PADS, (int)(sizeof TOMB_PADS / sizeof TOMB_PADS[0]), TOMB_MOVERS, (int)(sizeof TOMB_MOVERS / sizeof TOMB_MOVERS[0]), 0 },
+      "tomb", TOMB_PADS, (int)(sizeof TOMB_PADS / sizeof TOMB_PADS[0]), TOMB_MOVERS, (int)(sizeof TOMB_MOVERS / sizeof TOMB_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 0, TOMB_COINS, (int)(sizeof TOMB_COINS / sizeof TOMB_COINS[0]), TOMB_TUNNELS, 1 },
     { "Road to Heaven", 1, HEAVEN_PTS, (int)(sizeof HEAVEN_PTS / sizeof HEAVEN_PTS[0]),
       0.80f, 0.88f, 1.00f,                      /* bright pale sky */
       0.98f, 0.95f, 0.85f, 120.0f, 600.0f,      /* golden haze */
@@ -294,7 +309,7 @@ const TrackDef TRACK_DEFS[] = {
       "heaven", HEAVEN_PADS, (int)(sizeof HEAVEN_PADS / sizeof HEAVEN_PADS[0]), NULL, 0, 0,
       140,                                      /* the grid stands on the earth */
       "heaven_gates", 34, 70.0f, 40.0f,         /* the gates with God's open hands, standing across the plaza */
-      1 },
+      1, HEAVEN_COINS, (int)(sizeof HEAVEN_COINS / sizeof HEAVEN_COINS[0]), HEAVEN_TUNNELS, 1 },
     { "Test Loop", 3, TEST_PTS, (int)(sizeof TEST_PTS / sizeof TEST_PTS[0]),
       0.55f, 0.75f, 0.98f,
       0.72f, 0.82f, 0.95f, 120.0f, 520.0f,
@@ -315,5 +330,8 @@ void track_from_def(Track *t, const TrackDef *d) {
     t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx %= t->n; t->npad++; }
     t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx %= t->n; t->nmover++; }
     t->water = d->water; t->grid_idx = d->grid_idx % t->n;
+    t->ncoin = 0;
+    for (int i = 0; i < d->ncoinrows; i++) for (int c = 0; c < d->coins[i].n && t->ncoin < MAX_COINS; c++) { t->coin[t->ncoin].idx = (d->coins[i].idx + c * d->coins[i].step) % t->n; t->coin[t->ncoin].lateral = d->coins[i].lateral; t->ncoin++; }
+    t->ntunnel = 0; for (int i = 0; i < d->ntunnels && i < MAX_TUNNELS; i++) { t->tunnel[i] = d->tunnels[i]; t->tunnel[i].from %= t->n; t->tunnel[i].to %= t->n; t->ntunnel++; }
 }
 void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[NUM_TRACK_DEFS - 1]); }

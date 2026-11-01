@@ -61,6 +61,7 @@ int kart_hit(Kart *k, float stun_seconds) {
     if (k->shield > 0) { k->shield = 0; k->blocked_flag = 1; return 0; }
     if (k->stun > 0) return 0;
     k->stun = stun_seconds; k->hit_flag = 1; k->drifting = 0; k->drift_charge = 0; k->boost_t = 0; k->boost_mul = 1.0f;
+    k->coins -= 3; if (k->coins < 0) k->coins = 0;
     return 1;
 }
 
@@ -79,7 +80,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
         if (k->speed > 0) k->speed = fmaxf(0, k->speed - 20.0f * dt);
     } else if (k->spin_vis != 0) { k->spin_vis = 0; }
     if (!k->finished) { k->total_time += dt; if (k->lap >= 1) k->lap_time += dt; }
-    float top = BASE_TOP * st->top_speed * k->boost_mul;
+    float top = BASE_TOP * st->top_speed * k->boost_mul * (1.0f + 0.01f * (float)k->coins);
     int on_road = k->hit.on_road;
     if (!on_road && !k->air) top *= OFFROAD_MUL;
     if (k->slow_t > 0) top *= 0.62f;

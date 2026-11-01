@@ -59,14 +59,14 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
         r->ai_skill[i] = base + (rr(r) - 0.5f) * 0.16f;
         r->ai_wobble[i] = rr(r) * 6.28f;
     }
-    /* item boxes: rows of four across the road at three places */
+    /* item boxes: rows of six across the road at three places */
     static const float at[3] = {0.11f, 0.42f, 0.74f};
     r->nbox = 0;
     for (int row = 0; row < 3 && nk > 1; row++) {
         int idx = (t->grid_idx + (int)(at[row] * (float)(t->n - t->grid_idx))) % t->n;   /* on a one-way road, spread over the raced part */
-        for (int c = 0; c < 4; c++) {
+        for (int c = 0; c < 6; c++) {
             ItemBox *b = &r->box[r->nbox++];
-            float lat = (c - 1.5f) * (t->s[idx].width * 0.22f);
+            float lat = (c - 2.5f) * (t->s[idx].width * 0.16f);
             b->x = t->s[idx].x + t->s[idx].nx * lat; b->z = t->s[idx].z + t->s[idx].nz * lat; b->y = track_surface_height(t, idx, lat) + 1.0f;
             b->active = 1; b->respawn = 0; b->idx = idx;
         }
@@ -187,6 +187,13 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
             r->ai_wobble[i] += dt * 0.7f;
             if (k->finished) { in.steer *= 0.5f; in.gas = k->speed < 14.0f; }
             else in.steer += 0.06f * sinf(r->ai_wobble[i]) * (1.0f - skill);      /* human-like imperfection */
+            /* drift toward a coin just ahead (only a nudge, so the racing line still wins) */
+            if (k->coins < 10 && !k->air) { for (int c = 0; c < t->ncoin; c++) { if (r->coin_respawn[c] > 0) continue;
+                int ahead = t->coin[c].idx - k->hit.idx; if (ahead < 0) ahead += t->n; float dist = (float)ahead * (t->length / (float)t->n);
+                if (dist < 4.0f || dist > 30.0f) continue;
+                float gap = t->coin[c].lateral - k->hit.lateral;
+                if (fabsf(gap) > 3.5f) continue;
+                in.steer = clampf(in.steer - (gap > 0 ? 1.0f : -1.0f) * 0.25f * fminf(fabsf(gap), 1.0f), -1.0f, 1.0f); break; } }
             /* steer around the obstacles crossing the road ahead (good drivers see them earlier) */
             for (int m = 0; m < t->nmover; m++) {
                 const Mover *mv = &t->mover[m]; int ahead = mv->idx - k->hit.idx; if (ahead < 0) ahead += t->n;
@@ -219,6 +226,15 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
                 r->stat_pickups++; push_event(r, EV_PICKUP, i); break;
             }
         }
+    }
+    /* coins */
+    for (int c = 0; c < t->ncoin; c++) {
+        if (r->coin_respawn[c] > 0) { r->coin_respawn[c] -= dt; continue; }
+        const Coin *cn = &t->coin[c]; const TrackSample *s = &t->s[cn->idx];
+        float cx = s->x + s->nx * cn->lateral, cz = s->z + s->nz * cn->lateral;
+        for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; if (k->coins >= 10 || k->finished) continue;
+            float dx = k->x - cx, dz = k->z - cz;
+            if (dx * dx + dz * dz < 1.6f * 1.6f && k->y < s->y + 3.0f) { k->coins++; r->coin_respawn[c] = 10.0f; r->stat_coins++; push_event(r, EV_COIN, i); break; } }
     }
     /* projectiles and hazards */
     for (int p = 0; p < MAX_PROJ; p++) {

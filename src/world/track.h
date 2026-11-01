@@ -25,6 +25,11 @@ typedef struct { int idx; float lateral, halfw; int kind; } RoadPad;            
 typedef struct { const char *img; int idx; float lateral, amp, speed, phase, radius, height; } Mover;   /* an obstacle crossing the road: lateral + amp*sin(time*speed+phase) */
 #define MAX_PADS 32
 #define MAX_MOVERS 16
+#define MAX_COINS 120
+#define MAX_TUNNELS 4
+typedef struct { int idx, n, step; float lateral; } CoinRow;                  /* n coins from sample idx, every step samples, at a lateral offset */
+typedef struct { int idx; float lateral; } Coin;
+typedef struct { int from, to; float height; } Tunnel;                        /* the road runs under a roof between these samples */
 
 typedef struct {
     const char *name;
@@ -38,6 +43,8 @@ typedef struct {
     Mover mover[MAX_MOVERS]; int nmover;
     int water;                              /* off-road is water (splashes instead of dust) */
     int grid_idx;                           /* sample the grid lines up at; > 0 means the race starts partway (finish at sample 0) */
+    Coin coin[MAX_COINS]; int ncoin;
+    Tunnel tunnel[MAX_TUNNELS]; int ntunnel;
 } Track;
 
 typedef struct {
