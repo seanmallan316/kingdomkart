@@ -368,7 +368,8 @@ static void build_track_meshes(void) {
     batch_clear(&g_b);
     for (int k = 0; k < 24; k++) {
         float a0 = k * 6.2831853f / 24, a1 = (k + 1) * 6.2831853f / 24, R = 900.0f;
-        Vec3 p0 = v3(cosf(a0) * R, -60, sinf(a0) * R), p1 = v3(cosf(a1) * R, -60, sinf(a1) * R), p2 = v3(cosf(a1) * R, 420, sinf(a1) * R), p3 = v3(cosf(a0) * R, 420, sinf(a0) * R);
+        float top = g_sky_wrap < 1.5f ? -60 + 6.2831853f * R / 4.0f : 420;      /* a painted 4:1 sky goes around once, so the ring is a quarter of its circumference tall to keep the clouds in shape */
+        Vec3 p0 = v3(cosf(a0) * R, -60, sinf(a0) * R), p1 = v3(cosf(a1) * R, -60, sinf(a1) * R), p2 = v3(cosf(a1) * R, top, sinf(a1) * R), p3 = v3(cosf(a0) * R, top, sinf(a0) * R);
         batch_quad4(&g_b, p1, p0, p3, p2, v3(0, 1, 0), k / 24.0f * g_sky_wrap, 1, (k + 1) / 24.0f * g_sky_wrap, 0, 1, 1, 1, 1);
     }
     m_sky = gfx_mesh_static(g_b.v, g_b.n);
