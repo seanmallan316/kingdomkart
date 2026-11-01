@@ -40,7 +40,13 @@ jobs:
       - name: Install a software OpenGL/Vulkan driver and a virtual screen
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri libglu1-mesa imagemagick libfuse2 x11-utils
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri libglu1-mesa imagemagick x11-utils
+          # libraries the Cemu AppImage expects from the system; package names differ between Ubuntu versions, so try each one
+          for p in libfuse2 libfuse2t64 libegl1 libgl1 libopengl0 libglx-mesa0 libgles2 libasound2 libasound2t64 libpulse0 \
+                   libxkbcommon0 libgtk-3-0 libgtk-3-0t64 libwayland-client0 libwayland-egl1 libxcursor1 libxi6 libxrandr2 libxss1 \
+                   libsecret-1-0 libnotify4 libzstd1 libcurl4 libcurl4t64; do
+            sudo apt-get install -y --no-install-recommends "$p" || true
+          done
       - name: Download Cemu and the shader compiler
         env:
           GH_TOKEN: ${{ github.token }}
@@ -108,7 +114,11 @@ jobs:
           sleep 2
           export LIBGL_ALWAYS_SOFTWARE=1
           export GALLIUM_DRIVER=llvmpipe
-          ./cemu/Cemu.AppImage --force-no-menubar -f -g "$PWD/title/code/kingdomkart.rpx" > cemu_log.txt 2>&1 &
+          # unpack the AppImage so it does not need FUSE
+          (cd cemu && ./Cemu.AppImage --appimage-extract > /dev/null 2>&1 || true)
+          ls cemu/squashfs-root >/dev/null 2>&1 && CEMUBIN="./cemu/squashfs-root/AppRun" || CEMUBIN="./cemu/Cemu.AppImage"
+          ldd ./cemu/squashfs-root/usr/bin/Cemu 2>/dev/null | grep "not found" || true
+          "$CEMUBIN" --force-no-menubar -f -g "$PWD/title/code/kingdomkart.rpx" > cemu_log.txt 2>&1 &
           CEMU=$!
           for t in 15 30 45 60; do
             sleep 15
