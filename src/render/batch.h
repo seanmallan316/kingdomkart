@@ -36,6 +36,24 @@ static inline void batch_box(Batch *b, Vec3 c, Vec3 h, float r, float g, float b
     batch_quad(b, v3(c.x, c.y - h.y, c.z), v3(h.x, 0, 0), v3(0, 0, h.z), v3(0, -1, 0), 0, 0, 1, 1, r, g, bl, 1);
 }
 
+/* a wheel: an eight-sided cylinder along the x axis, with a lighter hub on each side */
+static inline void batch_wheel(Batch *b, Vec3 c, float hw, float rad, float r, float g, float bl) {
+    for (int i = 0; i < 8; i++) {
+        float a0 = i * 6.2831853f / 8, a1 = (i + 1) * 6.2831853f / 8;
+        Vec3 p0 = v3(c.x - hw, c.y + cosf(a0) * rad, c.z + sinf(a0) * rad), p1 = v3(c.x + hw, c.y + cosf(a0) * rad, c.z + sinf(a0) * rad);
+        Vec3 p2 = v3(c.x + hw, c.y + cosf(a1) * rad, c.z + sinf(a1) * rad), p3 = v3(c.x - hw, c.y + cosf(a1) * rad, c.z + sinf(a1) * rad);
+        Vec3 n = v3(0, cosf((a0 + a1) * 0.5f), sinf((a0 + a1) * 0.5f));
+        batch_quad4(b, p0, p3, p2, p1, n, 0, 0, 1, 1, r, g, bl, 1);
+        /* side caps as fans around the center, hub a little lighter */
+        Vec3 cl = v3(c.x - hw, c.y, c.z), cr = v3(c.x + hw, c.y, c.z);
+        if (b->n + 12 > b->cap) return;
+        Vertex q0 = {cl.x, cl.y, cl.z, -1, 0, 0, 0, 0, r + 0.3f, g + 0.3f, bl + 0.3f, 1}, q1 = {p3.x, p3.y, p3.z, -1, 0, 0, 0, 0, r, g, bl, 1}, q2 = {p0.x, p0.y, p0.z, -1, 0, 0, 0, 0, r, g, bl, 1};
+        b->v[b->n++] = q0; b->v[b->n++] = q1; b->v[b->n++] = q2;
+        Vertex q3 = {cr.x, cr.y, cr.z, 1, 0, 0, 0, 0, r + 0.3f, g + 0.3f, bl + 0.3f, 1}, q4 = {p1.x, p1.y, p1.z, 1, 0, 0, 0, 0, r, g, bl, 1}, q5 = {p2.x, p2.y, p2.z, 1, 0, 0, 0, 0, r, g, bl, 1};
+        b->v[b->n++] = q3; b->v[b->n++] = q4; b->v[b->n++] = q5;
+    }
+}
+
 /* ---- 2D helpers: virtual screen of 1280 x 720, origin top-left, mapped to clip space */
 static inline Vec3 scr(float x, float y) { return v3(x / 640.0f - 1.0f, 1.0f - y / 360.0f, 0); }
 static inline void batch_rect_uv(Batch *b, float x, float y, float w, float h, float u0, float v0, float u1, float v1, float r, float g, float bl, float a) {

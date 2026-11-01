@@ -20,6 +20,7 @@ RULES = [
     ("beth_grass",(512, 512), "plain"),
     ("beth_wall", (512, 512), "plain"),
     ("title_art", (1024, 576), "plain"),
+    ("card_",     (512, 512), "plain"),      # road-select card pictures
     ("heaven_gates", (1024, 576), "plain"),
     ("heaven_sky", (1024, 256), "plain"),
     ("",          (512, 512), "cutout"),     # everything else is scenery

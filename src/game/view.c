@@ -45,6 +45,8 @@ static Texture *tx_char[NCHARS]; static float g_char_aspect[NCHARS];      /* ful
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
 static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
 static Texture *tx_finale; static Mesh *m_finale;
+static Texture *tx_title; static Mesh *m_title;      /* title_art.png behind the title, when Sean has made it */
+static Texture *tx_card[8]; static Mesh *m_card[8];   /* card_<prefix>.png: the road pictures on the road-select cards */
 static Texture *tx_item[ITEM_COUNT];        /* item pictures for the HUD slot, when Sean's files exist */
 static Pad g_prev; static float g_nav_t, g_screen_t;
 static const int GP_POINTS[8] = {10, 8, 6, 5, 4, 3, 2, 1};
@@ -71,6 +73,9 @@ static Skid g_skid[MAX_SKID]; static int g_skid_n; static Vec3 g_last_l[NKARTS],
 /* dust */
 typedef struct { Vec3 p, v; float life, size; } Dust;
 static Dust g_dust[MAX_DUST];
+#define MAX_SPARK 160
+typedef struct { Vec3 p, v; float life, size, r, g, b; } Spark;
+static Spark g_spark[MAX_SPARK]; static Mesh *m_spark;
 /* scenery: cut-out pictures standing beside the road, grouped by picture */
 typedef struct { const char *img; Texture *tex; float aspect; Mesh *mesh; } SpriteKind;
 static SpriteKind g_kind[MAX_SPRITE_KINDS]; static int g_nkind;
@@ -239,7 +244,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
-    Mesh **ms[] = {&m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -321,6 +326,7 @@ static void build_track_meshes(void) {
     m_sky = gfx_mesh_static(g_b.v, g_b.n);
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
+    m_spark = gfx_mesh_dynamic(MAX_SPARK * 6);
     m_hud = gfx_mesh_dynamic(8192);
     /* placeholder kart: boxes until the character art arrives. The body is white and tinted with the character's color. */
     batch_clear(&g_b);
@@ -329,8 +335,10 @@ static void build_track_meshes(void) {
     m_kart_body = gfx_mesh_static(g_b.v, g_b.n); m_body_style[0] = m_kart_body;
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.62f, -0.15f), v3(0.55f, 0.08f, 0.55f), 0.2f, 0.2f, 0.25f);     /* seat */
+    batch_box(&g_b, v3(0, 0.62f, 0.75f), v3(0.35f, 0.06f, 0.2f), 0.9f, 0.9f, 0.95f);        /* a little hood */
+    batch_box(&g_b, v3(-0.45f, 0.42f, -1.1f), v3(0.07f, 0.07f, 0.12f), 0.3f, 0.3f, 0.32f);  /* exhaust */
     for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
-        batch_box(&g_b, v3(wx * 0.85f, 0.32f, wz * 0.78f), v3(0.14f, 0.32f, 0.32f), 0.12f, 0.12f, 0.12f);
+        batch_wheel(&g_b, v3(wx * 0.85f, 0.32f, wz * 0.78f), 0.15f, 0.32f, 0.1f, 0.1f, 0.11f);
     m_kart_rest = gfx_mesh_static(g_b.v, g_b.n); m_rest_style[0] = m_kart_rest;
     /* CHARIOT: a low open car on two big back wheels, a rail in front */
     batch_clear(&g_b);
@@ -339,8 +347,8 @@ static void build_track_meshes(void) {
     m_body_style[1] = gfx_mesh_static(g_b.v, g_b.n);
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.5f, 1.1f), v3(0.08f, 0.08f, 0.5f), 0.75f, 0.6f, 0.3f);           /* the shaft, gold */
-    for (int wx = -1; wx <= 1; wx += 2) batch_box(&g_b, v3(wx * 0.8f, 0.5f, -0.5f), v3(0.1f, 0.5f, 0.5f), 0.85f, 0.65f, 0.2f);   /* big gold wheels */
-    for (int wx = -1; wx <= 1; wx += 2) batch_box(&g_b, v3(wx * 0.7f, 0.25f, 0.8f), v3(0.1f, 0.25f, 0.25f), 0.12f, 0.12f, 0.12f);
+    for (int wx = -1; wx <= 1; wx += 2) batch_wheel(&g_b, v3(wx * 0.8f, 0.5f, -0.5f), 0.1f, 0.5f, 0.75f, 0.55f, 0.15f);   /* big gold wheels */
+    for (int wx = -1; wx <= 1; wx += 2) batch_wheel(&g_b, v3(wx * 0.7f, 0.25f, 0.8f), 0.1f, 0.25f, 0.1f, 0.1f, 0.11f);
     m_rest_style[1] = gfx_mesh_static(g_b.v, g_b.n);
     /* BOAT: a hull with a pointed bow and a little mast */
     batch_clear(&g_b);
@@ -352,7 +360,7 @@ static void build_track_meshes(void) {
     batch_box(&g_b, v3(0, 1.3f, 0.5f), v3(0.05f, 0.7f, 0.05f), 0.5f, 0.35f, 0.2f);           /* mast */
     batch_box(&g_b, v3(0.3f, 1.4f, 0.5f), v3(0.3f, 0.45f, 0.02f), 0.95f, 0.93f, 0.85f);       /* sail */
     for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
-        batch_box(&g_b, v3(wx * 0.8f, 0.3f, wz * 0.7f), v3(0.12f, 0.3f, 0.3f), 0.12f, 0.12f, 0.12f);
+        batch_wheel(&g_b, v3(wx * 0.8f, 0.3f, wz * 0.7f), 0.12f, 0.3f, 0.1f, 0.1f, 0.11f);
     m_rest_style[2] = gfx_mesh_static(g_b.v, g_b.n);
     /* ARK: a big wooden box with a roof */
     batch_clear(&g_b);
@@ -362,7 +370,7 @@ static void build_track_meshes(void) {
     batch_box(&g_b, v3(0, 1.1f, 0.5f), v3(0.9f, 0.12f, 0.6f), 0.45f, 0.3f, 0.18f);           /* the roof over the front */
     batch_box(&g_b, v3(0, 1.4f, 0.5f), v3(0.5f, 0.2f, 0.4f), 0.5f, 0.35f, 0.2f);
     for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
-        batch_box(&g_b, v3(wx * 0.95f, 0.32f, wz * 0.85f), v3(0.14f, 0.32f, 0.32f), 0.12f, 0.12f, 0.12f);
+        batch_wheel(&g_b, v3(wx * 0.95f, 0.32f, wz * 0.85f), 0.15f, 0.32f, 0.1f, 0.1f, 0.11f);
     m_rest_style[3] = gfx_mesh_static(g_b.v, g_b.n);
     /* the box driver, used for characters without a picture yet */
     batch_clear(&g_b);
@@ -590,6 +598,9 @@ int game_init(int status) {
             char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f; }
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
+        tx_title = asset_texture("title_art", 0, NULL, NULL);
+        for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
+        if (tx_title) { batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b); batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_title = gfx_mesh_static(g_b.v, g_b.n); }
     }
     set_track(0);
     start_race(1);
@@ -625,6 +636,9 @@ static void sfx_at(int id, Kart *q, float vol) {
     float g = vol / (1.0f + d * 0.05f); if (g < 0.05f) return;
     float side = -(dx * cosf(cam_yaw) - dz * sinf(cam_yaw));           /* screen-right is -x when facing +z */
     sfx_play(id, g, clampf(side * 0.05f, -0.8f, 0.8f));
+}
+static void add_spark(Vec3 p, Vec3 v, float size, float life, float r, float g, float b) {
+    for (int i = 0; i < MAX_SPARK; i++) if (g_spark[i].life <= 0) { Spark *s = &g_spark[i]; s->p = p; s->v = v; s->size = size; s->life = life; s->r = r; s->g = g; s->b = b; return; }
 }
 static const char *place_name(int p) { static const char *n[] = {"", "1ST", "2ND", "3RD", "4TH", "5TH", "6TH", "7TH", "8TH"}; return p >= 1 && p <= 8 ? n[p] : ""; }
 static void fmt_time(char *buf, size_t n, float t) { snprintf(buf, n, "%d:%02d.%02d", (int)(t / 60), (int)t % 60, (int)(t * 100) % 100); }
@@ -808,7 +822,8 @@ static void hud_track(void) {
             continue;
         }
         batch_rect(&g_b, x + 12, y + 12, 200, 200, td->sky_r, td->sky_g, td->sky_b, 1);
-        draw_preview(&g_preview[d], x + 112, y + 112, 175, 0.95f, 0.95f, 0.95f);
+        if (tx_card[d]) draw_preview(&g_preview[d], x + 112, y + 165, 80, 0.95f, 0.95f, 0.95f);   /* the picture goes on top (drawn after the HUD batch), the map small under it */
+        else draw_preview(&g_preview[d], x + 112, y + 112, 175, 0.95f, 0.95f, 0.95f);
         /* the name, split onto two lines when long */
         const char *nm = td->name; size_t len = strlen(nm);
         size_t cut = 0;    /* the space nearest the middle of the name, if any */
@@ -1029,12 +1044,23 @@ void game_frame(const Pad *pad, float dt) {
 
     /* effects */
     for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i];
+        if (q->drifting && !q->air && q->speed > 5.0f) {       /* sparks from the rear wheel on the inside of the drift, colored by the charge */
+            float hx = sinf(q->yaw + q->slide), hz = cosf(q->yaw + q->slide), rx = cosf(q->yaw + q->slide), rz = -sinf(q->yaw + q->slide);
+            float side = (float)q->drift_dir; int tier = q->drift_charge >= 1.6f ? 2 : (q->drift_charge >= 0.8f ? 1 : 0);
+            float cr = tier == 2 ? 1.0f : (tier == 1 ? 1.0f : 0.4f), cg = tier == 2 ? 0.5f : (tier == 1 ? 0.8f : 0.7f), cb = tier == 2 ? 1.0f : (tier == 1 ? 0.2f : 1.0f);
+            for (int n2 = 0; n2 < 2; n2++) add_spark(v3(q->x + rx * side * 0.85f - hx * 0.8f, q->y + 0.1f, q->z + rz * side * 0.85f - hz * 0.8f),
+                v3(rx * side * (2 + frand01() * 3) - hx * 4 + (frand01() - 0.5f) * 2, 1.5f + frand01() * 3, rz * side * (2 + frand01() * 3) - hz * 4 + (frand01() - 0.5f) * 2), 0.12f + 0.08f * tier, 0.25f + frand01() * 0.2f, cr, cg, cb); }
+        if (q->boost_t > 0) {                                   /* flames out of the back */
+            float hx = sinf(q->yaw), hz = cosf(q->yaw);
+            for (int n2 = 0; n2 < 2; n2++) add_spark(v3(q->x - hx * 1.2f + (frand01() - 0.5f) * 0.5f, q->y + 0.4f + frand01() * 0.3f, q->z - hz * 1.2f + (frand01() - 0.5f) * 0.5f),
+                v3(-hx * (6 + frand01() * 4), 1.0f + frand01(), -hz * (6 + frand01() * 4)), 0.35f + frand01() * 0.3f, 0.12f + frand01() * 0.12f, 1.0f, 0.55f + frand01() * 0.4f, 0.15f); }
         float near = (q->x - k->x) * (q->x - k->x) + (q->z - k->z) * (q->z - k->z) < 60.0f * 60.0f;
         if (near && !q->air && (!q->hit.on_road || q->drifting) && q->speed > 5.0f && frand01() < 0.6f) add_dust(v3(q->x, q->y, q->z), 1.5f, 1.5f);
         if (near && q->boost_t > 0 && frand01() < 0.9f) add_dust(v3(q->x - sinf(q->yaw) * 1.2f, q->y, q->z - cosf(q->yaw) * 1.2f), 0.6f, 1.5f); }
     if (sim_running) {
         for (int i = 0; i < MAX_DUST; i++) if (g_dust[i].life > 0) { Dust *d = &g_dust[i]; d->life -= dt; d->p.x += d->v.x * dt; d->p.y += d->v.y * dt; d->p.z += d->v.z * dt; d->v.y -= 2.0f * dt; d->size += 1.2f * dt; }
         for (int i = 0; i < MAX_SKID; i++) if (g_skid[i].used) { g_skid[i].a -= dt * 0.02f; if (g_skid[i].a <= 0) g_skid[i].used = 0; }
+        for (int i = 0; i < MAX_SPARK; i++) if (g_spark[i].life > 0) { Spark *s = &g_spark[i]; s->life -= dt; s->p.x += s->v.x * dt; s->p.y += s->v.y * dt; s->p.z += s->v.z * dt; s->v.y -= 9.0f * dt; }
     }
 
     /* chase camera: sits behind the kart, lags on turns, pulls back with speed */
@@ -1077,6 +1103,10 @@ void game_frame(const Pad *pad, float dt) {
             if (g_track.water) batch_quad(&g_b, d->p, v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.8f, 0.92f, 1.0f, d->life * 0.8f);
             else batch_quad(&g_b, d->p, v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.85f, 0.8f, 0.7f, d->life * 0.7f); }
         gfx_mesh_update(m_dust, g_b.v, g_b.n);
+        batch_clear(&g_b);
+        for (int i = 0; i < MAX_SPARK; i++) if (g_spark[i].life > 0) { Spark *sp = &g_spark[i]; float s = sp->size;
+            batch_quad(&g_b, sp->p, v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, sp->r, sp->g, sp->b, clampf(sp->life * 4.0f, 0, 1)); }
+        gfx_mesh_update(m_spark, g_b.v, g_b.n);
         batch_clear(&g_b);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; TrackHit h2; track_locate(&g_track, q->x, q->z, q->hit.idx, &h2);
             float hx = sinf(q->yaw), hz = cosf(q->yaw);
@@ -1165,7 +1195,7 @@ void game_frame(const Pad *pad, float dt) {
             Mat4 m = m4_mul(m4_translate(q->x, q->y, q->z), m4_rotate_y(g_time * 2.0f));
             gfx_draw(m_shield, &m, 0.4f, 0.8f, 1.0f, 0.25f + 0.1f * sinf(g_time * 8)); }
         gfx_bind(tx_blob); gfx_draw(m_items, &id, 1, 1, 1, 1);
-        gfx_state(ST_TRANSPARENT | ST_ADD); gfx_draw(m_dust, &id, 1, 1, 1, 1); gfx_draw(m_glow, &id, 1, 1, 1, 1);
+        gfx_state(ST_TRANSPARENT | ST_ADD); gfx_draw(m_dust, &id, 1, 1, 1, 1); gfx_draw(m_spark, &id, 1, 1, 1, 1); gfx_draw(m_glow, &id, 1, 1, 1, 1);
 
 
         /* ---- HUD and menus */
@@ -1188,9 +1218,13 @@ void game_frame(const Pad *pad, float dt) {
           batch_rect(&g_b, 20, 708, 300 * frac, 6, good ? 0.2f : 1.0f, good ? 1.0f : 0.2f, 0.2f, 0.8f);
           batch_rect(&g_b, 20 + 300 * (16.7f / 33.3f), 704, 2, 14, 1, 1, 1, 0.8f); }
         batch_rect(&g_b, 1220, 690, 20, 20, pad->source & 2 ? 1.0f : (pad->source & 1 ? 0.2f : 0.5f), pad->source & 2 ? 0.8f : (pad->source & 1 ? 0.5f : 0.5f), pad->source ? 0.2f : 0.5f, 0.9f);
+        if (g_screen == SCR_TITLE && tx_title && m_title) { gfx_bind(tx_title); gfx_draw(m_title, &id, 1, 1, 1, 1); }
         gfx_mesh_update(m_hud, g_b.v, g_b.n);
         gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
         if (g_screen == SCR_CHAR) draw_portraits();
+        if (g_screen == SCR_TRACK) for (int d = 0; d < NUM_PLAY_TRACKS && d < 8; d++) { if (!tx_card[d] || !track_unlocked(d)) continue;
+            if (!m_card[d]) { float x = 40 + d * 245 + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, 200, 108, 0, 0, 1, 1, 1, 1, 1, 1); m_card[d] = gfx_mesh_static(g_b.v, g_b.n); }
+            gfx_bind(tx_card[d]); gfx_draw(m_card[d], &id, 1, 1, 1, 1); }
         if (g_screen == SCR_KART) { draw_kart_models(); gfx_camera_2d(); gfx_state(ST_HUD); }
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
             if (it > 0 && it < ITEM_COUNT && tx_item[it]) { static Mesh *im = NULL; if (!im) im = gfx_mesh_dynamic(6);
