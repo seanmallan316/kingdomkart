@@ -704,7 +704,7 @@ void game_frame(const Pad *pad, float dt) {
     float want_yaw = k->yaw + k->slide * 0.3f;
     float dy = want_yaw - cam_yaw; while (dy > 3.14159f) dy -= 6.28318f; while (dy < -3.14159f) dy += 6.28318f;
     cam_yaw += dy * fminf(1.0f, 5.0f * dt);
-    float back = 7.0f + k->speed * 0.06f, up = 3.0f + k->speed * 0.01f;
+    float back = 4.6f + k->speed * 0.12f, up = 2.7f + k->speed * 0.02f;   /* close when stopped (the kart behind on the grid is 5 m back), pulls back with speed */
     float tx = k->x - sinf(cam_yaw) * back, tz = k->z - cosf(cam_yaw) * back, ty = k->y + up;
     cam_x += (tx - cam_x) * fminf(1.0f, 12.0f * dt); cam_z += (tz - cam_z) * fminf(1.0f, 12.0f * dt); cam_y += (ty - cam_y) * fminf(1.0f, 6.0f * dt);
     float want_fov = 62.0f + (k->boost_t > 0 ? 10.0f : 0.0f) + k->speed * 0.15f;
@@ -788,6 +788,7 @@ void game_frame(const Pad *pad, float dt) {
         /* the karts */
         gfx_state(ST_SOLID); gfx_bind(NULL);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];
+            if (i != r->player) { float cdx = q->x - eye.x, cdz = q->z - eye.z; if (cdx * cdx + cdz * cdz < 3.2f * 3.2f) continue; }   /* a kart sitting on the camera would fill the screen */
             float pitch = -atan2f(q->hit.slope, 1.0f) * (q->air ? 0.3f : 1.0f) + (q->air ? -q->vy * 0.03f : 0.0f);
             float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f;
             float sq = 1.0f - q->squash * 0.25f;
