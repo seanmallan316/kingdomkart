@@ -46,6 +46,7 @@ static float g_best_time[8];                 /* best time trial time per road (l
 static Texture *tx_portrait[NCHARS]; static float g_portrait_aspect[NCHARS];
 static Texture *tx_char[NCHARS]; static float g_char_aspect[NCHARS];      /* full-body pictures: the drivers in the karts */
 static Texture *tx_kart[NCHARS]; static float g_kart_aspect[NCHARS]; static Mesh *m_kartpic;   /* each character's own kart (kart-select screen) */
+static Texture *tx_kartback[NCHARS]; static float g_kartback_aspect[NCHARS]; static Mesh *m_kart_spr[NKARTS];   /* the kart seen from behind: drives on the track */
 static float g_shake;
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
@@ -681,7 +682,9 @@ int game_init(int status) {
         static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john"};
         for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
-            snprintf(cn, sizeof cn, "kart_%s", pn[i] + 9); w = h = 1; tx_kart[i] = asset_texture(cn, 0, &w, &h); g_kart_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f; }
+            snprintf(cn, sizeof cn, "kart_%s", pn[i] + 9); w = h = 1; tx_kart[i] = asset_texture(cn, 0, &w, &h); g_kart_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f;
+            snprintf(cn, sizeof cn, "kartback_%s", pn[i] + 9); w = h = 1; tx_kartback[i] = asset_texture(cn, 0, &w, &h); g_kartback_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f; }
+        for (int i = 0; i < NKARTS; i++) m_kart_spr[i] = gfx_mesh_dynamic(6);
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
@@ -1372,16 +1375,25 @@ void game_frame(const Pad *pad, float dt) {
             float sq = 1.0f - q->squash * 0.25f;
             Mat4 m = m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f, q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.04f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f)))));
             int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
+            if (tx_kartback[r->character[i]]) continue;      /* drawn as a picture below */
             gfx_draw(m_body_style[sty], &m, c->r, c->g, c->b, 1);
             gfx_draw(m_rest_style[sty], &m, 1, 1, 1, 1);
             if (!tx_char[r->character[i]]) { gfx_draw(m_driver_box, &m, c->r, c->g, c->b, 1); gfx_draw(m_driver_head, &m, 1, 1, 1, 1); } }
         /* drivers drawn from Sean's character pictures: a standing cut-out in the seat, always facing the camera */
         gfx_state(ST_CUTOUT);
-        for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; int ch = r->character[i]; if (!tx_char[ch]) continue;
+        for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; int ch = r->character[i];
             if (i != r->player) { float cdx = q->x - eye.x, cdz = q->z - eye.z; if (cdx * cdx + cdz * cdz < 3.2f * 3.2f) continue; }
-            float hgt = 1.75f, hw = hgt * 0.5f * g_char_aspect[ch];
             float hx = sinf(q->yaw + q->slide), hz = cosf(q->yaw + q->slide);
-            Vec3 c = v3(q->x - hx * 0.25f, q->y + q->hop * 0.4f + 0.55f + hgt * 0.5f, q->z - hz * 0.25f);
+            int pic = tx_kartback[ch] != NULL;
+            if (pic) {    /* Sean's kart from behind, standing on the road, leaning into turns and bouncing with the kart */
+                float kw = 2.6f, kh = kw / g_kartback_aspect[ch], klean = q->steer_vis * -0.08f + q->slide * 0.15f;
+                Vec3 kc = v3(q->x, q->y + q->hop * 0.4f + kh * 0.5f - 0.1f, q->z);
+                batch_clear(&g_b);
+                batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
+                gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(tx_kartback[ch]); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1); }
+            if (!tx_char[ch]) continue;
+            float hgt = pic ? 1.5f : 1.75f, hw = hgt * 0.5f * g_char_aspect[ch];
+            Vec3 c = v3(q->x - hx * 0.25f, q->y + q->hop * 0.4f + (pic ? 0.75f : 0.55f) + hgt * 0.5f, q->z - hz * 0.25f);
             float lean = q->steer_vis * -0.12f;       /* leans into the turn */
             batch_clear(&g_b);
             batch_quad(&g_b, c, v3(ax.x * hw, 0, ax.z * hw), v3(ax.x * lean * hgt * 0.5f, hgt * 0.5f, ax.z * lean * hgt * 0.5f), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
