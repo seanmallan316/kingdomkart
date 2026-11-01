@@ -4,6 +4,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  tests:
+    name: Physics and track tests (PC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Drive the track with no graphics and check laps, jumps and drifting
+        run: |
+          gcc -O2 -Wall -Wextra -Wno-missing-field-initializers -fsanitize=address,undefined tests/sim_test.c src/world/track.c src/sim/kart.c -lm -o sim_test
+          ./sim_test
+
   build:
     name: Build kingdomkart.wuhb
     runs-on: ubuntu-latest

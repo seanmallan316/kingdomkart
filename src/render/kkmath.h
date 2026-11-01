@@ -7,6 +7,7 @@
 typedef struct { float x, y, z; } Vec3;
 typedef struct { float m[16]; } Mat4;
 
+static inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 static inline Vec3 v3(float x, float y, float z) { Vec3 r = {x, y, z}; return r; }
 static inline Vec3 v3_sub(Vec3 a, Vec3 b) { return v3(a.x - b.x, a.y - b.y, a.z - b.z); }
 static inline Vec3 v3_cross(Vec3 a, Vec3 b) { return v3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }

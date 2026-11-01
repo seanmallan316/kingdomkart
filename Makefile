@@ -11,7 +11,7 @@ WUT_ROOT  := $(DEVKITPRO)/wut
 TARGET := kingdomkart
 CC     := $(DEVKITPPC)/bin/powerpc-eabi-gcc
 
-SRCS := $(wildcard src/platform/*.c) $(wildcard src/render/*.c)
+SRCS := $(wildcard src/*/*.c)
 HDRS := $(wildcard src/*/*.h)
 
 CFLAGS  := -O2 -ffast-math -fno-math-errno -Wall -Wextra -Wno-unused-parameter -std=gnu11 \

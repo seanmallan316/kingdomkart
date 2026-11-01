@@ -1,0 +1,40 @@
+// gfx.h - the small rendering interface the game uses. Only gfx.c knows about GX2.
+#ifndef KK_GFX_H
+#define KK_GFX_H
+#include <stdint.h>
+#include "kkmath.h"
+
+typedef struct { float px, py, pz, nx, ny, nz, u, v, r, g, b, a; } Vertex;   /* 48 bytes */
+typedef struct Mesh Mesh;
+typedef struct Texture Texture;
+
+enum { GFX_OK = 0, GFX_NO_COMPILER = 1, GFX_SHADER_FAILED = 2 };
+enum { ST_DEPTH = 1, ST_DEPTH_WRITE = 2, ST_BLEND = 4, ST_CULL = 8, ST_ADD = 16 };
+#define ST_SOLID (ST_DEPTH | ST_DEPTH_WRITE | ST_CULL)
+#define ST_CUTOUT (ST_DEPTH | ST_DEPTH_WRITE | ST_BLEND)
+#define ST_TRANSPARENT (ST_DEPTH | ST_BLEND)
+#define ST_HUD (ST_BLEND)
+
+int  gfx_init(void);                         /* returns GFX_OK or an error code; the game shows a colored screen for errors */
+void gfx_shutdown(void);
+void gfx_log(const char *fmt, ...);
+
+Mesh *gfx_mesh_static(const Vertex *v, uint32_t n);
+Mesh *gfx_mesh_dynamic(uint32_t capacity);
+void gfx_mesh_update(Mesh *m, const Vertex *v, uint32_t n);   /* at most once per frame per mesh */
+void gfx_mesh_free(Mesh *m);
+Texture *gfx_texture_rgba(const uint32_t *pixels, int w, int h, int repeat, int nearest);   /* pixels are 0xRRGGBBAA */
+void gfx_texture_free(Texture *t);
+
+void gfx_frame_begin(void);
+void gfx_view_begin(int drc, float r, float g, float b);      /* drc = 0 for the TV, 1 for the GamePad */
+void gfx_view_end(int drc);
+void gfx_frame_end(void);
+float gfx_aspect(int drc);
+
+void gfx_camera(const Mat4 *viewproj, Vec3 lightdir, float ambient, float fog_r, float fog_g, float fog_b, float fog_start, float fog_end);
+void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
+void gfx_bind(Texture *t);
+void gfx_state(int flags);
+void gfx_draw(const Mesh *m, const Mat4 *model, float r, float g, float b, float a);
+#endif
