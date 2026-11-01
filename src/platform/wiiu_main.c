@@ -19,7 +19,7 @@
 #include "../render/gfx.h"
 #include "../game/game.h"
 
-#define KK_VERSION "M2-0.1"
+#define KK_VERSION "M3-0.1"
 void gfx_set_logfile(FILE *f);
 
 static void read_pad(Pad *p) {

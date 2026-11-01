@@ -53,9 +53,24 @@ static void advance_progress(Kart *k, const Track *t, int prev_idx) {
     else k->wrongway_t = clampf1(k->wrongway_t - SIM_DT * 2.0f, 0, 10);
 }
 
-void kart_step(Kart *k, const Track *t, const KartInput *in, float dt) {
+int kart_hit(Kart *k, float stun_seconds) {
+    if (k->shield > 0) { k->shield = 0; k->blocked_flag = 1; return 0; }
+    if (k->stun > 0) return 0;
+    k->stun = stun_seconds; k->hit_flag = 1; k->drifting = 0; k->drift_charge = 0; k->boost_t = 0; k->boost_mul = 1.0f;
+    return 1;
+}
+
+void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     const KartStats *st = &k->st;
-    k->skid = 0; k->mini_turbo_tier = 0;
+    k->skid = 0; k->mini_turbo_tier = 0; k->blocked_flag = 0; k->hit_flag = 0;
+    if (k->item) k->item_hold += dt;
+    if (k->shield > 0) k->shield -= dt;
+    KartInput stunned_in; const KartInput *in = in_real;
+    if (k->stun > 0) {                                    /* spinning out: no control, slowing down */
+        k->stun -= dt; k->spin_vis += 9.0f * dt;
+        memset(&stunned_in, 0, sizeof stunned_in); stunned_in.brake = 0; in = &stunned_in;
+        if (k->speed > 0) k->speed = fmaxf(0, k->speed - 20.0f * dt);
+    } else if (k->spin_vis != 0) { k->spin_vis = 0; }
     if (!k->finished) { k->total_time += dt; if (k->lap >= 1) k->lap_time += dt; }
     float top = BASE_TOP * st->top_speed * k->boost_mul;
     int on_road = k->hit.on_road;

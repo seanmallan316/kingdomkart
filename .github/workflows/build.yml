@@ -13,6 +13,8 @@ jobs:
         run: |
           gcc -O2 -Wall -Wextra -Wno-missing-field-initializers -fsanitize=address,undefined tests/sim_test.c src/world/track.c src/sim/kart.c -lm -o sim_test
           ./sim_test
+          gcc -O2 -Wall -Wextra -Wno-missing-field-initializers -fsanitize=address,undefined tests/race_test.c src/sim/race.c src/world/track.c src/sim/kart.c -lm -o race_test
+          ./race_test
 
   build:
     name: Build kingdomkart.wuhb
@@ -144,8 +146,8 @@ jobs:
           ldd ./cemu/squashfs-root/usr/bin/Cemu 2>/dev/null | grep "not found" || true
           "$CEMUBIN" --force-no-menubar -f -g "$PWD/title/code/kingdomkart.rpx" > cemu_log.txt 2>&1 &
           CEMU=$!
-          for t in 15 30 45 60; do
-            sleep 15
+          for t in 20 40 60 80 100; do
+            sleep 20
             import -window root "screenshot_${t}s.png" || xwd -root -silent | convert xwd:- "screenshot_${t}s.png" || true
           done
           kill $CEMU || true
