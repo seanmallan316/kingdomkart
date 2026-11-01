@@ -572,7 +572,7 @@ static void hud_gp(void) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pad(Pad *p, float t) {
     static const struct { float t; char key; } script[] = {
-        {10, 'A'}, {14, 'D'}, {18, 'A'}, {21, 'R'}, {26, 'A'}, {28, 'R'}, {31, 'L'}, {36, 'A'},
+        {8, 'A'}, {11, 'D'}, {14, 'A'}, {17, 'R'}, {24, 'A'}, {28, 'R'}, {31, 'L'}, {36, 'A'},
         {70, 'P'}, {84, 'P'} };
     memset(p, 0, sizeof *p);
     for (unsigned i = 0; i < sizeof script / sizeof script[0]; i++) {
