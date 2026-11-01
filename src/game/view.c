@@ -45,6 +45,7 @@ static int g_gp_round = 0, g_gp_points[NCHARS], g_gp_order[NUM_GP_ROUNDS_MAX];
 static float g_best_time[8];                 /* best time trial time per road (loaded from the save file) */
 static Texture *tx_portrait[NCHARS]; static float g_portrait_aspect[NCHARS];
 static Texture *tx_char[NCHARS]; static float g_char_aspect[NCHARS];      /* full-body pictures: the drivers in the karts */
+static Texture *tx_kart[NCHARS]; static float g_kart_aspect[NCHARS]; static Mesh *m_kartpic;   /* each character's own kart (kart-select screen) */
 static float g_shake;
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
@@ -679,7 +680,9 @@ int game_init(int status) {
         { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); }
         static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john"};
         for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
-            char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f; }
+            char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
+            snprintf(cn, sizeof cn, "kart_%s", pn[i] + 9); w = h = 1; tx_kart[i] = asset_texture(cn, 0, &w, &h); g_kart_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f; }
+        m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
         { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(6); }
@@ -851,10 +854,11 @@ static void draw_portraits(void) {   /* the real portraits are separate textures
         gfx_bind(tx_portrait[i]); gfx_draw(pm[i], &id, 1, 1, 1, 1); }
 }
 static void hud_kart(void) {
-    text_c("CHOOSE YOUR KART", 30, 40, 1, 0.85f, 0.3f, 1);
+    char ttl[64]; snprintf(ttl, sizeof ttl, "%s'S KART", CHARACTERS[g_player_char].short_name); text_c(ttl, 20, 34, 1, 0.85f, 0.3f, 1);
+    if (tx_kart[g_player_char]) { batch_rect(&g_b, 380, 62, 520, 230, 0.05f, 0.08f, 0.2f, 0.6f); text_c("CHOOSE A BODY", 300, 20, 1, 0.85f, 0.3f, 1); }
     static const char *desc[NSTYLES][2] = {{"THE EVERYDAY KART", "BALANCED"}, {"BUILT FOR SPEED", "WIDER TURNS"}, {"LIGHT AND NIMBLE", "QUICK TURNS"}, {"HEAVY AND STURDY", "FAST OFF THE LINE"}, {"DAVID'S SLING CART", "NIMBLE AND QUICK"}};
     for (int i = 0; i < NSTYLES; i++) {
-        int sel = i == g_player_style, open = style_unlocked(i); float x = 40 + i * 245, y = 150, w = 230, h = 360;
+        int sel = i == g_player_style, open = style_unlocked(i); float x = 40 + i * 245, y = tx_kart[g_player_char] ? 330 : 150, w = 230, h = tx_kart[g_player_char] ? 340 : 360;
         if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
         batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
         if (!open) {
@@ -881,7 +885,7 @@ static void hud_kart(void) {
 static void draw_kart_models(void) {    /* little 3D karts turning in the kart-select windows */
     const Character *c = &CHARACTERS[g_player_char];
     for (int i = 0; i < NSTYLES; i++) { if (!style_unlocked(i)) continue;
-        float x = 40 + i * 245 + 115, y = 150 + 95;
+        float x = 40 + i * 245 + 115, y = (tx_kart[g_player_char] ? 330 : 150) + 95;
         /* a tiny perspective view into the window: the kart at the origin, camera in front */
         Mat4 view = m4_look_at(v3(3.2f * sinf(g_time * 0.8f), 1.6f, 3.2f * cosf(g_time * 0.8f)), v3(0, 0.7f, 0), v3(0, 1, 0));
         Mat4 proj = m4_perspective(40.0f * 3.14159265f / 180.0f, 190.0f / 150.0f, 0.3f, 50.0f);
@@ -934,7 +938,7 @@ static void hud_pause(void) {
 }
 static void hud_battle(void) {
     Battle *b = &g_battle; char buf[64];
-    text_c("THE VALLEY OF ELAH", 24, 22, 1, 0.85f, 0.3f, 1);
+    text_c("THE VALLEY OF ELAH", 60, 16, 1, 0.85f, 0.3f, 1);
     batch_text(&g_b, "DAVID", 40, 30, 22, 1, 1, 1, 1);
     for (int i = 0; i < BATTLE_LIVES; i++) batch_rect(&g_b, 40 + i * 34, 60, 28, 24, i < BATTLE_LIVES - b->hits_on_david ? 0.95f : 0.25f, 0.2f, 0.25f, 1);
     snprintf(buf, sizeof buf, "STONES x%d", b->stones_held); batch_text(&g_b, buf, 40, 95, 18, 0.9f, 0.9f, 0.85f, 1);
@@ -1300,10 +1304,10 @@ void game_frame(const Pad *pad, float dt) {
         gfx_bind(tx_grass); gfx_draw(m_ground, &id, sr, sg, sb, 1);
         gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
         gfx_bind(tx_road); gfx_draw(m_road, &id, sr, sg, sb, 1);
-        gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1);
+        if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1); }
         gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
         gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1);
-        gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1);
+        if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1); }
         if (g_def->bonus == 2 && m_brook) { static Texture *tx_brook = NULL; if (!tx_brook) tx_brook = make_tex(128, 128, 1, 0, px_water); gfx_state(ST_TRANSPARENT); gfx_bind(tx_brook);
             Mat4 flow = m4_translate(sinf(g_time * 2.0f) * 0.3f, 0, 0); gfx_draw(m_brook, &flow, 1, 1, 1, 0.75f); gfx_state(ST_SOLID); }
         { float pulse = 0.75f + 0.25f * sinf(g_time * 6.0f);
@@ -1409,7 +1413,9 @@ void game_frame(const Pad *pad, float dt) {
         if (g_screen == SCR_TRACK) for (int d = 0; d < NUM_PLAY_TRACKS && d < 8; d++) { if (!tx_card[d] || !track_unlocked(d)) continue;
             if (!m_card[d]) { float x = 40 + d * 245 + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, 200, 108, 0, 0, 1, 1, 1, 1, 1, 1); m_card[d] = gfx_mesh_static(g_b.v, g_b.n); }
             gfx_bind(tx_card[d]); gfx_draw(m_card[d], &id, 1, 1, 1, 1); }
-        if (g_screen == SCR_KART) { draw_kart_models(); gfx_camera_2d(); gfx_state(ST_HUD); }
+        if (g_screen == SCR_KART) { draw_kart_models(); gfx_camera_2d(); gfx_state(ST_HUD);
+            if (tx_kart[g_player_char]) { float a = g_kart_aspect[g_player_char], ph = 220, pw = ph * a; if (pw > 500) { pw = 500; ph = pw / a; }
+                batch_clear(&g_b); batch_rect_uv(&g_b, 640 - pw / 2, 67 + (220 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m_kartpic, g_b.v, g_b.n); gfx_bind(tx_kart[g_player_char]); gfx_draw(m_kartpic, &id, 1, 1, 1, 1); } }
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
             if (it > 0 && it < ITEM_COUNT && tx_item[it]) { static Mesh *im = NULL; if (!im) im = gfx_mesh_dynamic(6);
                 batch_clear(&g_b); batch_rect_uv(&g_b, 48, 146, 134, 48, 0, 0, 1, 1, 1, 1, 1, 1);
