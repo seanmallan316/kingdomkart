@@ -1,0 +1,1 @@
+Hello from inside the Kingdom Kart game file - content loading works.

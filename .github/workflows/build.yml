@@ -1,0 +1,131 @@
+name: Build Wii U game
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build kingdomkart.wuhb
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitppc:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the game
+        run: make
+      - name: Save the finished game file
+        uses: actions/upload-artifact@v4
+        with:
+          name: KingdomKart
+          path: kingdomkart.wuhb
+      - name: Save the raw program too (for the emulator test)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KingdomKart-rpx
+          path: |
+            kingdomkart.rpx
+            content/
+
+  emulator-screenshot:
+    # Best effort: try to run the build in the Cemu emulator with no graphics card and photograph it.
+    # If anything here fails the game build above is still fine; this job only exists so Claude can see the game.
+    name: Emulator screenshot (best effort)
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KingdomKart-rpx
+          path: game
+      - name: Install a software OpenGL/Vulkan driver and a virtual screen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri libglu1-mesa imagemagick libfuse2 x11-utils
+      - name: Download Cemu and the shader compiler
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p cemu
+          gh release download --repo cemu-project/Cemu --pattern '*x86_64.AppImage' --dir cemu
+          mv cemu/*.AppImage cemu/Cemu.AppImage
+          chmod +x cemu/Cemu.AppImage
+          mkdir -p "$HOME/.local/share/Cemu/cafeLibs"
+          gh release download --repo Exzap/CafeGLSL --pattern 'glslcompiler.rpl' --dir "$HOME/.local/share/Cemu/cafeLibs"
+          ls -la cemu "$HOME/.local/share/Cemu/cafeLibs"
+      - name: Prepare a title folder the emulator can load
+        run: |
+          mkdir -p title/code title/content title/meta
+          cp game/kingdomkart.rpx title/code/
+          cp -r game/content/* title/content/
+          cat > title/code/app.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <app type="complex" access="777">
+            <version type="unsignedInt" length="4">1</version>
+            <os_version type="hexBinary" length="8">000500101000400A</os_version>
+            <title_id type="hexBinary" length="8">0005000012345678</title_id>
+            <title_version type="hexBinary" length="2">0000</title_version>
+            <sdk_version type="unsignedInt" length="4">21204</sdk_version>
+            <app_type type="hexBinary" length="4">80000000</app_type>
+            <group_id type="hexBinary" length="4">00001234</group_id>
+          </app>
+          EOF
+          cat > title/code/cos.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <app type="complex" access="777">
+            <version type="unsignedInt" length="4">1</version>
+            <cmdFlags type="unsignedInt" length="4">0</cmdFlags>
+            <argstr type="string" length="4096">kingdomkart.rpx</argstr>
+            <avail_size type="hexBinary" length="4">00000000</avail_size>
+            <codegen_size type="hexBinary" length="4">02000000</codegen_size>
+            <codegen_core type="hexBinary" length="4">80000001</codegen_core>
+            <max_size type="hexBinary" length="4">40000000</max_size>
+            <max_codesize type="hexBinary" length="4">02000000</max_codesize>
+            <default_stack0_size type="hexBinary" length="4">00000000</default_stack0_size>
+            <default_stack1_size type="hexBinary" length="4">00000000</default_stack1_size>
+            <default_stack2_size type="hexBinary" length="4">00000000</default_stack2_size>
+            <exception_stack0_size type="hexBinary" length="4">00001000</exception_stack0_size>
+            <exception_stack1_size type="hexBinary" length="4">00001000</exception_stack1_size>
+            <exception_stack2_size type="hexBinary" length="4">00001000</exception_stack2_size>
+          </app>
+          EOF
+          cat > title/meta/meta.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <menu type="complex" access="777">
+            <version type="unsignedInt" length="4">33</version>
+            <product_code type="string" length="32">WUP-P-KKRT</product_code>
+            <title_id type="hexBinary" length="8">0005000012345678</title_id>
+            <title_version type="unsignedShort" length="2">0</title_version>
+            <region type="hexBinary" length="4">FFFFFFFF</region>
+            <longname_en type="string" length="512">Kingdom Kart: Road to Glory</longname_en>
+            <shortname_en type="string" length="256">Kingdom Kart</shortname_en>
+            <publisher_en type="string" length="256">Sean</publisher_en>
+          </menu>
+          EOF
+      - name: Run the game in the emulator for 60 seconds and take screenshots
+        run: |
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export GALLIUM_DRIVER=llvmpipe
+          ./cemu/Cemu.AppImage --force-no-menubar -f -g "$PWD/title/code/kingdomkart.rpx" > cemu_log.txt 2>&1 &
+          CEMU=$!
+          for t in 15 30 45 60; do
+            sleep 15
+            import -window root "screenshot_${t}s.png" || xwd -root -silent | convert xwd:- "screenshot_${t}s.png" || true
+          done
+          kill $CEMU || true
+          sleep 2
+          ls -la *.png || true
+          tail -n 50 cemu_log.txt || true
+          cp -r "$HOME/.local/share/Cemu/log.txt" cemu_internal_log.txt 2>/dev/null || true
+      - name: Save the screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmulatorScreenshots
+          path: |
+            screenshot_*.png
+            cemu_log.txt
+            cemu_internal_log.txt
+          if-no-files-found: ignore
