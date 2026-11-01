@@ -76,8 +76,13 @@ static void px_tree(int x, int y, uint32_t *o) {       /* 64x64 cypress-like tre
 }
 static void px_blob(int x, int y, uint32_t *o) { float dx = (x - 32) / 32.0f, dy = (y - 32) / 32.0f; float d = sqrtf(dx * dx + dy * dy); float a = d > 1 ? 0 : (1 - d) * (1 - d); *o = rgba(255, 255, 255, (int)(a * 255)); }
 static void px_flag(int x, int y, uint32_t *o) { int c = ((x / 8) + (y / 8)) & 1; *o = c ? rgba(245, 245, 245, 255) : rgba(20, 20, 20, 255); }
+static float sky_noise(float x, float y) {              /* repeats every 256 pixels in x so the sky ring has no seams */
+    float a = smooth_noise(x / 40.0f, y / 20.0f) * 0.6f + smooth_noise(x / 15.0f, y / 8.0f) * 0.4f;
+    float b = smooth_noise((x + 256) / 40.0f, y / 20.0f) * 0.6f + smooth_noise((x + 256) / 15.0f, y / 8.0f) * 0.4f;
+    float w = x / 256.0f; return a * (1 - w) + b * w;
+}
 static void px_sky(int x, int y, uint32_t *o) {        /* vertical gradient with a few soft clouds */
-    float t = y / 255.0f; float n = smooth_noise(x / 40.0f, y / 20.0f) * 0.6f + smooth_noise(x / 15.0f, y / 8.0f) * 0.4f;
+    float t = y / 255.0f; float n = sky_noise((float)x, (float)y);
     int r = (int)(80 + 120 * t), g = (int)(150 + 80 * t), b = (int)(230 + 20 * t);
     float cloud = clampf((n - 0.55f) * 4.0f, 0, 1) * (t > 0.25f && t < 0.75f ? 1.0f : 0.0f) * 0.8f;
     r = (int)(r + (250 - r) * cloud); g = (int)(g + (250 - g) * cloud); b = (int)(b + (255 - b) * cloud);
@@ -135,7 +140,7 @@ static void build_track_meshes(void) {
     m_startline = gfx_mesh_static(g_b.v, g_b.n);
     /* ground: a big grass plane under everything */
     batch_clear(&g_b);
-    batch_quad(&g_b, v3(80, -1.3f, 70), v3(400, 0, 0), v3(0, 0, -400), v3(0, 1, 0), 0, 0, 80, 80, 1, 1, 1, 1);
+    batch_quad(&g_b, v3(80, -2.4f, 70), v3(400, 0, 0), v3(0, 0, -400), v3(0, 1, 0), 0, 0, 80, 80, 1, 1, 1, 1);
     m_ground = gfx_mesh_static(g_b.v, g_b.n);
     /* sky: a big cylinder-ish ring far away (drawn without depth) */
     batch_clear(&g_b);
@@ -149,7 +154,7 @@ static void build_track_meshes(void) {
     g_tree_n = 0;
     for (int i = 3; i < t->n && g_tree_n < MAX_TREES; i += 7) {
         int side = ((i / 7) & 1) ? 1 : -1; float e = track_edge(t, i) + 2.5f + frand01() * 7.0f;
-        Vec3 p = road_point(t, i, side * e); p.y = -1.3f + (track_surface_height(t, i, side * track_edge(t, i)) + 1.3f) * 0.5f;
+        Vec3 p = road_point(t, i, side * e); p.y = fminf(-2.4f, track_surface_height(t, i, side * track_edge(t, i)) - 1.0f) + 0.3f;
         g_tree[g_tree_n].p = p; g_tree[g_tree_n].h = 5.0f + frand01() * 4.0f; g_tree_n++;
     }
     m_trees = gfx_mesh_dynamic(MAX_TREES * 6);
