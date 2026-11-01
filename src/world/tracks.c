@@ -271,7 +271,7 @@ const TrackDef TRACK_DEFS[] = {
       0.03f, 0.04f, 0.14f,                      /* sky */
       0.05f, 0.06f, 0.18f, 70.0f, 320.0f,       /* fog */
       -0.35f, 1.0f, 0.25f, 0.38f,               /* moonlight direction, ambient */
-      0.55f, 0.62f, 0.88f,                      /* cool moonlight tint */
+      0.72f, 0.74f, 0.92f,                      /* cool moonlight tint */
       1.0f, 0.72f, 0.35f,                       /* warm lantern glow */
       1, "beth_road", "beth_dirt", "beth_grass", "beth_wall", "beth_sky",
       BETH_SCENERY, (int)(sizeof BETH_SCENERY / sizeof BETH_SCENERY[0]),

@@ -81,6 +81,7 @@ def main():
             if rule[2] in ("cutout", "black"): im = key_background(im, rule[2])
             else: im = im.convert("RGBA")
             im = fit(im, rule[1])
+            if name.endswith("_sky"): im = im.resize((2048, 512), Image.LANCZOS)      # the sky must be exactly this size (the Wii U wants power-of-two textures)
             if rule[2] == "cutout":
                 im = im.crop(im.getbbox() or (0, 0, 1, 1))      # trim empty borders
                 im = fit(im, rule[1])
