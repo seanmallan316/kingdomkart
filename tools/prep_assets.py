@@ -30,13 +30,20 @@ def key_background(im, mode):
     corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
     bg = max(set(c[:3] for c in corners), key=[c[:3] for c in corners].count)
     tol = 70 if mode == "cutout" else 40
+    green_screen = bg[1] > bg[0] + 80 and bg[1] > bg[2] + 80
     out = Image.new("RGBA", im.size)
     op = out.load()
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
             d = abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2])
-            if mode == "black":
+            if green_screen and mode == "cutout":
+                # green screen: judge by how green the pixel is, and take the green fringe off the edges
+                k = g - max(r, b)
+                if k > 60: op[x, y] = (0, 0, 0, 0)
+                elif k > 10: op[x, y] = (r, min(g, max(r, b) + 5), b, int(255 * (60 - k) / 50))
+                else: op[x, y] = (r, g, b, 255)
+            elif mode == "black":
                 # the star: brightness becomes alpha, so the glow fades out smoothly
                 lum = max(r, g, b)
                 op[x, y] = (r, g, b, lum)
