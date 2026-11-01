@@ -685,7 +685,7 @@ int game_init(int status) {
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
-        { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(6); }
+        { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
         for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
         if (tx_title) { batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b); batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_title = gfx_mesh_static(g_b.v, g_b.n); }
@@ -755,6 +755,31 @@ static void draw_preview(const Preview *pv, float cx, float cy, float size, floa
 }
 
 // ------------------------------------------------------------------ the race HUD
+static void hud_gamepad(void) {     /* the GamePad shows the big map and the standings while the TV shows the race */
+    Race *r = &g_race; char buf[64];
+    batch_rect(&g_b, 0, 0, 1280, 720, 0.04f, 0.07f, 0.18f, 1);
+    text_c(g_track.name, 20, 28, 1, 0.85f, 0.3f, 1);
+    float mx = 420, mz = 380, sc = map_scale * 2.6f;
+    batch_rect(&g_b, mx - 330, mz - 300, 660, 600, 0.02f, 0.04f, 0.1f, 1);
+    for (int i = 0; i < g_track.n; i++) { TrackSample *sm = &g_track.s[i]; batch_rect(&g_b, mx + (sm->x - map_x0) * sc - 5, mz - (sm->z - map_z0) * sc - 5, 10, 10, 0.85f, 0.85f, 0.85f, 1); }
+    for (int b = 0; b < r->nbox; b++) if (r->box[b].active) batch_rect(&g_b, mx + (r->box[b].x - map_x0) * sc - 4, mz - (r->box[b].z - map_z0) * sc - 4, 8, 8, 0.3f, 0.6f, 1.0f, 1);
+    for (int p = r->nk - 1; p >= 0; p--) { int i = r->order[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]]; float sz = i == r->player ? 26 : 18;
+        batch_rect(&g_b, mx + (q->x - map_x0) * sc - sz / 2, mz - (q->z - map_z0) * sc - sz / 2, sz, sz, c->r, c->g, c->b, 1);
+        if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * sc - 6, mz - (q->z - map_z0) * sc - 6, 12, 12, 1, 1, 1, 1); }
+    if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; batch_rect(&g_b, mx + (b->gx - map_x0) * sc - 20, mz - (b->gz - map_z0) * sc - 20, 40, 40, 0.9f, 0.2f, 0.15f, 1); batch_text(&g_b, "G", mx + (b->gx - map_x0) * sc - 8, mz - (b->gz - map_z0) * sc - 10, 20, 1, 1, 1, 1); }
+    /* standings down the right side */
+    batch_text(&g_b, g_mode == MODE_BATTLE ? "THE FIGHT" : "STANDINGS", 800, 80, 24, 1, 0.85f, 0.3f, 1);
+    if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; snprintf(buf, sizeof buf, "GOLIATH HIT %d OF %d", b->hits_on_goliath, BATTLE_WIN_HITS); batch_text(&g_b, buf, 800, 130, 20, 1, 1, 1, 1);
+        snprintf(buf, sizeof buf, "DAVID HIT %d OF %d", b->hits_on_david, BATTLE_LIVES); batch_text(&g_b, buf, 800, 165, 20, 1, 1, 1, 1); snprintf(buf, sizeof buf, "STONES x%d", b->stones_held); batch_text(&g_b, buf, 800, 200, 20, 1, 0.9f, 0.5f, 1); }
+    else for (int p = 0; p < r->nk; p++) { int i = r->order[p]; const Character *c = &CHARACTERS[r->character[i]]; float y = 125 + p * 42; int me = i == r->player;
+        if (me) batch_rect(&g_b, 790, y - 5, 460, 36, 1, 0.85f, 0.3f, 0.25f);
+        batch_text(&g_b, place_name(p + 1), 800, y, 22, 1, 1, 1, 1); batch_rect(&g_b, 880, y + 2, 22, 22, c->r, c->g, c->b, 1); batch_text(&g_b, c->short_name, 915, y, 22, 1, 1, 1, 1);
+        if (r->k[i].lap >= 1) { snprintf(buf, sizeof buf, "LAP %d", r->k[i].lap > g_track.laps ? g_track.laps : r->k[i].lap); batch_text(&g_b, buf, 1120, y, 18, 0.8f, 0.9f, 1, 1); } }
+    if (g_mode != MODE_TT && g_mode != MODE_BATTLE) { Kart *k = &r->k[r->player]; snprintf(buf, sizeof buf, "ITEM: %s", k->item ? item_name(k->item) : "-"); batch_text(&g_b, buf, 800, 500, 22, 1, 0.9f, 0.4f, 1);
+        snprintf(buf, sizeof buf, "COINS x%d", k->coins); batch_text(&g_b, buf, 800, 540, 22, 1, 0.9f, 0.5f, 1); }
+    { char tb[32]; fmt_time(tb, sizeof tb, r->k[r->player].total_time); snprintf(buf, sizeof buf, "TIME %s", tb); batch_text(&g_b, buf, 800, 600, 22, 1, 1, 1, 1); }
+    if (g_msg_t > 0) text_c(g_msg, 660, 30, 1, 0.95f, 0.4f, 1);
+}
 static void hud_race(const Pad *pad) {
     Race *r = &g_race; Kart *k = &r->k[r->player]; char buf[64];
     int lap = k->lap < 1 ? 1 : (k->lap > g_track.laps ? g_track.laps : k->lap);
@@ -1285,6 +1310,12 @@ void game_frame(const Pad *pad, float dt) {
     for (int drc = 0; drc < 2; drc++) {
         if (g_status == GFX_NO_COMPILER) { gfx_view_begin(drc, 1.0f, 0.5f, 0.0f); gfx_view_end(drc); continue; }
         if (g_status == GFX_SHADER_FAILED) { gfx_view_begin(drc, 0.8f, 0.05f, 0.05f); gfx_view_end(drc); continue; }
+        int gamepad_map = drc && (g_screen == SCR_RACE || g_screen == SCR_PAUSE) && !g_attract;
+#ifdef KK_TOUR
+        if (!drc && g_time > 98.0f && g_time < 103.0f && g_screen == SCR_RACE) gamepad_map = 1;   /* the CI camera only sees the TV: show the GamePad layout there for one photo */
+#endif
+        if (gamepad_map) { gfx_view_begin(drc, 0.04f, 0.07f, 0.18f); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
+            batch_clear(&g_b); hud_gamepad(); if (g_screen == SCR_PAUSE) hud_pause(); gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
         gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 view = m4_look_at(eye, at, v3(0, 1, 0));
         Mat4 proj = m4_perspective(cam_fov * 3.14159265f / 180.0f, gfx_aspect(drc), 0.3f, 1200.0f);
