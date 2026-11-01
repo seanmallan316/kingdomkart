@@ -104,7 +104,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     } else {
         yaw_rate = steer * turn * (k->air ? 0.35f : 1.0f);
         k->slide += (0 - k->slide) * 8.0f * dt;
-        if (fabsf(steer) > 0.85f && fabsf(k->speed) > top * 0.8f && !k->air) k->skid = 1;
+        if (fabsf(steer) > 0.97f && fabsf(k->speed) > top * 0.85f && !k->air) k->skid = 1;
     }
     if (k->speed < 0) yaw_rate = -yaw_rate;
     k->yaw += yaw_rate * spd_f * dt;
