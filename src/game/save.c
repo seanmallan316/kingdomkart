@@ -42,10 +42,13 @@ void save_store(void) {
 
 unsigned save_check_unlocks(void) {
     unsigned want = g_save.unlocks;
-    if (g_save.wins >= 5) want |= UNLOCK_NOAH;
-    if (g_save.gp_wins[2] >= 1) want |= UNLOCK_ELIJAH;
+    if (g_save.wins >= 5) want |= UNLOCK_SAMSON;
+    if (g_save.gp_wins[0] + g_save.gp_wins[1] + g_save.gp_wins[2] >= 1) want |= UNLOCK_NOAH;
+    if ((g_save.win_chars & 0xFF) == 0xFF) want |= UNLOCK_JOSEPH;
+    if (PAR_TIME[1] > 0 && g_save.best_ms[1] > 0 && g_save.best_ms[1] <= (int)(PAR_TIME[1] * 1000)) want |= UNLOCK_JONAH;
+    if (g_save.gp_wins[2] >= 1) want |= UNLOCK_JOHN;
     if (g_save.gp_wins[1] + g_save.gp_wins[2] >= 1) want |= UNLOCK_HEAVEN;
-    if ((g_save.win_chars & 0xFF) == 0xFF) want |= UNLOCK_KART_CHARIOT;
+    if (g_save.wins >= 10) want |= UNLOCK_KART_CHARIOT;
     int all_par = 1; for (int i = 0; i < SAVE_MAX_ROADS; i++) if (PAR_TIME[i] > 0 && (g_save.best_ms[i] == 0 || g_save.best_ms[i] > (int)(PAR_TIME[i] * 1000))) all_par = 0;
     if (all_par) want |= UNLOCK_KART_BOAT;
     if (g_save.races >= 25) want |= UNLOCK_KART_ARK;
@@ -58,15 +61,16 @@ float save_par_time(int road) { return road >= 0 && road < SAVE_MAX_ROADS ? PAR_
 
 const char *unlock_name(int bit) {
     switch (bit) {
-        case UNLOCK_NOAH: return "NOAH"; case UNLOCK_ELIJAH: return "ELIJAH"; case UNLOCK_HEAVEN: return "ROAD TO HEAVEN";
+        case UNLOCK_SAMSON: return "SAMSON"; case UNLOCK_NOAH: return "NOAH"; case UNLOCK_JOSEPH: return "JOSEPH"; case UNLOCK_JONAH: return "JONAH"; case UNLOCK_JOHN: return "JOHN THE BAPTIST"; case UNLOCK_HEAVEN: return "ROAD TO HEAVEN";
         case UNLOCK_KART_CHARIOT: return "CHARIOT KART"; case UNLOCK_KART_BOAT: return "GALILEE BOAT KART"; case UNLOCK_KART_ARK: return "ARK KART";
         default: return "";
     }
 }
 const char *unlock_hint(int bit) {
     switch (bit) {
-        case UNLOCK_NOAH: return "WIN 5 RACES"; case UNLOCK_ELIJAH: return "WIN THE GRAND PRIX ON HARD"; case UNLOCK_HEAVEN: return "WIN THE GRAND PRIX ON NORMAL";
-        case UNLOCK_KART_CHARIOT: return "WIN WITH ALL 8 CHARACTERS"; case UNLOCK_KART_BOAT: return "BEAT THE TARGET TIME ON EVERY ROAD"; case UNLOCK_KART_ARK: return "FINISH 25 RACES";
+        case UNLOCK_SAMSON: return "WIN 5 RACES"; case UNLOCK_NOAH: return "WIN A GRAND PRIX"; case UNLOCK_JOSEPH: return "WIN WITH ALL 8 CHARACTERS";
+        case UNLOCK_JONAH: return "BEAT THE TARGET ON THE SEA OF GALILEE"; case UNLOCK_JOHN: return "WIN THE GRAND PRIX ON HARD"; case UNLOCK_HEAVEN: return "WIN THE GRAND PRIX ON NORMAL";
+        case UNLOCK_KART_CHARIOT: return "WIN 10 RACES"; case UNLOCK_KART_BOAT: return "BEAT THE TARGET TIME ON EVERY ROAD"; case UNLOCK_KART_ARK: return "FINISH 25 RACES";
         default: return "";
     }
 }

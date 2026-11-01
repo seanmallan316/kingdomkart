@@ -12,8 +12,11 @@ const Character CHARACTERS[NCHARS] = {
     {"Paul",   "PAUL",   {0.98f, 1.08f, 0.98f, 0.98f}, 0.80f, 0.22f, 0.18f},   /* red and bronze */
     {"Mary",   "MARY",   {0.96f, 1.06f, 1.05f, 0.90f}, 0.55f, 0.80f, 0.98f},   /* light blue */
     {"Daniel", "DANIEL", {1.06f, 0.94f, 0.97f, 1.05f}, 0.92f, 0.70f, 0.20f},   /* gold and blue */
-    {"Noah",   "NOAH",   {0.95f, 0.96f, 0.98f, 1.30f}, 0.45f, 0.32f, 0.20f, 1}, /* bonus: ark wood, heaviest of all */
-    {"Elijah", "ELIJAH", {1.10f, 1.02f, 0.92f, 0.95f}, 1.00f, 0.45f, 0.10f, 1}, /* bonus: chariot-of-fire orange, fastest of all */
+    {"Samson", "SAMSON", {1.00f, 0.98f, 0.90f, 1.40f}, 0.75f, 0.20f, 0.15f, 1}, /* bonus: the strongest, heaviest of all */
+    {"Noah",   "NOAH",   {0.95f, 0.96f, 1.00f, 1.25f}, 0.30f, 0.40f, 0.75f, 1}, /* bonus: steady and heavy, ark blue */
+    {"Joseph", "JOSEPH", {1.00f, 1.06f, 1.02f, 0.92f}, 0.90f, 0.55f, 0.20f, 1}, /* bonus: coat of many colors, quick off the line */
+    {"Jonah",  "JONAH",  {0.97f, 1.00f, 1.08f, 0.98f}, 0.25f, 0.55f, 0.90f, 1}, /* bonus: sea blue, the best handling */
+    {"John",   "JOHN",   {1.08f, 1.00f, 0.94f, 1.00f}, 0.60f, 0.42f, 0.22f, 1}, /* bonus: John the Baptist, the fastest of all */
 };
 static unsigned g_unlocked = 0xFF;      /* the computer drives only unlocked characters */
 void race_set_unlocked(unsigned mask) { g_unlocked = mask | 0xFF; }
@@ -77,7 +80,7 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
 
 void race_rank(Race *r) {
     float key[NKARTS];
-    for (int i = 0; i < r->nk; i++) { key[i] = r->k[i].finished ? 1e9f - (float)r->k[i].place : r->k[i].dist; r->order[i] = i; }
+    for (int i = 0; i < r->nk; i++) { key[i] = r->k[i].finished ? 1e6f - (float)r->k[i].place : r->k[i].dist;   /* (1e6 keeps the places apart in float precision) */ r->order[i] = i; }
     for (int i = 1; i < r->nk; i++) { int v = r->order[i], j = i - 1; while (j >= 0 && key[r->order[j]] < key[v]) { r->order[j + 1] = r->order[j]; j--; } r->order[j + 1] = v; }
 }
 

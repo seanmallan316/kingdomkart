@@ -5,13 +5,16 @@
 #define SAVE_MAX_ROADS 8
 
 enum {
-    UNLOCK_NOAH = 1 << 0,          /* win 5 races */
-    UNLOCK_ELIJAH = 1 << 1,        /* win the Grand Prix on Hard */
-    UNLOCK_HEAVEN = 1 << 2,        /* win the Grand Prix on Normal or Hard */
-    UNLOCK_KART_CHARIOT = 1 << 3,  /* win a race with every one of the eight characters */
-    UNLOCK_KART_BOAT = 1 << 4,     /* beat the target time in Time Trial on every road */
-    UNLOCK_KART_ARK = 1 << 5,      /* finish 25 races */
-    UNLOCK_COUNT = 6
+    UNLOCK_SAMSON = 1 << 0,        /* win 5 races */
+    UNLOCK_NOAH = 1 << 1,          /* win a Grand Prix (any difficulty) */
+    UNLOCK_JOSEPH = 1 << 2,        /* win a race with every one of the eight characters */
+    UNLOCK_JONAH = 1 << 3,         /* beat the target time in Time Trial on the Sea of Galilee */
+    UNLOCK_JOHN = 1 << 4,          /* win the Grand Prix on Hard */
+    UNLOCK_HEAVEN = 1 << 5,        /* win the Grand Prix on Normal or Hard */
+    UNLOCK_KART_CHARIOT = 1 << 6,  /* win 10 races */
+    UNLOCK_KART_BOAT = 1 << 7,     /* beat the target time in Time Trial on every road */
+    UNLOCK_KART_ARK = 1 << 8,      /* finish 25 races */
+    UNLOCK_COUNT = 9
 };
 
 typedef struct {

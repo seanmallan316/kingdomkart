@@ -30,8 +30,8 @@ static int g_player_char = 0, g_difficulty = DIFF_NORMAL;
 enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP };
 enum { MODE_GP, MODE_SINGLE, MODE_TT };
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
-static int char_unlocked(int c) { return !CHARACTERS[c].bonus || (c == 8 && (g_save.unlocks & UNLOCK_NOAH)) || (c == 9 && (g_save.unlocks & UNLOCK_ELIJAH)); }
-static int char_lock_bit(int c) { return c == 8 ? UNLOCK_NOAH : (c == 9 ? UNLOCK_ELIJAH : 0); }
+static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
+static int char_unlocked(int c) { return !CHARACTERS[c].bonus || (g_save.unlocks & char_lock_bit(c)); }
 static int style_lock_bit(int sty) { return sty == 1 ? UNLOCK_KART_CHARIOT : (sty == 2 ? UNLOCK_KART_BOAT : (sty == 3 ? UNLOCK_KART_ARK : 0)); }
 static int style_unlocked(int sty) { return sty == 0 || (g_save.unlocks & style_lock_bit(sty)); }
 static unsigned unlocked_styles(void) { unsigned m = 0; for (int i = 0; i < NSTYLES; i++) if (style_unlocked(i)) m |= 1u << i; return m; }
@@ -639,7 +639,7 @@ int game_init(int status) {
         tx_blob = make_tex(64, 64, 0, 0, px_blob);
         tx_flag = make_tex(32, 32, 1, 1, px_flag);
         { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); }
-        static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel", "portrait_noah", "portrait_elijah"};
+        static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john"};
         for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f; }
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
@@ -771,43 +771,41 @@ static void hud_main(void) {
     snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]); menu_item(buf, 430, g_menu_sel == 3, 30);
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 520, 16, 0.8f, 0.85f, 1, 1);
 }
-static void char_card_pos(int i, float *x, float *y) { *x = 40 + (i % 5) * 245, *y = 95 + (i / 5) * 290; }
+static void char_card_pos(int i, float *x, float *y) { *x = 40 + (i % 5) * 245, *y = 78 + (i / 5) * 202; }
 static void hud_char(void) {
-    text_c("CHOOSE YOUR CHARACTER", 30, 40, 1, 0.85f, 0.3f, 1);
+    text_c("CHOOSE YOUR CHARACTER", 22, 36, 1, 0.85f, 0.3f, 1);
     for (int i = 0; i < NCHARS; i++) {
         const Character *c = &CHARACTERS[i]; int sel = i == g_player_char, open = char_unlocked(i);
-        float x, y, w = 225, h = 262; char_card_pos(i, &x, &y);
-        if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
+        float x, y, w = 225, h = 186; char_card_pos(i, &x, &y);
+        if (sel) batch_rect(&g_b, x - 6, y - 6, w + 12, h + 12, 1, 0.85f, 0.3f, 1);
         batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
         if (!open) {
-            batch_rect(&g_b, x + 10, y + 10, 120, 120, 0.2f, 0.22f, 0.3f, 1);
-            batch_text(&g_b, "?", x + 70 - text_width("?", 80) / 2, y + 30, 80, 0.5f, 0.55f, 0.7f, 1);
-            batch_text(&g_b, "LOCKED", x + 140, y + 20, 20, 0.8f, 0.8f, 0.9f, 1);
-            /* the hint, wrapped onto a few short lines */
+            batch_rect(&g_b, x + 8, y + 8, 90, 90, 0.2f, 0.22f, 0.3f, 1);
+            batch_text(&g_b, "?", x + 53 - text_width("?", 60) / 2, y + 22, 60, 0.5f, 0.55f, 0.7f, 1);
+            batch_text(&g_b, "LOCKED", x + 106, y + 14, 16, 0.8f, 0.8f, 0.9f, 1);
             const char *hint = unlock_hint(char_lock_bit(i)); char line[24]; int li = 0, row = 0;
-            for (const char *q = hint; ; q++) { if (*q == ' ' || *q == 0) { if (li > 0 && (q - hint) > 0) { line[li] = 0; } 
-                    if (*q == 0 || li >= 13) { line[li] = 0; batch_text(&g_b, line, x + 10, y + 150 + row * 20, 14, 1, 0.9f, 0.5f, 1); row++; li = 0; if (*q == 0) break; continue; } }
+            for (const char *q = hint; ; q++) { if ((*q == ' ' || *q == 0) && li >= 11) { line[li] = 0; batch_text(&g_b, line, x + 8, y + 108 + row * 17, 12, 1, 0.9f, 0.5f, 1); row++; li = 0; if (*q == 0) break; continue; }
+                if (*q == 0) { line[li] = 0; if (li) batch_text(&g_b, line, x + 8, y + 108 + row * 17, 12, 1, 0.9f, 0.5f, 1); break; }
                 if (li < 22) line[li++] = *q; }
             continue;
         }
-        /* portrait or a colored card with the initial */
-        batch_rect(&g_b, x + 10, y + 10, 120, 120, c->r, c->g, c->b, 1);
-        if (!tx_portrait[i]) { char ini[2] = {c->short_name[0], 0}; batch_text(&g_b, ini, x + 70 - text_width(ini, 80) / 2, y + 30, 80, 0.1f, 0.1f, 0.15f, 0.8f); }
-        batch_text(&g_b, c->short_name, x + 140, y + 20, 20, 1, 1, 1, 1);
-        if (c->bonus) batch_text(&g_b, "BONUS", x + 140, y + 48, 14, 1, 0.85f, 0.3f, 1);
-        stat_bar(x + 10, y + 150, "SPEED", c->st.top_speed);
-        stat_bar(x + 10, y + 175, "ACCEL", c->st.accel);
-        stat_bar(x + 10, y + 200, "HANDLE", c->st.handling);
-        stat_bar(x + 10, y + 225, "WEIGHT", c->st.weight);
+        batch_rect(&g_b, x + 8, y + 8, 90, 90, c->r, c->g, c->b, 1);
+        if (!tx_portrait[i]) { char ini[2] = {c->short_name[0], 0}; batch_text(&g_b, ini, x + 53 - text_width(ini, 60) / 2, y + 22, 60, 0.1f, 0.1f, 0.15f, 0.8f); }
+        batch_text(&g_b, c->short_name, x + 106, y + 14, 17, 1, 1, 1, 1);
+        if (c->bonus) batch_text(&g_b, "BONUS", x + 106, y + 36, 12, 1, 0.85f, 0.3f, 1);
+        stat_bar(x + 8, y + 108, "SPEED", c->st.top_speed);
+        stat_bar(x + 8, y + 126, "ACCEL", c->st.accel);
+        stat_bar(x + 8, y + 144, "HANDLE", c->st.handling);
+        stat_bar(x + 8, y + 162, "WEIGHT", c->st.weight);
     }
-    text_c("A: CHOOSE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
+    text_c("A: CHOOSE   B: BACK", 692, 14, 0.8f, 0.85f, 1, 1);
 }
 static void draw_portraits(void) {   /* the real portraits are separate textures, drawn after the HUD batch; one mesh each (a dynamic mesh can only be filled once per frame) */
     static Mesh *pm[NCHARS]; Mat4 id = m4_identity();
     for (int i = 0; i < NCHARS; i++) { if (!tx_portrait[i] || !char_unlocked(i)) continue;
         if (!pm[i]) { float x, y; char_card_pos(i, &x, &y);
-            float a = g_portrait_aspect[i], pw = a < 1 ? 120 * a : 120, ph = a < 1 ? 120 : 120 / a;
-            batch_clear(&g_b); batch_rect_uv(&g_b, x + 10 + (120 - pw) / 2, y + 10 + (120 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
+            float a = g_portrait_aspect[i], pw = a < 1 ? 90 * a : 90, ph = a < 1 ? 90 : 90 / a;
+            batch_clear(&g_b); batch_rect_uv(&g_b, x + 8 + (90 - pw) / 2, y + 8 + (90 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
             pm[i] = gfx_mesh_static(g_b.v, g_b.n); }
         gfx_bind(tx_portrait[i]); gfx_draw(pm[i], &id, 1, 1, 1, 1); }
 }
@@ -979,8 +977,8 @@ void game_frame(const Pad *pad, float dt) {
         if (pb) { g_screen = SCR_TITLE; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_CHAR:
-        if (mx) { g_player_char = (g_player_char / 5) * 5 + ((g_player_char % 5) + mx + 5) % 5; sfx_play(SFX_MENU_MOVE, 1, 0); }
-        if (my) { g_player_char = (g_player_char + 5) % NCHARS; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (mx) { int row = g_player_char / 5, ncol = row == 2 ? NCHARS - 10 : 5; g_player_char = row * 5 + ((g_player_char % 5) + mx + ncol) % ncol; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (my) { int nc = g_player_char - my * 5; if (nc < 0) nc += 15; if (nc >= 15) nc -= 15; if (nc >= NCHARS) nc = my < 0 ? nc - 5 : nc % 5; g_player_char = nc; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) sfx_play(char_unlocked(g_player_char) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && char_unlocked(g_player_char)) { g_screen = SCR_KART; g_screen_t = 0; }
         if (pb) { g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
