@@ -581,7 +581,7 @@ int game_init(int status) {
         { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); }
         static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel", "portrait_noah", "portrait_elijah"};
         for (int i = 0; i < NCHARS; i++) tx_portrait[i] = asset_texture(pn[i], 0, NULL, NULL);
-        static const char *in[ITEM_COUNT] = {"", "item_manna", "item_staff", "item_stone", "item_oil", "shofar", "item_fire", "item_locusts", "item_dove"};
+        static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
     }
     set_track(0);

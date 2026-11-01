@@ -287,7 +287,7 @@ const TrackDef TRACK_DEFS[] = {
       0.2f, 1.0f, 0.3f, 0.60f,                  /* light from above */
       1.0f, 0.98f, 0.90f,
       1.0f, 0.92f, 0.6f,
-      0, "heaven_road", "heaven_cloud", "heaven_earth", "heaven_cloudwall", "heaven_sky",
+      0, "heaven_road", "heaven_clouds", "heaven_earth", "heaven_cloudwall", "heaven_sky",
       HEAVEN_SCENERY, (int)(sizeof HEAVEN_SCENERY / sizeof HEAVEN_SCENERY[0]),
       0, 0, 0, 0,
       -1, -1, 0,
