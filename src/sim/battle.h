@@ -10,7 +10,15 @@
 #define BATTLE_LIVES 3
 
 enum { GOL_STALK, GOL_WINDUP, GOL_CHARGE, GOL_THROW, GOL_STUNNED, GOL_DOWN };
-enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE };
+enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE, BEV_STEP, BEV_QUOTE };
+/* words from 1 Samuel 17 (King James Version), spoken during the fight */
+typedef struct { const char *who; const char *line; const char *ref; } BattleQuote;
+extern const BattleQuote BATTLE_QUOTES[];
+#define BATTLE_NQUOTES 6
+/* the brook: a straight line across the valley; the stones lie in it */
+#define BROOK_X0 -85.0f
+#define BROOK_X1  85.0f
+#define BROOK_Z   78.0f
 
 typedef struct { float x, z, vx, vz, y, life; int alive; } Missile;
 typedef struct {
@@ -25,7 +33,9 @@ typedef struct {
     float t, invuln;                 /* battle time, seconds David cannot be hit again */
     int over, won, was_throw;
     int ev[16], nev;
-    float roar_t;
+    float roar_t, step_t;
+    int quote; float quote_t;        /* the quote on screen (-1 none) and how long it has left */
+    int quotes_said;                 /* bit per quote */
 } Battle;
 
 void battle_init(Battle *b, const Track *arena, int difficulty);

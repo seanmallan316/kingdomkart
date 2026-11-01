@@ -45,6 +45,7 @@ static int g_gp_round = 0, g_gp_points[NCHARS], g_gp_order[NUM_GP_ROUNDS_MAX];
 static float g_best_time[8];                 /* best time trial time per road (loaded from the save file) */
 static Texture *tx_portrait[NCHARS]; static float g_portrait_aspect[NCHARS];
 static Texture *tx_char[NCHARS]; static float g_char_aspect[NCHARS];      /* full-body pictures: the drivers in the karts */
+static float g_shake;
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
 static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
@@ -65,7 +66,7 @@ static float g_results_t;
 /* textures */
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star;
 /* meshes */
-static Mesh *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[8192];
 static Batch g_b;
 
@@ -248,7 +249,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
-    Mesh **ms[] = {&m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -332,6 +333,12 @@ static void build_track_meshes(void) {
                 Vec3 mid = road_point(t, i, 0); batch_box(&g_b, v3(mid.x, mid.y + tu->height + 0.5f, mid.z), v3(e + 1.3f, 0.6f, 0.7f), 0.6f, 0.55f, 0.5f);
             } } }
     m_tunnel = gfx_mesh_static(g_b.v, g_b.n);
+    /* the brook across the Valley of Elah (battle arena only) */
+    batch_clear(&g_b);
+    if (g_def->bonus == 2) { float hw = 3.0f; for (int q = 0; q < 34; q++) { float x0 = BROOK_X0 + (BROOK_X1 - BROOK_X0) * q / 34.0f, x1 = BROOK_X0 + (BROOK_X1 - BROOK_X0) * (q + 1) / 34.0f;
+        float wob0 = sinf(q * 0.9f) * 1.2f, wob1 = sinf((q + 1) * 0.9f) * 1.2f;
+        batch_quad4(&g_b, v3(x0, 0.06f, BROOK_Z + wob0 - hw), v3(x1, 0.06f, BROOK_Z + wob1 - hw), v3(x1, 0.06f, BROOK_Z + wob1 + hw), v3(x0, 0.06f, BROOK_Z + wob0 + hw), v3(0, 1, 0), q * 0.5f, 0, q * 0.5f + 0.5f, 1, 1, 1, 1, 0.8f); } }
+    m_brook = gfx_mesh_static(g_b.v, g_b.n);
     /* the start/finish arch: two pillars and a checkered banner across the road */
     batch_clear(&g_b);
     { int i = 0; float e = track_edge(t, i);
@@ -543,6 +550,20 @@ static void px_waterfall(int x, int y, uint32_t *o) {    /* falling water: verti
     int a = x < 4 || x > 59 ? 0 : 230; int w = n > 0.6f ? 60 : 0;
     *o = rgba(170 + w, 215 + w / 2, 255, a);
 }
+static void px_person(int x, int y, uint32_t *o, int r, int g, int b, int helmet) {   /* a simple standing soldier */
+    *o = 0;
+    float dx = (x - 32) / 7.0f, dy = (y - 18) / 8.0f; if (dx * dx + dy * dy < 1.0f) *o = helmet && y < 18 ? rgba(170, 150, 90, 255) : rgba(225, 180, 140, 255);
+    if (inrect(x, y, 22, 26, 42, 66)) *o = rgba(r, g, b, 255);
+    if (inrect(x, y, 14, 28, 22, 54) || inrect(x, y, 42, 28, 50, 54)) *o = rgba(225, 180, 140, 255);
+    if (inrect(x, y, 24, 66, 31, 96) || inrect(x, y, 33, 66, 40, 96)) *o = rgba(110, 80, 50, 255);
+    if (helmet && inrect(x, y, 48, 6, 52, 70)) *o = rgba(120, 90, 50, 255);      /* a spear */
+}
+static void px_israelite(int x, int y, uint32_t *o) { px_person(x, y, o, 200, 190, 160, 0); }
+static void px_philistine(int x, int y, uint32_t *o) { px_person(x, y, o, 150, 40, 40, 1); }
+static void px_banner(int x, int y, uint32_t *o, int r, int g, int b) { *o = 0; if (inrect(x, y, 30, 4, 34, 96)) *o = rgba(110, 80, 50, 255); if (inrect(x, y, 34, 8, 60, 44)) *o = rgba(r, g, b, 255); }
+static void px_banner_israel(int x, int y, uint32_t *o) { px_banner(x, y, o, 40, 70, 200); }
+static void px_banner_philistine(int x, int y, uint32_t *o) { px_banner(x, y, o, 180, 40, 40); }
+static void px_tent(int x, int y, uint32_t *o) { *o = 0; if (y > 40 && x > 6 + (96 - y) / 2 - 20 && x < 58 - (96 - y) / 2 + 20 && fabsf((float)(x - 32)) < (float)(y - 40) * 0.6f + 2) *o = rgba(170 + (y & 4), 140, 100, 255); if (inrect(x, y, 30, 70, 34, 96)) *o = rgba(60, 40, 25, 255); }
 static void px_stone(int x, int y, uint32_t *o) {        /* a rolling round stone */
     *o = 0; float dx = (x - 32) / 30.0f, dy = (y - 64) / 30.0f;
     if (dx * dx + dy * dy < 1.0f) *o = stone(x, y, 150 - (int)(dy * 40), 140 - (int)(dy * 40), 130 - (int)(dy * 40));
@@ -552,7 +573,8 @@ static Texture *placeholder_sprite(const char *id, float *aspect) {
     static const struct { const char *id; void (*fn)(int, int, uint32_t *); } table[] = {
         {"#hut", px_hut}, {"#net", px_net}, {"#rock", px_rock}, {"#boat", px_boat}, {"#cypress", px_cypress}, {"#pillar", px_pillar},
         {"#tower", px_tower}, {"#wallseg", px_wallseg}, {"#arch", px_arch}, {"#stall", px_stall}, {"#cart", px_cart}, {"#lily", px_lily},
-        {"#tomb", px_tomb}, {"#crosses", px_crosses}, {"#stone", px_stone}, {"#cloud", px_cloudpuff}, {"#gpillar", px_gpillar}, {"#crystal", px_crystal} };
+        {"#tomb", px_tomb}, {"#crosses", px_crosses}, {"#stone", px_stone}, {"#cloud", px_cloudpuff}, {"#gpillar", px_gpillar}, {"#crystal", px_crystal},
+        {"#israelite", px_israelite}, {"#philistine", px_philistine}, {"#banner_israel", px_banner_israel}, {"#banner_philistine", px_banner_philistine}, {"#tent", px_tent} };
     if (!strcmp(id, "#waterfall")) { *aspect = 0.5f; return make_tex(64, 128, 1, 0, px_waterfall); }
     for (size_t i = 0; i < sizeof table / sizeof table[0]; i++) if (!strcmp(id, table[i].id)) return make_tex(PW, PH, 0, 0, table[i].fn);
     if (!strcmp(id, "#house1")) return make_tex(PW, PH, 0, 0, px_house1);
@@ -921,7 +943,16 @@ static void hud_battle(void) {
     { char tb[32]; fmt_time(tb, sizeof tb, RACE_TIME_LIMIT - b->race.race_t > 0 ? RACE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
     if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, FACE HIM, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); }
     if (g_msg_t > 0) text_c(g_msg, 260, 60, 1, 0.95f, 0.4f, 1);
-    if (g_demo && !g_attract) text_c("DEMO - MOVE THE STICK TO DRIVE", 680, 20, 1, 1, 1, 0.8f);
+    if (b->quote >= 0 && b->quote < BATTLE_NQUOTES) {      /* the words of 1 Samuel 17, wrapped into a panel at the bottom */
+        const BattleQuote *q = &BATTLE_QUOTES[b->quote]; float y0 = 560;
+        batch_rect(&g_b, 140, y0, 1000, 120, 0.05f, 0.08f, 0.2f, 0.85f); batch_rect(&g_b, 140, y0, 1000, 3, 1, 0.85f, 0.3f, 1);
+        char head[64]; snprintf(head, sizeof head, "%s%s%s", q->who, q->who[0] ? "  -  " : "", q->ref); batch_text(&g_b, head, 160, y0 + 12, 14, 1, 0.85f, 0.3f, 1);
+        char line[80]; int li = 0, row = 0; const char *p = q->line;
+        for (;; p++) { if ((*p == ' ' || *p == 0) && text_width(line, 18) > 860) { line[li] = 0; batch_text(&g_b, line, 160, y0 + 36 + row * 24, 18, 1, 1, 1, 1); row++; li = 0; if (*p == 0) break; continue; }
+            if (*p == 0) { line[li] = 0; batch_text(&g_b, line, 160, y0 + 36 + row * 24, 18, 1, 1, 1, 1); break; }
+            if (li < 78) { line[li++] = *p; line[li] = 0; } }
+    }
+    if (g_demo && !g_attract) text_c("DEMO - MOVE THE STICK TO DRIVE", 700, 16, 1, 1, 1, 0.8f);
 }
 static void hud_battle_results(void) {
     Battle *b = &g_battle; char buf[64];
@@ -1117,6 +1148,7 @@ void game_frame(const Pad *pad, float dt) {
                 case BEV_ROAR: sfx_play(SFX_SHOFAR, 0.6f, 0); break;
                 case BEV_CHARGE: snprintf(g_msg, sizeof g_msg, "HE CHARGES!"); g_msg_t = 1.0f; sfx_play(SFX_FIRE, 0.7f, 0); break;
                 case BEV_WIN: snprintf(g_msg, sizeof g_msg, "GIANT SLAYER!"); g_msg_t = 3.0f; sfx_play(SFX_WIN, 1, 0); break;
+                case BEV_STEP: { float ddx = g_battle.gx - r->k[0].x, ddz = g_battle.gz - r->k[0].z, dd = sqrtf(ddx * ddx + ddz * ddz); g_shake = fmaxf(g_shake, clampf(1.2f - dd / 50.0f, 0.1f, 1.0f) * (g_battle.gstate == GOL_CHARGE ? 0.5f : 0.3f)); sfx_play(SFX_BUMP, clampf(1.5f - dd / 60.0f, 0.2f, 1.0f), 0); } break;
                 case BEV_LOSE: snprintf(g_msg, sizeof g_msg, "GOLIATH WINS"); g_msg_t = 3.0f; sfx_play(SFX_WRONG_WAY, 1, 0); break;
                 default: break; }
         } else race_step(r, &in, g_demo || g_attract, SIM_DT);
@@ -1188,7 +1220,9 @@ void game_frame(const Pad *pad, float dt) {
     cam_x += (tx - cam_x) * fminf(1.0f, 12.0f * dt); cam_z += (tz - cam_z) * fminf(1.0f, 12.0f * dt); cam_y += (ty - cam_y) * fminf(1.0f, 6.0f * dt);
     float want_fov = 62.0f + (k->boost_t > 0 ? 10.0f : 0.0f) + k->speed * 0.15f;
     cam_fov += (want_fov - cam_fov) * fminf(1.0f, 4.0f * dt);
-    Vec3 eye = v3(cam_x, cam_y, cam_z), at = v3(k->x + sinf(k->yaw) * 3.0f, k->y + 1.2f, k->z + cosf(k->yaw) * 3.0f);
+    if (g_shake > 0) g_shake = fmaxf(0, g_shake - dt * 1.5f);
+    float shk = g_shake * g_shake * 0.6f;
+    Vec3 eye = v3(cam_x + sinf(g_time * 37.0f) * shk, cam_y + sinf(g_time * 53.0f) * shk, cam_z + cosf(g_time * 41.0f) * shk), at = v3(k->x + sinf(k->yaw) * 3.0f, k->y + 1.2f, k->z + cosf(k->yaw) * 3.0f);
     /* dynamic geometry shared by both screens: trees, skid marks, dust, shadows, items */
     float cy = cam_yaw; Vec3 ax = v3(-cosf(cy), 0, sinf(cy));   /* screen-right in world space, so pictures are not mirrored */
     {
@@ -1270,6 +1304,8 @@ void game_frame(const Pad *pad, float dt) {
         gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
         gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1);
         gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1);
+        if (g_def->bonus == 2 && m_brook) { static Texture *tx_brook = NULL; if (!tx_brook) tx_brook = make_tex(128, 128, 1, 0, px_water); gfx_state(ST_TRANSPARENT); gfx_bind(tx_brook);
+            Mat4 flow = m4_translate(sinf(g_time * 2.0f) * 0.3f, 0, 0); gfx_draw(m_brook, &flow, 1, 1, 1, 0.75f); gfx_state(ST_SOLID); }
         { float pulse = 0.75f + 0.25f * sinf(g_time * 6.0f);
           gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_boostpads, &id, pulse, pulse, pulse, 1);
           gfx_bind(tx_blob); gfx_draw(m_bouncepads, &id, 1, 1, 1, 0.9f);
