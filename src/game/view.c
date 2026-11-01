@@ -795,9 +795,11 @@ static void hud_track(void) {
         draw_preview(&g_preview[d], x + 112, y + 112, 175, 0.95f, 0.95f, 0.95f);
         /* the name, split onto two lines when long */
         const char *nm = td->name; size_t len = strlen(nm);
-        if (text_width(nm, 18) > w - 24) { size_t cut = len / 2; while (cut > 0 && nm[cut] != ' ') cut--; char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
+        size_t cut = 0;    /* the space nearest the middle of the name, if any */
+        for (size_t q = 0; q < len; q++) if (nm[q] == ' ' && (cut == 0 || labs((long)q - (long)len / 2) < labs((long)cut - (long)len / 2))) cut = q;
+        if (text_width(nm, 18) > w - 24 && cut > 0) { char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
             batch_text(&g_b, l1, x + 12, y + 225, 18, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, y + 248, 18, 1, 1, 1, 1); }
-        else batch_text(&g_b, nm, x + 12, y + 225, 18, 1, 1, 1, 1);
+        else batch_text(&g_b, nm, x + 12, y + 225, text_width(nm, 18) > w - 24 ? 15 : 18, 1, 1, 1, 1);
         snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : "%d LAPS", td->laps); batch_text(&g_b, buf, x + 12, y + 280, 14, 0.8f, 0.9f, 1, 1);
         if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, y + 305, 14, 1, 0.9f, 0.5f, 1); }
         if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, y + 328, 14, 0.7f, 0.95f, 0.8f, 1); }
