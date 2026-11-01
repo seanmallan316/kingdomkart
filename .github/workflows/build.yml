@@ -32,6 +32,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     continue-on-error: true
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -142,9 +144,17 @@ jobs:
           tail -n 50 cemu_log.txt || true
           cp -r "$HOME/.local/share/Cemu/log.txt" cemu_internal_log.txt 2>/dev/null || true
           echo "::group::Cemu internal log"; cat cemu_internal_log.txt 2>/dev/null | tail -n 80 || true; echo "::endgroup::"
-          # the screenshot is also printed into this log as text, so it can be read without downloading the artifact
-          echo "::group::screenshot_60s.png base64"; base64 -w0 screenshot_60s.png 2>/dev/null; echo; echo "::endgroup::"
-          echo "::group::screenshot_30s.png base64"; base64 -w0 screenshot_30s.png 2>/dev/null; echo; echo "::endgroup::"
+      - name: Store the screenshots in the repository (branch ci-screenshots)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p shots && cp screenshot_*.png cemu_log.txt cemu_internal_log.txt shots/ 2>/dev/null || true
+          cd shots
+          git init -q -b ci-screenshots
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add -A && git commit -q -m "Emulator screenshots for ${{ github.sha }}" || true
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" ci-screenshots 2>&1 | tail -n 2 || true
       - name: Save the screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
