@@ -47,6 +47,8 @@ static Texture *tx_portrait[NCHARS]; static float g_portrait_aspect[NCHARS];
 static Texture *tx_char[NCHARS]; static float g_char_aspect[NCHARS];      /* full-body pictures: the drivers in the karts */
 static Texture *tx_kart[NCHARS]; static float g_kart_aspect[NCHARS]; static Mesh *m_kartpic;   /* each character's own kart (kart-select screen) */
 static Texture *tx_kartback[NCHARS]; static float g_kartback_aspect[NCHARS]; static Mesh *m_kart_spr[NKARTS];   /* the kart seen from behind: drives on the track */
+/* the same kart from more angles (N64 style): 0 behind, 1 back-left 45, 2 left side, 3 front-left 45, 4 front; the right side is the left mirrored */
+static Texture *tx_kartview[NCHARS][5]; static float g_kartview_aspect[NCHARS][5];
 static float g_shake;
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
@@ -687,7 +689,10 @@ int game_init(int status) {
         for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             snprintf(cn, sizeof cn, "kart_%s", pn[i] + 9); w = h = 1; tx_kart[i] = asset_texture(cn, 0, &w, &h); g_kart_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f;
-            snprintf(cn, sizeof cn, "kartback_%s", pn[i] + 9); w = h = 1; tx_kartback[i] = asset_texture(cn, 0, &w, &h); g_kartback_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f; }
+            snprintf(cn, sizeof cn, "kartback_%s", pn[i] + 9); w = h = 1; tx_kartback[i] = asset_texture(cn, 0, &w, &h); g_kartback_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f;
+            tx_kartview[i][0] = tx_kartback[i]; g_kartview_aspect[i][0] = g_kartback_aspect[i]; tx_kartview[i][4] = tx_kart[i]; g_kartview_aspect[i][4] = g_kart_aspect[i];
+            static const char *suf[3] = {"bl", "l", "fl"};
+            for (int v = 0; v < 3; v++) { snprintf(cn, sizeof cn, "kartview_%s_%s", pn[i] + 9, suf[v]); w = h = 1; tx_kartview[i][v + 1] = asset_texture(cn, 0, &w, &h); g_kartview_aspect[i][v + 1] = h > 0 ? (float)w / (float)h : 1.6f; } }
         for (int i = 0; i < NKARTS; i++) m_kart_spr[i] = gfx_mesh_dynamic(6);
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
@@ -1389,12 +1394,20 @@ void game_frame(const Pad *pad, float dt) {
             if (i != r->player) { float cdx = q->x - eye.x, cdz = q->z - eye.z; if (cdx * cdx + cdz * cdz < 3.2f * 3.2f) continue; }
             float hx = sinf(q->yaw + q->slide), hz = cosf(q->yaw + q->slide);
             int pic = tx_kartback[ch] != NULL;
-            if (pic) {    /* Sean's kart from behind, standing on the road, leaning into turns and bouncing with the kart */
-                float kw = 2.6f, kh = kw / g_kartback_aspect[ch], klean = q->steer_vis * -0.08f + q->slide * 0.15f;
+            if (pic) {    /* Sean's kart as a standing picture: the view that best matches the angle the camera sees it from (N64 style) */
+                float cdx = eye.x - q->x, cdz = eye.z - q->z;
+                float phi = atan2f(cdx, cdz) - (q->yaw + q->slide + q->spin_vis) - 3.14159265f;      /* 0 = camera straight behind */
+                while (phi > 3.14159265f) phi -= 6.2831853f; while (phi < -3.14159265f) phi += 6.2831853f;
+                int mirror = phi > 0; float a = fabsf(phi) * 180.0f / 3.14159265f;
+                int want = a < 22.5f ? 0 : (a < 67.5f ? 1 : (a < 112.5f ? 2 : (a < 157.5f ? 3 : 4)));
+                int v = want; while (v > 0 && !tx_kartview[ch][v]) v--;                                /* fall back toward the back view when an angle is missing */
+                if (want == 4 && !tx_kartview[ch][4]) v = tx_kartview[ch][3] ? 3 : (tx_kartview[ch][2] ? 2 : 0);
+                float kw = v == 2 ? 3.4f : (v == 1 || v == 3 ? 3.0f : 2.6f), kh = kw / g_kartview_aspect[ch][v], klean = q->steer_vis * -0.08f + q->slide * 0.15f;
                 Vec3 kc = v3(q->x, q->y + q->hop * 0.4f + kh * 0.5f - 0.1f, q->z);
                 batch_clear(&g_b);
-                batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
-                gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(tx_kartback[ch]); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1); }
+                float u0 = mirror ? 1.0f : 0.0f, u1 = mirror ? 0.0f : 1.0f;
+                batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), u0, 0, u1, 1, 1, 1, 1, 1);
+                gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(tx_kartview[ch][v]); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1); }
             if (!tx_char[ch]) continue;
             float hgt = pic ? 1.5f : 1.75f, hw = hgt * 0.5f * g_char_aspect[ch];
             Vec3 c = v3(q->x - hx * 0.25f, q->y + q->hop * 0.4f + (pic ? 0.75f : 0.55f) + hgt * 0.5f, q->z - hz * 0.25f);
