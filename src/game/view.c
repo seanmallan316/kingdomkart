@@ -39,7 +39,8 @@ static int track_unlocked(int d) { return !TRACK_DEFS[d].bonus || (g_save.unlock
 static unsigned unlocked_mask(void) { unsigned m = 0; for (int c = 0; c < NCHARS; c++) if (char_unlocked(c)) m |= 1u << c; return m; }
 static int g_gp_round = 0, g_gp_points[NCHARS], g_gp_order[NUM_GP_ROUNDS_MAX];
 static float g_best_time[8];                 /* best time trial time per road (loaded from the save file) */
-static Texture *tx_portrait[NCHARS];
+static Texture *tx_portrait[NCHARS]; static float g_portrait_aspect[NCHARS];
+static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
 static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
 static Texture *tx_finale; static Mesh *m_finale;
 static Texture *tx_item[ITEM_COUNT];        /* item pictures for the HUD slot, when Sean's files exist */
@@ -238,6 +239,8 @@ static void free_track_meshes(void) {
     Mesh **ms[] = {&m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
+    gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
+    for (int i = 0; i < NKARTS; i++) { gfx_mesh_free(m_driver_spr[i]); m_driver_spr[i] = NULL; }
 }
 static void build_track_meshes(void) {
     const Track *t = &g_track;
@@ -320,11 +323,9 @@ static void build_track_meshes(void) {
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.42f, 0), v3(0.75f, 0.17f, 1.05f), 1, 1, 1);                    /* body (tinted) */
     batch_box(&g_b, v3(0, 0.48f, 0.95f), v3(0.6f, 0.12f, 0.2f), 1, 1, 1);                  /* front bumper */
-    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);          /* driver robe (tinted) */
     m_kart_body = gfx_mesh_static(g_b.v, g_b.n); m_body_style[0] = m_kart_body;
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.62f, -0.15f), v3(0.55f, 0.08f, 0.55f), 0.2f, 0.2f, 0.25f);     /* seat */
-    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);   /* head */
     for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
         batch_box(&g_b, v3(wx * 0.85f, 0.32f, wz * 0.78f), v3(0.14f, 0.32f, 0.32f), 0.12f, 0.12f, 0.12f);
     m_kart_rest = gfx_mesh_static(g_b.v, g_b.n); m_rest_style[0] = m_kart_rest;
@@ -332,10 +333,8 @@ static void build_track_meshes(void) {
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.45f, -0.2f), v3(0.6f, 0.12f, 0.8f), 1, 1, 1);
     batch_box(&g_b, v3(0, 0.85f, 0.55f), v3(0.6f, 0.3f, 0.06f), 1, 1, 1);                   /* the front wall */
-    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);
     m_body_style[1] = gfx_mesh_static(g_b.v, g_b.n);
     batch_clear(&g_b);
-    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);
     batch_box(&g_b, v3(0, 0.5f, 1.1f), v3(0.08f, 0.08f, 0.5f), 0.75f, 0.6f, 0.3f);           /* the shaft, gold */
     for (int wx = -1; wx <= 1; wx += 2) batch_box(&g_b, v3(wx * 0.8f, 0.5f, -0.5f), v3(0.1f, 0.5f, 0.5f), 0.85f, 0.65f, 0.2f);   /* big gold wheels */
     for (int wx = -1; wx <= 1; wx += 2) batch_box(&g_b, v3(wx * 0.7f, 0.25f, 0.8f), v3(0.1f, 0.25f, 0.25f), 0.12f, 0.12f, 0.12f);
@@ -345,10 +344,8 @@ static void build_track_meshes(void) {
     batch_box(&g_b, v3(0, 0.45f, -0.1f), v3(0.7f, 0.2f, 0.9f), 1, 1, 1);
     batch_box(&g_b, v3(0, 0.5f, 1.0f), v3(0.4f, 0.18f, 0.35f), 1, 1, 1);
     batch_box(&g_b, v3(0, 0.55f, 1.35f), v3(0.15f, 0.15f, 0.2f), 1, 1, 1);                   /* bow */
-    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);
     m_body_style[2] = gfx_mesh_static(g_b.v, g_b.n);
     batch_clear(&g_b);
-    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);
     batch_box(&g_b, v3(0, 1.3f, 0.5f), v3(0.05f, 0.7f, 0.05f), 0.5f, 0.35f, 0.2f);           /* mast */
     batch_box(&g_b, v3(0.3f, 1.4f, 0.5f), v3(0.3f, 0.45f, 0.02f), 0.95f, 0.93f, 0.85f);       /* sail */
     for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
@@ -357,15 +354,21 @@ static void build_track_meshes(void) {
     /* ARK: a big wooden box with a roof */
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.6f, 0), v3(0.85f, 0.35f, 1.1f), 1, 1, 1);
-    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);
     m_body_style[3] = gfx_mesh_static(g_b.v, g_b.n);
     batch_clear(&g_b);
-    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);
     batch_box(&g_b, v3(0, 1.1f, 0.5f), v3(0.9f, 0.12f, 0.6f), 0.45f, 0.3f, 0.18f);           /* the roof over the front */
     batch_box(&g_b, v3(0, 1.4f, 0.5f), v3(0.5f, 0.2f, 0.4f), 0.5f, 0.35f, 0.2f);
     for (int wx = -1; wx <= 1; wx += 2) for (int wz = -1; wz <= 1; wz += 2)
         batch_box(&g_b, v3(wx * 0.95f, 0.32f, wz * 0.85f), v3(0.14f, 0.32f, 0.32f), 0.12f, 0.12f, 0.12f);
     m_rest_style[3] = gfx_mesh_static(g_b.v, g_b.n);
+    /* the box driver, used for characters without a picture yet */
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 1.0f, -0.25f), v3(0.22f, 0.3f, 0.2f), 0.9f, 0.9f, 0.9f);          /* robe (tinted) */
+    m_driver_box = gfx_mesh_static(g_b.v, g_b.n);
+    batch_clear(&g_b);
+    batch_box(&g_b, v3(0, 1.48f, -0.25f), v3(0.19f, 0.19f, 0.19f), 0.98f, 0.82f, 0.65f);   /* head */
+    m_driver_head = gfx_mesh_static(g_b.v, g_b.n);
+    for (int i = 0; i < NKARTS; i++) m_driver_spr[i] = gfx_mesh_dynamic(6);
     /* item box: a cube */
     batch_clear(&g_b); batch_box(&g_b, v3(0, 0, 0), v3(0.65f, 0.65f, 0.65f), 1, 1, 1); m_cube = gfx_mesh_static(g_b.v, g_b.n);
     /* shield: a bigger cube drawn transparent around the kart */
@@ -580,7 +583,7 @@ int game_init(int status) {
         tx_flag = make_tex(32, 32, 1, 1, px_flag);
         { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); }
         static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_paul", "portrait_mary", "portrait_daniel", "portrait_noah", "portrait_elijah"};
-        for (int i = 0; i < NCHARS; i++) tx_portrait[i] = asset_texture(pn[i], 0, NULL, NULL);
+        for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f; }
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
     }
@@ -730,7 +733,8 @@ static void draw_portraits(void) {   /* the real portraits are separate textures
     Mat4 id = m4_identity();
     for (int i = 0; i < NCHARS; i++) { if (!tx_portrait[i] || !char_unlocked(i)) continue;
         float x, y; char_card_pos(i, &x, &y);
-        batch_clear(&g_b); batch_rect_uv(&g_b, x + 10, y + 10, 120, 120, 0, 0, 1, 1, 1, 1, 1, 1);
+        float a = g_portrait_aspect[i], pw = a < 1 ? 120 * a : 120, ph = a < 1 ? 120 : 120 / a;
+        batch_clear(&g_b); batch_rect_uv(&g_b, x + 10 + (120 - pw) / 2, y + 10 + (120 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
         static Mesh *pm = NULL; if (!pm) pm = gfx_mesh_dynamic(6);
         gfx_mesh_update(pm, g_b.v, g_b.n); gfx_bind(tx_portrait[i]); gfx_draw(pm, &id, 1, 1, 1, 1); }
 }
@@ -1016,7 +1020,7 @@ void game_frame(const Pad *pad, float dt) {
     cam_fov += (want_fov - cam_fov) * fminf(1.0f, 4.0f * dt);
     Vec3 eye = v3(cam_x, cam_y, cam_z), at = v3(k->x + sinf(k->yaw) * 3.0f, k->y + 1.2f, k->z + cosf(k->yaw) * 3.0f);
     /* dynamic geometry shared by both screens: trees, skid marks, dust, shadows, items */
-    float cy = cam_yaw; Vec3 ax = v3(cosf(cy), 0, -sinf(cy));
+    float cy = cam_yaw; Vec3 ax = v3(-cosf(cy), 0, sinf(cy));   /* screen-right in world space, so pictures are not mirrored */
     {
         for (int kd = 0; kd < g_nkind; kd++) {
             batch_clear(&g_b);
@@ -1113,7 +1117,20 @@ void game_frame(const Pad *pad, float dt) {
             Mat4 m = m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f, q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.04f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f)))));
             int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
             gfx_draw(m_body_style[sty], &m, c->r, c->g, c->b, 1);
-            gfx_draw(m_rest_style[sty], &m, 1, 1, 1, 1); }
+            gfx_draw(m_rest_style[sty], &m, 1, 1, 1, 1);
+            if (!tx_portrait[r->character[i]]) { gfx_draw(m_driver_box, &m, c->r, c->g, c->b, 1); gfx_draw(m_driver_head, &m, 1, 1, 1, 1); } }
+        /* drivers drawn from Sean's character pictures: a standing cut-out in the seat, always facing the camera */
+        gfx_state(ST_CUTOUT);
+        for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; int ch = r->character[i]; if (!tx_portrait[ch]) continue;
+            if (i != r->player) { float cdx = q->x - eye.x, cdz = q->z - eye.z; if (cdx * cdx + cdz * cdz < 3.2f * 3.2f) continue; }
+            float hgt = 1.75f, hw = hgt * 0.5f * g_portrait_aspect[ch];
+            float hx = sinf(q->yaw + q->slide), hz = cosf(q->yaw + q->slide);
+            Vec3 c = v3(q->x - hx * 0.25f, q->y + q->hop * 0.4f + 0.55f + hgt * 0.5f, q->z - hz * 0.25f);
+            float lean = q->steer_vis * -0.12f;       /* leans into the turn */
+            batch_clear(&g_b);
+            batch_quad(&g_b, c, v3(ax.x * hw, 0, ax.z * hw), v3(ax.x * lean * hgt * 0.5f, hgt * 0.5f, ax.z * lean * hgt * 0.5f), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
+            gfx_mesh_update(m_driver_spr[i], g_b.v, g_b.n); gfx_bind(tx_portrait[ch]); gfx_draw(m_driver_spr[i], &id, sr, sg, sb, 1); }
+        gfx_state(ST_SOLID); gfx_bind(NULL);
         /* shields */
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; if (q->shield <= 0) continue;

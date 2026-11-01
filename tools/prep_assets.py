@@ -11,7 +11,7 @@ from PIL import Image
 SRC, DST = "assets", "content/img"
 # how big each kind of picture is allowed to be in the game (width, height); 0 = keep aspect, fit inside
 RULES = [
-    ("portrait_", (256, 256), "cutout"),
+    ("portrait_", (384, 384), "cutout"),
     ("icon_",     (128, 128), "cutout"),
     ("beth_star", (256, 256), "black"),
     ("beth_sky",  (1024, 256), "plain"),
