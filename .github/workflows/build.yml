@@ -132,7 +132,7 @@ jobs:
           echo "::group::Cemu internal log"; cat cemu_internal_log.txt 2>/dev/null | tail -n 80 || true; echo "::endgroup::"
           # the screenshot is also printed into this log as text, so it can be read without downloading the artifact
           echo "::group::screenshot_60s.png base64"; base64 -w0 screenshot_60s.png 2>/dev/null; echo; echo "::endgroup::"
-          echo "::group::screenshot_30s.png base64"; base64 -w0 screenshot_30s.png 2>/dev/null; echo; echo "::endgroup::
+          echo "::group::screenshot_30s.png base64"; base64 -w0 screenshot_30s.png 2>/dev/null; echo; echo "::endgroup::"
       - name: Save the screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
