@@ -704,6 +704,7 @@ static void build_previews(void) {
         for (int i = 0; i < tmp.n && pv->n < 80; i += (tmp.n / 80 + 1)) { pv->x[pv->n] = (tmp.s[i].x - (minx + maxx) * 0.5f) / span; pv->z[pv->n] = (tmp.s[i].z - (minz + maxz) * 0.5f) / span; pv->n++; }
     }
 }
+static void draw_loading(const char *msg);
 int game_init(int status) {
     g_status = status; music_set_logger(gfx_log); sfx_set_logger(gfx_log); sfx_load_samples();
     save_load(); save_check_unlocks(); save_store(); apply_volumes();
@@ -719,6 +720,7 @@ int game_init(int status) {
         { Texture *hd = asset_texture("font_hd", 0, NULL, NULL);
           if (hd) { tx_font = hd; g_font_hd = 1; }
           else { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); } }
+        draw_loading("LOADING...");
         static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john"};
         for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
@@ -786,6 +788,17 @@ static void checker_band(float y, float h) {
     for (float x = 0; x < 1280; x += h) { int c = ((int)(x / h)) & 1; batch_rect(&g_b, x, y, h, h, c ? 0.95f : 0.1f, c ? 0.95f : 0.1f, c ? 0.95f : 0.1f, 0.9f); }
 }
 static void text_c(const char *s, float y, float size, float r, float g, float b, float a) { batch_text(&g_b, s, 640 - text_width(s, size) / 2, y, size, r, g, b, a); }
+/* one frame with a message on both screens, shown while the pictures load (the game is otherwise black for a few seconds) */
+static void draw_loading(const char *msg) {
+    static Mesh *m = NULL; if (!m) m = gfx_mesh_dynamic(512);
+    batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b);
+    checker_band(300, 20); text_c("KINGDOM KART", 340, 48, 1, 0.85f, 0.3f, 1); text_c(msg, 410, 24, 0.9f, 0.95f, 1, 1); checker_band(450, 20);
+    gfx_mesh_update(m, g_b.v, g_b.n);
+    Mat4 id = m4_identity();
+    gfx_frame_begin();
+    for (int drc = 0; drc < 2; drc++) { gfx_view_begin(drc, 0.02f, 0.04f, 0.12f); gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m, &id, 1, 1, 1, 1); gfx_view_end(drc); }
+    gfx_frame_end();
+}
 static void menu_item(const char *s, float y, int selected, float size) {
     if (selected) { batch_rect(&g_b, 400, y - 8, 480, size + 16, 0.95f, 0.78f, 0.3f, 0.35f); text_c(s, y, size, 1, 0.95f, 0.5f, 1); }
     else text_c(s, y, size, 0.9f, 0.92f, 1, 1);
