@@ -218,7 +218,8 @@ static void downsample(const uint32_t *src, int w, int h, uint32_t *dst, int dw,
 Texture *gfx_texture_rgba(const uint32_t *pixels, int w, int h, int repeat, int nearest) {
     Texture *t = calloc(1, sizeof *t); if (!t) return NULL;
     GX2Texture *tx = &t->tex;
-    int levels = 1; if (!nearest) { int m = w > h ? w : h; while ((m >> levels) >= 1 && levels < 13) levels++; }
+    /* up to four levels (full, half, quarter, eighth) is enough to stop the shimmering; more only costs load time */
+    int levels = 1; if (!nearest && (w > 128 || h > 128)) { int m = w > h ? w : h; while ((m >> levels) >= 1 && levels < 4) levels++; }
     tx->surface.use = GX2_SURFACE_USE_TEXTURE; tx->surface.width = w; tx->surface.height = h; tx->surface.depth = 1;
     tx->surface.dim = GX2_SURFACE_DIM_TEXTURE_2D; tx->surface.format = GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8;
     tx->surface.tileMode = GX2_TILE_MODE_DEFAULT; tx->surface.aa = GX2_AA_MODE1X; tx->surface.mipLevels = (uint32_t)levels;
