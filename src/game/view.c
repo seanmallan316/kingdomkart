@@ -71,7 +71,8 @@ static float g_frame_ms = 16.7f;
 static float g_results_t;
 
 /* textures */
-static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star;
+static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette;
+static Mesh *m_scshadow;   /* soft shadows under the scenery */
 /* meshes */
 static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[8192];
@@ -227,6 +228,8 @@ static void px_tree(int x, int y, uint32_t *o) {       /* 64x64 cypress-like tre
     *o = rgba(0, 0, 0, 0);
 }
 static void px_blob(int x, int y, uint32_t *o) { float dx = (x - 32) / 32.0f, dy = (y - 32) / 32.0f; float d = sqrtf(dx * dx + dy * dy); float a = d > 1 ? 0 : (1 - d) * (1 - d); *o = rgba(255, 255, 255, (int)(a * 255)); }
+static void px_vignette(int x, int y, uint32_t *o) {    /* dark at the corners, clear in the middle; drawn over the whole screen */
+    float dx = (x - 127.5f) / 127.5f, dy = (y - 127.5f) / 127.5f; float d = sqrtf(dx * dx + dy * dy) / 1.4142f; float a = d < 0.45f ? 0 : (d - 0.45f) / 0.55f; a = a * a * 0.6f; *o = rgba(0, 0, 0, (int)(a * 255)); }
 static void px_flag(int x, int y, uint32_t *o) { int c = ((x / 8) + (y / 8)) & 1; *o = c ? rgba(245, 245, 245, 255) : rgba(20, 20, 20, 255); }
 static float sky_noise(float x, float y) {              /* repeats every 256 pixels in x so the sky ring has no seams */
     float a = smooth_noise(x / 40.0f, y / 20.0f) * 0.6f + smooth_noise(x / 15.0f, y / 8.0f) * 0.4f;
@@ -264,6 +267,13 @@ static void free_track_meshes(void) {
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
     for (int i = 0; i < NKARTS; i++) { gfx_mesh_free(m_driver_spr[i]); m_driver_spr[i] = NULL; }
 }
+/* a quad whose first two corners (the bottom) are darker than the last two (the top) */
+static void batch_quad4_shade(Batch *b, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, Vec3 n, float u0, float v0, float u1, float v1, float bottom, float top) {
+    if (b->n + 6 > b->cap) return;
+    Vec3 p[4] = {p0, p1, p2, p3}; float uv[4][2] = {{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}}; float sh[4] = {bottom, bottom, top, top};
+    static const int idx[6] = {0, 1, 2, 0, 2, 3};
+    for (int i = 0; i < 6; i++) { int k = idx[i]; Vertex q = {p[k].x, p[k].y, p[k].z, n.x, n.y, n.z, uv[k][0], uv[k][1], sh[k], sh[k], sh[k], 1}; b->v[b->n++] = q; }
+}
 static void build_track_meshes(void) {
     const Track *t = &g_track;
     batch_init(&g_b, g_vtmp, 8192);
@@ -288,8 +298,9 @@ static void build_track_meshes(void) {
             Vec3 at = v3(a.x, a.y + 0.9f, a.z), bt = v3(b.x, b.y + 0.9f, b.z);
             Vec3 n = v3(-t->s[i].nx * side, 0, -t->s[i].nz * side);
             float v0 = t->s[i].dist / 3.0f, v1 = v0 + 0.7f;
-            if (side < 0) batch_quad4(&g_b, a, b, bt, at, n, v0, 0, v1, 1, 1, 1, 1, 1);
-            else batch_quad4(&g_b, b, a, at, bt, n, v0, 0, v1, 1, 1, 1, 1, 1);
+            /* darker where the wall meets the ground (a baked contact shadow) */
+            if (side < 0) batch_quad4_shade(&g_b, a, b, bt, at, n, v0, 0, v1, 1, 0.55f, 1.0f);
+            else batch_quad4_shade(&g_b, b, a, at, bt, n, v0, 0, v1, 1, 0.55f, 1.0f);
         }
     }
     m_wall = gfx_mesh_static(g_b.v, g_b.n);
@@ -650,7 +661,13 @@ static void load_theme(void) {
         p->p.y = track_surface_height(&g_track, idx, (sc->side < 0 ? -1.0f : 1.0f) * edge) - 0.2f;   /* stands on the ground just outside the wall */
         p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
     }
-    m_glow = gfx_mesh_dynamic(MAX_SCENERY * 6 + 6);
+    m_glow = gfx_mesh_dynamic((MAX_SCENERY + NKARTS) * 6 + 6);
+    /* a soft shadow blob under everything that stands by the road */
+    batch_clear(&g_b);
+    for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->falls) continue;
+        float w = pl->w * 0.55f, dz = pl->w * 0.3f;
+        batch_quad(&g_b, v3(pl->p.x, pl->p.y + 0.26f, pl->p.z), v3(w, 0, 0), v3(0, 0, -dz), v3(0, 1, 0), 0, 0, 1, 1, 0, 0, 0, 0.45f); }
+    gfx_mesh_free(m_scshadow); m_scshadow = gfx_mesh_static(g_b.v, g_b.n);
 }
 
 // ------------------------------------------------------------------ setup
@@ -691,7 +708,7 @@ int game_init(int status) {
     race_set_unlocked(unlocked_mask()); race_set_styles(0, unlocked_styles());
     build_previews();
     if (status == GFX_OK) {
-        tx_blob = make_tex(64, 64, 0, 0, px_blob);
+        tx_blob = make_tex(64, 64, 0, 0, px_blob); tx_vignette = make_tex(256, 256, 0, 0, px_vignette);
         tx_flag = make_tex(32, 32, 1, 1, px_flag);
         { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); }
         static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john"};
@@ -1418,6 +1435,11 @@ void game_frame(const Pad *pad, float dt) {
             float fl = 0.85f + 0.15f * sinf(g_time * 9.0f + i * 1.7f), s = pl->glow * fl;
             if (pl->purple) batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.55f, pl->p.z), v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.7f, 0.35f, 1.0f, 0.6f);
             else batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.55f, pl->p.z), v3(ax.x * s, 0, ax.z * s), v3(0, s, 0), v3(0, 1, 0), 0, 0, 1, 1, g_def->glow_r, g_def->glow_g, g_def->glow_b, 0.55f); }
+        if (g_def->night) {   /* each kart's lantern lights the road ahead of it */
+            for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; float dx = q->x - cam_x, dz = q->z - cam_z; if (dx * dx + dz * dz > 80.0f * 80.0f) continue;
+                float fx = sinf(q->yaw), fz = cosf(q->yaw), big = i == r->player ? 1.0f : 0.7f;
+                Vec3 c = v3(q->x + fx * 4.5f * big, q->y + 0.08f, q->z + fz * 4.5f * big);
+                batch_quad(&g_b, c, v3(fz * 3.2f * big, 0, -fx * 3.2f * big), v3(fx * 5.0f * big, 0, fz * 5.0f * big), v3(0, 1, 0), 0, 0, 1, 1, 1.0f, 0.85f, 0.55f, 0.28f); } }
         gfx_mesh_update(m_glow, g_b.v, g_b.n);
         batch_clear(&g_b);
         for (int i = 0; i < MAX_SKID; i++) if (g_skid[i].used) { Skid *s = &g_skid[i];
@@ -1466,35 +1488,40 @@ void game_frame(const Pad *pad, float dt) {
         Mat4 vp = m4_mul(proj, view);
         Mat4 id = m4_identity();
         Vec3 ldir = v3(g_def->light_x, g_def->light_y, g_def->light_z);
+        { /* hemisphere light: the sky's color from above, a bounce color from below, the sun's color on lit faces */
+          float mx = fmaxf(g_def->sky_r, fmaxf(g_def->sky_g, g_def->sky_b)); if (mx < 0.05f) mx = 0.05f;
+          Vec3 skyc = v3(0.3f + 0.7f * g_def->sky_r / mx, 0.3f + 0.7f * g_def->sky_g / mx, 0.3f + 0.7f * g_def->sky_b / mx);
+          Vec3 gnd = g_def->night ? v3(0.5f, 0.45f, 0.5f) : (g_def->water ? v3(0.75f, 0.85f, 0.95f) : (g_def->grid_idx ? v3(1.0f, 0.95f, 0.9f) : v3(0.95f, 0.85f, 0.7f)));
+          gfx_light(v3(g_def->sun_r, g_def->sun_g, g_def->sun_b), skyc, gnd, eye); }
         gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f);
-        gfx_state(ST_BLEND); gfx_bind(tx_sky); { Mat4 sm = m4_translate(cam_x, -30.0f, cam_z); gfx_draw(m_sky, &sm, 1, 1, 1, 1); }
+        gfx_state(ST_BLEND); gfx_bind(tx_sky); { Mat4 sm = m4_translate(cam_x, -30.0f, cam_z); gfx_draw_ex(m_sky, &sm, 1, 1, 1, 1, 0, 1, 0, 0); }
         if (tx_star) { gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_star);
             batch_clear(&g_b); float ss = g_def->star_size * (0.95f + 0.05f * sinf(g_time * 3.0f));
             Vec3 sp = v3(cam_x + g_def->star_x, g_def->star_y, cam_z + g_def->star_z);
             batch_quad(&g_b, sp, v3(ax.x * ss, 0, ax.z * ss), v3(0, ss, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
-            static Mesh *m_star = NULL; if (!m_star) m_star = gfx_mesh_dynamic(12); gfx_mesh_update(m_star, g_b.v, g_b.n); gfx_draw(m_star, &id, 1, 1, 1, 1); }
+            static Mesh *m_star = NULL; if (!m_star) m_star = gfx_mesh_dynamic(12); gfx_mesh_update(m_star, g_b.v, g_b.n); gfx_draw_ex(m_star, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
         gfx_camera(&vp, ldir, g_def->ambient, g_def->fog_r, g_def->fog_g, g_def->fog_b, g_def->fog_start, g_def->fog_end);
         gfx_state(ST_SOLID);
-        float sr = g_def->sun_r, sg = g_def->sun_g, sb = g_def->sun_b;
-        gfx_bind(tx_grass); gfx_draw(m_ground, &id, sr, sg, sb, 1);
+        float sr = 1, sg = 1, sb = 1;    /* the sun's color is applied by the shader now */
+        /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
+        gfx_bind(tx_grass); if (g_def->water) gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); else gfx_draw(m_ground, &id, sr, sg, sb, 1);
         gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
-        gfx_bind(tx_road); gfx_draw(m_road, &id, sr, sg, sb, 1);
+        gfx_bind(tx_road); gfx_draw_ex(m_road, &id, 1, 1, 1, 1, g_def->night ? 0.35f : 0.18f, 0, 0, 0);   /* a faint sheen on the road, wetter at night */
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1); }
         gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
         gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1);
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1); }
         if (g_def->bonus == 2 && m_brook) { static Texture *tx_brook = NULL; if (!tx_brook) tx_brook = make_tex(128, 128, 1, 0, px_water); gfx_state(ST_TRANSPARENT); gfx_bind(tx_brook);
-            Mat4 flow = m4_translate(sinf(g_time * 2.0f) * 0.3f, 0, 0); gfx_draw(m_brook, &flow, 1, 1, 1, 0.75f); gfx_state(ST_SOLID); }
+            Mat4 flow = m4_translate(sinf(g_time * 2.0f) * 0.3f, 0, 0); gfx_draw_ex(m_brook, &flow, 1, 1, 1, 0.75f, 0.8f, 0, g_time * 0.05f, 0); gfx_state(ST_SOLID); }
         { float pulse = 0.75f + 0.25f * sinf(g_time * 6.0f);
           gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_boostpads, &id, pulse, pulse, pulse, 1);
           gfx_bind(tx_blob); gfx_draw(m_bouncepads, &id, 1, 1, 1, 0.9f);
           gfx_state(ST_SOLID); }
         gfx_state(ST_CUTOUT);
-        for (int kd = 0; kd < g_nkind; kd++) { gfx_bind(g_kind[kd].tex); gfx_draw(g_kind[kd].mesh, &id, g_def->sun_r, g_def->sun_g, g_def->sun_b, 1); }
-        if (tx_finale && m_finale) { gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f); gfx_state(ST_CUTOUT); gfx_bind(tx_finale); gfx_draw(m_finale, &id, 1, 1, 1, 1);
-            gfx_camera(&vp, ldir, g_def->ambient, g_def->fog_r, g_def->fog_g, g_def->fog_b, g_def->fog_start, g_def->fog_end); }
+        for (int kd = 0; kd < g_nkind; kd++) { gfx_bind(g_kind[kd].tex); gfx_draw(g_kind[kd].mesh, &id, 1, 1, 1, 1); }
+        if (tx_finale && m_finale) { gfx_state(ST_CUTOUT); gfx_bind(tx_finale); gfx_draw_ex(m_finale, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_skid, &id, 1, 1, 1, 1);
-        gfx_bind(tx_blob); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
+        gfx_bind(tx_blob); gfx_draw(m_scshadow, &id, 1, 1, 1, 1); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
         /* item boxes: spinning cubes */
         gfx_state(ST_TRANSPARENT | ST_CULL); gfx_bind(NULL);
         for (int b = 0; b < r->nbox; b++) { ItemBox *bx = &r->box[b]; if (!bx->active) continue;
@@ -1581,6 +1608,10 @@ void game_frame(const Pad *pad, float dt) {
         /* ---- HUD and menus */
         gfx_camera_2d(); gfx_state(ST_HUD);
         batch_clear(&g_b);
+        { /* a touch of the road's color over the whole picture, and darker corners */
+          static Mesh *m_tone = NULL; if (!m_tone) { batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_tone = gfx_mesh_static(g_b.v, g_b.n); batch_clear(&g_b); }
+          gfx_bind(NULL); gfx_draw(m_tone, &id, g_def->fog_r, g_def->fog_g, g_def->fog_b, 0.07f);
+          gfx_bind(tx_vignette); gfx_draw(m_tone, &id, 1, 1, 1, 1); }
         int menu_screen = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_GP;
         if (menu_screen) batch_rect(&g_b, 0, 0, 1280, 720, 0.02f, 0.03f, 0.1f, g_screen == SCR_TITLE ? 0.25f : 0.55f);
         switch (g_screen) {

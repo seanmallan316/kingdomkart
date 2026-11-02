@@ -36,5 +36,7 @@ void gfx_camera(const Mat4 *viewproj, Vec3 lightdir, float ambient, float fog_r,
 void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
 void gfx_bind(Texture *t);
 void gfx_state(int flags);
+void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye);   /* sun color, ambient from above and from below, camera position; call before gfx_camera */
 void gfx_draw(const Mesh *m, const Mat4 *model, float r, float g, float b, float a);
+void gfx_draw_ex(const Mesh *m, const Mat4 *model, float r, float g, float b, float a, float specular, int unlit, float scroll_u, float scroll_v);
 #endif

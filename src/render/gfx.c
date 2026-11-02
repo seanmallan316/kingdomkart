@@ -33,42 +33,53 @@ static const char *VS_SRC =
     "layout(location = 1) in vec3 in_normal;\n"
     "layout(location = 2) in vec2 in_texcoord;\n"
     "layout(location = 3) in vec4 in_color;\n"
-    "layout(binding = 0) uniform Frame { mat4 u_viewproj; vec4 u_lightdir; vec4 u_fog; };\n"   /* u_lightdir.w = ambient, u_fog = start, end, enabled, 0 */
-    "layout(binding = 1) uniform Object { mat4 u_model; vec4 u_tint; };\n"
+    /* Frame: u_lightdir.w = ambient strength, u_fog = start, end, enabled, 0; u_sky / u_ground = the ambient light from above / below
+       (hemisphere lighting), u_sun = the sun's color, u_eye = camera position. Object: u_params = specular strength, unlit flag, uv scroll */
+    "layout(binding = 0) uniform Frame { mat4 u_viewproj; vec4 u_lightdir; vec4 u_fog; vec4 u_sky; vec4 u_ground; vec4 u_sun; vec4 u_eye; };\n"
+    "layout(binding = 1) uniform Object { mat4 u_model; vec4 u_tint; vec4 u_params; };\n"
     "layout(location = 0) out vec2 v_texcoord;\n"
     "layout(location = 1) out vec4 v_color;\n"
-    "layout(location = 2) out float v_light;\n"
+    "layout(location = 2) out vec4 v_light;\n"
     "layout(location = 3) out float v_fog;\n"
     "void main() {\n"
     "  vec4 wp = u_model * vec4(in_position, 1.0);\n"
     "  vec3 n = normalize((u_model * vec4(in_normal, 0.0)).xyz);\n"
+    "  vec3 L = normalize(u_lightdir.xyz);\n"
     "  float amb = u_lightdir.w;\n"
-    "  v_light = amb + (1.0 - amb) * max(dot(n, normalize(u_lightdir.xyz)), 0.0);\n"
-    "  v_texcoord = in_texcoord;\n"
+    "  float diff = max(dot(n, L), 0.0);\n"
+    "  vec3 hemi = mix(u_ground.rgb, u_sky.rgb, n.y * 0.5 + 0.5);\n"
+    "  vec3 lc = hemi * amb + u_sun.rgb * diff * (1.0 - amb);\n"
+    "  vec3 V = normalize(u_eye.xyz - wp.xyz);\n"
+    "  vec3 H = normalize(L + V);\n"
+    "  float spec = pow(max(dot(n, H), 0.0), 40.0) * u_params.x;\n"
+    "  if (u_params.y > 0.5) { lc = vec3(1.0); spec = 0.0; }\n"
+    "  v_light = vec4(lc, spec);\n"
+    "  v_texcoord = in_texcoord + u_params.zw;\n"
     "  v_color = in_color * u_tint;\n"
     "  vec4 cp = u_viewproj * wp;\n"
-    "  v_fog = clamp((cp.w - u_fog.x) / max(u_fog.y - u_fog.x, 0.01), 0.0, 1.0) * u_fog.z;\n"
+    "  v_fog = clamp((cp.w - u_fog.x) / max(u_fog.y - u_fog.x, 0.01), 0.0, 1.0) * u_fog.z * (1.0 - u_params.y);\n"
     "  gl_Position = cp;\n"
     "}\n";
 static const char *PS_SRC =
     "#version 450\n"
     "layout(location = 0) in vec2 v_texcoord;\n"
     "layout(location = 1) in vec4 v_color;\n"
-    "layout(location = 2) in float v_light;\n"
+    "layout(location = 2) in vec4 v_light;\n"
     "layout(location = 3) in float v_fog;\n"
-    "layout(binding = 0) uniform FogColor { vec4 u_fogcolor; };\n"
+    "layout(binding = 0) uniform FogColor { vec4 u_fogcolor; vec4 u_speccolor; };\n"
     "layout(binding = 0) uniform sampler2D u_tex;\n"
     "layout(location = 0) out vec4 out_color;\n"
     "void main() {\n"
     "  vec4 t = texture(u_tex, v_texcoord) * v_color;\n"
     "  if (t.a < 0.03) discard;\n"
-    "  vec3 c = mix(t.rgb * v_light, u_fogcolor.rgb, v_fog);\n"
+    "  vec3 c = mix(t.rgb * v_light.rgb + u_speccolor.rgb * v_light.a, u_fogcolor.rgb, v_fog);\n"
     "  out_color = vec4(c, t.a);\n"
     "}\n";
 
-typedef struct { float viewproj[16]; float lightdir[4]; float fog[4]; } FrameBlock;
-typedef struct { float model[16]; float tint[4]; } ObjectBlock;
-typedef struct { float color[4]; } FogBlock;
+typedef struct { float viewproj[16]; float lightdir[4]; float fog[4]; float sky[4]; float ground[4]; float sun[4]; float eye[4]; } FrameBlock;
+typedef struct { float model[16]; float tint[4]; float params[4]; } ObjectBlock;
+static float g_sun[3] = {1, 1, 1}, g_sky[3] = {1, 1, 1}, g_ground[3] = {1, 1, 1}, g_eye[3] = {0, 0, 0};
+typedef struct { float color[4]; float spec[4]; } FogBlock;
 
 #define UB_ALIGN 256
 #define UB_SLOTS 1024
@@ -232,16 +243,23 @@ void gfx_camera(const Mat4 *vp, Vec3 l, float ambient, float fr, float fg, float
     FrameBlock fb2; memcpy(fb2.viewproj, vp->m, sizeof fb2.viewproj);
     fb2.lightdir[0] = l.x; fb2.lightdir[1] = l.y; fb2.lightdir[2] = l.z; fb2.lightdir[3] = ambient;
     fb2.fog[0] = fs; fb2.fog[1] = fe; fb2.fog[2] = 1.0f; fb2.fog[3] = 0;
+    for (int i = 0; i < 3; i++) { fb2.sky[i] = g_sky[i]; fb2.ground[i] = g_ground[i]; fb2.sun[i] = g_sun[i]; fb2.eye[i] = g_eye[i]; }
+    fb2.sky[3] = fb2.ground[3] = fb2.sun[3] = fb2.eye[3] = 0;
     g_framebuf = pool_upload(&fb2, sizeof fb2);
-    FogBlock fg2 = {{fr, fg, fb, 1}};
+    FogBlock fg2 = {{fr, fg, fb, 1}, {g_sun[0], g_sun[1], g_sun[2], 1}};
     g_fogbuf = pool_upload(&fg2, sizeof fg2);
+}
+void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye) {
+    g_sun[0] = sun.x; g_sun[1] = sun.y; g_sun[2] = sun.z; g_sky[0] = sky.x; g_sky[1] = sky.y; g_sky[2] = sky.z;
+    g_ground[0] = ground.x; g_ground[1] = ground.y; g_ground[2] = ground.z; g_eye[0] = eye.x; g_eye[1] = eye.y; g_eye[2] = eye.z;
 }
 void gfx_camera_2d(void) {
     FrameBlock fb2; Mat4 id = m4_identity(); memcpy(fb2.viewproj, id.m, sizeof fb2.viewproj);
     fb2.lightdir[0] = 0; fb2.lightdir[1] = 0; fb2.lightdir[2] = 1; fb2.lightdir[3] = 1.0f;
     fb2.fog[0] = 0; fb2.fog[1] = 1; fb2.fog[2] = 0; fb2.fog[3] = 0;
+    for (int i = 0; i < 4; i++) { fb2.sky[i] = fb2.ground[i] = fb2.sun[i] = 1; fb2.eye[i] = 0; }
     g_framebuf = pool_upload(&fb2, sizeof fb2);
-    FogBlock fg2 = {{0, 0, 0, 1}};
+    FogBlock fg2 = {{0, 0, 0, 1}, {0, 0, 0, 0}};
     g_fogbuf = pool_upload(&fg2, sizeof fg2);
 }
 void gfx_bind(Texture *t) {
@@ -266,9 +284,11 @@ void gfx_state(int flags) {
         GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, TRUE);
     }
 }
-void gfx_draw(const Mesh *m, const Mat4 *model, float r, float g, float b, float a) {
+void gfx_draw(const Mesh *m, const Mat4 *model, float r, float g, float b, float a) { gfx_draw_ex(m, model, r, g, b, a, 0, 0, 0, 0); }
+void gfx_draw_ex(const Mesh *m, const Mat4 *model, float r, float g, float b, float a, float specular, int unlit, float scroll_u, float scroll_v) {
     if (!m || m->count == 0 || !g_framebuf) return;
     ObjectBlock ob; memcpy(ob.model, model->m, sizeof ob.model); ob.tint[0] = r; ob.tint[1] = g; ob.tint[2] = b; ob.tint[3] = a;
+    ob.params[0] = specular; ob.params[1] = unlit ? 1.0f : 0.0f; ob.params[2] = scroll_u; ob.params[3] = scroll_v;
     void *obuf = pool_upload(&ob, sizeof ob);
     GX2SetVertexUniformBlock(g_loc_frame, sizeof(FrameBlock), g_framebuf);
     GX2SetVertexUniformBlock(g_loc_object, sizeof(ObjectBlock), obuf);
