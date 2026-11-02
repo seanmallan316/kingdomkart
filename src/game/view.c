@@ -54,6 +54,7 @@ static Texture *tx_kart[NCHARS]; static float g_kart_aspect[NCHARS]; static Mesh
 static Texture *tx_kartback[NCHARS]; static float g_kartback_aspect[NCHARS]; static Mesh *m_kart_spr[NKARTS];   /* the kart seen from behind: drives on the track */
 /* the same kart from more angles (N64 style): 0 behind, 1 back-left 45, 2 left side, 3 front-left 45, 4 front; the right side is the left mirrored */
 static Texture *tx_kartview[NCHARS][5]; static float g_kartview_aspect[NCHARS][5];
+static Texture *tx_ride[NCHARS][5]; static float g_ride_aspect[NCHARS][5];   /* ride_<name>_<b|bl|l|fl|f>: the character sitting in the kart, one picture; used instead of kart + driver when present */
 static float g_shake;
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
@@ -730,7 +731,9 @@ int game_init(int status) {
             snprintf(cn, sizeof cn, "kartback_%s", pn[i] + 9); w = h = 1; tx_kartback[i] = asset_texture(cn, 0, &w, &h); g_kartback_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f;
             tx_kartview[i][0] = tx_kartback[i]; g_kartview_aspect[i][0] = g_kartback_aspect[i]; tx_kartview[i][4] = tx_kart[i]; g_kartview_aspect[i][4] = g_kart_aspect[i];
             static const char *suf[3] = {"bl", "l", "fl"};
-            for (int v = 0; v < 3; v++) { snprintf(cn, sizeof cn, "kartview_%s_%s", pn[i] + 9, suf[v]); w = h = 1; tx_kartview[i][v + 1] = asset_texture(cn, 0, &w, &h); g_kartview_aspect[i][v + 1] = h > 0 ? (float)w / (float)h : 1.6f; } }
+            for (int v = 0; v < 3; v++) { snprintf(cn, sizeof cn, "kartview_%s_%s", pn[i] + 9, suf[v]); w = h = 1; tx_kartview[i][v + 1] = asset_texture(cn, 0, &w, &h); g_kartview_aspect[i][v + 1] = h > 0 ? (float)w / (float)h : 1.6f; }
+            static const char *rsuf[5] = {"b", "bl", "l", "fl", "f"};
+            for (int v = 0; v < 5; v++) { snprintf(cn, sizeof cn, "ride_%s_%s", pn[i] + 9, rsuf[v]); w = h = 1; tx_ride[i][v] = asset_texture(cn, 0, &w, &h); g_ride_aspect[i][v] = h > 0 ? (float)w / (float)h : 1.4f; } }
         for (int i = 0; i < NKARTS; i++) m_kart_spr[i] = gfx_mesh_dynamic(6);
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
@@ -1654,12 +1657,17 @@ void game_frame(const Pad *pad, float dt) {
                 int want = a < 22.5f ? 0 : (a < 67.5f ? 1 : (a < 112.5f ? 2 : (a < 157.5f ? 3 : 4)));
                 int v = want; while (v > 0 && !tx_kartview[ch][v]) v--;                                /* fall back toward the back view when an angle is missing */
                 if (want == 4 && !tx_kartview[ch][4]) v = tx_kartview[ch][3] ? 3 : (tx_kartview[ch][2] ? 2 : 0);
-                float kw = v == 2 ? 3.4f : (v == 1 || v == 3 ? 3.0f : 2.6f), kh = kw / g_kartview_aspect[ch][v], klean = q->steer_vis * -0.08f + q->slide * 0.15f;
+                /* a picture with the driver already in the kart wins over kart + separate driver */
+                int rv = (want == 0 && !tx_ride[ch][0] && tx_ride[ch][1]) ? 1 : want;   /* straight behind: the behind-left picture is close enough */
+                Texture *ktex = tx_kartview[ch][v]; float kasp = g_kartview_aspect[ch][v]; int ride = 0;
+                if (tx_ride[ch][rv]) { ktex = tx_ride[ch][rv]; kasp = g_ride_aspect[ch][rv]; v = rv; ride = 1; }
+                float kw = v == 2 ? 3.4f : (v == 1 || v == 3 ? 3.0f : 2.6f), kh = kw / kasp, klean = q->steer_vis * -0.08f + q->slide * 0.15f;
                 Vec3 kc = v3(q->x, q->y + q->hop * 0.4f + kh * 0.5f - 0.1f, q->z);
                 batch_clear(&g_b);
                 float u0 = mirror ? 1.0f : 0.0f, u1 = mirror ? 0.0f : 1.0f;
                 batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), u0, 0, u1, 1, 1, 1, 1, 1);
-                gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(tx_kartview[ch][v]); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1); }
+                gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(ktex); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1);
+                if (ride) continue; }
             if (!tx_char[ch]) continue;
             /* the driver sits: only the top part of the standing picture shows (head, shoulders, chest), sunk into the seat */
             float part = pic ? 0.56f : 1.0f;

@@ -13,6 +13,7 @@ SRC, DST = "assets", "content/img"
 RULES = [
     ("portrait_", (256, 256), "cutout"),
     ("icon_",     (128, 128), "cutout"),
+    ("ride_",     (512, 384), "cutout"),     # character sitting in the kart, one picture per angle
     ("beth_star", (256, 256), "black"),
     ("beth_sky",  (2048, 512), "plain"),
     ("gal_sky",   (2048, 512), "plain"),
