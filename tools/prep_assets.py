@@ -20,6 +20,7 @@ RULES = [
     ("tomb_sky",  (2048, 512), "plain"),
     ("elah_sky",  (2048, 512), "plain"),
     ("title_art", (1024, 512), "cutout"),
+    ("title_bg",  (1024, 576), "plain"),      # the whole title screen picture
     ("card_",     (512, 512), "plain"),      # road-select card pictures
     ("heaven_gates", (1024, 576), "plain"),
     ("heaven_sky", (2048, 512), "plain"),
