@@ -82,7 +82,9 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     if (!k->finished) { k->total_time += dt; if (k->lap >= 1) k->lap_time += dt; }
     float top = BASE_TOP * st->top_speed * k->boost_mul * (1.0f + 0.01f * (float)k->coins);
     int on_road = k->hit.on_road;
-    if (!on_road && !k->air) top *= OFFROAD_MUL;
+    if (!on_road && !k->air && k->grace_t <= 0) top *= OFFROAD_MUL;
+    if (k->carried_t > 0) { k->carried_t -= dt; k->boost_t = fmaxf(k->boost_t, 0.2f); k->boost_mul = fmaxf(k->boost_mul, 2.0f); k->shield = fmaxf(k->shield, 0.2f); top = BASE_TOP * st->top_speed * 2.0f; }
+    if (k->grace_t > 0) { k->grace_t -= dt; top *= 1.12f; }
     if (k->slow_t > 0) top *= 0.62f;
     float accel = BASE_ACCEL * st->accel * (k->boost_t > 0 ? 1.8f : 1.0f);
     float steer = clampf1(in->steer, -1, 1);

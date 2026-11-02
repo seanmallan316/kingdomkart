@@ -8,7 +8,8 @@
 #define WRONGWAY_DELAY 1.5f    /* seconds of driving backwards before the warning shows */
 
 typedef struct { float steer; int gas, brake, drift, item; } KartInput;   /* steer -1..1 (left negative); item = use the held item */
-enum { ITEM_NONE = 0, ITEM_MANNA, ITEM_STAFF, ITEM_STONE, ITEM_OIL, ITEM_TRUMPET, ITEM_FIRE, ITEM_LOCUSTS, ITEM_DOVE, ITEM_COUNT };
+/* the blessings: every item does something for you and something for another racer (Love your neighbor) */
+enum { ITEM_NONE = 0, ITEM_MANNA, ITEM_LOAVES, ITEM_SAMARITAN, ITEM_SHIELD, ITEM_PARTING, ITEM_JUBILEE, ITEM_FIRE, ITEM_WATER, ITEM_COUNT };
 
 typedef struct {
     float top_speed, accel, handling, weight;    /* per character stats, 1.0 = average */
@@ -33,7 +34,9 @@ typedef struct {
     float stun;                /* seconds left spinning out, no control */
     float shield;              /* seconds of shield left (blocks one hit) */
     float spin_vis;            /* visual spin angle while stunned */
-    float slow_t;              /* seconds left crawling through a locust swarm */
+    float slow_t;              /* seconds left crawling (a splash of mud, a hit) */
+    float carried_t;           /* the Good Samaritan carries this kart: strong boost and a shield */
+    float grace_t;             /* inside the parted sea: no off-road slowdown, a gentle push */
     float pad_cd;              /* cooldown so one pad fires once per pass */
     float obstacle_cd;         /* seconds before an obstacle can hit this kart again */
     int pad_flag;              /* PAD_BOOST / PAD_BOUNCE for the step a pad fired, else 0 */

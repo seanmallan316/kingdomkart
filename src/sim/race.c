@@ -30,8 +30,12 @@ static int g_player_style = 0; static unsigned g_styles = 1;
 void race_set_styles(int player_style, unsigned unlocked_styles) { g_player_style = player_style; g_styles = unlocked_styles | 1; }
 
 const char *item_name(int item) {
-    switch (item) { case ITEM_MANNA: return "MANNA"; case ITEM_STAFF: return "STAFF"; case ITEM_STONE: return "STONE"; case ITEM_OIL: return "OIL JAR";
-                    case ITEM_TRUMPET: return "SHOFAR"; case ITEM_FIRE: return "CHARIOT OF FIRE"; case ITEM_LOCUSTS: return "LOCUSTS"; case ITEM_DOVE: return "DOVE"; default: return ""; }
+    switch (item) { case ITEM_MANNA: return "MANNA"; case ITEM_LOAVES: return "LOAVES AND FISHES"; case ITEM_SAMARITAN: return "GOOD SAMARITAN"; case ITEM_SHIELD: return "SHIELD OF FAITH";
+                    case ITEM_PARTING: return "PARTING OF THE SEA"; case ITEM_JUBILEE: return "JUBILEE TRUMPET"; case ITEM_FIRE: return "CHARIOT OF FIRE"; case ITEM_WATER: return "LIVING WATER"; default: return ""; }
+}
+const char *item_verse(int item) {
+    switch (item) { case ITEM_MANNA: return "EXODUS 16"; case ITEM_LOAVES: return "MATTHEW 14"; case ITEM_SAMARITAN: return "LUKE 10"; case ITEM_SHIELD: return "EPHESIANS 6";
+                    case ITEM_PARTING: return "EXODUS 14"; case ITEM_JUBILEE: return "LEVITICUS 25"; case ITEM_FIRE: return "2 KINGS 2"; case ITEM_WATER: return "JOHN 4"; default: return ""; }
 }
 static float rr(Race *r) { r->rng ^= r->rng << 13; r->rng ^= r->rng >> 17; r->rng ^= r->rng << 5; return (r->rng & 0xFFFFFF) / 16777216.0f; }
 static void push_event(Race *r, int type, int kart) { if (r->nev < 32) { r->ev[r->nev].type = type; r->ev[r->nev].kart = kart; r->nev++; } }
@@ -85,51 +89,70 @@ void race_rank(Race *r) {
     for (int i = 1; i < r->nk; i++) { int v = r->order[i], j = i - 1; while (j >= 0 && key[r->order[j]] < key[v]) { r->order[j + 1] = r->order[j]; j--; } r->order[j + 1] = v; }
 }
 
-static int give_item(Race *r, int position) {           /* back of the pack gets more help */
+static int give_item(Race *r, int position) {           /* back of the pack gets the big helps */
     float x = rr(r); float behind = r->nk > 1 ? (float)position / (float)(r->nk - 1) : 0.0f;   /* 0 = leading, 1 = last */
-    /* weights per item, front of the pack vs back of the pack */
-    static const float front[ITEM_COUNT] = {0, 2.0f, 3.0f, 2.0f, 3.0f, 1.0f, 0.0f, 0.0f, 0.0f};
-    static const float back[ITEM_COUNT]  = {0, 3.0f, 0.5f, 2.0f, 0.5f, 2.0f, 3.0f, 2.5f, 2.5f};
+    /*                                       none manna loaves samar shield parting jubilee fire  water */
+    static const float front[ITEM_COUNT] = {0,  3.0f, 3.0f,  1.0f, 2.5f,  2.0f,   1.0f,   0.0f, 2.0f};
+    static const float back[ITEM_COUNT]  = {0,  2.0f, 1.0f,  3.0f, 1.0f,  2.0f,   2.0f,   3.5f, 1.0f};
     float w[ITEM_COUNT], total = 0;
     for (int i = 1; i < ITEM_COUNT; i++) { w[i] = front[i] * (1 - behind) + back[i] * behind; total += w[i]; }
     float pick = x * total;
     for (int i = 1; i < ITEM_COUNT; i++) { pick -= w[i]; if (pick <= 0) return i; }
     return ITEM_MANNA;
 }
+static int rank_pos(Race *r, int i) { for (int p = 0; p < r->nk; p++) if (r->order[p] == i) return p; return 0; }
+static void bless(Race *r, int who, int by) { if (who == by) return; r->blessed_by[who] = by; r->blessed_t[who] = 2.5f; r->stat_blessings++; push_event(r, EV_BLESSED, who); }
+static void give_boost(Kart *k, float t, float mul) { if (k->stun > 0) return; k->boost_t = fmaxf(k->boost_t, t); k->boost_mul = fmaxf(k->boost_mul, mul); }
 
-static void spawn_proj(Race *r, int owner, int type) {
+/* a piece of trail dropped on the road where the kart is (manna, or the fire of the chariot) */
+static void drop_trail(Race *r, int owner, int type, float back, float life) {
     for (int i = 0; i < MAX_PROJ; i++) if (!r->proj[i].alive) {
         Proj *p = &r->proj[i]; Kart *k = &r->k[owner]; memset(p, 0, sizeof *p);
-        p->alive = 1; p->type = type; p->owner = owner; p->idx = k->hit.idx;
         float hx = sinf(k->yaw), hz = cosf(k->yaw);
-        if (type == ITEM_STONE) { p->x = k->x + hx * 1.8f; p->z = k->z + hz * 1.8f; p->y = k->y + 0.6f; float sp = fmaxf(k->speed, 0) + 32.0f; p->vx = hx * sp; p->vz = hz * sp; p->life = 2.6f; }
-        else if (type == ITEM_DOVE) {
-            /* flies along the road to whoever is leading (not the thrower) */
-            p->target = -1; for (int q = 0; q < r->nk; q++) if (r->order[q] != owner) { p->target = r->order[q]; break; }
-            p->x = k->x + hx * 1.5f; p->z = k->z + hz * 1.5f; p->y = k->y + 2.0f; p->along = k->hit.lateral; p->life = 14.0f;
-        }
-        else { p->x = k->x - hx * 2.2f; p->z = k->z - hz * 2.2f; p->y = k->y; p->life = 30.0f; }
+        p->alive = 1; p->type = type; p->owner = owner; p->idx = k->hit.idx; p->x = k->x - hx * back; p->z = k->z - hz * back; p->y = k->y; p->life = life;
         return;
     }
 }
 
 static void use_item(Race *r, int i) {
-    Kart *k = &r->k[i];
+    Kart *k = &r->k[i]; const Track *t = r->track; int mine = rank_pos(r, i);
     switch (k->item) {
-        case ITEM_MANNA: k->boost_t = 1.7f; k->boost_mul = 1.45f; push_event(r, EV_USE_MANNA, i); break;
-        case ITEM_STAFF: k->shield = 8.0f; push_event(r, EV_USE_STAFF, i); break;
-        case ITEM_STONE: spawn_proj(r, i, ITEM_STONE); push_event(r, EV_USE_STONE, i); r->stat_stones++; break;
-        case ITEM_OIL: spawn_proj(r, i, ITEM_OIL); push_event(r, EV_USE_OIL, i); r->stat_oils++; break;
-        case ITEM_TRUMPET:      /* the shofar: every kart nearby spins out, like the walls of Jericho */
-            for (int j = 0; j < r->nk; j++) { if (j == i) continue; Kart *o = &r->k[j]; float dx = o->x - k->x, dz = o->z - k->z;
-                if (dx * dx + dz * dz < 16.0f * 16.0f) { int had = o->shield > 0; if (kart_hit(o, 1.1f)) { r->stat_hits++; push_event(r, EV_HIT, j); } else if (had) { r->stat_blocks++; push_event(r, EV_BLOCK, j); } } }
-            push_event(r, EV_USE_TRUMPET, i); break;
-        case ITEM_FIRE: k->boost_t = 3.0f; k->boost_mul = 1.5f; k->shield = fmaxf(k->shield, 3.0f); push_event(r, EV_USE_FIRE, i); break;
-        case ITEM_LOCUSTS: {    /* a swarm slows everyone ahead of you */
-            int mine = 0; for (int p = 0; p < r->nk; p++) if (r->order[p] == i) mine = p;
-            for (int p = 0; p < mine; p++) { Kart *o = &r->k[r->order[p]]; if (o->shield > 0) continue; o->slow_t = 3.0f; push_event(r, EV_SLOWED, r->order[p]); }
-            push_event(r, EV_USE_LOCUSTS, i); break; }
-        case ITEM_DOVE: spawn_proj(r, i, ITEM_DOVE); push_event(r, EV_USE_DOVE, i); break;
+        case ITEM_MANNA:        /* bread from heaven: a burst for you, and three pieces on the road behind for whoever comes next */
+            give_boost(k, 1.7f, 1.45f); for (int n = 0; n < 3; n++) drop_trail(r, i, TRAIL_MANNA, 3.0f + n * 4.5f, 14.0f); push_event(r, EV_USE_MANNA, i); break;
+        case ITEM_LOAVES:       /* feeding the five thousand: everyone gets coins, the giver twice as many */
+            for (int j = 0; j < r->nk; j++) { Kart *o = &r->k[j]; int add = j == i ? 10 : 5; o->coins += add; if (o->coins > 10) o->coins = 10; if (j != i) bless(r, j, i); }
+            push_event(r, EV_USE_LOAVES, i); break;
+        case ITEM_SAMARITAN: {  /* the one who fell among thieves is carried: whoever is last (or you, if that is you) */
+            int last = r->order[r->nk - 1]; Kart *o = &r->k[last];
+            o->carried_t = 4.0f; o->stun = 0; o->slow_t = 0; o->shield = fmaxf(o->shield, 4.0f);
+            if (last != i) { bless(r, last, i); give_boost(k, 1.0f, 1.25f); }
+            push_event(r, EV_CARRIED, last); push_event(r, EV_USE_SAMARITAN, i); break; }
+        case ITEM_SHIELD: {     /* the shield of faith, for you and for the one behind you */
+            k->shield = fmaxf(k->shield, 8.0f);
+            if (mine + 1 < r->nk) { int behind = r->order[mine + 1]; r->k[behind].shield = fmaxf(r->k[behind].shield, 8.0f); bless(r, behind, i); }
+            push_event(r, EV_USE_SHIELD, i); break; }
+        case ITEM_PARTING: {    /* the sea parts through the next corner for everyone, for ten seconds */
+            r->parting_t = 10.0f; r->parting_idx = (k->hit.idx + 6) % t->n; r->parting_len = 70;
+            give_boost(k, 1.2f, 1.3f);
+            for (int j = 0; j < r->nk; j++) if (j != i) bless(r, j, i);
+            push_event(r, EV_USE_PARTING, i); break; }
+        case ITEM_JUBILEE: {    /* the year of release: every trouble cancelled, the far-behind lifted to the pack */
+            float lead = r->k[r->order[0]].dist;
+            for (int j = 0; j < r->nk; j++) { Kart *o = &r->k[j]; int helped = 0;
+                if (o->stun > 0 || o->slow_t > 0) { o->stun = 0; o->slow_t = 0; o->spin_vis = 0; helped = 1; }
+                if (lead - o->dist > 300.0f) { o->carried_t = fmaxf(o->carried_t, 3.0f); helped = 1; }
+                if (helped && j != i) bless(r, j, i); }
+            give_boost(k, 1.5f, 1.3f);
+            push_event(r, EV_USE_JUBILEE, i); break; }
+        case ITEM_FIRE:         /* the chariot of fire: blazing speed, and a fire trail that carries whoever follows */
+            give_boost(k, 4.0f, 1.5f); k->shield = fmaxf(k->shield, 4.0f); r->fire_drop[i] = 0.0f; push_event(r, EV_USE_FIRE, i); break;
+        case ITEM_WATER: {      /* living water: made whole, and the two nearest racers with you */
+            k->stun = 0; k->slow_t = 0; k->spin_vis = 0; give_boost(k, 1.0f, 1.25f);
+            int near[2] = {-1, -1}; float nd[2] = {1e9f, 1e9f};
+            for (int j = 0; j < r->nk; j++) { if (j == i) continue; Kart *o = &r->k[j]; float dx = o->x - k->x, dz = o->z - k->z, d = dx * dx + dz * dz;
+                if (d < nd[0]) { nd[1] = nd[0]; near[1] = near[0]; nd[0] = d; near[0] = j; } else if (d < nd[1]) { nd[1] = d; near[1] = j; } }
+            for (int n = 0; n < 2; n++) if (near[n] >= 0) { Kart *o = &r->k[near[n]]; o->stun = 0; o->slow_t = 0; o->spin_vis = 0; give_boost(o, 1.0f, 1.15f); bless(r, near[n], i); }
+            push_event(r, EV_USE_WATER, i); break; }
         default: return;
     }
     r->stat_uses++; r->stat_item_used[k->item]++;
@@ -140,23 +163,17 @@ static void use_item(Race *r, int i) {
 static int ai_wants_item(Race *r, int i) {
     Kart *k = &r->k[i]; const Track *t = r->track;
     if (!k->item || k->stun > 0) return 0;
+    int look = 12; const TrackSample *a = &t->s[(k->hit.idx + look) % t->n], *b = &t->s[(k->hit.idx + look * 2) % t->n];
+    float curve = fabsf(wrap_pi(atan2f(b->tx, b->tz) - atan2f(a->tx, a->tz)));
     switch (k->item) {
-        case ITEM_MANNA: { int look = 12; const TrackSample *a = &t->s[(k->hit.idx + look) % t->n], *b = &t->s[(k->hit.idx + look * 2) % t->n];
-            float curve = fabsf(wrap_pi(atan2f(b->tx, b->tz) - atan2f(a->tx, a->tz))); return curve < 0.2f && !k->air; }
-        case ITEM_STAFF: return k->item_hold > 2.5f;
-        case ITEM_STONE: for (int j = 0; j < r->nk; j++) { if (j == i) continue; Kart *o = &r->k[j];
-                float dx = o->x - k->x, dz = o->z - k->z, d = sqrtf(dx * dx + dz * dz);
-                if (d < 45.0f && fabsf(wrap_pi(atan2f(dx, dz) - k->yaw)) < 0.22f) return 1; }
-            return k->item_hold > 10.0f;
-        case ITEM_OIL: for (int j = 0; j < r->nk; j++) { if (j == i) continue; Kart *o = &r->k[j];
-                float dx = o->x - k->x, dz = o->z - k->z, d = sqrtf(dx * dx + dz * dz);
-                if (d < 18.0f && fabsf(wrap_pi(atan2f(-dx, -dz) - k->yaw)) < 0.5f) return 1; }
-            return k->item_hold > 12.0f;
-        case ITEM_TRUMPET: for (int j = 0; j < r->nk; j++) { if (j == i) continue; Kart *o = &r->k[j];
-                float dx = o->x - k->x, dz = o->z - k->z; if (dx * dx + dz * dz < 12.0f * 12.0f) return 1; }
-            return k->item_hold > 15.0f;
-        case ITEM_FIRE: return k->item_hold > 1.0f && !k->air;
-        case ITEM_LOCUSTS: case ITEM_DOVE: { int mine = 0; for (int p = 0; p < r->nk; p++) if (r->order[p] == i) mine = p; return mine > 0 && k->item_hold > 1.5f; }
+        case ITEM_MANNA: return curve < 0.2f && !k->air;
+        case ITEM_LOAVES: return k->item_hold > 1.0f;
+        case ITEM_SAMARITAN: return k->item_hold > (rank_pos(r, i) == r->nk - 1 ? 0.3f : 1.5f);
+        case ITEM_SHIELD: return k->item_hold > 2.5f;
+        case ITEM_PARTING: return curve > 0.35f && r->parting_t <= 0;
+        case ITEM_JUBILEE: return k->item_hold > 3.0f || k->slow_t > 0;
+        case ITEM_FIRE: return k->item_hold > 1.0f && !k->air && curve < 0.3f;
+        case ITEM_WATER: return k->slow_t > 0 || k->item_hold > 6.0f;
     }
     return 0;
 }
@@ -251,43 +268,24 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
             float dx = k->x - cx, dz = k->z - cz;
             if (dx * dx + dz * dz < 1.6f * 1.6f && k->y < s->y + 3.0f) { k->coins++; r->coin_respawn[c] = 10.0f; r->stat_coins++; push_event(r, EV_COIN, i); break; } }
     }
-    /* projectiles and hazards */
+    /* the parted sea: karts inside the window drive the shoulders as if they were road */
+    if (r->parting_t > 0) { r->parting_t -= dt;
+        for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; int rel = (k->hit.idx - r->parting_idx + t->n) % t->n; if (rel < r->parting_len) k->grace_t = 0.3f; } }
+    /* a blazing chariot drops fire behind it */
+    for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; if (k->boost_t > 0 && k->boost_mul >= 1.5f && k->shield > 0) { r->fire_drop[i] -= dt; if (r->fire_drop[i] <= 0) { drop_trail(r, i, TRAIL_FIRE, 2.0f, 6.0f); r->fire_drop[i] = 0.35f; } } }
+    for (int i = 0; i < r->nk; i++) if (r->blessed_t[i] > 0) r->blessed_t[i] -= dt;
+    /* trails on the road: manna and fire give a boost to whoever drives through (not the one who left them) */
     for (int p = 0; p < MAX_PROJ; p++) {
         Proj *pr = &r->proj[p]; if (!pr->alive) continue;
         pr->age += dt; pr->life -= dt;
-        if (pr->type == ITEM_STONE) {
-            /* a little homing toward the nearest kart ahead of the thrower */
-            int target = -1; float best = 1e9f;
-            for (int i = 0; i < r->nk; i++) { if (i == pr->owner) continue; Kart *o = &r->k[i]; float dx = o->x - pr->x, dz = o->z - pr->z, d = dx * dx + dz * dz;
-                float ahead = dx * pr->vx + dz * pr->vz; if (ahead > 0 && d < best && d < 40.0f * 40.0f) { best = d; target = i; } }
-            if (target >= 0) { Kart *o = &r->k[target]; float dx = o->x - pr->x, dz = o->z - pr->z, d = sqrtf(dx * dx + dz * dz) + 1e-3f; float sp = sqrtf(pr->vx * pr->vx + pr->vz * pr->vz);
-                float wx = pr->vx / sp * (1 - 2.5f * dt) + dx / d * 2.5f * dt, wz = pr->vz / sp * (1 - 2.5f * dt) + dz / d * 2.5f * dt; float wl = sqrtf(wx * wx + wz * wz) + 1e-3f; pr->vx = wx / wl * sp; pr->vz = wz / wl * sp; }
-            pr->x += pr->vx * dt; pr->z += pr->vz * dt;
-            TrackHit h; track_locate(t, pr->x, pr->z, pr->idx, &h); pr->idx = h.idx; pr->y = h.height + 0.6f;
-            if (fabsf(h.lateral) > track_edge(t, h.idx)) pr->alive = 0;
-        }
-        if (pr->type == ITEM_DOVE) {
-            /* glides down the middle of the road at a fixed speed, then dives on its target */
-            if (pr->target < 0 || pr->target >= r->nk) { pr->alive = 0; continue; }
-            Kart *o = &r->k[pr->target];
-            float dx = o->x - pr->x, dz = o->z - pr->z, d = sqrtf(dx * dx + dz * dz);
-            if (d < 14.0f) { pr->x += dx / (d + 1e-3f) * 52.0f * dt; pr->z += dz / (d + 1e-3f) * 52.0f * dt; pr->y += (o->y + 0.6f - pr->y) * 6.0f * dt; }
-            else { const TrackSample *s = &t->s[(pr->idx + 2) % t->n]; pr->x += s->tx * 52.0f * dt; pr->z += s->tz * 52.0f * dt; pr->y += (s->y + 2.0f - pr->y) * 4.0f * dt; }
-            TrackHit h; track_locate(t, pr->x, pr->z, pr->idx, &h); pr->idx = h.idx;
-            if (d < 1.8f) { int had = o->shield > 0; if (kart_hit(o, 1.5f)) { r->stat_hits++; push_event(r, EV_HIT, pr->target); } else if (had) { r->stat_blocks++; push_event(r, EV_BLOCK, pr->target); } pr->alive = 0; }
-            if (pr->life <= 0) pr->alive = 0;
-            continue;
-        }
         if (pr->life <= 0) { pr->alive = 0; continue; }
         for (int i = 0; i < r->nk; i++) {
-            Kart *k = &r->k[i];
-            if (i == pr->owner && pr->age < (pr->type == ITEM_OIL ? 1.5f : 0.4f)) continue;
-            float dx = k->x - pr->x, dz = k->z - pr->z, rad = pr->type == ITEM_OIL ? 1.9f : 1.6f;
-            if (dx * dx + dz * dz < rad * rad && fabsf(k->y - pr->y) < 2.5f) {
-                int had_shield = k->shield > 0;
-                if (kart_hit(k, pr->type == ITEM_OIL ? 1.0f : 1.3f)) { r->stat_hits++; push_event(r, EV_HIT, i); }
-                else if (had_shield) { r->stat_blocks++; push_event(r, EV_BLOCK, i); }
-                pr->alive = 0; break;
+            Kart *k = &r->k[i]; if (i == pr->owner || k->finished) continue;
+            float dx = k->x - pr->x, dz = k->z - pr->z;
+            if (dx * dx + dz * dz < 1.8f * 1.8f && fabsf(k->y - pr->y) < 2.5f) {
+                if (pr->type == TRAIL_MANNA) { float behind = r->nk > 1 ? (float)rank_pos(r, i) / (float)(r->nk - 1) : 0; give_boost(k, 1.0f + behind, 1.25f + 0.25f * behind); }
+                else give_boost(k, 2.0f, 1.3f);
+                bless(r, i, pr->owner); r->stat_trails++; push_event(r, EV_TRAIL_BOOST, i); pr->alive = 0; break;
             }
         }
     }
@@ -312,7 +310,10 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
             float push = (2.2f - d), wa = a->st.weight, wb = b->st.weight, fa = wb / (wa + wb), fb = wa / (wa + wb);
             a->x -= dx / d * push * fa; a->z -= dz / d * push * fa; b->x += dx / d * push * fb; b->z += dz / d * push * fb;
             float rel = fabsf(a->speed - b->speed);
-            if (rel > 4.0f) { a->speed *= 0.97f; b->speed *= 0.97f; push_event(r, EV_BUMP, i); }
+            if (rel > 4.0f) { a->speed *= 0.97f; b->speed *= 0.97f; push_event(r, EV_BUMP, i);
+                /* turn the other cheek: the one who was bumped gets a little push forward */
+                int bumper = a->speed > b->speed ? i : j, bumped = bumper == i ? j : i; Kart *v = &r->k[bumped];
+                if (v->boost_t <= 0.3f) { give_boost(v, 0.6f, 1.18f); bless(r, bumped, bumper); push_event(r, EV_CHEEK, bumped); } }
         }
     }
     /* the race ends 5 s after the player finishes, when everyone finishes, or at the time limit */

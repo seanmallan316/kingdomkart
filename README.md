@@ -11,7 +11,10 @@ Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
   clouds to the gates.
 - Drifting with mini-turbos, rocket starts, tricks off jumps, boost arrows, bounce pads, hidden shortcuts, tunnels with
   crystals, coins, obstacles crossing the road (sheep, nets, carts, rolling stones), GamePad rumble, slow-motion finish.
-- **Eight power-ups**: Manna, Staff, Stone, Oil Jar, Shofar, Chariot of Fire, Locusts, Dove.
+- **Eight blessings instead of weapons** (every item does something for you *and* for another racer): Manna (Exodus 16),
+  Loaves and Fishes (Matthew 14), the Good Samaritan (Luke 10), the Shield of Faith (Ephesians 6), the Parting of the Sea
+  (Exodus 14), the Jubilee Trumpet (Leviticus 25), the Chariot of Fire (2 Kings 2), Living Water (John 4). Bumping another
+  kart gives *them* a boost (turn the other cheek). Boxes float, glow and burst into a rainbow when taken.
 - Modes: Grand Prix (four roads, points, standings), Single Race, Time Trial (records saved), with Easy / Normal / Hard
   computer drivers that never cheat. Every race is under two minutes.
 - Achievements that unlock the bonus characters, karts and road; progress, records and volume settings saved on the SD card.

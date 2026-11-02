@@ -14,7 +14,8 @@
 
 enum { RACE_COUNTDOWN, RACE_RUNNING, RACE_FINISHED };
 enum { DIFF_EASY, DIFF_NORMAL, DIFF_HARD };
-enum { EV_NONE, EV_PICKUP, EV_USE_MANNA, EV_USE_STAFF, EV_USE_STONE, EV_USE_OIL, EV_HIT, EV_BLOCK, EV_BUMP, EV_LAP, EV_FINAL_LAP, EV_FINISH, EV_GO, EV_COUNT_TICK, EV_USE_TRUMPET, EV_USE_FIRE, EV_USE_LOCUSTS, EV_USE_DOVE, EV_PAD_BOOST, EV_PAD_BOUNCE, EV_SLOWED, EV_COIN, EV_TRICK, EV_TRICK_LAND, EV_ROCKET_START, EV_WHEELSPIN };
+enum { EV_NONE, EV_PICKUP, EV_USE_MANNA, EV_USE_LOAVES, EV_USE_SAMARITAN, EV_USE_SHIELD, EV_HIT, EV_BLOCK, EV_BUMP, EV_LAP, EV_FINAL_LAP, EV_FINISH, EV_GO, EV_COUNT_TICK, EV_USE_PARTING, EV_USE_FIRE, EV_USE_JUBILEE, EV_USE_WATER, EV_PAD_BOOST, EV_PAD_BOUNCE, EV_SLOWED, EV_COIN, EV_TRICK, EV_TRICK_LAND, EV_ROCKET_START, EV_WHEELSPIN,
+       EV_BLESSED, EV_CARRIED, EV_TRAIL_BOOST, EV_CHEEK };   /* blessed: this kart received something from another; carried: by the Samaritan; trail: ate a manna/fire trail; cheek: a bumped kart got its boost */
 
 typedef struct { const char *name; const char *short_name; KartStats st; float r, g, b; int bonus; } Character;
 extern const Character CHARACTERS[NCHARS];
@@ -22,7 +23,8 @@ typedef struct { const char *name; KartStats mul; } KartStyle;      /* multiplie
 extern const KartStyle KART_STYLES[NSTYLES];
 
 typedef struct { float x, y, z; int active; float respawn; int idx; } ItemBox;
-typedef struct { int type; float x, y, z, vx, vz, life, age; int owner, alive, idx, target; float along; } Proj;      /* ITEM_STONE flies, ITEM_OIL sits, ITEM_DOVE follows the road to the leader */
+typedef struct { int type; float x, y, z, vx, vz, life, age; int owner, alive, idx, target; float along; } Proj;      /* trails left on the road: TRAIL_MANNA and TRAIL_FIRE give a boost to whoever drives through */
+enum { TRAIL_MANNA = 1, TRAIL_FIRE = 2 };
 typedef struct { int type, kart; } RaceEvent;
 
 typedef struct {
@@ -35,11 +37,14 @@ typedef struct {
     Proj proj[MAX_PROJ];
     int state; float cd, race_t, after_t; int nfin;
     float gas_since;           /* countdown value when the player began holding gas (-1 = not holding); decides the rocket start */
+    float parting_t; int parting_idx, parting_len;   /* the parted sea: seconds left, first sample, length in samples */
+    float fire_drop[NKARTS];   /* seconds until a blazing kart drops its next fire trail piece */
+    int blessed_by[NKARTS]; float blessed_t[NKARTS];   /* who last blessed this kart and how long ago (for the "BLESSED BY ..." message) */
     int order[NKARTS];                       /* order[0] is the leader */
     RaceEvent ev[32]; int nev;               /* events raised this step, for sounds and messages */
     uint32_t rng;
     /* statistics for tests */
-    int stat_coins, stat_pickups, stat_hits, stat_blocks, stat_uses, stat_stones, stat_oils, stat_pads, stat_mover_hits, stat_item_used[ITEM_COUNT];
+    int stat_coins, stat_pickups, stat_hits, stat_blocks, stat_uses, stat_blessings, stat_trails, stat_pads, stat_mover_hits, stat_item_used[ITEM_COUNT];
 } Race;
 
 void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk);   /* nk = 1 for a time trial */
@@ -48,4 +53,5 @@ void race_set_styles(int player_style, unsigned unlocked_styles);   /* the playe
 void race_step(Race *r, const KartInput *player_in, int player_auto, float dt);
 void race_rank(Race *r);
 const char *item_name(int item);
+const char *item_verse(int item);          /* the Bible reference behind each blessing */
 #endif

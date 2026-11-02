@@ -83,14 +83,15 @@ static Batch g_b;
 
 /* camera state */
 static float cam_yaw, cam_x, cam_y, cam_z, cam_fov = 62.0f;
-static float g_slowmo = 0, g_orbit = 0;      /* finish-line slow motion (seconds left) and the camera swing around the kart */
+static float g_slowmo = 0, g_orbit = 0;
+static char g_msg2[64];    /* a smaller line under the big message (the verse, or who blessed you) */      /* finish-line slow motion (seconds left) and the camera swing around the kart */
 /* skid marks: ring of quads */
 typedef struct { Vec3 l0, r0, l1, r1; float a; int used; } Skid;
 static Skid g_skid[MAX_SKID]; static int g_skid_n; static Vec3 g_last_l[NKARTS], g_last_r[NKARTS]; static int g_last_skid[NKARTS];
 /* dust */
 typedef struct { Vec3 p, v; float life, size; } Dust;
 static Dust g_dust[MAX_DUST];
-#define MAX_SPARK 160
+#define MAX_SPARK 400
 typedef struct { Vec3 p, v; float life, size, r, g, b; } Spark;
 static Spark g_spark[MAX_SPARK]; static Mesh *m_spark;
 /* scenery: cut-out pictures standing beside the road, grouped by picture */
@@ -460,7 +461,7 @@ static void build_track_meshes(void) {
     batch_clear(&g_b); batch_box(&g_b, v3(0, 0, 0), v3(0.65f, 0.65f, 0.65f), 1, 1, 1); m_cube = gfx_mesh_static(g_b.v, g_b.n);
     /* shield: a bigger cube drawn transparent around the kart */
     batch_clear(&g_b); batch_box(&g_b, v3(0, 0.8f, 0), v3(1.4f, 1.2f, 1.6f), 1, 1, 1); m_shield = gfx_mesh_static(g_b.v, g_b.n);
-    m_items = gfx_mesh_dynamic(MAX_PROJ * 6 + 6);
+    m_items = gfx_mesh_dynamic(MAX_PROJ * 12 + 80 * 12 + NKARTS * 12 + 64);
     m_shadow = gfx_mesh_dynamic((NKARTS + MAX_MOVERS + 1) * 6);
 }
 
@@ -736,7 +737,7 @@ int game_init(int status) {
             for (int v = 0; v < 5; v++) { snprintf(cn, sizeof cn, "ride_%s_%s", pn[i] + 9, rsuf[v]); w = h = 1; tx_ride[i][v] = asset_texture(cn, 0, &w, &h); g_ride_aspect[i][v] = h > 0 ? (float)w / (float)h : 1.4f; } }
         for (int i = 0; i < NKARTS; i++) m_kart_spr[i] = gfx_mesh_dynamic(6);
         m_kartpic = gfx_mesh_dynamic(6);
-        static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_staff", "icon_stone", "icon_oil", "shofar", "icon_fire", "icon_locusts", "icon_dove"};
+        static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_loaves", "icon_samaritan", "icon_shield", "icon_parting", "shofar", "icon_fire", "icon_water"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
         { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
@@ -791,6 +792,21 @@ static void sfx_at(int id, Kart *q, float vol) {
 }
 static void add_spark(Vec3 p, Vec3 v, float size, float life, float r, float g, float b) {
     for (int i = 0; i < MAX_SPARK; i++) if (g_spark[i].life <= 0) { Spark *s = &g_spark[i]; s->p = p; s->v = v; s->size = size; s->life = life; s->r = r; s->g = g; s->b = b; return; }
+}
+/* a burst of rainbow sparks and an expanding ring where a box was taken */
+#define MAX_RING 8
+typedef struct { Vec3 p; float t; } Ring; static Ring g_ring[MAX_RING];
+static void rainbow_burst(Vec3 p) {
+    for (int n = 0; n < 48; n++) { float h = n / 48.0f * 6.2831853f, a = n * 2.399f, up = 0.3f + frand01() * 0.7f;
+        float r_ = 0.5f + 0.5f * sinf(h), g_ = 0.5f + 0.5f * sinf(h + 2.094f), b_ = 0.5f + 0.5f * sinf(h + 4.189f);
+        float sp = 4.0f + frand01() * 6.0f;
+        add_spark(v3(p.x, p.y + 0.6f, p.z), v3(cosf(a) * sp, up * 7.0f, sinf(a) * sp), 0.25f + frand01() * 0.2f, 0.6f + frand01() * 0.5f, r_, g_, b_); }
+    for (int i = 0; i < MAX_RING; i++) if (g_ring[i].t <= 0) { g_ring[i].p = p; g_ring[i].t = 0.6f; break; }
+}
+/* a soft shower of golden sparkles over a kart that was just blessed */
+static void bless_sparkle(const Kart *q, float r_, float g_, float b_) {
+    for (int n = 0; n < 14; n++) { float a = frand01() * 6.2831853f, d = frand01() * 1.4f;
+        add_spark(v3(q->x + cosf(a) * d, q->y + 1.2f + frand01() * 1.5f, q->z + sinf(a) * d), v3(0, 1.5f + frand01() * 2.0f, 0), 0.14f + frand01() * 0.1f, 0.8f + frand01() * 0.5f, r_, g_, b_); }
 }
 static const char *place_name(int p) { static const char *n[] = {"", "1ST", "2ND", "3RD", "4TH", "5TH", "6TH", "7TH", "8TH"}; return p >= 1 && p <= 8 ? n[p] : ""; }
 static void fmt_time(char *buf, size_t n, float t) { snprintf(buf, n, "%d:%02d.%02d", (int)(t / 60), (int)t % 60, (int)(t * 100) % 100); }
@@ -874,7 +890,8 @@ static void hud_race(const Pad *pad) {
         batch_rect(&g_b, 40, 140, 150, 60, 0.05f, 0.1f, 0.25f, 0.7f);
         batch_rect(&g_b, 43, 143, 144, 54, 0.15f, 0.3f, 0.6f, 0.7f);
         if (k->item && tx_item[k->item]) batch_text(&g_b, item_name(k->item), 115 - text_width(item_name(k->item), 12) / 2, 203, 12, 1, 0.9f, 0.4f, 1);
-        else if (k->item) batch_text(&g_b, item_name(k->item), 115 - text_width(item_name(k->item), 18) / 2, 161, 18, 1, 0.9f, 0.4f, 1);
+        else if (k->item) { float sz = text_width(item_name(k->item), 16) > 136 ? 12 : 16; batch_text(&g_b, item_name(k->item), 115 - text_width(item_name(k->item), sz) / 2, 152, sz, 1, 0.9f, 0.4f, 1);
+            batch_text(&g_b, item_verse(k->item), 115 - text_width(item_verse(k->item), 11) / 2, 178, 11, 0.8f, 0.85f, 1, 1); }
         else batch_text(&g_b, "ZL: ITEM", 115 - text_width("ZL: ITEM", 16) / 2, 162, 16, 0.7f, 0.8f, 1, 0.8f);
     }
     if (k->drifting) { float c = clampf(k->drift_charge / 1.6f, 0, 1); batch_rect(&g_b, 1040, 130, 200, 14, 0.1f, 0.1f, 0.1f, 0.6f);
@@ -887,7 +904,7 @@ static void hud_race(const Pad *pad) {
           batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - sz / 2, mz - (q->z - map_z0) * map_scale - sz / 2, sz, sz, c->r, c->g, c->b, 1);
           if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - 3, mz - (q->z - map_z0) * map_scale - 3, 6, 6, 1, 1, 1, 1); } }
     if (r->state == RACE_COUNTDOWN) { text_c(g_track.name, 180, 34, 1, 1, 1, 1); int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } }
-    if (g_msg_t > 0) text_c(g_msg, 260, 60, 1, 0.95f, 0.4f, 1);
+    if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
     if (k->wrongway_t > WRONGWAY_DELAY && ((int)(g_time * 4) & 1)) text_c("WRONG WAY", 330, 56, 1, 0.3f, 0.2f, 1);
     if (g_demo && !g_attract) text_c("DEMO - MOVE THE STICK TO DRIVE", 680, 20, 1, 1, 1, 0.8f);
     (void)pad;
@@ -1142,7 +1159,7 @@ static void hud_battle(void) {
     for (int i = 0; i < BATTLE_WIN_HITS; i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < BATTLE_WIN_HITS - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
     { char tb[32]; fmt_time(tb, sizeof tb, RACE_TIME_LIMIT - b->race.race_t > 0 ? RACE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
     if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, FACE HIM, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); }
-    if (g_msg_t > 0) text_c(g_msg, 260, 60, 1, 0.95f, 0.4f, 1);
+    if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
     if (b->quote >= 0 && b->quote < BATTLE_NQUOTES) {      /* the words of 1 Samuel 17, wrapped into a panel at the bottom */
         const BattleQuote *q = &BATTLE_QUOTES[b->quote]; float y0 = 560;
         batch_rect(&g_b, 140, y0, 1000, 120, 0.05f, 0.08f, 0.2f, 0.85f); batch_rect(&g_b, 140, y0, 1000, 3, 1, 0.85f, 0.3f, 1);
@@ -1388,7 +1405,7 @@ void game_frame(const Pad *pad, float dt) {
         int real_input = pad->source && (fabsf(pad->sx) > 0.15f || pad->a || pad->b || pad->zr || pad->zl);
         if (real_input) { g_idle = 0; g_demo = 0; } else { g_idle += dt; if (g_idle > 8.0f) g_demo = 1; }
     }
-    if (g_msg_t > 0) g_msg_t -= dt;
+    if (g_msg_t > 0) { g_msg_t -= dt; if (g_msg_t <= 0) g_msg2[0] = 0; }
     { Kart *pk = &r->k[r->player]; int racing = (g_screen == SCR_RACE) && !g_attract && r->state != RACE_FINISHED;
       sfx_engine(fabsf(pk->speed) / (36.0f * pk->st.top_speed), pk->drifting, pk->boost_t > 0, !pk->hit.on_road, pk->air, g_track.water, racing, g_screen == SCR_RACE && pad->a, g_screen == SCR_RACE && pad->b);
       static float ww_t = 0; if (racing && pk->wrongway_t > WRONGWAY_DELAY) { ww_t += dt; if (ww_t > 1.0f) { ww_t = 0; sfx_play(SFX_WRONG_WAY, 0.8f, 0); } } else ww_t = 1.0f; }
@@ -1433,16 +1450,24 @@ void game_frame(const Pad *pad, float dt) {
                 case EV_TRICK_LAND: if (mine) { snprintf(g_msg, sizeof g_msg, "NICE LANDING!"); g_msg_t = 0.9f; sfx_play(SFX_MINI_TURBO, 0.9f, 0); platform_rumble(0.5f, 0.15f); } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 1.0f, 2.0f); break;
                 case EV_ROCKET_START: if (mine) { snprintf(g_msg, sizeof g_msg, "ROCKET START!"); g_msg_t = 1.2f; sfx_play(SFX_SUPER_TURBO, 1, 0); platform_rumble(0.7f, 0.35f); } break;
                 case EV_WHEELSPIN: if (mine) { snprintf(g_msg, sizeof g_msg, "TOO EARLY!"); g_msg_t = 1.2f; sfx_play(SFX_WRONG_WAY, 0.8f, 0); platform_rumble(0.3f, 0.5f); } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 1.5f, 2.5f); break;
-                case EV_PICKUP: if (mine) { snprintf(g_msg, sizeof g_msg, "%s", item_name(r->k[ev->kart].item)); g_msg_t = 1.0f; sfx_play(SFX_PICKUP, 1, 0); } break;
-                case EV_USE_MANNA: case EV_USE_STAFF: sfx_at(SFX_USE_ITEM, &r->k[ev->kart], 0.9f); break;
-                case EV_USE_STONE: case EV_USE_OIL: case EV_USE_DOVE: sfx_at(ev->type == EV_USE_DOVE ? SFX_DOVE : SFX_THROW, &r->k[ev->kart], 0.9f); break;
-                case EV_USE_FIRE: sfx_at(SFX_FIRE, &r->k[ev->kart], 1.0f); break;
-                case EV_USE_LOCUSTS: sfx_at(SFX_LOCUSTS, &r->k[ev->kart], 1.0f); break;
+                case EV_PICKUP: { Kart *q = &r->k[ev->kart]; rainbow_burst(v3(q->x, q->y, q->z));
+                    if (mine) { snprintf(g_msg, sizeof g_msg, "%s", item_name(q->item)); snprintf(g_msg2, sizeof g_msg2, "%s", item_verse(q->item)); g_msg_t = 1.4f; sfx_play(SFX_PICKUP, 1, 0); } else sfx_at(SFX_PICKUP, q, 0.5f); } break;
+                case EV_USE_MANNA: sfx_at(SFX_USE_ITEM, &r->k[ev->kart], 0.9f); if (mine) { snprintf(g_msg, sizeof g_msg, "MANNA!"); g_msg_t = 0.8f; } break;
+                case EV_USE_LOAVES: sfx_at(SFX_COIN, &r->k[ev->kart], 1.0f); if (mine) { snprintf(g_msg, sizeof g_msg, "BREAD FOR EVERYONE!"); g_msg_t = 1.2f; } for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.85f, 0.3f); break;
+                case EV_USE_SAMARITAN: sfx_at(SFX_UNLOCK, &r->k[ev->kart], 0.8f); break;
+                case EV_CARRIED: if (mine) { snprintf(g_msg, sizeof g_msg, "CARRIED BY THE SAMARITAN!"); g_msg_t = 1.5f; platform_rumble(0.5f, 0.3f); } bless_sparkle(&r->k[ev->kart], 1, 1, 1); break;
+                case EV_USE_SHIELD: sfx_at(SFX_BLOCK, &r->k[ev->kart], 0.7f); if (mine) { snprintf(g_msg, sizeof g_msg, "SHIELD OF FAITH!"); g_msg_t = 1.0f; } break;
+                case EV_USE_PARTING: sfx_at(SFX_SPLASH, &r->k[ev->kart], 1.0f); sfx_play(SFX_SHOFAR, 0.4f, 0); if (mine) { snprintf(g_msg, sizeof g_msg, "THE SEA PARTS!"); g_msg_t = 1.5f; } g_shake = fmaxf(g_shake, 0.4f); break;
+                case EV_USE_JUBILEE: sfx_at(SFX_SHOFAR, &r->k[ev->kart], 1.0f); if (mine) { snprintf(g_msg, sizeof g_msg, "JUBILEE!"); g_msg_t = 1.5f; } for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.95f, 0.6f); break;
+                case EV_USE_FIRE: sfx_at(SFX_FIRE, &r->k[ev->kart], 1.0f); if (mine) { snprintf(g_msg, sizeof g_msg, "CHARIOT OF FIRE!"); g_msg_t = 1.5f; platform_rumble(0.6f, 0.4f); } break;
+                case EV_USE_WATER: sfx_at(SFX_SPLASH, &r->k[ev->kart], 0.8f); if (mine) { snprintf(g_msg, sizeof g_msg, "LIVING WATER!"); g_msg_t = 1.0f; } bless_sparkle(&r->k[ev->kart], 0.5f, 0.8f, 1); break;
+                case EV_BLESSED: { int by = r->blessed_by[ev->kart]; if (mine && by >= 0 && by < r->nk) { snprintf(g_msg2, sizeof g_msg2, "BLESSED BY %s", CHARACTERS[r->character[by]].short_name); if (g_msg_t < 1.2f) g_msg_t = 1.2f; } bless_sparkle(&r->k[ev->kart], 1, 0.9f, 0.5f); } break;
+                case EV_TRAIL_BOOST: if (mine) { snprintf(g_msg, sizeof g_msg, "BLESSING ON THE ROAD!"); g_msg_t = 1.0f; } sfx_at(SFX_BOOST_PAD, &r->k[ev->kart], 0.7f); break;
+                case EV_CHEEK: if (mine) { snprintf(g_msg, sizeof g_msg, "THE OTHER CHEEK!"); g_msg_t = 1.0f; } break;
                 case EV_PAD_BOOST: if (mine) { snprintf(g_msg, sizeof g_msg, "BOOST!"); g_msg_t = 0.7f; platform_rumble(0.35f, 0.2f); } add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y, r->k[ev->kart].z), 1.0f, 2.0f); sfx_at(SFX_BOOST_PAD, &r->k[ev->kart], 0.9f); break;
                 case EV_PAD_BOUNCE: if (mine) { snprintf(g_msg, sizeof g_msg, "BOING!"); g_msg_t = 0.7f; } sfx_at(SFX_BOUNCE, &r->k[ev->kart], 0.9f); break;
                 case EV_COIN: if (mine) sfx_play(SFX_COIN, 0.8f, 0); break;
-                case EV_SLOWED: if (mine) { snprintf(g_msg, sizeof g_msg, "LOCUSTS!"); g_msg_t = 1.5f; } break;
-                case EV_USE_TRUMPET: for (int q = 0; q < 10; q++) add_dust(v3(r->k[ev->kart].x, r->k[ev->kart].y + 1, r->k[ev->kart].z), 6.0f, 2.5f); sfx_at(SFX_SHOFAR, &r->k[ev->kart], 1.0f); break;
+                case EV_SLOWED: if (mine) { snprintf(g_msg, sizeof g_msg, "SLOWED!"); g_msg_t = 1.0f; } break;
                 default: break;
             }
         }
@@ -1543,12 +1568,29 @@ void game_frame(const Pad *pad, float dt) {
             batch_quad(&g_b, v3(mx, my + 0.05f, mz), v3(mv->radius, 0, 0), v3(0, 0, -mv->radius), v3(0, 1, 0), 0, 0, 1, 1, 0, 0, 0, 0.4f); }
         if (g_mode == MODE_BATTLE) { TrackHit h; track_locate(&g_track, g_battle.gx, g_battle.gz, -1, &h); batch_quad(&g_b, v3(g_battle.gx, h.height + 0.05f, g_battle.gz), v3(2.6f, 0, 0), v3(0, 0, -2.6f), v3(0, 1, 0), 0, 0, 1, 1, 0, 0, 0, 0.5f); }
         gfx_mesh_update(m_shadow, g_b.v, g_b.n);
-        /* oil puddles, flying stones and the dove as sprites */
+        /* blessings on the road (additive glow sprites): manna, fire trails, the parted sea, the Samaritan's light, rainbow rings */
         batch_clear(&g_b);
         for (int p = 0; p < MAX_PROJ; p++) { Proj *pr = &r->proj[p]; if (!pr->alive) continue;
-            if (pr->type == ITEM_OIL) batch_quad(&g_b, v3(pr->x, pr->y + 0.06f, pr->z), v3(1.6f, 0, 0), v3(0, 0, -1.6f), v3(0, 1, 0), 0, 0, 1, 1, 0.08f, 0.05f, 0.02f, 0.9f);
-            else if (pr->type == ITEM_DOVE) { float fl = 0.7f + 0.3f * sinf(g_time * 20.0f); batch_quad(&g_b, v3(pr->x, pr->y, pr->z), v3(ax.x * 0.9f * fl, 0, ax.z * 0.9f * fl), v3(0, 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
-            else batch_quad(&g_b, v3(pr->x, pr->y + 0.3f, pr->z), v3(ax.x * 0.45f, 0, ax.z * 0.45f), v3(0, 0.45f, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.5f, 0.5f, 0.5f, 1); }
+            float fade = pr->life < 1.0f ? pr->life : 1.0f;
+            if (pr->type == TRAIL_MANNA) { float pul = 0.8f + 0.2f * sinf(g_time * 6.0f + p), sz = 0.9f * pul;
+                batch_quad(&g_b, v3(pr->x, pr->y + 0.5f, pr->z), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz, 0), v3(0, 1, 0), 0, 0, 1, 1, 1.0f, 0.9f, 0.5f, 0.9f * fade);
+                batch_quad(&g_b, v3(pr->x, pr->y + 0.5f, pr->z), v3(ax.x * sz * 2.2f, 0, ax.z * sz * 2.2f), v3(0, sz * 2.2f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1.0f, 0.8f, 0.3f, 0.35f * fade); }
+            else { float fl = 0.8f + 0.2f * sinf(g_time * 14.0f + p * 1.3f), sz = 1.1f * fl;
+                batch_quad(&g_b, v3(pr->x, pr->y + 0.7f, pr->z), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz * 1.4f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1.0f, 0.55f, 0.1f, 0.85f * fade);
+                batch_quad(&g_b, v3(pr->x, pr->y + 0.4f, pr->z), v3(ax.x * sz * 0.6f, 0, ax.z * sz * 0.6f), v3(0, sz * 0.9f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1.0f, 0.95f, 0.5f, 0.9f * fade); } }
+        if (r->parting_t > 0) {   /* walls of water standing along both shoulders of the parted stretch */
+            float a = r->parting_t > 9.0f ? (10.0f - r->parting_t) : (r->parting_t < 1.5f ? r->parting_t / 1.5f : 1.0f);
+            for (int n = 0; n < r->parting_len; n += 2) { int i0 = (r->parting_idx + n) % g_track.n, i1 = (r->parting_idx + n + 2) % g_track.n;
+                float e0 = track_edge(&g_track, i0) + 1.0f, e1 = track_edge(&g_track, i1) + 1.0f, hgt = 5.0f + 1.5f * sinf(g_time * 3.0f + n * 0.4f);
+                for (int side = -1; side <= 1; side += 2) { Vec3 p0 = road_point(&g_track, i0, side * e0), p1 = road_point(&g_track, i1, side * e1);
+                    batch_quad4(&g_b, p0, p1, v3(p1.x, p1.y + hgt * a, p1.z), v3(p0.x, p0.y + hgt * a, p0.z), v3(0, 1, 0), 0, 0, 1, 1, 0.35f, 0.7f, 1.0f, 0.45f * a);
+                    batch_quad4(&g_b, v3(p0.x, p0.y + hgt * a * 0.8f, p0.z), v3(p1.x, p1.y + hgt * a * 0.8f, p1.z), v3(p1.x, p1.y + hgt * a, p1.z), v3(p0.x, p0.y + hgt * a, p0.z), v3(0, 1, 0), 0, 0, 1, 1, 0.9f, 0.97f, 1.0f, 0.6f * a); } } }
+        for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i];
+            if (q->carried_t > 0) { float sz = 2.6f + 0.2f * sinf(g_time * 5.0f);   /* a pillar of light carries the kart */
+                batch_quad(&g_b, v3(q->x, q->y + 2.2f, q->z), v3(ax.x * sz * 0.6f, 0, ax.z * sz * 0.6f), v3(0, sz * 1.6f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1.0f, 0.97f, 0.8f, 0.5f); }
+            if (q->shield > 0 && q->shield < 8.5f && q->shield > 7.0f) { float sz = 2.4f; batch_quad(&g_b, v3(q->x, q->y + 1.0f, q->z), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.6f, 0.85f, 1.0f, 0.35f); } }
+        for (int i = 0; i < MAX_RING; i++) if (g_ring[i].t > 0) { Ring *rg = &g_ring[i]; float u = 1.0f - rg->t / 0.6f, sz = 0.5f + u * 5.0f;
+            batch_quad(&g_b, v3(rg->p.x, rg->p.y + 0.8f, rg->p.z), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.6f + 0.4f * sinf(u * 6), 0.6f + 0.4f * sinf(u * 6 + 2), 0.6f + 0.4f * sinf(u * 6 + 4), 0.7f * (1 - u)); if (sim_running) rg->t -= dt; }
         gfx_mesh_update(m_items, g_b.v, g_b.n);
     }
 
@@ -1619,11 +1661,23 @@ void game_frame(const Pad *pad, float dt) {
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_skid, &id, 1, 1, 1, 1);
         gfx_bind(tx_blob); gfx_draw(m_scshadow, &id, 1, 1, 1, 1); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
         /* item boxes: spinning cubes */
+        /* the boxes float a metre up, turn slowly, shimmer through the rainbow and glow */
+        { static Mesh *m_boxglow = NULL; if (!m_boxglow) m_boxglow = gfx_mesh_dynamic(MAX_BOX * 12);
+          batch_clear(&g_b);
+          for (int b = 0; b < r->nbox; b++) { ItemBox *bx = &r->box[b]; if (!bx->active) continue; float yb = bx->y + 1.1f + 0.25f * sinf(g_time * 2.0f + b);
+              float pul = 0.85f + 0.15f * sinf(g_time * 4.0f + b * 0.7f), sz = 1.9f * pul;
+              batch_quad(&g_b, v3(bx->x, yb, bx->z), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.75f, 0.85f, 1.0f, 0.45f);
+              batch_quad(&g_b, v3(bx->x, bx->y + 0.05f, bx->z), v3(1.2f, 0, 0), v3(0, 0, -1.2f), v3(0, 1, 0), 0, 0, 1, 1, 0.6f, 0.8f, 1.0f, 0.3f); }
+          gfx_mesh_update(m_boxglow, g_b.v, g_b.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_boxglow, &id, 1, 1, 1, 1); }
         gfx_state(ST_TRANSPARENT | ST_CULL); gfx_bind(NULL);
-        for (int b = 0; b < r->nbox; b++) { ItemBox *bx = &r->box[b]; if (!bx->active) continue;
-            Mat4 m = m4_mul(m4_translate(bx->x, bx->y + 0.15f * sinf(g_time * 2.0f + b), bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_rotate_x(0.6f)));
-            gfx_draw(m_cube, &m, 0.3f, 0.6f, 1.0f, 0.55f);
-            Mat4 m2 = m4_mul(m, m4_scale(0.5f, 0.5f, 0.5f)); gfx_draw(m_cube, &m2, 1.0f, 0.85f, 0.3f, 0.9f); }
+        for (int b = 0; b < r->nbox; b++) { ItemBox *bx = &r->box[b]; if (!bx->active) continue; float yb = bx->y + 1.1f + 0.25f * sinf(g_time * 2.0f + b);
+            float hue = g_time * 1.2f + b * 0.9f; float cr = 0.55f + 0.45f * sinf(hue), cg = 0.55f + 0.45f * sinf(hue + 2.094f), cb = 0.55f + 0.45f * sinf(hue + 4.189f);
+            Mat4 m = m4_mul(m4_translate(bx->x, yb, bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_rotate_x(0.6f + 0.2f * sinf(g_time + b))));
+            gfx_draw_ex(m_cube, &m, cr, cg, cb, 0.6f, 0.9f, 0, 0, 0);
+            Mat4 m2 = m4_mul(m, m4_scale(0.5f, 0.5f, 0.5f)); gfx_draw(m_cube, &m2, 1.0f, 0.95f, 0.7f, 0.95f);
+            /* a gold cross standing inside */
+            Mat4 cv = m4_mul(m4_translate(bx->x, yb, bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_scale(0.12f, 0.9f, 0.12f))); gfx_draw(m_cube, &cv, 1.0f, 0.85f, 0.3f, 1);
+            Mat4 ch = m4_mul(m4_translate(bx->x, yb + 0.15f, bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_scale(0.6f, 0.12f, 0.12f))); gfx_draw(m_cube, &ch, 1.0f, 0.85f, 0.3f, 1); }
         /* coins: spinning discs */
         gfx_state(ST_SOLID); gfx_bind(NULL);
         for (int c = 0; c < g_track.ncoin; c++) { if (r->coin_respawn[c] > 0) continue; const Coin *cn = &g_track.coin[c]; const TrackSample *cs = &g_track.s[cn->idx];

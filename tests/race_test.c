@@ -27,8 +27,8 @@ int main(void) {
         race_rank(&r);
         int winner = r.order[0]; wins[r.character[winner]]++;
         int finished = 0; for (int i = 0; i < r.nk; i++) finished += r.k[i].lap > t.laps;
-        printf("difficulty %d run %d: ended at %.1fs, %d/%d crossed the line, winner %s (%.1fs), player %s place %d, pickups %d, uses %d (stones %d, oil %d), hits %d, blocks %d\n",
-               diff, rep, r.race_t, finished, r.nk, CHARACTERS[r.character[winner]].name, r.k[winner].total_time, CHARACTERS[r.character[r.player]].name, r.k[r.player].place, r.stat_pickups, r.stat_uses, r.stat_stones, r.stat_oils, r.stat_hits, r.stat_blocks);
+        printf("difficulty %d run %d: ended at %.1fs, %d/%d crossed the line, winner %s (%.1fs), player %s place %d, pickups %d, uses %d (blessings %d, trail boosts %d), hits %d, blocks %d\n",
+               diff, rep, r.race_t, finished, r.nk, CHARACTERS[r.character[winner]].name, r.k[winner].total_time, CHARACTERS[r.character[r.player]].name, r.k[r.player].place, r.stat_pickups, r.stat_uses, r.stat_blessings, r.stat_trails, r.stat_hits, r.stat_blocks);
         CHECK(!nan, "NaN");
         CHECK(r.state == RACE_FINISHED, "race did not end");
         CHECK(r.race_t <= RACE_TIME_LIMIT + 0.1f, "race ran past the 2 minute limit");
