@@ -57,7 +57,7 @@ static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
 static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
 static Texture *tx_finale; static Mesh *m_finale;
-static Texture *tx_title; static Mesh *m_title;      /* title_art.png behind the title, when Sean has made it */
+static Texture *tx_title; static Mesh *m_title; static float g_title_h;      /* title_art.png: the logo on the title screen, when Sean has made it */
 static Texture *tx_card[8]; static Mesh *m_card[8];   /* card_<prefix>.png: the road pictures on the road-select cards */
 static Texture *tx_item[ITEM_COUNT];        /* item pictures for the HUD slot, when Sean's files exist */
 static Pad g_prev; static float g_nav_t, g_screen_t;
@@ -736,7 +736,8 @@ int game_init(int status) {
         { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
         for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
-        if (tx_title) { batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b); batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_title = gfx_mesh_static(g_b.v, g_b.n); }
+        if (tx_title) { int w = 1024, h = 437; gfx_texture_free(tx_title); tx_title = asset_texture("title_art", 0, &w, &h); float lw = 820, lh = lw * h / (float)w;
+            batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b); batch_rect_uv(&g_b, 640 - lw / 2, 60, lw, lh, 0, 0, 1, 1, 1, 1, 1, 1); m_title = gfx_mesh_static(g_b.v, g_b.n); g_title_h = lh; }
     }
     set_track(0);
     start_race(1);
@@ -881,6 +882,11 @@ static void hud_race(const Pad *pad) {
 static void hud_title(void) {
     float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);   /* the logo settles in */
     float sc = 1.6f - 0.6f * ease, al = ease;
+    if (tx_title) {   /* Sean's logo is drawn separately (draw_title_logo); the words go under it */
+        float y = 60 + g_title_h + 10;
+        checker_band(y, 18); text_c("ROAD TO GLORY", y + 32, 40, 1, 0.85f, 0.3f, al); text_c("A RACE THROUGH THE STORY OF JESUS", y + 84, 18, 0.9f, 0.95f, 1, al); checker_band(y + 112, 18);
+        if ((int)(g_time * 2) & 1 && u >= 1) text_c("PRESS A", 640, 32, 1, 1, 1, 1);
+        return; }
     checker_band(150, 24);
     panel(240, 190, 800, 230);
     text_c("KINGDOM KART", 258 - 43 * sc, 86 * sc, 1, 0.85f, 0.3f, al);
@@ -1695,7 +1701,8 @@ void game_frame(const Pad *pad, float dt) {
           batch_rect(&g_b, 20, 708, 300 * frac, 6, good ? 0.2f : 1.0f, good ? 1.0f : 0.2f, 0.2f, 0.8f);
           batch_rect(&g_b, 20 + 300 * (16.7f / 33.3f), 704, 2, 14, 1, 1, 1, 0.8f); }
         batch_rect(&g_b, 1220, 690, 20, 20, pad->source & 2 ? 1.0f : (pad->source & 1 ? 0.2f : 0.5f), pad->source & 2 ? 0.8f : (pad->source & 1 ? 0.5f : 0.5f), pad->source ? 0.2f : 0.5f, 0.9f);
-        if (g_screen == SCR_TITLE && tx_title && m_title) { gfx_bind(tx_title); gfx_draw(m_title, &id, 1, 1, 1, 1); }
+        if (g_screen == SCR_TITLE && tx_title && m_title) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);
+            gfx_bind(tx_title); gfx_draw(m_title, &id, 1, 1, 1, ease); }
         /* a quick fade from black when a new screen opens */
         if (g_screen_t < 0.3f && (g_screen == SCR_RACE || g_screen == SCR_RESULTS || g_screen == SCR_TITLE || g_screen == SCR_CREDITS || g_screen == SCR_GP)) batch_rect(&g_b, 0, 0, 1280, 720, 0, 0, 0, 1.0f - g_screen_t / 0.3f);
         gfx_mesh_update(m_hud, g_b.v, g_b.n);

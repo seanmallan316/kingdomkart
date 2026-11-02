@@ -3,5 +3,6 @@
 #define FONT_HD_CW 64
 #define FONT_HD_CH 80
 #define FONT_HD_W 1024
-#define FONT_HD_H 256
+#define FONT_HD_H 512
+#define FONT_HD_GOLD_Y 256
 static const unsigned char FONT_HD_ADV[] = {60, 59, 58, 63, 54, 54, 63, 64, 35, 39, 62, 52, 64, 64, 64, 57, 64, 60, 57, 54, 62, 60, 64, 60, 59, 57, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 36, 36, 40, 48, 37, 38, 31, 35, 64, 40, 40};

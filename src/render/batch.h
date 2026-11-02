@@ -107,11 +107,13 @@ static inline float batch_text(Batch *b, const char *s, float x, float y, float 
     float sc = size / 7.0f, x0 = x;
     if (g_font_hd) {
         float hs = size / 50.0f;     /* the HD glyphs have 50-pixel capitals in an 80-pixel cell, cap tops 10 pixels down */
+        int gold = size >= 34 && r > 0.9f && g > 0.7f && g < 0.95f && bl < 0.5f;   /* big text asked for in gold uses the gold letters (Sean's title style) */
+        if (gold) { r = g = bl = 1; }
         for (; *s; s++) {
             char c = *s; if (c >= 'a' && c <= 'z') c = (char)(c - 32);
             if (c == ' ') { x += 24 * hs; continue; }
             const char *p = strchr(FONT_CHARS, c); if (!p) continue;
-            int i = (int)(p - FONT_CHARS); float u0 = (float)(i % FONT_HD_COLS) * FONT_HD_CW / FONT_HD_W, v0 = (float)(i / FONT_HD_COLS) * FONT_HD_CH / FONT_HD_H;
+            int i = (int)(p - FONT_CHARS); float u0 = (float)(i % FONT_HD_COLS) * FONT_HD_CW / FONT_HD_W, v0 = ((float)(i / FONT_HD_COLS) * FONT_HD_CH + (gold ? FONT_HD_GOLD_Y : 0)) / FONT_HD_H;
             batch_rect_uv(b, x, y - 10 * hs, FONT_HD_CW * hs, FONT_HD_CH * hs, u0, v0, u0 + (float)FONT_HD_CW / FONT_HD_W, v0 + (float)FONT_HD_CH / FONT_HD_H, r, g, bl, a);
             x += FONT_HD_ADV[i] * hs;
         }

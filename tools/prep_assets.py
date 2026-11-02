@@ -19,7 +19,7 @@ RULES = [
     ("jeru_sky",  (2048, 512), "plain"),
     ("tomb_sky",  (2048, 512), "plain"),
     ("elah_sky",  (2048, 512), "plain"),
-    ("title_art", (1024, 576), "plain"),
+    ("title_art", (1024, 512), "cutout"),
     ("card_",     (512, 512), "plain"),      # road-select card pictures
     ("heaven_gates", (1024, 576), "plain"),
     ("heaven_sky", (2048, 512), "plain"),
