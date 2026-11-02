@@ -18,12 +18,13 @@ SRC = os.path.join(ROOT, "assets", "music")
 DST = os.path.join(ROOT, "content", "music")
 os.makedirs(DST, exist_ok=True)
 
-def convert(src, dst):
+def convert(src, dst, keep_timing=False):
     # two passes: trim silence off both ends into a temporary WAV, then even out the loudness and encode.
     # (one combined filter chain hangs ffmpeg on some long WAV files)
     tmp = dst + ".trim.wav"
     trim = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,"
             "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse")
+    if keep_timing: trim = "anull"          # a video's sound track must stay in step with its pictures
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", src, "-map", "0:a:0", "-vn", "-af", trim,
                     "-ac", "2", "-codec:a", "pcm_s16le", tmp], check=True)
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", tmp, "-af", "loudnorm=I=-15:TP=-1.5:LRA=11",
@@ -40,7 +41,7 @@ def main():
         out = os.path.join(DST, name + ".mp3")
         if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(f):
             print(f"  {name}: up to date"); continue
-        convert(f, out)
+        convert(f, out, keep_timing=name.endswith("opener"))
         dur = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", out],
                              capture_output=True, text=True).stdout.strip()
         print(f"  {name}: {os.path.getsize(out) // 1024} KB, {float(dur):.0f} s")

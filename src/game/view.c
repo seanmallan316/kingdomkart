@@ -31,7 +31,9 @@ static Battle g_battle;            /* the battle holds the race; in the racing m
 #define ARENA_TRACK (NUM_TRACK_DEFS - 2)   /* the Valley of Elah sits just before the Test Loop */
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL;
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER };
+/* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
+static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1; static Texture *tx_op; static Mesh *m_op;
 static int g_opt_sel = 0;
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE };
@@ -745,6 +747,13 @@ int game_init(int status) {
     set_track(0);
     start_race(1);
     g_time = 0; g_screen = SCR_TITLE;
+#ifndef KK_TOUR   /* the CI tour has a fixed timetable; it skips the opener */
+    if (status == GFX_OK && asset_exists("video/opener.txt")) {
+        char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "video/opener.txt"); FILE *f = fopen(path, "r");
+        if (f) { int w = 0, h = 0; if (fscanf(f, "%d %d %d %d", &g_op_frames, &g_op_fps, &w, &h) == 4 && g_op_frames > 0) {
+            batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b); batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_op = gfx_mesh_static(g_b.v, g_b.n);
+            g_screen = SCR_OPENER; g_screen_t = 0; gfx_log("opener: %d frames at %d fps", g_op_frames, g_op_fps); } fclose(f); } }
+#endif
     gfx_log("track '%s': %d samples, %.0f m", g_track.name, g_track.n, g_track.length);
     return status == GFX_OK;
 }
@@ -1260,6 +1269,7 @@ static const char *pick_music(void) {
     }
     if ((g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK) && music_available("music_select")) return "music_select";
     if (g_screen == SCR_CREDITS && music_available("music_credits")) return "music_credits";
+    if (g_screen == SCR_OPENER) return music_available("music_opener") ? "music_opener" : NULL;
     return "music_menu";
 }
 
@@ -1283,6 +1293,12 @@ void game_frame(const Pad *pad, float dt) {
     int sim_running = 1;
     switch (g_screen) {
     case SCR_TITLE: if (pa || pb || pplus || pad->x || pad->y) { g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; sfx_play(SFX_MENU_OK, 1, 0); } break;
+    case SCR_OPENER: {
+        int want = (int)(g_screen_t * g_op_fps);
+        if (pa || pb || pplus || pad->x || pad->y || want >= g_op_frames) { g_screen = SCR_TITLE; g_screen_t = 0; gfx_texture_free(tx_op); tx_op = NULL; g_op_cur = -1; break; }
+        if (want != g_op_cur) { char rel[64]; snprintf(rel, sizeof rel, "video/opener_%03d.jpg", want); Texture *nt = asset_texture_file(rel, 0, NULL, NULL);
+            if (nt) { gfx_texture_free(tx_op); tx_op = nt; } g_op_cur = want; }
+        break; }
     case SCR_OPTIONS:
         if (my) { g_opt_sel = (g_opt_sel - my + 2) % 2; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (mx) { int *v = g_opt_sel == 0 ? &g_save.music_vol : &g_save.sfx_vol; *v = *v + mx < 0 ? 0 : (*v + mx > 10 ? 10 : *v + mx); g_save.dirty = 1; apply_volumes(); sfx_play(SFX_MENU_MOVE, 1, 0); }
@@ -1542,6 +1558,9 @@ void game_frame(const Pad *pad, float dt) {
 #endif
         if (gamepad_map) { gfx_view_begin(drc, 0.04f, 0.07f, 0.18f); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
             batch_clear(&g_b); hud_gamepad(); if (g_screen == SCR_PAUSE) hud_pause(); gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
+        if (g_screen == SCR_OPENER) { gfx_view_begin(drc, 0, 0, 0); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
+            if (tx_op && m_op) { gfx_bind(tx_op); gfx_draw(m_op, &id2, 1, 1, 1, 1); }
+            gfx_view_end(drc); continue; }
         gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 view = m4_look_at(eye, at, v3(0, 1, 0));
         Mat4 proj = m4_perspective(cam_fov * 3.14159265f / 180.0f, gfx_aspect(drc), 0.3f, 1200.0f);
@@ -1640,13 +1659,15 @@ void game_frame(const Pad *pad, float dt) {
                 batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), u0, 0, u1, 1, 1, 1, 1, 1);
                 gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(tx_kartview[ch][v]); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1); }
             if (!tx_char[ch]) continue;
-            float hgt = pic ? 1.5f : 1.75f, hw = hgt * 0.5f * g_char_aspect[ch];
+            /* the driver sits: only the top part of the standing picture shows (head, shoulders, chest), sunk into the seat */
+            float part = pic ? 0.56f : 1.0f;
+            float hgt = (pic ? 1.5f : 1.75f) * part, hw = (pic ? 1.5f : 1.75f) * 0.5f * g_char_aspect[ch];
             float bob = sinf(g_time * 11.0f + i) * 0.015f * fminf(fabsf(q->speed) / 20.0f, 1.0f);   /* a little engine shake */
             hgt *= 1.0f - q->squash * 0.18f + (q->air && q->hop <= 0 ? -0.08f : 0);                 /* lands with a bounce, tucks in on jumps */
-            Vec3 c = v3(q->x - hx * 0.25f, q->y + q->hop * 0.4f + bob + (pic ? 0.75f : 0.55f) + hgt * 0.5f, q->z - hz * 0.25f);
+            Vec3 c = v3(q->x - hx * 0.35f, q->y + q->hop * 0.4f + bob + (pic ? 0.85f : 0.55f) + hgt * 0.5f, q->z - hz * 0.35f);
             float lean = q->steer_vis * -0.12f;       /* leans into the turn */
             batch_clear(&g_b);
-            batch_quad(&g_b, c, v3(ax.x * hw, 0, ax.z * hw), v3(ax.x * lean * hgt * 0.5f, hgt * 0.5f, ax.z * lean * hgt * 0.5f), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
+            batch_quad(&g_b, c, v3(ax.x * hw, 0, ax.z * hw), v3(ax.x * lean * hgt * 0.5f, hgt * 0.5f, ax.z * lean * hgt * 0.5f), v3(0, 1, 0), 0, 0, 1, part, 1, 1, 1, 1);
             gfx_mesh_update(m_driver_spr[i], g_b.v, g_b.n); gfx_bind(tx_char[ch]); gfx_draw(m_driver_spr[i], &id, sr, sg, sb, 1); }
         gfx_state(ST_SOLID); gfx_bind(NULL);
         if (g_mode == MODE_BATTLE) {
