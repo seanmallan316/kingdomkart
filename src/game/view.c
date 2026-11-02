@@ -747,7 +747,7 @@ int game_init(int status) {
     set_track(0);
     start_race(1);
     g_time = 0; g_screen = SCR_TITLE;
-#ifndef KK_TOUR   /* the CI tour has a fixed timetable; it skips the opener */
+#if !defined(KK_TOUR) || KK_TOUR_ROAD == 7   /* the CI tour has a fixed timetable; only tour 7 watches the opener */
     if (status == GFX_OK && asset_exists("video/opener.txt")) {
         char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "video/opener.txt"); FILE *f = fopen(path, "r");
         if (f) { int w = 0, h = 0; if (fscanf(f, "%d %d %d %d", &g_op_frames, &g_op_fps, &w, &h) == 4 && g_op_frames > 0) {
@@ -1211,7 +1211,9 @@ static void hud_gp(void) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pad(Pad *p, float t) {
     static const struct { float t; char key; } script[] = {
-#if KK_TOUR_ROAD == 6
+#if KK_TOUR_ROAD == 7
+        {200, 0},                                /* the opener plays through, then the title screen */
+#elif KK_TOUR_ROAD == 6
         {8, 'A'}, {11, 'U'}, {14, 'A'},          /* the credits, then (back at the title) options and records */
         {88, 'B'}, {91, 'A'}, {94, 'U'}, {96, 'U'}, {98, 'A'},
 #else
