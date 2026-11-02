@@ -3,6 +3,8 @@
 #include "sfx.h"
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define MAXV 24
 #define TWO_PI 6.28318530718f
@@ -31,12 +33,102 @@ static float eng_phase = 0, eng_phase2 = 0, eng_f = 40, drift_lp = 0, road_lp = 
 static uint32_t nrng = 0x1234567u;
 static inline float frand(uint32_t *s) { *s ^= *s << 13; *s ^= *s >> 17; *s ^= *s << 5; return ((*s & 0xFFFFFF) / 8388608.0f) - 1.0f; }
 
-void sfx_init(int sample_rate) { SR = (float)sample_rate; ISR = 1.0f / SR; memset(V, 0, sizeof V); rq_w = rq_r = 0; }
-void sfx_engine(float speed, int drifting, int boosting, int offroad, int in_air, int water, int active) {
-    e_speed = speed < 0 ? -speed : speed; e_drift = drifting; e_boost = boosting; e_off = offroad; e_air = in_air; e_water = water; e_active = active;
+/* ---- recorded samples (content/sfx/NAME.wav, 32 kHz 16-bit): the kart engine, stings, and replacements for synthesized effects ---- */
+#ifndef KK_CONTENT_DIR
+#define KK_CONTENT_DIR "/vol/content/"
+#endif
+typedef struct { int16_t *d; int n, ch; } Sample;
+enum { SMP_IDLE, SMP_ACCEL, SMP_TOP, SMP_DECEL, SMP_START, SMP_SHIFT, SMP_POP, SMP_BRAKE, SMP_HARDBRAKE, SMP_COUNTDOWN, SMP_UNLOCK, SMP_COUNT };
+static const char *SMP_NAMES[SMP_COUNT] = {"kart_engine_idle", "kart_engine_acceleration", "kart_engine_top_speed", "kart_engine_deceleration", "kart_engine_start", "kart_gear_shift", "kart_exhaust_pop", "kart_braking", "kart_hard_braking", "sting_countdown", "sting_unlock"};
+static const char *SFX_NAMES[SFX_COUNT] = {"menu_move", "menu_ok", "menu_back", "count_tick", "go", "pickup", "use_item", "throw", "hit", "block", "bump", "lap", "final_lap", "finish", "win",
+    "mini_turbo", "super_turbo", "boost_pad", "bounce", "land", "splash", "shofar", "fire", "locusts", "dove", "unlock", "welcome_home", "wrong_way", "coin", "countdown", "engine_start"};
+static Sample smp[SMP_COUNT], smp_fx[SFX_COUNT];
+static void (*logf_)(const char *fmt, ...) = NULL;
+#define LOG(...) do { if (logf_) logf_(__VA_ARGS__); } while (0)
+typedef struct { int on; const Sample *s; float pos, rate, vol, pan; int loop, delay_smp; } SVoice;
+#define MAXSV 10
+static SVoice SV[MAXSV];           /* one-shot sample voices */
+static SVoice EL[4];               /* engine layers: idle, acceleration, top speed, deceleration (looping) */
+static float el_vol[4], el_want[4], el_rate[4];
+static int use_samples = 0;
+
+static uint32_t rd32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
+static int load_wav(const char *name, Sample *out) {
+    char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "sfx/%s.wav", name);
+    FILE *f = fopen(path, "rb"); if (!f) return 0;
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    if (n < 44 || n > 8 * 1024 * 1024) { fclose(f); return 0; }
+    uint8_t *buf = malloc((size_t)n); if (!buf || fread(buf, 1, (size_t)n, f) != (size_t)n) { fclose(f); free(buf); return 0; }
+    fclose(f);
+    if (memcmp(buf, "RIFF", 4) || memcmp(buf + 8, "WAVE", 4)) { free(buf); return 0; }
+    int ch = 0, rate = 0, bits = 0; long pos = 12; const uint8_t *data = NULL; uint32_t dlen = 0;
+    while (pos + 8 <= n) {
+        uint32_t len = rd32(buf + pos + 4);
+        if (!memcmp(buf + pos, "fmt ", 4) && len >= 16) { ch = buf[pos + 10] | (buf[pos + 11] << 8); rate = (int)rd32(buf + pos + 12); bits = buf[pos + 22] | (buf[pos + 23] << 8); }
+        else if (!memcmp(buf + pos, "data", 4)) { data = buf + pos + 8; dlen = len; if (pos + 8 + (long)dlen > n) dlen = (uint32_t)(n - pos - 8); break; }
+        pos += 8 + len + (len & 1);
+    }
+    if (!data || bits != 16 || (ch != 1 && ch != 2) || rate != (int)SR) { LOG("sample %s: unsupported format (%d ch, %d Hz, %d bit)", name, ch, rate, bits); free(buf); return 0; }
+    int frames = (int)(dlen / (2 * ch));
+    out->d = malloc((size_t)frames * ch * sizeof(int16_t)); if (!out->d) { free(buf); return 0; }
+    for (int i = 0; i < frames * ch; i++) out->d[i] = (int16_t)(data[i * 2] | (data[i * 2 + 1] << 8));
+    out->n = frames; out->ch = ch; free(buf);
+    return 1;
+}
+void sfx_set_logger(void (*log)(const char *fmt, ...)) { logf_ = log; }
+void sfx_load_samples(void) {
+    int got = 0;
+    for (int i = 0; i < SMP_COUNT; i++) if (!smp[i].d && load_wav(SMP_NAMES[i], &smp[i])) got++;
+    for (int i = 0; i < SFX_COUNT; i++) if (!smp_fx[i].d) { char nm[48]; snprintf(nm, sizeof nm, "sfx_%s", SFX_NAMES[i]); if (load_wav(nm, &smp_fx[i])) got++; }
+    use_samples = smp[SMP_IDLE].d && smp[SMP_TOP].d && smp[SMP_ACCEL].d;
+    for (int i = 0; i < 4; i++) { EL[i].s = &smp[i]; EL[i].loop = 1; EL[i].on = smp[i].d != NULL; EL[i].rate = 1; }
+    LOG("sound: %d recorded samples loaded, engine %s", got, use_samples ? "recorded" : "synthesized");
+}
+int sfx_has_sample(int id) {
+    if (id < 0 || id >= SFX_COUNT) return 0;
+    if (smp_fx[id].d) return 1;
+    return (id == SFX_COUNTDOWN && smp[SMP_COUNTDOWN].d) || (id == SFX_ENGINE_START && smp[SMP_START].d) || (id == SFX_UNLOCK && smp[SMP_UNLOCK].d);
+}
+static void svoice_start(const Sample *s, float rate, float vol, float pan, float delay) {
+    if (!s || !s->d) return;
+    SVoice *v = NULL; float oldest = -1;
+    for (int i = 0; i < MAXSV; i++) { if (!SV[i].on) { v = &SV[i]; break; } if (SV[i].pos > oldest) { oldest = SV[i].pos; v = &SV[i]; } }
+    memset(v, 0, sizeof *v); v->on = 1; v->s = s; v->rate = rate; v->vol = vol; v->pan = pan; v->delay_smp = (int)(delay * SR);
+}
+static inline void sample_read(const Sample *s, float pos, float *l, float *r) {
+    int i = (int)pos; float f = pos - i; int j = i + 1 < s->n ? i + 1 : (s->ch ? 0 : i);
+    if (s->ch == 2) { *l = (s->d[i * 2] + (s->d[j * 2] - s->d[i * 2]) * f) * (1.0f / 32768.0f); *r = (s->d[i * 2 + 1] + (s->d[j * 2 + 1] - s->d[i * 2 + 1]) * f) * (1.0f / 32768.0f); }
+    else { *l = *r = (s->d[i] + (s->d[j] - s->d[i]) * f) * (1.0f / 32768.0f); }
+}
+
+void sfx_init(int sample_rate) { SR = (float)sample_rate; ISR = 1.0f / SR; memset(V, 0, sizeof V); memset(SV, 0, sizeof SV); rq_w = rq_r = 0; }
+/* the engine model: which recorded layer plays how loud and how fast, plus the one-shots on gear changes, braking, boosts */
+static int p_active = 0, p_boost = 0, p_brake = 0, p_drift = 0; static float p_speed = 0; static int shift_cd = 0, brake_cd = 0;
+void sfx_engine(float speed, int drifting, int boosting, int offroad, int in_air, int water, int active, int gas, int brake) {
+    speed = speed < 0 ? -speed : speed;
+    e_speed = speed; e_drift = drifting; e_boost = boosting; e_off = offroad; e_air = in_air; e_water = water; e_active = active;
+    if (use_samples) {
+        float s = speed > 1 ? 1 : speed;
+        float up = s < 0.05f ? 0 : (s > 0.35f ? 1 : (s - 0.05f) / 0.3f), top = s < 0.45f ? 0 : (s > 0.9f ? 1 : (s - 0.45f) / 0.45f);
+        int coasting = !gas && s > 0.12f && !boosting;
+        el_want[0] = active ? (1.0f - (s * 2.5f > 1 ? 1 : s * 2.5f)) * 0.55f + 0.08f : 0;
+        el_want[1] = active && !coasting ? up * (1.0f - top) * 0.6f : 0;
+        el_want[2] = active ? top * (boosting ? 0.75f : 0.6f) : 0;
+        el_want[3] = active && coasting ? 0.5f * (s < 0.3f ? (s - 0.12f) / 0.18f : 1) : 0;
+        el_rate[0] = 1.0f + 0.15f * s; el_rate[1] = 0.8f + 0.6f * s; el_rate[2] = 0.85f + 0.35f * s + (boosting ? 0.1f : 0); el_rate[3] = 0.8f + 0.5f * s;
+        if (shift_cd > 0) shift_cd--;
+        if (brake_cd > 0) brake_cd--;
+        if (active) {
+            if (gas && !coasting && shift_cd == 0 && ((p_speed < 0.3f && s >= 0.3f) || (p_speed < 0.6f && s >= 0.6f))) { sfx_play(SFX_COUNT + 1, 0.45f, 0); shift_cd = 45; }
+            if (p_boost && !boosting) sfx_play(SFX_COUNT + 2, 0.5f, 0);
+            if (brake && !p_brake && s > 0.3f && brake_cd == 0) { sfx_play(SFX_COUNT + 3, 0.5f, 0); brake_cd = 60; }
+            if (drifting && !p_drift && s > 0.5f && brake_cd == 0) { sfx_play(SFX_COUNT + 4, 0.45f, 0); brake_cd = 60; }
+        }
+    }
+    p_active = active; p_boost = boosting; p_brake = brake; p_drift = drifting; p_speed = speed;
 }
 void sfx_play(int id, float volume, float pan) {
-    if (id < 0 || id >= SFX_COUNT) return;
+    if (id < 0 || id >= SFX_COUNT + 8) return;
     int w = rq_w; if (w - rq_r >= 60) return;
     rq[w & 63].id = id; rq[w & 63].vol = volume; rq[w & 63].pan = pan;
     __sync_synchronize(); rq_w = w + 1;
@@ -54,6 +146,13 @@ static Voice *voice(int wave, float f0, float f1, float dur, float att, float de
 #define N(wave, f0, f1, dur, att, dec, vol, delay) voice(wave, f0, f1, dur, att, dec, (vol) * g, p, delay)
 static void fire(int id, float g, float p) {
     Voice *v;
+    /* requests above SFX_COUNT are the engine's own one-shots: 1 gear shift, 2 exhaust pop, 3 braking, 4 hard braking */
+    if (id > SFX_COUNT) { static const int map[5] = {0, SMP_SHIFT, SMP_POP, SMP_BRAKE, SMP_HARDBRAKE}; if (id - SFX_COUNT < 5) svoice_start(&smp[map[id - SFX_COUNT]], 1.0f, g, p, 0); return; }
+    if (smp_fx[id].d) { svoice_start(&smp_fx[id], 1.0f, g, p, 0); return; }   /* a recorded replacement for this effect */
+    if (id == SFX_COUNTDOWN) { svoice_start(&smp[SMP_COUNTDOWN], 1.0f, g * 0.8f, p, 0); return; }
+    if (id == SFX_ENGINE_START) { svoice_start(&smp[SMP_START], 1.0f, g, p, 0); return; }
+    if (id == SFX_UNLOCK && smp[SMP_UNLOCK].d) { svoice_start(&smp[SMP_UNLOCK], 1.0f, g * 0.8f, p, 0); return; }
+    if (id == SFX_COUNT_TICK && smp[SMP_COUNTDOWN].d) return;   /* the recorded countdown has its own beats */
     switch (id) {
     case SFX_MENU_MOVE: N(W_SINE, 1400, 1400, 0.05f, 0.002f, 0.05f, 0.35f, 0); break;
     case SFX_MENU_OK:   N(W_SINE, 880, 880, 0.08f, 0.002f, 0.08f, 0.4f, 0); N(W_SINE, 1320, 1320, 0.2f, 0.002f, 0.2f, 0.4f, 0.08f); break;
@@ -124,8 +223,20 @@ void sfx_render(int16_t *left, int16_t *right, int n) {
         drift_lp += (nz - drift_lp) * 0.25f; float drift = drift_lp * drift_vol;
         wind_lp += (nz - wind_lp) * (e_water ? 0.06f : 0.12f); float road = wind_lp * road_vol;
         boost_phase += (300.0f + 200.0f * sinf(boost_phase * 0.001f)) * ISR; float boost = (sinf(boost_phase * TWO_PI) * 0.5f + nz * 0.5f) * boost_vol;
-        float cont = eng + drift + road + boost;
+        float cont = (use_samples ? 0 : eng) + drift + road + boost;
         l += cont * 1.0f; r += cont * 0.9f;
+        if (use_samples) {
+            for (int j = 0; j < 4; j++) { SVoice *e = &EL[j]; if (!e->on) continue;
+                el_vol[j] += (el_want[j] - el_vol[j]) * 0.0004f; e->rate += (el_rate[j] - e->rate) * 0.0003f;
+                if (el_vol[j] > 0.001f) { float sl, sr; sample_read(e->s, e->pos, &sl, &sr); l += sl * el_vol[j]; r += sr * el_vol[j] * 0.9f; }
+                e->pos += e->rate; if (e->pos >= e->s->n - 1) e->pos -= (float)(e->s->n - 1); }
+        }
+        for (int j = 0; j < MAXSV; j++) { SVoice *sv = &SV[j]; if (!sv->on) continue;
+            if (sv->delay_smp > 0) { sv->delay_smp--; continue; }
+            float sl, sr; sample_read(sv->s, sv->pos, &sl, &sr);
+            float pl = sv->pan < 0 ? 1.0f : 1.0f - sv->pan, pr = sv->pan > 0 ? 1.0f : 1.0f + sv->pan;
+            l += sl * sv->vol * pl; r += sr * sv->vol * pr;
+            sv->pos += sv->rate; if (sv->pos >= sv->s->n - 1) sv->on = 0; }
         /* one-shot voices */
         for (int j = 0; j < MAXV; j++) {
             Voice *v = &V[j]; if (!v->on) continue;

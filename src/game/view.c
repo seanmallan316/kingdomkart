@@ -659,6 +659,7 @@ static void start_race(int attract) {
     g_attract = attract;
     int nk = (g_mode == MODE_TT && !attract) ? 1 : NKARTS;
     race_init(&g_race, &g_track, g_player_char, nk == 1 ? 0 : 5, g_difficulty, nk);
+    if (!attract) { sfx_play(SFX_COUNTDOWN, 1, 0); sfx_play(SFX_ENGINE_START, 0.8f, 0); }
     g_skid_n = 0; memset(g_skid, 0, sizeof g_skid); memset(g_dust, 0, sizeof g_dust); memset(g_last_skid, 0, sizeof g_last_skid);
     Kart *k = &g_race.k[g_race.player];
     cam_yaw = k->yaw; cam_x = k->x - sinf(cam_yaw) * 8; cam_z = k->z - cosf(cam_yaw) * 8; cam_y = k->y + 3.5f;
@@ -674,7 +675,7 @@ static void build_previews(void) {
     }
 }
 int game_init(int status) {
-    g_status = status; music_set_logger(gfx_log);
+    g_status = status; music_set_logger(gfx_log); sfx_set_logger(gfx_log); sfx_load_samples();
     save_load(); save_check_unlocks(); save_store();
 #ifdef KK_TOUR
     if (KK_TOUR_ROAD >= 4) g_save.unlocks = 0xFFFF;      /* the CI tour of the bonus road / the battle */
@@ -1076,11 +1077,16 @@ static void begin_battle(void) {
 }
 
 /* which music should be playing right now. Files are content/music/NAME.mp3; a road without its own track borrows one. */
+static int gp_player_rank(void) {   /* 1 = leading the championship */
+    int rank = 1; for (int c = 0; c < NCHARS; c++) if (c != g_player_char && g_gp_points[c] > g_gp_points[g_player_char]) rank++;
+    return rank;
+}
 static const char *pick_music(void) {
     static char buf[48];
     if (g_screen == SCR_RACE || g_screen == SCR_PAUSE) {
         if (g_mode == MODE_BATTLE) return music_available("music_elah") ? "music_elah" : (music_available("music_jeru") ? "music_jeru" : "music_menu");
         Race *r = &g_race; Kart *pk = &r->k[r->player];
+        if (r->state == RACE_COUNTDOWN && sfx_has_sample(SFX_COUNTDOWN)) return NULL;   /* the recorded 3-2-1-GO plays alone */
         if (g_track.laps > 1 && pk->lap >= g_track.laps && r->state != RACE_COUNTDOWN && music_available("music_finallap")) return "music_finallap";
         snprintf(buf, sizeof buf, "music_%s", g_def->prefix);
         if (music_available(buf)) return buf;
@@ -1088,7 +1094,18 @@ static const char *pick_music(void) {
         for (int i = 0; i < 5; i++) if (music_available(roads[i])) return roads[i];
         return "music_menu";
     }
-    if (g_screen == SCR_RESULTS || g_screen == SCR_GP) return music_available("music_results") ? "music_results" : "music_menu";
+    if (g_screen == SCR_RESULTS) {
+        int lost = g_mode == MODE_BATTLE ? !g_battle.won : (g_mode != MODE_TT && g_race.k[g_race.player].place > 3);
+        if (lost && music_available("music_lose")) return "music_lose";
+        return music_available("music_results") ? "music_results" : "music_menu";
+    }
+    if (g_screen == SCR_GP) {
+        if (g_gp_round >= NUM_GP_TRACKS) { int rank = gp_player_rank();
+            if (rank == 1 && music_available("music_trophy")) return "music_trophy";
+            if (rank > 3 && music_available("music_lose")) return "music_lose"; }
+        return music_available("music_results") ? "music_results" : "music_menu";
+    }
+    if ((g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK) && music_available("music_select")) return "music_select";
     return "music_menu";
 }
 
@@ -1187,7 +1204,7 @@ void game_frame(const Pad *pad, float dt) {
     }
     if (g_msg_t > 0) g_msg_t -= dt;
     { Kart *pk = &r->k[r->player]; int racing = (g_screen == SCR_RACE) && !g_attract && r->state != RACE_FINISHED;
-      sfx_engine(fabsf(pk->speed) / (36.0f * pk->st.top_speed), pk->drifting, pk->boost_t > 0, !pk->hit.on_road, pk->air, g_track.water, racing);
+      sfx_engine(fabsf(pk->speed) / (36.0f * pk->st.top_speed), pk->drifting, pk->boost_t > 0, !pk->hit.on_road, pk->air, g_track.water, racing, g_screen == SCR_RACE && pad->a, g_screen == SCR_RACE && pad->b);
       static float ww_t = 0; if (racing && pk->wrongway_t > WRONGWAY_DELAY) { ww_t += dt; if (ww_t > 1.0f) { ww_t = 0; sfx_play(SFX_WRONG_WAY, 0.8f, 0); } } else ww_t = 1.0f; }
     music_want(pick_music()); music_set_duck(g_screen == SCR_PAUSE ? 0.3f : 1.0f); music_update(16384);
 

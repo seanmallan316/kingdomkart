@@ -16,7 +16,7 @@ jobs:
           gcc $FLAGS tests/sim_test.c $SIM -lm -o sim_test && ./sim_test
           gcc $FLAGS tests/race_test.c $SIM -lm -o race_test && ./race_test
           gcc $FLAGS tests/track_test.c $SIM -lm -o track_test && ./track_test
-          gcc $FLAGS tests/sfx_test.c src/audio/sfx.c -lm -o sfx_test && ./sfx_test
+          gcc $FLAGS -DKK_CONTENT_DIR='"content/"' tests/sfx_test.c src/audio/sfx.c -lm -o sfx_test && ./sfx_test
           gcc $FLAGS tests/battle_test.c $SIM src/sim/battle.c -lm -o battle_test && ./battle_test
           gcc $FLAGS -DKK_CONTENT_DIR='"content/"' tests/music_test.c src/audio/music.c -lm -o music_test && ./music_test
 

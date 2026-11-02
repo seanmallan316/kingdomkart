@@ -47,11 +47,20 @@ Drop pictures into `assets/` (see `assets/README.txt` and the Art List for the e
 whenever one exists and draws its own placeholder otherwise.
 
 ## Music
-Soundtrack files live in `assets/music/` named by what they are for (`music_menu`, `music_beth`, `music_gal`,
-`music_jeru`, `music_tomb`, `music_heaven`, `music_elah`, `music_results`, `music_finallap`), in any audio format.
+Soundtrack files live in `assets/music/` named by what they are for (`music_menu`, `music_select`, `music_beth`, `music_gal`,
+`music_jeru`, `music_tomb`, `music_heaven`, `music_elah`, `music_results`, `music_lose`, `music_trophy`, `music_finallap`,
+`music_credits`), in any audio format.
 `python3 tools/prep_music.py` trims silence, evens the loudness and writes 32 kHz MP3s into `content/music/`, which
 the game streams and loops (with a crossfade from the end back to the start). A road without its own file borrows
 another road's track; a missing file is simply silent. The MP3 decoder is minimp3 (public domain, `src/third_party`).
+
+## Sound effects
+Recorded sounds go in `assets/sfx/` and `python3 tools/prep_sfx.py` writes them to `content/sfx/` (32 kHz WAV). The kart
+engine uses `kart_engine_idle`, `kart_engine_acceleration`, `kart_engine_top_speed` and `kart_engine_deceleration`
+(loops blended by speed and pitched up with it) plus `kart_engine_start`, `kart_gear_shift`, `kart_exhaust_pop`,
+`kart_braking` and `kart_hard_braking`. `sting_countdown` plays over the 3-2-1-GO and `sting_unlock` when something is
+unlocked. Any synthesized effect can be replaced by a recording named `sfx_<effect>.wav` (`sfx_coin`, `sfx_lap`, ...).
+Without the files, the game synthesizes everything itself.
 
 ## Project layout
 `src/sim` kart physics and the race (no graphics, runs in tests on a PC) · `src/world` roads and themes · `src/render`
