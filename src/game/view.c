@@ -370,15 +370,6 @@ static void build_track_meshes(void) {
     { float lowest = 1e9f; for (int i = 0; i < t->n; i++) { float y = track_surface_height(t, i, track_edge(t, i)); if (y < lowest) lowest = y; y = track_surface_height(t, i, -track_edge(t, i)); if (y < lowest) lowest = y; }
       batch_quad(&g_b, v3(0, lowest - 0.6f, 0), v3(600, 0, 0), v3(0, 0, -600), v3(0, 1, 0), 0, 0, 120, 120, 1, 1, 1, 1); }
     m_ground = gfx_mesh_static(g_b.v, g_b.n);
-    /* sky: a big cylinder-ish ring far away (drawn without depth) */
-    batch_clear(&g_b);
-    for (int k = 0; k < 24; k++) {
-        float a0 = k * 6.2831853f / 24, a1 = (k + 1) * 6.2831853f / 24, R = 900.0f;
-        float top = g_sky_wrap < 1.5f ? -60 + 6.2831853f * R / 4.0f : 420;      /* a painted 4:1 sky goes around once, so the ring is a quarter of its circumference tall to keep the clouds in shape */
-        Vec3 p0 = v3(cosf(a0) * R, -60, sinf(a0) * R), p1 = v3(cosf(a1) * R, -60, sinf(a1) * R), p2 = v3(cosf(a1) * R, top, sinf(a1) * R), p3 = v3(cosf(a0) * R, top, sinf(a0) * R);
-        batch_quad4(&g_b, p1, p0, p3, p2, v3(0, 1, 0), k / 24.0f * g_sky_wrap, 1, (k + 1) / 24.0f * g_sky_wrap, 0, 1, 1, 1, 1);
-    }
-    m_sky = gfx_mesh_static(g_b.v, g_b.n);
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
     m_spark = gfx_mesh_dynamic(MAX_SPARK * 6);
@@ -634,6 +625,17 @@ static void load_theme(void) {
     { int sw = 0, sh = 0; Texture *painted = asset_texture(d->tex_sky, 1, &sw, &sh);
       if (painted) { tx_sky = painted; g_sky_wrap = sw >= sh * 3 ? 1.0f : 3.0f; }
       else { tx_sky = make_tex(256, 256, 1, 0, d->night ? px_sky_night : px_sky); g_sky_wrap = 3.0f; } }
+    /* sky: a big cylinder-ish ring far away (drawn without depth), built once the picture (and so the wrap count) is known.
+       Going around, u runs forward continuously; the picture's bottom row (v = 1) sits at the horizon. */
+    batch_clear(&g_b);
+    for (int k = 0; k < 24; k++) {
+        float a0 = k * 6.2831853f / 24, a1 = (k + 1) * 6.2831853f / 24, R = 900.0f;
+        float top = g_sky_wrap < 1.5f ? -60 + 6.2831853f * R / 4.0f : 420;      /* a painted 4:1 sky goes around once, so the ring is a quarter of its circumference tall to keep the clouds in shape */
+        float u0 = k / 24.0f * g_sky_wrap, u1 = (k + 1) / 24.0f * g_sky_wrap;
+        Vec3 p0 = v3(cosf(a0) * R, -60, sinf(a0) * R), p1 = v3(cosf(a1) * R, -60, sinf(a1) * R), p2 = v3(cosf(a1) * R, top, sinf(a1) * R), p3 = v3(cosf(a0) * R, top, sinf(a0) * R);
+        batch_quad4(&g_b, p1, p0, p3, p2, v3(0, 1, 0), u1, 0, u0, 1, 1, 1, 1, 1);   /* corners get (u1,1) (u0,1) (u0,0) (u1,0) */
+    }
+    gfx_mesh_free(m_sky); m_sky = gfx_mesh_static(g_b.v, g_b.n);
     gfx_texture_free(tx_finale); tx_finale = d->finale_img ? asset_texture(d->finale_img, 0, NULL, NULL) : NULL;
     tx_star = NULL;
     if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star && g_sky_wrap > 1.5f) tx_star = make_tex(64, 64, 0, 0, px_star); }
