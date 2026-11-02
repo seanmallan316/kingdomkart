@@ -2,6 +2,7 @@
 // that the 3 ms audio frame callback keeps topped up from sfx_render().
 #include "wiiu_audio.h"
 #include "../audio/sfx.h"
+#include "../audio/music.h"
 #include "../render/gfx.h"
 #include <sndcore2/core.h>
 #include <sndcore2/voice.h>
@@ -25,7 +26,7 @@ static void frame_cb(void) {
     if (ahead >= LEAD) return;
     uint32_t need = LEAD - ahead;
     static int16_t tl[LEAD], tr[LEAD];
-    sfx_render(tl, tr, (int)need);
+    sfx_render(tl, tr, (int)need); music_mix(tl, tr, (int)need);
     for (uint32_t i = 0; i < need; i++) { uint32_t p = (write_pos + i) % RING; bufL[p] = tl[i]; bufR[p] = tr[i]; }
     write_pos = (write_pos + need) % RING;
     DCFlushRange(bufL, RING * sizeof(int16_t)); DCFlushRange(bufR, RING * sizeof(int16_t));
@@ -53,7 +54,7 @@ int wiiu_audio_start(void) {
     AXInitParams params; memset(&params, 0, sizeof params);
     params.renderer = AX_INIT_RENDERER_32KHZ; params.pipeline = AX_INIT_PIPELINE_SINGLE;
     AXInitWithParams(&params);
-    sfx_init(32000);
+    sfx_init(32000); music_init(32000);
     bufL = memalign(64, RING * sizeof(int16_t)); bufR = memalign(64, RING * sizeof(int16_t));
     if (!bufL || !bufR) { gfx_log("audio: no memory"); return 0; }
     memset(bufL, 0, RING * sizeof(int16_t)); memset(bufR, 0, RING * sizeof(int16_t));
@@ -61,7 +62,7 @@ int wiiu_audio_start(void) {
     vL = AXAcquireVoice(31, NULL, NULL); vR = AXAcquireVoice(31, NULL, NULL);
     if (!vL || !vR) { gfx_log("audio: could not get two voices"); return 0; }
     /* start a little ahead so the first frame has something to play */
-    static int16_t tl[LEAD], tr[LEAD]; sfx_render(tl, tr, LEAD);
+    static int16_t tl[LEAD], tr[LEAD]; sfx_render(tl, tr, LEAD); music_mix(tl, tr, LEAD);
     memcpy(bufL, tl, sizeof tl); memcpy(bufR, tr, sizeof tr); write_pos = LEAD;
     DCFlushRange(bufL, RING * sizeof(int16_t)); DCFlushRange(bufR, RING * sizeof(int16_t));
     setup_voice(vL, bufL, 0); setup_voice(vR, bufR, 1);
@@ -79,4 +80,5 @@ void wiiu_audio_stop(void) {
     AXVoiceBegin(vR); AXSetVoiceState(vR, AX_VOICE_STATE_STOPPED); AXVoiceEnd(vR);
     AXFreeVoice(vL); AXFreeVoice(vR);
     AXQuit();
+    music_shutdown();
 }

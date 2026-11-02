@@ -2,6 +2,7 @@
 #include "game.h"
 #include "save.h"
 #include "../audio/sfx.h"
+#include "../audio/music.h"
 #include "../sim/battle.h"
 #include "../sim/race.h"
 #include "../render/gfx.h"
@@ -673,7 +674,7 @@ static void build_previews(void) {
     }
 }
 int game_init(int status) {
-    g_status = status;
+    g_status = status; music_set_logger(gfx_log);
     save_load(); save_check_unlocks(); save_store();
 #ifdef KK_TOUR
     if (KK_TOUR_ROAD >= 4) g_save.unlocks = 0xFFFF;      /* the CI tour of the bonus road / the battle */
@@ -1074,6 +1075,23 @@ static void begin_battle(void) {
     g_msg_t = 0; g_results_t = 0; g_demo = 0; g_idle = 0; g_screen = SCR_RACE;
 }
 
+/* which music should be playing right now. Files are content/music/NAME.mp3; a road without its own track borrows one. */
+static const char *pick_music(void) {
+    static char buf[48];
+    if (g_screen == SCR_RACE || g_screen == SCR_PAUSE) {
+        if (g_mode == MODE_BATTLE) return music_available("music_elah") ? "music_elah" : (music_available("music_jeru") ? "music_jeru" : "music_menu");
+        Race *r = &g_race; Kart *pk = &r->k[r->player];
+        if (g_track.laps > 1 && pk->lap >= g_track.laps && r->state != RACE_COUNTDOWN && music_available("music_finallap")) return "music_finallap";
+        snprintf(buf, sizeof buf, "music_%s", g_def->prefix);
+        if (music_available(buf)) return buf;
+        static const char *roads[5] = {"music_beth", "music_gal", "music_jeru", "music_tomb", "music_heaven"};
+        for (int i = 0; i < 5; i++) if (music_available(roads[i])) return roads[i];
+        return "music_menu";
+    }
+    if (g_screen == SCR_RESULTS || g_screen == SCR_GP) return music_available("music_results") ? "music_results" : "music_menu";
+    return "music_menu";
+}
+
 void game_frame(const Pad *pad, float dt) {
     if (dt > 0.1f) dt = 0.1f;
 #ifdef KK_TOUR
@@ -1171,6 +1189,7 @@ void game_frame(const Pad *pad, float dt) {
     { Kart *pk = &r->k[r->player]; int racing = (g_screen == SCR_RACE) && !g_attract && r->state != RACE_FINISHED;
       sfx_engine(fabsf(pk->speed) / (36.0f * pk->st.top_speed), pk->drifting, pk->boost_t > 0, !pk->hit.on_road, pk->air, g_track.water, racing);
       static float ww_t = 0; if (racing && pk->wrongway_t > WRONGWAY_DELAY) { ww_t += dt; if (ww_t > 1.0f) { ww_t = 0; sfx_play(SFX_WRONG_WAY, 0.8f, 0); } } else ww_t = 1.0f; }
+    music_want(pick_music()); music_set_duck(g_screen == SCR_PAUSE ? 0.3f : 1.0f); music_update(16384);
 
     /* fixed-step simulation */
     static float acc = 0; if (sim_running) acc += dt; else acc = 0;

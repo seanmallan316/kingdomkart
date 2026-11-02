@@ -15,7 +15,8 @@ Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
 - Modes: Grand Prix (four roads, points, standings), Single Race, Time Trial (records saved), with Easy / Normal / Hard
   computer drivers that never cheat. Every race is under two minutes.
 - Achievements that unlock the bonus characters, karts and road; progress saved on the SD card.
-- Sound effects for everything (music is on hold).
+- Sound effects for everything, and a soundtrack: a track per road, the menus, the results screen, the final lap and
+  the Goliath fight (MP3 files streamed from the game file; see Music below).
 
 ## Controls (GamePad or Pro Controller)
 Left stick / D-pad steer and move through menus · **A** gas / choose · **B** brake / back · **ZR** hold to drift
@@ -45,7 +46,14 @@ Drop pictures into `assets/` (see `assets/README.txt` and the Art List for the e
 `python3 tools/prep_assets.py`, and commit the small files it writes into `content/img/`. The game uses a picture
 whenever one exists and draws its own placeholder otherwise.
 
+## Music
+Soundtrack files live in `assets/music/` named by what they are for (`music_menu`, `music_beth`, `music_gal`,
+`music_jeru`, `music_tomb`, `music_heaven`, `music_elah`, `music_results`, `music_finallap`), in any audio format.
+`python3 tools/prep_music.py` trims silence, evens the loudness and writes 32 kHz MP3s into `content/music/`, which
+the game streams and loops (with a crossfade from the end back to the start). A road without its own file borrows
+another road's track; a missing file is simply silent. The MP3 decoder is minimp3 (public domain, `src/third_party`).
+
 ## Project layout
 `src/sim` kart physics and the race (no graphics, runs in tests on a PC) · `src/world` roads and themes · `src/render`
-GX2 drawing · `src/game` screens and the race view · `src/audio` sound synthesizer · `src/platform` Wii U entry point,
+GX2 drawing · `src/game` screens and the race view · `src/audio` sound synthesizer and music player · `src/platform` Wii U entry point,
 input, sound output · `tests/` host tests · `docs/` milestone checklists.
