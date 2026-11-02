@@ -192,32 +192,64 @@ void gfx_mesh_update(Mesh *m, const Vertex *v, uint32_t n) {
 void gfx_mesh_free(Mesh *m) { if (!m) return; for (int i = 0; i < m->nbuf; i++) GX2RDestroyBufferEx(&m->buf[i], GX2R_RESOURCE_BIND_NONE); free(m); }
 
 // ------------------------------------------------------------------ textures
+/* copies one level's linear pixels into the tiled texture */
+static void *upload_level(GX2Texture *tx, int level, const uint32_t *pixels, int w, int h) {   /* returns the staging buffer: free it after GX2DrawDone */
+    GX2Surface lin = tx->surface; lin.tileMode = GX2_TILE_MODE_LINEAR_ALIGNED; lin.width = w; lin.height = h; lin.mipLevels = 1;
+    GX2CalcSurfaceSizeAndAlignment(&lin);
+    lin.image = memalign(lin.alignment, lin.imageSize);
+    if (!lin.image) return NULL;
+    memset(lin.image, 0, lin.imageSize);
+    for (int y = 0; y < h; y++) memcpy((uint8_t *)lin.image + (size_t)y * lin.pitch * 4, pixels + (size_t)y * w, (size_t)w * 4);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, lin.image, lin.imageSize);
+    GX2CopySurface(&lin, 0, 0, &tx->surface, level, 0);
+    return lin.image;
+}
+/* half-size picture, averaging 2x2 pixels; colors are weighted by alpha so transparent pixels do not darken the edges */
+static void downsample(const uint32_t *src, int w, int h, uint32_t *dst, int dw, int dh) {
+    for (int y = 0; y < dh; y++) for (int x = 0; x < dw; x++) {
+        unsigned r = 0, g = 0, b = 0, a = 0, wsum = 0;
+        for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
+            int sx = x * 2 + dx, sy = y * 2 + dy; if (sx >= w) sx = w - 1; if (sy >= h) sy = h - 1;
+            uint32_t p = src[sy * w + sx]; unsigned pa = p & 255, wgt = pa + 1;   /* 0xRRGGBBAA in memory on a big-endian machine = the word's low byte is A */
+            r += ((p >> 24) & 255) * wgt; g += ((p >> 16) & 255) * wgt; b += ((p >> 8) & 255) * wgt; a += pa; wsum += wgt; }
+        dst[y * dw + x] = ((r / wsum) << 24) | ((g / wsum) << 16) | ((b / wsum) << 8) | (a / 4);
+    }
+}
 Texture *gfx_texture_rgba(const uint32_t *pixels, int w, int h, int repeat, int nearest) {
     Texture *t = calloc(1, sizeof *t); if (!t) return NULL;
     GX2Texture *tx = &t->tex;
+    int levels = 1; if (!nearest) { int m = w > h ? w : h; while ((m >> levels) >= 1 && levels < 13) levels++; }
     tx->surface.use = GX2_SURFACE_USE_TEXTURE; tx->surface.width = w; tx->surface.height = h; tx->surface.depth = 1;
     tx->surface.dim = GX2_SURFACE_DIM_TEXTURE_2D; tx->surface.format = GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8;
-    tx->surface.tileMode = GX2_TILE_MODE_DEFAULT; tx->surface.aa = GX2_AA_MODE1X; tx->surface.mipLevels = 1;
-    tx->viewNumSlices = 1; tx->viewNumMips = 1; tx->compMap = 0x00010203;
+    tx->surface.tileMode = GX2_TILE_MODE_DEFAULT; tx->surface.aa = GX2_AA_MODE1X; tx->surface.mipLevels = (uint32_t)levels;
+    tx->viewNumSlices = 1; tx->viewNumMips = (uint32_t)levels; tx->compMap = 0x00010203;
     GX2CalcSurfaceSizeAndAlignment(&tx->surface);
     GX2InitTextureRegs(tx);
     tx->surface.image = memalign(tx->surface.alignment, tx->surface.imageSize);
     if (!tx->surface.image) { free(t); return NULL; }
-    GX2Surface lin = tx->surface; lin.tileMode = GX2_TILE_MODE_LINEAR_ALIGNED;
-    GX2CalcSurfaceSizeAndAlignment(&lin);
-    lin.image = memalign(lin.alignment, lin.imageSize);
-    if (!lin.image) { free(tx->surface.image); free(t); return NULL; }
-    memset(lin.image, 0, lin.imageSize);
-    for (int y = 0; y < h; y++) memcpy((uint8_t *)lin.image + (size_t)y * lin.pitch * 4, pixels + (size_t)y * w, (size_t)w * 4);
-    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, lin.image, lin.imageSize);
-    GX2CopySurface(&lin, 0, 0, &tx->surface, 0, 0);
-    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tx->surface.image, tx->surface.imageSize);
+    if (levels > 1 && tx->surface.mipmapSize) { tx->surface.mipmaps = memalign(tx->surface.alignment, tx->surface.mipmapSize); if (!tx->surface.mipmaps) { free(tx->surface.image); free(t); return NULL; } }
+    void *staging[13] = {0}; int nst = 0;
+    staging[nst++] = upload_level(tx, 0, pixels, w, h);
+    if (!staging[0]) { free(tx->surface.mipmaps); free(tx->surface.image); free(t); return NULL; }
+    if (levels > 1) {   /* the smaller copies for far-away drawing */
+        uint32_t *cur = malloc((size_t)w * h * 4), *nxt = malloc((size_t)w * h * 4); int cw = w, ch = h;
+        if (cur && nxt) { memcpy(cur, pixels, (size_t)w * h * 4);
+            for (int lv = 1; lv < levels; lv++) { int dw = cw > 1 ? cw / 2 : 1, dh = ch > 1 ? ch / 2 : 1; downsample(cur, cw, ch, nxt, dw, dh); staging[nst++] = upload_level(tx, lv, nxt, dw, dh); uint32_t *tmp = cur; cur = nxt; nxt = tmp; cw = dw; ch = dh; } }
+        free(cur); free(nxt);
+    }
     GX2DrawDone();
-    free(lin.image);
+    for (int i = 0; i < nst; i++) free(staging[i]);
+    if (tx->surface.mipmaps) GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tx->surface.mipmaps, tx->surface.mipmapSize);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tx->surface.image, tx->surface.imageSize);
     GX2InitSampler(&t->smp, repeat ? GX2_TEX_CLAMP_MODE_WRAP : GX2_TEX_CLAMP_MODE_CLAMP, nearest ? GX2_TEX_XY_FILTER_MODE_POINT : GX2_TEX_XY_FILTER_MODE_LINEAR);
+    if (levels > 1) {
+        GX2InitSamplerXYFilter(&t->smp, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_4_TO_1);
+        GX2InitSamplerZMFilter(&t->smp, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_LINEAR);
+        GX2InitSamplerLOD(&t->smp, 0.0f, (float)(levels - 1), 0.0f);
+    }
     return t;
 }
-void gfx_texture_free(Texture *t) { if (!t) return; free(t->tex.surface.image); free(t); }
+void gfx_texture_free(Texture *t) { if (!t) return; free(t->tex.surface.mipmaps); free(t->tex.surface.image); free(t); }
 
 // ------------------------------------------------------------------ frames and state
 void gfx_frame_begin(void) {

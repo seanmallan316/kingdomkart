@@ -100,9 +100,23 @@ static inline void font_build_texture(uint32_t *px) {        /* px has FONT_TEX_
     }
     for (int y = 24; y < 32; y++) for (int x = 120; x < 128; x++) px[y * FONT_TEX_W + x] = 0xFFFFFFFFu;   /* solid white block for rectangles */
 }
-/* draws text in the virtual 1280x720 space; size = pixel height of a glyph cell (7 rows); returns width used */
+#include "font_hd.h"
+static int g_font_hd = 0;      /* 1 when content/img/font_hd.png is loaded and bound as the text texture */
+/* draws text in the virtual 1280x720 space; size = pixel height of a capital letter; returns width used */
 static inline float batch_text(Batch *b, const char *s, float x, float y, float size, float r, float g, float bl, float a) {
     float sc = size / 7.0f, x0 = x;
+    if (g_font_hd) {
+        float hs = size / 50.0f;     /* the HD glyphs have 50-pixel capitals in an 80-pixel cell, cap tops 10 pixels down */
+        for (; *s; s++) {
+            char c = *s; if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+            if (c == ' ') { x += 24 * hs; continue; }
+            const char *p = strchr(FONT_CHARS, c); if (!p) continue;
+            int i = (int)(p - FONT_CHARS); float u0 = (float)(i % FONT_HD_COLS) * FONT_HD_CW / FONT_HD_W, v0 = (float)(i / FONT_HD_COLS) * FONT_HD_CH / FONT_HD_H;
+            batch_rect_uv(b, x, y - 10 * hs, FONT_HD_CW * hs, FONT_HD_CH * hs, u0, v0, u0 + (float)FONT_HD_CW / FONT_HD_W, v0 + (float)FONT_HD_CH / FONT_HD_H, r, g, bl, a);
+            x += FONT_HD_ADV[i] * hs;
+        }
+        return x - x0;
+    }
     for (; *s; s++) {
         char c = *s; if (c >= 'a' && c <= 'z') c = (char)(c - 32);
         if (c == ' ') { x += 6 * sc; continue; }
@@ -113,5 +127,8 @@ static inline float batch_text(Batch *b, const char *s, float x, float y, float 
     }
     return x - x0;
 }
-static inline float text_width(const char *s, float size) { return (float)strlen(s) * 6.0f * (size / 7.0f) - size / 7.0f; }
+static inline float text_width(const char *s, float size) {
+    if (g_font_hd) { float hs = size / 50.0f, w = 0; for (; *s; s++) { char c = *s; if (c >= 'a' && c <= 'z') c = (char)(c - 32); if (c == ' ') { w += 24 * hs; continue; } const char *p = strchr(FONT_CHARS, c); if (p) w += FONT_HD_ADV[p - FONT_CHARS] * hs; } return w - 6 * hs; }
+    return (float)strlen(s) * 6.0f * (size / 7.0f) - size / 7.0f;
+}
 #endif
