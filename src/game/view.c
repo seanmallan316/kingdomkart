@@ -71,7 +71,7 @@ static float g_frame_ms = 16.7f;
 static float g_results_t;
 
 /* textures */
-static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette;
+static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
 /* meshes */
 static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
@@ -91,7 +91,7 @@ static Dust g_dust[MAX_DUST];
 typedef struct { Vec3 p, v; float life, size, r, g, b; } Spark;
 static Spark g_spark[MAX_SPARK]; static Mesh *m_spark;
 /* scenery: cut-out pictures standing beside the road, grouped by picture */
-typedef struct { const char *img; Texture *tex; float aspect; Mesh *mesh; } SpriteKind;
+typedef struct { const char *img; Texture *tex; float aspect; Mesh *mesh; int placeholder, sway; } SpriteKind;   /* sway: 1 tree (slow), 2 cloth (quick) */
 static SpriteKind g_kind[MAX_SPRITE_KINDS]; static int g_nkind;
 typedef struct { Vec3 p; float h, w, glow; int kind; int purple, falls; } Placed;
 static Placed g_placed[MAX_SCENERY]; static int g_nplaced;
@@ -230,6 +230,10 @@ static void px_tree(int x, int y, uint32_t *o) {       /* 64x64 cypress-like tre
 static void px_blob(int x, int y, uint32_t *o) { float dx = (x - 32) / 32.0f, dy = (y - 32) / 32.0f; float d = sqrtf(dx * dx + dy * dy); float a = d > 1 ? 0 : (1 - d) * (1 - d); *o = rgba(255, 255, 255, (int)(a * 255)); }
 static void px_vignette(int x, int y, uint32_t *o) {    /* dark at the corners, clear in the middle; drawn over the whole screen */
     float dx = (x - 127.5f) / 127.5f, dy = (y - 127.5f) / 127.5f; float d = sqrtf(dx * dx + dy * dy) / 1.4142f; float a = d < 0.45f ? 0 : (d - 0.45f) / 0.55f; a = a * a * 0.6f; *o = rgba(0, 0, 0, (int)(a * 255)); }
+static void px_bird(int x, int y, uint32_t *o) {        /* a small white bird: two wings in a shallow V */
+    float fx = (x - 16) / 16.0f, fy = (y - 16) / 16.0f; float wing = 0.35f - fabsf(fx) * 0.5f;   /* the wing line, higher toward the tips */
+    float d = fabsf(fy - wing); float a = d < 0.12f ? 1.0f : (d < 0.22f ? (0.22f - d) / 0.1f : 0); if (fabsf(fx) > 0.95f) a = 0;
+    *o = rgba(250, 250, 255, (int)(a * 255)); }
 static void px_flag(int x, int y, uint32_t *o) { int c = ((x / 8) + (y / 8)) & 1; *o = c ? rgba(245, 245, 245, 255) : rgba(20, 20, 20, 255); }
 static float sky_noise(float x, float y) {              /* repeats every 256 pixels in x so the sky ring has no seams */
     float a = smooth_noise(x / 40.0f, y / 20.0f) * 0.6f + smooth_noise(x / 15.0f, y / 8.0f) * 0.4f;
@@ -611,7 +615,9 @@ static int sprite_kind(const char *img) {
       k->tex = asset_texture(name, 0, &w, &h);
       if (!k->tex && img[0] == '#') k->tex = asset_texture(img + 1, 0, &w, &h);   /* a picture shared by every road (waterfall.png) */
       if (k->tex) k->aspect = (float)w / (float)h; }
+    k->placeholder = k->tex == NULL;
     if (!k->tex) k->tex = placeholder_sprite(img, &k->aspect);
+    k->sway = (strstr(img, "palm") || strstr(img, "olive") || strstr(img, "cypress") || strstr(img, "tree")) ? 1 : ((strstr(img, "banner") || strstr(img, "flag") || strstr(img, "net") || strstr(img, "tent")) ? 2 : 0);
     k->mesh = gfx_mesh_dynamic((MAX_SCENERY + MAX_MOVERS) * 6);
     return g_nkind++;
 }
@@ -708,7 +714,7 @@ int game_init(int status) {
     race_set_unlocked(unlocked_mask()); race_set_styles(0, unlocked_styles());
     build_previews();
     if (status == GFX_OK) {
-        tx_blob = make_tex(64, 64, 0, 0, px_blob); tx_vignette = make_tex(256, 256, 0, 0, px_vignette);
+        tx_blob = make_tex(64, 64, 0, 0, px_blob); tx_vignette = make_tex(256, 256, 0, 0, px_vignette); tx_bird = make_tex(32, 32, 0, 0, px_bird);
         tx_flag = make_tex(32, 32, 1, 1, px_flag);
         { Texture *hd = asset_texture("font_hd", 0, NULL, NULL);
           if (hd) { tx_font = hd; g_font_hd = 1; }
@@ -860,13 +866,38 @@ static void hud_race(const Pad *pad) {
 
 // ------------------------------------------------------------------ screens
 static void hud_title(void) {
+    float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);   /* the logo settles in */
+    float sc = 1.6f - 0.6f * ease, al = ease;
     checker_band(150, 24);
     panel(240, 190, 800, 230);
-    text_c("KINGDOM KART", 215, 86, 1, 0.85f, 0.3f, 1);
-    text_c("ROAD TO GLORY", 315, 44, 1, 1, 1, 1);
-    text_c("A RACE THROUGH THE STORY OF JESUS", 372, 18, 0.8f, 0.9f, 1, 1);
+    text_c("KINGDOM KART", 258 - 43 * sc, 86 * sc, 1, 0.85f, 0.3f, al);
+    text_c("ROAD TO GLORY", 315, 44, 1, 1, 1, al);
+    text_c("A RACE THROUGH THE STORY OF JESUS", 372, 18, 0.8f, 0.9f, 1, al);
     checker_band(430, 24);
-    if ((int)(g_time * 2) & 1) text_c("PRESS A", 520, 36, 1, 1, 1, 1);
+    if ((int)(g_time * 2) & 1 && u >= 1) text_c("PRESS A", 520, 36, 1, 1, 1, 1);
+}
+/* the top three on stands (results of a race) */
+static void hud_podium(void) {
+    Race *r = &g_race; if (r->nk < 3) return;
+    int rows[NKARTS]; for (int p = 0; p < r->nk; p++) rows[p] = r->order[p];
+    for (int a2 = 1; a2 < r->nk; a2++) { int v = rows[a2], j = a2 - 1; while (j >= 0 && r->k[rows[j]].place > r->k[v].place) { rows[j + 1] = rows[j]; j--; } rows[j + 1] = v; }
+    static const float sx[3] = {215, 95, 335}, sh[3] = {110, 75, 50}; static const float col[3][3] = {{1, 0.85f, 0.3f}, {0.8f, 0.82f, 0.88f}, {0.8f, 0.5f, 0.25f}};
+    float base = 600;
+    for (int p = 0; p < 3; p++) { int i = rows[p]; const Character *c = &CHARACTERS[r->character[i]];
+        batch_rect(&g_b, sx[p] - 55, base - sh[p], 110, sh[p], col[p][0] * 0.6f, col[p][1] * 0.6f, col[p][2] * 0.6f, 1);
+        batch_rect(&g_b, sx[p] - 55, base - sh[p], 110, 8, col[p][0], col[p][1], col[p][2], 1);
+        char n[4]; snprintf(n, sizeof n, "%d", p + 1); batch_text(&g_b, n, sx[p] - text_width(n, 40) / 2, base - sh[p] + 22, 40, col[p][0], col[p][1], col[p][2], 1);
+        batch_text(&g_b, c->short_name, sx[p] - text_width(c->short_name, 16) / 2, base + 8, 16, 1, 1, 1, 1); }
+}
+static void draw_podium_karts(void) {   /* the kart pictures stand on the podium; drawn after the HUD batch with their own textures */
+    Race *r = &g_race; if (r->nk < 3) return;
+    int rows[NKARTS]; for (int p = 0; p < r->nk; p++) rows[p] = r->order[p];
+    for (int a2 = 1; a2 < r->nk; a2++) { int v = rows[a2], j = a2 - 1; while (j >= 0 && r->k[rows[j]].place > r->k[v].place) { rows[j + 1] = rows[j]; j--; } rows[j + 1] = v; }
+    static Mesh *pm[3] = {0}; Mat4 id = m4_identity(); static const float sx[3] = {215, 95, 335}, sh[3] = {110, 75, 50};
+    for (int p = 0; p < 3; p++) { int ch = r->character[rows[p]]; if (!tx_kart[ch]) continue; if (!pm[p]) pm[p] = gfx_mesh_dynamic(6);
+        float w = p == 0 ? 150 : 110, h = w / g_kart_aspect[ch];
+        batch_clear(&g_b); batch_rect_uv(&g_b, sx[p] - w / 2, 600 - sh[p] - h + 6, w, h, 0, 0, 1, 1, 1, 1, 1, 1);
+        gfx_mesh_update(pm[p], g_b.v, g_b.n); gfx_bind(tx_kart[ch]); gfx_draw(pm[p], &id, 1, 1, 1, 1); }
 }
 static void hud_main(void) {
     panel(360, 150, 560, 420);
@@ -1103,19 +1134,21 @@ static void hud_battle_results(void) {
 }
 static void hud_results(void) {
     Race *r = &g_race; char buf[64];
-    panel(290, 90, 700, 540);
+    int podium = g_mode != MODE_TT;
+    if (podium) hud_podium();
+    panel(podium ? 420 : 290, 90, podium ? 780 : 700, 540);
     text_c(g_mode == MODE_TT ? "TIME TRIAL" : "RESULTS", 110, 44, 1, 0.85f, 0.3f, 1);
     int rows[NKARTS]; for (int p = 0; p < r->nk; p++) rows[p] = r->order[p];
     for (int a2 = 1; a2 < r->nk; a2++) { int v = rows[a2], j = a2 - 1; while (j >= 0 && r->k[rows[j]].place > r->k[v].place) { rows[j + 1] = rows[j]; j--; } rows[j + 1] = v; }
     for (int p = 0; p < r->nk; p++) { int i = rows[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];
-        float y = 170 + p * 50; int me = i == r->player;
-        if (me) batch_rect(&g_b, 310, y - 6, 660, 44, 1, 0.85f, 0.3f, 0.25f);
-        batch_text(&g_b, place_name(q->place ? q->place : p + 1), 330, y, 30, 1, 1, 1, 1);
-        batch_rect(&g_b, 440, y + 2, 26, 26, c->r, c->g, c->b, 1);
-        batch_text(&g_b, c->short_name, 480, y, 30, me ? 1.0f : 0.9f, me ? 0.95f : 0.9f, me ? 0.5f : 0.9f, 1);
+        float y = 170 + p * 50, ox = podium ? 130 : 0; int me = i == r->player;
+        if (me) batch_rect(&g_b, 310 + ox, y - 6, 660, 44, 1, 0.85f, 0.3f, 0.25f);
+        batch_text(&g_b, place_name(q->place ? q->place : p + 1), 330 + ox, y, 30, 1, 1, 1, 1);
+        batch_rect(&g_b, 440 + ox, y + 2, 26, 26, c->r, c->g, c->b, 1);
+        batch_text(&g_b, c->short_name, 480 + ox, y, 30, me ? 1.0f : 0.9f, me ? 0.95f : 0.9f, me ? 0.5f : 0.9f, 1);
         if (q->lap > g_track.laps) fmt_time(buf, sizeof buf, q->total_time); else snprintf(buf, sizeof buf, "--:--.--");
-        batch_text(&g_b, buf, 720, y, 30, 1, 1, 1, 1);
-        if (g_mode == MODE_GP) { int pl = q->place ? q->place : p + 1; snprintf(buf, sizeof buf, "+%d", GP_POINTS[pl - 1]); batch_text(&g_b, buf, 900, y, 30, 1, 0.9f, 0.4f, 1); } }
+        batch_text(&g_b, buf, 720 + ox, y, 30, 1, 1, 1, 1);
+        if (g_mode == MODE_GP) { int pl = q->place ? q->place : p + 1; snprintf(buf, sizeof buf, "+%d", GP_POINTS[pl - 1]); batch_text(&g_b, buf, 900 + ox, y, 30, 1, 0.9f, 0.4f, 1); } }
     if (g_mode == MODE_TT) { Kart *k = &r->k[r->player]; fmt_time(buf, sizeof buf, k->best_lap); char line[96]; snprintf(line, sizeof line, "BEST LAP %s", buf); text_c(line, 240, 28, 0.9f, 0.95f, 1, 1);
         if (g_best_time[g_track_idx] > 0 && k->total_time <= g_best_time[g_track_idx] + 0.001f) text_c("NEW RECORD!", 300, 40, 1, 0.9f, 0.3f, 1); }
     text_c(g_mode == MODE_GP ? "A: NEXT ROAD" : "A: RACE AGAIN   B: MENU", 585, 20, 0.9f, 0.95f, 1, 1);
@@ -1422,9 +1455,11 @@ void game_frame(const Pad *pad, float dt) {
             batch_clear(&g_b);
             for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->kind != kd) continue;
                 float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; if (dx * dx + dz * dz > SPRITE_DRAW_DIST * SPRITE_DRAW_DIST) continue;
-                float w = pl->w * 0.5f;
-                float v0 = pl->falls ? g_time * 1.5f : 0.0f;
-                batch_quad(&g_b, v3(pl->p.x, pl->p.y + pl->h * 0.5f, pl->p.z), v3(ax.x * w, 0, ax.z * w), v3(0, pl->h * 0.5f, 0), v3(0, 1, 0), 0, v0, 1, v0 + (pl->falls ? pl->h / 3.0f : 1.0f), 1, 1, 1, 1); }
+                float w = pl->w * 0.5f; int scroll = pl->falls && g_kind[kd].placeholder;
+                float v0 = scroll ? g_time * 1.5f : 0.0f, v1 = v0 + (scroll ? pl->h / 3.0f : 1.0f);
+                float sw = g_kind[kd].sway == 1 ? sinf(g_time * 0.9f + i * 1.3f) * 0.025f * pl->h : (g_kind[kd].sway == 2 ? sinf(g_time * 3.0f + i * 2.1f) * 0.03f * pl->h : 0);   /* the top of trees and cloth moves in the wind */
+                Vec3 c = v3(pl->p.x, pl->p.y + pl->h * 0.5f, pl->p.z), r_ = v3(ax.x * w, 0, ax.z * w), u_ = v3(ax.x * sw, pl->h * 0.5f, ax.z * sw);
+                batch_quad4(&g_b, v3(c.x - r_.x - u_.x, c.y - u_.y, c.z - r_.z - u_.z), v3(c.x + r_.x - u_.x, c.y - u_.y, c.z + r_.z - u_.z), v3(c.x + r_.x + u_.x, c.y + u_.y, c.z + r_.z + u_.z), v3(c.x - r_.x + u_.x, c.y + u_.y, c.z - r_.z + u_.z), v3(0, 1, 0), 0, v0, 1, v1, 1, 1, 1, 1); }
             for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd) continue; const Mover *mv = &g_track.mover[m];
                 float mx, my, mz; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); float w = mv->height * g_kind[kd].aspect * 0.5f;
                 batch_quad(&g_b, v3(mx, my + mv->height * 0.5f, mz), v3(ax.x * w, 0, ax.z * w), v3(0, mv->height * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
@@ -1522,6 +1557,18 @@ void game_frame(const Pad *pad, float dt) {
         gfx_state(ST_CUTOUT);
         for (int kd = 0; kd < g_nkind; kd++) { gfx_bind(g_kind[kd].tex); gfx_draw(g_kind[kd].mesh, &id, 1, 1, 1, 1); }
         if (tx_finale && m_finale) { gfx_state(ST_CUTOUT); gfx_bind(tx_finale); gfx_draw_ex(m_finale, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
+        if (!g_def->night) {   /* doves crossing the sky, and the sun's glare */
+            static Mesh *m_birds = NULL, *m_sun = NULL; if (!m_birds) { m_birds = gfx_mesh_dynamic(6 * 6); m_sun = gfx_mesh_dynamic(12); }
+            batch_clear(&g_b);
+            for (int bd = 0; bd < 6; bd++) { float t = g_time * 0.25f + bd * 1.05f, rad = 90.0f + bd * 17.0f;
+                Vec3 bp = v3(cam_x + cosf(t) * rad, 26.0f + bd * 3.0f + sinf(g_time * 0.7f + bd) * 2.0f, cam_z + sinf(t) * rad);
+                float flap = 0.35f + 0.65f * fabsf(sinf(g_time * 7.0f + bd * 1.7f)), bw = 1.1f;
+                batch_quad(&g_b, bp, v3(ax.x * bw, 0, ax.z * bw), v3(0, bw * 0.5f * flap, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 0.9f); }
+            gfx_mesh_update(m_birds, g_b.v, g_b.n); gfx_state(ST_CUTOUT); gfx_bind(tx_bird); gfx_draw_ex(m_birds, &id, 1, 1, 1, 1, 0, 1, 0, 0);
+            batch_clear(&g_b);
+            { Vec3 sd = v3_norm(ldir); float dist = 700.0f; Vec3 sp = v3(cam_x + sd.x * dist, cam_y + sd.y * dist * 0.55f, cam_z + sd.z * dist);
+              float ss = 95.0f; batch_quad(&g_b, sp, v3(ax.x * ss, 0, ax.z * ss), v3(0, ss, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 0.95f, 0.8f, 0.55f); }
+            gfx_mesh_update(m_sun, g_b.v, g_b.n); gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_sun, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_skid, &id, 1, 1, 1, 1);
         gfx_bind(tx_blob); gfx_draw(m_scshadow, &id, 1, 1, 1, 1); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
         /* item boxes: spinning cubes */
@@ -1571,7 +1618,9 @@ void game_frame(const Pad *pad, float dt) {
                 gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(tx_kartview[ch][v]); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1); }
             if (!tx_char[ch]) continue;
             float hgt = pic ? 1.5f : 1.75f, hw = hgt * 0.5f * g_char_aspect[ch];
-            Vec3 c = v3(q->x - hx * 0.25f, q->y + q->hop * 0.4f + (pic ? 0.75f : 0.55f) + hgt * 0.5f, q->z - hz * 0.25f);
+            float bob = sinf(g_time * 11.0f + i) * 0.015f * fminf(fabsf(q->speed) / 20.0f, 1.0f);   /* a little engine shake */
+            hgt *= 1.0f - q->squash * 0.18f + (q->air && q->hop <= 0 ? -0.08f : 0);                 /* lands with a bounce, tucks in on jumps */
+            Vec3 c = v3(q->x - hx * 0.25f, q->y + q->hop * 0.4f + bob + (pic ? 0.75f : 0.55f) + hgt * 0.5f, q->z - hz * 0.25f);
             float lean = q->steer_vis * -0.12f;       /* leans into the turn */
             batch_clear(&g_b);
             batch_quad(&g_b, c, v3(ax.x * hw, 0, ax.z * hw), v3(ax.x * lean * hgt * 0.5f, hgt * 0.5f, ax.z * lean * hgt * 0.5f), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
@@ -1634,9 +1683,12 @@ void game_frame(const Pad *pad, float dt) {
           batch_rect(&g_b, 20 + 300 * (16.7f / 33.3f), 704, 2, 14, 1, 1, 1, 0.8f); }
         batch_rect(&g_b, 1220, 690, 20, 20, pad->source & 2 ? 1.0f : (pad->source & 1 ? 0.2f : 0.5f), pad->source & 2 ? 0.8f : (pad->source & 1 ? 0.5f : 0.5f), pad->source ? 0.2f : 0.5f, 0.9f);
         if (g_screen == SCR_TITLE && tx_title && m_title) { gfx_bind(tx_title); gfx_draw(m_title, &id, 1, 1, 1, 1); }
+        /* a quick fade from black when a new screen opens */
+        if (g_screen_t < 0.3f && (g_screen == SCR_RACE || g_screen == SCR_RESULTS || g_screen == SCR_TITLE || g_screen == SCR_CREDITS || g_screen == SCR_GP)) batch_rect(&g_b, 0, 0, 1280, 720, 0, 0, 0, 1.0f - g_screen_t / 0.3f);
         gfx_mesh_update(m_hud, g_b.v, g_b.n);
         gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
         if (g_screen == SCR_CHAR) draw_portraits();
+        if (g_screen == SCR_RESULTS && g_mode != MODE_TT && g_mode != MODE_BATTLE) draw_podium_karts();
         if (g_screen == SCR_TRACK) for (int d = 0; d < NUM_PLAY_TRACKS && d < 8; d++) { if (!tx_card[d] || !track_unlocked(d)) continue;
             if (!m_card[d]) { float x = 40 + d * 245 + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, 200, 108, 0, 0, 1, 1, 1, 1, 1, 1); m_card[d] = gfx_mesh_static(g_b.v, g_b.n); }
             gfx_bind(tx_card[d]); gfx_draw(m_card[d], &id, 1, 1, 1, 1); }
