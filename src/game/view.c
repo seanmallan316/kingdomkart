@@ -874,12 +874,12 @@ static void hud_options(void) {
     volume_row("SOUND VOLUME", g_save.sfx_vol, 180, g_opt_sel == 1);
     text_c("LEFT/RIGHT: CHANGE   B: BACK", 224, 14, 0.8f, 0.85f, 1, 1);
     batch_text(&g_b, "RECORDS", 280, 262, 24, 1, 0.85f, 0.3f, 1);
-    batch_text(&g_b, "ROAD", 280, 300, 16, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "BEST TIME", 660, 300, 16, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "TARGET", 860, 300, 16, 0.8f, 0.85f, 1, 1);
+    batch_text(&g_b, "ROAD", 280, 300, 16, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "BEST TIME", 720, 300, 16, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "TARGET", 900, 300, 16, 0.8f, 0.85f, 1, 1);
     for (int d = 0; d < NUM_PLAY_TRACKS && d < SAVE_MAX_ROADS; d++) { float y = 326 + d * 30;
         batch_text(&g_b, TRACK_DEFS[d].name, 280, y, 18, 1, 1, 1, 1);
-        if (g_save.best_ms[d] > 0) { fmt_time(buf, sizeof buf, g_save.best_ms[d] / 1000.0f); int beat = save_par_time(d) > 0 && g_save.best_ms[d] <= (int)(save_par_time(d) * 1000); batch_text(&g_b, buf, 660, y, 18, beat ? 1 : 1, beat ? 0.85f : 1, beat ? 0.3f : 1, 1); }
-        else batch_text(&g_b, "--:--.--", 660, y, 18, 0.6f, 0.65f, 0.75f, 1);
-        if (save_par_time(d) > 0) { fmt_time(buf, sizeof buf, save_par_time(d)); batch_text(&g_b, buf, 860, y, 18, 0.8f, 0.85f, 1, 1); } }
+        if (g_save.best_ms[d] > 0) { fmt_time(buf, sizeof buf, g_save.best_ms[d] / 1000.0f); int beat = save_par_time(d) > 0 && g_save.best_ms[d] <= (int)(save_par_time(d) * 1000); batch_text(&g_b, buf, 720, y, 18, 1, beat ? 0.85f : 1, beat ? 0.3f : 1, 1); }
+        else batch_text(&g_b, "--:--.--", 720, y, 18, 0.6f, 0.65f, 0.75f, 1);
+        if (save_par_time(d) > 0) { fmt_time(buf, sizeof buf, save_par_time(d)); batch_text(&g_b, buf, 900, y, 18, 0.8f, 0.85f, 1, 1); } }
     float y = 326 + NUM_PLAY_TRACKS * 30 + 16;
     snprintf(buf, sizeof buf, "RACES FINISHED %d   RACES WON %d", g_save.races, g_save.wins); batch_text(&g_b, buf, 280, y, 18, 1, 1, 1, 1);
     snprintf(buf, sizeof buf, "GRAND PRIX WON: EASY %d  NORMAL %d  HARD %d", g_save.gp_wins[0], g_save.gp_wins[1], g_save.gp_wins[2]); batch_text(&g_b, buf, 280, y + 30, 18, 1, 1, 1, 1);
