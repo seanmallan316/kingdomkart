@@ -790,7 +790,7 @@ static void checker_band(float y, float h) {
 static void text_c(const char *s, float y, float size, float r, float g, float b, float a) { batch_text(&g_b, s, 640 - text_width(s, size) / 2, y, size, r, g, b, a); }
 /* one frame with a message on both screens, shown while the pictures load (the game is otherwise black for a few seconds) */
 static void draw_loading(const char *msg) {
-    static Mesh *m = NULL; if (!m) m = gfx_mesh_dynamic(512);
+    static Mesh *m = NULL; if (!m) m = gfx_mesh_dynamic(2048);
     batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b);
     checker_band(300, 20); text_c("KINGDOM KART", 340, 48, 1, 0.85f, 0.3f, 1); text_c(msg, 410, 24, 0.9f, 0.95f, 1, 1); checker_band(450, 20);
     gfx_mesh_update(m, g_b.v, g_b.n);
