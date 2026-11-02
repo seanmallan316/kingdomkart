@@ -862,8 +862,10 @@ static void hud_main(void) {
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 535, 16, 0.8f, 0.85f, 1, 1);
 }
 static void volume_row(const char *label, int vol, float y, int selected) {
-    float x = 380; menu_item(label, y, selected, 24);
-    for (int i = 0; i < 10; i++) batch_rect(&g_b, x + 360 + i * 16, y + 4, 11, 20, i < vol ? 1 : 0.3f, i < vol ? 0.85f : 0.33f, i < vol ? 0.3f : 0.45f, 1);
+    float x = 400;
+    if (selected) batch_rect(&g_b, x - 16, y - 6, 480, 36, 1, 0.85f, 0.3f, 0.25f);
+    batch_text(&g_b, label, x, y, 24, selected ? 1 : 0.9f, selected ? 0.85f : 0.95f, selected ? 0.3f : 1, 1);
+    for (int i = 0; i < 10; i++) batch_rect(&g_b, x + 270 + i * 18, y + 2, 12, 22, i < vol ? 1 : 0.3f, i < vol ? 0.85f : 0.33f, i < vol ? 0.3f : 0.45f, 1);
 }
 static void hud_options(void) {
     panel(240, 60, 800, 600); char buf[64];
