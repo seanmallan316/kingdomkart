@@ -31,7 +31,7 @@ static Battle g_battle;            /* the battle holds the race; in the racing m
 #define ARENA_TRACK (NUM_TRACK_DEFS - 2)   /* the Valley of Elah sits just before the Test Loop */
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL;
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS };
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE };
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
 static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
@@ -846,13 +846,48 @@ static void hud_main(void) {
     panel(360, 150, 560, 420);
     text_c("MAIN MENU", 170, 40, 1, 0.85f, 0.3f, 1);
     static const char *dn[3] = {"EASY", "NORMAL", "HARD"}; char buf[64];
-    menu_item("GRAND PRIX", 235, g_menu_sel == 0, 32);
-    menu_item("SINGLE RACE", 287, g_menu_sel == 1, 32);
-    menu_item("TIME TRIAL", 339, g_menu_sel == 2, 32);
-    if (g_save.unlocks & UNLOCK_GOLIATH) menu_item("DAVID VS GOLIATH", 391, g_menu_sel == 3, 32);
-    else { menu_item("? LOCKED", 391, g_menu_sel == 3, 32); if (g_menu_sel == 3) text_c("WIN A RACE AS DAVID", 428, 13, 1, 0.9f, 0.5f, 1); }
-    snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]); menu_item(buf, 450, g_menu_sel == 4, 28);
+    menu_item("GRAND PRIX", 225, g_menu_sel == 0, 30);
+    menu_item("SINGLE RACE", 272, g_menu_sel == 1, 30);
+    menu_item("TIME TRIAL", 319, g_menu_sel == 2, 30);
+    if (g_save.unlocks & UNLOCK_GOLIATH) menu_item("DAVID VS GOLIATH", 366, g_menu_sel == 3, 30);
+    else { menu_item("? LOCKED", 366, g_menu_sel == 3, 30); if (g_menu_sel == 3) text_c("WIN A RACE AS DAVID", 400, 13, 1, 0.9f, 0.5f, 1); }
+    snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]); menu_item(buf, 413, g_menu_sel == 4, 26);
+    menu_item("CREDITS", 460, g_menu_sel == 5, 26);
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 525, 16, 0.8f, 0.85f, 1, 1);
+}
+/* the credits roll up over the demo race; A or B skips */
+typedef struct { const char *text; float size; int gold; float gap; } CreditLine;
+static const CreditLine CREDITS[] = {
+    {"KINGDOM KART", 56, 1, 0}, {"ROAD TO GLORY", 36, 1, 0}, {"A RACE THROUGH THE STORY OF JESUS", 18, 0, 60},
+    {"CREATED BY", 18, 1, 0}, {"SEAN", 34, 0, 60},
+    {"CHARACTERS, KARTS, ROADS AND ART", 18, 1, 0}, {"SEAN", 34, 0, 60},
+    {"MUSIC AND SOUND", 18, 1, 0}, {"SEAN", 34, 0, 60},
+    {"PROGRAMMING", 18, 1, 0}, {"CLAUDE", 34, 0, 60},
+    {"THE ROADS", 18, 1, 0}, {"BETHLEHEM ROAD - LUKE 2", 24, 0, 0}, {"SEA OF GALILEE - MATTHEW 4 AND 14", 24, 0, 0},
+    {"JERUSALEM ROAD - MATTHEW 21", 24, 0, 0}, {"SUNRISE AT THE EMPTY TOMB - MATTHEW 28", 24, 0, 0},
+    {"ROAD TO HEAVEN - REVELATION 21 AND 22", 24, 0, 0}, {"THE VALLEY OF ELAH - 1 SAMUEL 17", 24, 0, 60},
+    {"THE RACERS", 18, 1, 0}, {"JESUS - MOSES - DAVID - ESTHER", 24, 0, 0}, {"PETER - MARY - DANIEL", 24, 0, 0},
+    {"SAMSON - NOAH - JOSEPH - JONAH - JOHN THE BAPTIST", 24, 0, 60},
+    {"BUILT WITH", 18, 1, 0}, {"DEVKITPRO AND WUT - CAFEGLSL - MINIMP3 - STB IMAGE", 20, 0, 0}, {"FOR THE WII U AROMA HOMEBREW ENVIRONMENT", 20, 0, 60},
+    {"THIS IS AN ORIGINAL FAN-MADE GAME", 18, 0, 0}, {"NOT AFFILIATED WITH NINTENDO", 18, 0, 90},
+    {"I AM THE WAY, THE TRUTH, AND THE LIFE", 26, 1, 0}, {"JOHN 14:6", 18, 0, 90},
+    {"THE BATTLE IS THE LORD'S", 26, 1, 0}, {"1 SAMUEL 17:47", 18, 0, 90},
+    {"TO GOD BE THE GLORY", 40, 1, 90},
+    {"THANK YOU FOR PLAYING", 30, 0, 0},
+};
+#define NCREDITS (int)(sizeof CREDITS / sizeof CREDITS[0])
+#define CREDITS_SPEED 38.0f
+static float credits_height(void) { float h = 0; for (int i = 0; i < NCREDITS; i++) h += CREDITS[i].size * 1.5f + CREDITS[i].gap; return h; }
+static void hud_credits(void) {
+    batch_rect(&g_b, 0, 0, 1280, 720, 0.02f, 0.05f, 0.15f, 0.6f);
+    float y = 720 - g_screen_t * CREDITS_SPEED;
+    for (int i = 0; i < NCREDITS; i++) {
+        const CreditLine *c = &CREDITS[i];
+        if (y > -80 && y < 760) { float fade = y < 60 ? y / 60 : (y > 640 ? (720 - y) / 80 : 1); if (fade < 0) fade = 0;
+            if (c->gold) text_c(c->text, y, c->size, 1, 0.85f, 0.3f, fade); else text_c(c->text, y, c->size, 0.95f, 0.97f, 1, fade); }
+        y += c->size * 1.5f + c->gap;
+    }
+    text_c("A: BACK", 690, 14, 0.8f, 0.85f, 1, 0.8f);
 }
 static void char_card_pos(int i, float *x, float *y) { *x = 40 + (i % 5) * 245, *y = 78 + (i / 5) * 202; }
 static void hud_char(void) {
@@ -1055,14 +1090,19 @@ static void hud_gp(void) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pad(Pad *p, float t) {
     static const struct { float t; char key; } script[] = {
+#if KK_TOUR_ROAD == 6
+        {8, 'A'}, {11, 'U'}, {14, 'A'},          /* the credits */
+#else
         {8, 'A'}, {11, 'D'}, {13, KK_TOUR_ROAD == 5 ? 'D' : 0}, {15, KK_TOUR_ROAD == 5 ? 'D' : 0}, {18, KK_TOUR_ROAD == 5 ? 'A' : 0}, {14, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {17, KK_TOUR_ROAD == 5 ? 0 : 'R'}, {22, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {26, KK_TOUR_ROAD == 5 ? 0 : 'A'},
         {27, KK_TOUR_ROAD >= 1 ? 'R' : 0}, {29, KK_TOUR_ROAD >= 2 ? 'R' : 0}, {31, KK_TOUR_ROAD >= 3 ? 'R' : 0}, {33, KK_TOUR_ROAD >= 4 ? 'R' : 0}, {36, 'A'},
-        {70, 'P'}, {84, 'P'} };
+        {70, 'P'}, {84, 'P'}
+#endif
+    };
     memset(p, 0, sizeof *p);
     for (unsigned i = 0; i < sizeof script / sizeof script[0]; i++) {
         if (t >= script[i].t && t < script[i].t + 0.15f) {
             switch (script[i].key) { case 'A': p->a = 1; break; case 'B': p->b = 1; break; case 'P': p->plus = 1; break;
-                                     case 'D': p->sy = -1; break; case 'R': p->sx = 1; break; case 'L': p->sx = -1; break; }
+                                     case 'D': p->sy = -1; break; case 'U': p->sy = 1; break; case 'R': p->sx = 1; break; case 'L': p->sx = -1; break; }
         }
     }
 }
@@ -1106,6 +1146,7 @@ static const char *pick_music(void) {
         return music_available("music_results") ? "music_results" : "music_menu";
     }
     if ((g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK) && music_available("music_select")) return "music_select";
+    if (g_screen == SCR_CREDITS && music_available("music_credits")) return "music_credits";
     return "music_menu";
 }
 
@@ -1129,11 +1170,15 @@ void game_frame(const Pad *pad, float dt) {
     int sim_running = 1;
     switch (g_screen) {
     case SCR_TITLE: if (pa) { g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; sfx_play(SFX_MENU_OK, 1, 0); } break;
+    case SCR_CREDITS:
+        if (pa || pb || g_screen_t * CREDITS_SPEED > credits_height() + 760) { g_screen = SCR_TITLE; g_screen_t = 0; if (pa || pb) sfx_play(SFX_MENU_BACK, 1, 0); }
+        break;
     case SCR_MAIN:
-        if (my) { g_menu_sel = (g_menu_sel - my + 5) % 5; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (my) { g_menu_sel = (g_menu_sel - my + 6) % 6; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (g_menu_sel == 4 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
         if (pa) {
-            if (g_menu_sel == 4) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
+            if (g_menu_sel == 5) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 4) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
             else if (g_menu_sel == 3) { if (g_save.unlocks & UNLOCK_GOLIATH) { sfx_play(SFX_MENU_OK, 1, 0); g_mode = MODE_BATTLE; g_player_char = 2; begin_battle(); g_screen_t = 0; } else sfx_play(SFX_WRONG_WAY, 1, 0); }
             else { sfx_play(SFX_MENU_OK, 1, 0); g_mode = g_menu_sel == 0 ? MODE_GP : (g_menu_sel == 1 ? MODE_SINGLE : MODE_TT); g_screen = SCR_CHAR; g_screen_t = 0; } }
         if (pb) { g_screen = SCR_TITLE; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
@@ -1490,6 +1535,7 @@ void game_frame(const Pad *pad, float dt) {
         switch (g_screen) {
             case SCR_TITLE: hud_title(); break;
             case SCR_MAIN: hud_main(); break;
+            case SCR_CREDITS: hud_credits(); break;
             case SCR_CHAR: hud_char(); break;
             case SCR_KART: hud_kart(); break;
             case SCR_TRACK: hud_track(); break;
