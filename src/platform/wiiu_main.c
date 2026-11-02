@@ -58,6 +58,21 @@ static void read_pad(Pad *p) {
     if (fabsf(p->sy) < 0.12f) p->sy = 0;
 }
 
+/* vibration: the GamePad takes a bit pattern (each bit is 1/120 s), the Pro Controller only on/off, so a timer stops it */
+static float g_rumble_left = 0; static int g_pro_rumbling = 0;
+void platform_rumble(float strength, float seconds) {
+    if (strength <= 0 || seconds <= 0) return;
+    uint8_t pattern[15]; int len = (int)(seconds * 15.0f); if (len < 1) len = 1; if (len > 15) len = 15;
+    uint8_t byte = strength > 0.75f ? 0xFF : (strength > 0.45f ? 0xEE : (strength > 0.25f ? 0xAA : 0x88));
+    memset(pattern, byte, sizeof pattern);
+    VPADControlMotor(VPAD_CHAN_0, pattern, (uint8_t)len);
+    if (seconds > g_rumble_left) g_rumble_left = seconds;
+    if (strength > 0.3f) { WPADControlMotor(WPAD_CHAN_0, TRUE); g_pro_rumbling = 1; }
+}
+static void rumble_tick(float dt) {
+    if (g_rumble_left > 0) { g_rumble_left -= dt; if (g_rumble_left <= 0 && g_pro_rumbling) { WPADControlMotor(WPAD_CHAN_0, FALSE); g_pro_rumbling = 0; } }
+}
+
 int main(int argc, char **argv) {
     (void)argc; (void)argv;
     WHBLogCafeInit(); WHBLogUdpInit();
@@ -84,8 +99,10 @@ int main(int argc, char **argv) {
         if (frames % 300 == 0) { gfx_log("frame %llu: avg %.2f ms, worst %.2f ms, controller %d", (unsigned long long)frames, acc_ms / 300.0, worst_ms, pad.source); acc_ms = 0; worst_ms = 0; }
         read_pad(&pad);
         game_frame(&pad, dt);
+        rumble_tick(dt);
     }
     gfx_log("shutting down after %llu frames", (unsigned long long)frames);
+    VPADStopMotor(VPAD_CHAN_0); if (g_pro_rumbling) WPADControlMotor(WPAD_CHAN_0, FALSE);
     wiiu_audio_stop();
     game_shutdown();
     gfx_shutdown();

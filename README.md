@@ -9,12 +9,13 @@ Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
 - **Four story roads**: Bethlehem Road (night, under the Star), Sea of Galilee (causeway over the water), Jerusalem Road
   (into the city), Sunrise at the Empty Tomb — and the unlockable **Road to Heaven**, one run from the earth up through the
   clouds to the gates.
-- Drifting with mini-turbos, jumps, boost arrows, bounce pads, hidden shortcuts, tunnels with crystals, coins, obstacles
-  crossing the road (sheep, nets, carts, rolling stones).
+- Drifting with mini-turbos, rocket starts, tricks off jumps, boost arrows, bounce pads, hidden shortcuts, tunnels with
+  crystals, coins, obstacles crossing the road (sheep, nets, carts, rolling stones), GamePad rumble, slow-motion finish.
 - **Eight power-ups**: Manna, Staff, Stone, Oil Jar, Shofar, Chariot of Fire, Locusts, Dove.
 - Modes: Grand Prix (four roads, points, standings), Single Race, Time Trial (records saved), with Easy / Normal / Hard
   computer drivers that never cheat. Every race is under two minutes.
-- Achievements that unlock the bonus characters, karts and road; progress saved on the SD card.
+- Achievements that unlock the bonus characters, karts and road; progress, records and volume settings saved on the SD card.
+- Options and records screen, credits screen.
 - Sound effects for everything, and a soundtrack: a track per road, the menus, the results screen, the final lap and
   the Goliath fight (MP3 files streamed from the game file; see Music below).
 

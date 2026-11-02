@@ -11,7 +11,7 @@ static const float PAR_TIME[SAVE_MAX_ROADS] = {78.0f, 84.0f, 70.0f, 78.0f, 50.0f
 void save_set_path(const char *path) { snprintf(g_path, sizeof g_path, "%s", path); }
 
 void save_load(void) {
-    memset(&g_save, 0, sizeof g_save);
+    memset(&g_save, 0, sizeof g_save); g_save.music_vol = 8; g_save.sfx_vol = 10;
     FILE *f = fopen(g_path, "r");
     if (!f) { gfx_log("no save file at %s (first run)", g_path); return; }
     char key[32]; long val;
@@ -24,6 +24,8 @@ void save_load(void) {
         else if (!strcmp(key, "unlocks")) g_save.unlocks = (unsigned)val;
         else if (!strcmp(key, "battles")) g_save.battles = (int)val;
         else if (!strcmp(key, "battlewins")) g_save.battle_wins = (int)val;
+        else if (!strcmp(key, "musicvol")) g_save.music_vol = (int)val;
+        else if (!strcmp(key, "sfxvol")) g_save.sfx_vol = (int)val;
     }
     fclose(f);
     gfx_log("save loaded: %d races, %d wins, unlocks %u", g_save.races, g_save.wins, g_save.unlocks);
@@ -38,6 +40,7 @@ void save_store(void) {
     fprintf(f, "races %d\nwins %d\n", g_save.races, g_save.wins);
     for (int i = 0; i < 3; i++) fprintf(f, "gpwins%d %d\n", i, g_save.gp_wins[i]);
     fprintf(f, "winchars %u\nunlocks %u\nbattles %d\nbattlewins %d\n", g_save.win_chars, g_save.unlocks, g_save.battles, g_save.battle_wins);
+    fprintf(f, "musicvol %d\nsfxvol %d\n", g_save.music_vol, g_save.sfx_vol);
     fclose(f);
     g_save.dirty = 0;
 }

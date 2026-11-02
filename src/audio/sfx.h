@@ -21,6 +21,7 @@ void sfx_init(int sample_rate);
 void sfx_play(int id, float volume, float pan);          /* pan -1 left .. 1 right; safe to call from the game thread */
 /* the player's kart, updated every frame: speed 0..1 of top speed, flags for the continuous sounds */
 void sfx_engine(float speed, int drifting, int boosting, int offroad, int in_air, int water, int active, int gas, int brake);
+void sfx_set_volume(float vol);                            /* 0..1, the player's sound volume setting */
 void sfx_set_logger(void (*log)(const char *fmt, ...));
 void sfx_load_samples(void);                               /* reads the recorded sounds from content/sfx once; without them everything is synthesized */
 int  sfx_has_sample(int id);                               /* 1 if a recording replaces this effect */

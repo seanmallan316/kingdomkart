@@ -11,6 +11,7 @@ void music_set_logger(void (*log)(const char *fmt, ...));
 int  music_available(const char *name);           /* 1 if content/music/NAME.mp3 exists (result is remembered) */
 void music_want(const char *name);                /* track that should be playing now, NULL for silence; call every frame */
 void music_set_duck(float gain);                  /* 0..1, lowers the music while paused */
+void music_set_volume(float vol);                 /* 0..1, the player's music volume setting */
 void music_update(int max_frames);                /* decodes ahead; call once per game frame (max_frames bounds the work) */
 void music_mix(int16_t *left, int16_t *right, int n);   /* audio thread: adds music to a buffer of sound effects */
 const char *music_now(void);                      /* name of the track playing (for the log and tests) */

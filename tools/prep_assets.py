@@ -19,10 +19,6 @@ RULES = [
     ("jeru_sky",  (2048, 512), "plain"),
     ("tomb_sky",  (2048, 512), "plain"),
     ("elah_sky",  (2048, 512), "plain"),
-    ("beth_road", (512, 512), "plain"),
-    ("beth_dirt", (512, 512), "plain"),
-    ("beth_grass",(512, 512), "plain"),
-    ("beth_wall", (512, 512), "plain"),
     ("title_art", (1024, 576), "plain"),
     ("card_",     (512, 512), "plain"),      # road-select card pictures
     ("heaven_gates", (1024, 576), "plain"),
@@ -68,6 +64,22 @@ def fit(im, box):
     s = min(bw / w, bh / h, 1.0)
     return im.resize((max(1, int(w * s)), max(1, int(h * s))), Image.LANCZOS)
 
+TILE_SUFFIXES = ("_road", "_dirt", "_grass", "_sand", "_wall", "_water", "_clouds", "_earth", "_cloudwall")
+def is_tile(name): return name.endswith(TILE_SUFFIXES)
+def make_seamless(im, band=48):
+    """A ground or wall tile repeats across the road, so its left edge must meet its right edge. Shift the picture by
+    half (the old edges meet in the middle, where they now show as seams), then paint the original back over those
+    seams with a soft brush. The result wraps without a visible line."""
+    import numpy as np
+    a = np.asarray(im.convert("RGBA")).astype(np.float32); h, w = a.shape[:2]
+    r = np.roll(np.roll(a, w // 2, axis=1), h // 2, axis=0)
+    x = np.arange(w); y = np.arange(h)
+    wx = np.clip(1 - np.abs(x - w / 2) / band, 0, 1); wy = np.clip(1 - np.abs(y - h / 2) / band, 0, 1)
+    wx = (np.sin(wx * np.pi / 2)) ** 2; wy = (np.sin(wy * np.pi / 2)) ** 2
+    wgt = np.maximum(wx[None, :], wy[:, None])[:, :, None]
+    out = r * (1 - wgt) + a * wgt
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+
 def main():
     os.makedirs(DST, exist_ok=True)
     n = 0
@@ -77,10 +89,12 @@ def main():
             if not f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")): continue
             name = os.path.splitext(f)[0].lower()
             rule = next(r for r in RULES if name.startswith(r[0]))
+            if is_tile(name): rule = (name, (512, 512), "tile")
             im = Image.open(os.path.join(root, f))
             if rule[2] in ("cutout", "black"): im = key_background(im, rule[2])
             else: im = im.convert("RGBA")
             im = fit(im, rule[1])
+            if rule[2] == "tile": im = make_seamless(im.resize((512, 512), Image.LANCZOS))
             if name.endswith("_sky"): im = im.resize((2048, 512), Image.LANCZOS)      # the sky must be exactly this size (the Wii U wants power-of-two textures)
             if rule[2] == "cutout":
                 im = im.crop(im.getbbox() or (0, 0, 1, 1))      # trim empty borders

@@ -32,7 +32,7 @@
 static int SR = 32000;
 static int16_t ringL[RING], ringR[RING];
 static volatile uint32_t ring_w = 0, ring_r = 0;
-static volatile float g_duck = 1.0f;
+static volatile float g_duck = 1.0f, g_vol = 1.0f;
 static int g_underruns = 0;
 static void (*logf_)(const char *fmt, ...) = NULL;
 #define LOG(...) do { if (logf_) logf_(__VA_ARGS__); } while (0)
@@ -58,6 +58,7 @@ static Known K[24]; static int nk = 0;
 void music_set_logger(void (*log)(const char *fmt, ...)) { logf_ = log; }
 void music_init(int sample_rate) { SR = sample_rate; memset(D, 0, sizeof D); ring_w = ring_r = 0; nk = 0; g_underruns = 0; }
 void music_set_duck(float gain) { g_duck = gain < 0 ? 0 : (gain > 1 ? 1 : gain); }
+void music_set_volume(float vol) { g_vol = vol < 0 ? 0 : (vol > 1 ? 1 : vol); }
 int music_buffered(void) { return (int)(ring_w - ring_r); }
 const char *music_now(void) {
     for (int i = 0; i < 2; i++) if (D[i].active && D[i].target > 0) return D[i].name;
@@ -200,7 +201,7 @@ void music_update(int max_samples) {
 }
 
 void music_mix(int16_t *left, int16_t *right, int n) {
-    float duck = g_duck; uint32_t r = ring_r, w = ring_w;
+    float duck = g_duck * g_vol; uint32_t r = ring_r, w = ring_w;
     int have = (int)(w - r); if (have < 0) have = 0;
     if (have < n) { if (have == 0 && music_now()) g_underruns++; }
     int m = have < n ? have : n;

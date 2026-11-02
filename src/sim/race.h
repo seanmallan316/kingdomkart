@@ -14,7 +14,7 @@
 
 enum { RACE_COUNTDOWN, RACE_RUNNING, RACE_FINISHED };
 enum { DIFF_EASY, DIFF_NORMAL, DIFF_HARD };
-enum { EV_NONE, EV_PICKUP, EV_USE_MANNA, EV_USE_STAFF, EV_USE_STONE, EV_USE_OIL, EV_HIT, EV_BLOCK, EV_BUMP, EV_LAP, EV_FINAL_LAP, EV_FINISH, EV_GO, EV_COUNT_TICK, EV_USE_TRUMPET, EV_USE_FIRE, EV_USE_LOCUSTS, EV_USE_DOVE, EV_PAD_BOOST, EV_PAD_BOUNCE, EV_SLOWED, EV_COIN };
+enum { EV_NONE, EV_PICKUP, EV_USE_MANNA, EV_USE_STAFF, EV_USE_STONE, EV_USE_OIL, EV_HIT, EV_BLOCK, EV_BUMP, EV_LAP, EV_FINAL_LAP, EV_FINISH, EV_GO, EV_COUNT_TICK, EV_USE_TRUMPET, EV_USE_FIRE, EV_USE_LOCUSTS, EV_USE_DOVE, EV_PAD_BOOST, EV_PAD_BOUNCE, EV_SLOWED, EV_COIN, EV_TRICK, EV_TRICK_LAND, EV_ROCKET_START, EV_WHEELSPIN };
 
 typedef struct { const char *name; const char *short_name; KartStats st; float r, g, b; int bonus; } Character;
 extern const Character CHARACTERS[NCHARS];
@@ -34,6 +34,7 @@ typedef struct {
     float coin_respawn[MAX_COINS];           /* 0 = the coin is there, else seconds until it comes back */
     Proj proj[MAX_PROJ];
     int state; float cd, race_t, after_t; int nfin;
+    float gas_since;           /* countdown value when the player began holding gas (-1 = not holding); decides the rocket start */
     int order[NKARTS];                       /* order[0] is the leader */
     RaceEvent ev[32]; int nev;               /* events raised this step, for sounds and messages */
     uint32_t rng;

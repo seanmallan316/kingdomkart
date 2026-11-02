@@ -75,7 +75,7 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
             b->active = 1; b->respawn = 0; b->idx = idx;
         }
     }
-    r->state = RACE_COUNTDOWN; r->cd = 3.5f;
+    r->state = RACE_COUNTDOWN; r->cd = 3.5f; r->gas_since = -1;
     race_rank(r);
 }
 
@@ -169,7 +169,16 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
         r->cd -= dt;
         int after = (int)ceilf(r->cd - 0.5f);
         if (after != before && after >= 1 && after <= 3) push_event(r, EV_COUNT_TICK, -1);
-        if (r->cd <= 0) { r->state = RACE_RUNNING; push_event(r, EV_GO, -1); }
+        /* rocket start: hold gas from the last half second before GO; hold it from too early and the wheels spin */
+        int gas = player_in && player_in->gas && !player_auto;
+        if (!gas) r->gas_since = -1; else if (r->gas_since < 0) r->gas_since = r->cd + dt;
+        if (r->cd <= 0) { r->state = RACE_RUNNING; push_event(r, EV_GO, -1);
+            Kart *pk = &r->k[r->player];
+            if (gas && r->gas_since <= 0.65f) { pk->boost_t = 1.1f; pk->boost_mul = 1.32f; pk->rocket = 1; push_event(r, EV_ROCKET_START, r->player); }
+            else if (gas && r->gas_since > 1.5f) { pk->slow_t = 1.0f; pk->rocket = -1; push_event(r, EV_WHEELSPIN, r->player); }
+            /* some computer drivers get a rocket start too, more of them on Hard */
+            for (int i = 0; i < r->nk; i++) if (i != r->player && rr(r) < 0.15f + 0.2f * r->difficulty) { r->k[i].boost_t = 1.0f; r->k[i].boost_mul = 1.25f; }
+        }
         KartInput none; memset(&none, 0, sizeof none);
         for (int i = 0; i < r->nk; i++) { kart_step(&r->k[i], t, &none, dt); r->k[i].total_time = 0; }
         return;
@@ -190,6 +199,8 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
             kart_autopilot(k, t, &in, clampf(skill, 0.3f, 1.0f));
             r->ai_wobble[i] += dt * 0.7f;
             if (k->finished) { in.steer *= 0.5f; in.gas = k->speed < 14.0f; }
+            /* good drivers do a trick off big jumps */
+            if (k->air && k->air_t > 0.2f && k->hop <= 0 && !k->trick && skill > 0.4f && rr(r) < 0.08f) in.drift = 1;
             else in.steer += 0.06f * sinf(r->ai_wobble[i]) * (1.0f - skill);      /* human-like imperfection */
             /* drift toward a coin just ahead (only a nudge, so the racing line still wins) */
             if (k->coins < 10 && !k->air) { for (int c = 0; c < t->ncoin; c++) { if (r->coin_respawn[c] > 0) continue;
@@ -292,6 +303,7 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
             } }
     }
     for (int i = 0; i < r->nk; i++) if (r->k[i].pad_flag) { r->stat_pads++; push_event(r, r->k[i].pad_flag == PAD_BOOST ? EV_PAD_BOOST : EV_PAD_BOUNCE, i); }
+    for (int i = 0; i < r->nk; i++) if (r->k[i].trick_flag) push_event(r, r->k[i].trick_flag == 1 ? EV_TRICK : EV_TRICK_LAND, i);
     /* kart-to-kart bumping: push apart, heavier kart wins */
     for (int i = 0; i < r->nk; i++) for (int j = i + 1; j < r->nk; j++) {
         Kart *a = &r->k[i], *b = &r->k[j];

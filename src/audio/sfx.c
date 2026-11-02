@@ -51,6 +51,8 @@ static SVoice SV[MAXSV];           /* one-shot sample voices */
 static SVoice EL[4];               /* engine layers: idle, acceleration, top speed, deceleration (looping) */
 static float el_vol[4], el_want[4], el_rate[4];
 static int use_samples = 0;
+static volatile float g_sfx_vol = 1.0f;
+void sfx_set_volume(float vol) { g_sfx_vol = vol < 0 ? 0 : (vol > 1 ? 1 : vol); }
 
 static uint32_t rd32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
 static int load_wav(const char *name, Sample *out) {
@@ -256,7 +258,7 @@ void sfx_render(int16_t *left, int16_t *right, int n) {
             v->t += ISR; if (v->t >= v->dur) v->on = 0;
         }
         /* soft limiter */
-        l = tanhf(l * 1.2f) * 0.85f; r = tanhf(r * 1.2f) * 0.85f;
+        l = tanhf(l * 1.2f) * 0.85f * g_sfx_vol; r = tanhf(r * 1.2f) * 0.85f * g_sfx_vol;
         left[i] = (int16_t)(l * 32000.0f); right[i] = (int16_t)(r * 32000.0f);
     }
 }

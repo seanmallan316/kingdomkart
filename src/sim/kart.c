@@ -98,6 +98,11 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
             k->drifting = 0; k->drift_charge = 0;
         }
     } else if (k->drifting && !in->drift) { k->drifting = 0; k->drift_charge = 0; }
+    /* ---- tricks: a tap of the drift button while flying off a jump (not the little drift hop) */
+    k->trick_flag = 0;
+    if (k->air && in->drift && !k->drift_prev && !k->trick && k->air_t > 0.15f && k->hop <= 0 && k->stun <= 0) { k->trick = 1; k->trick_vis = 0; k->trick_flag = 1; }
+    if (k->trick) { k->trick_vis += 7.0f * dt; if (k->trick_vis > 6.2831853f) k->trick_vis = 6.2831853f; }
+    k->drift_prev = in->drift;
     if (k->drifting) k->drift_charge += dt * (0.6f + 0.4f * fabsf(steer));
 
     /* ---- turning */
@@ -178,7 +183,8 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     }
     if (k->air) {
         k->air_t += dt; k->vy -= GRAVITY * dt; k->y += k->vy * dt;
-        if (k->y <= ground) { k->y = ground; k->air = 0; k->squash = clampf1(-k->vy / 12.0f, 0, 1); k->vy = 0; if (k->hop > 0) k->hop = 0; }
+        if (k->y <= ground) { k->y = ground; k->air = 0; k->squash = clampf1(-k->vy / 12.0f, 0, 1); k->vy = 0; if (k->hop > 0) k->hop = 0;
+            if (k->trick) { k->trick = 0; k->trick_vis = 0; if (k->stun <= 0) { k->boost_t = fmaxf(k->boost_t, 0.7f); k->boost_mul = fmaxf(k->boost_mul, 1.22f); k->trick_flag = 2; } } }
     }
     k->hop = fmaxf(0, k->hop - 3.0f * dt); k->squash = fmaxf(0, k->squash - 4.0f * dt);
     (void)ox; (void)oz;

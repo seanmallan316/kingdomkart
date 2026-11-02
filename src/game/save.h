@@ -26,6 +26,7 @@ typedef struct {
     int battles, battle_wins;      /* David vs Goliath fights and wins */
     unsigned win_chars;            /* bit per character that has won a race */
     unsigned unlocks;              /* UNLOCK_* bits */
+    int music_vol, sfx_vol;        /* 0..10 */
     int dirty;
 } Save;
 
