@@ -19,12 +19,17 @@ DST = os.path.join(ROOT, "content", "music")
 os.makedirs(DST, exist_ok=True)
 
 def convert(src, dst):
-    af = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,"
-          "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,"
-          "loudnorm=I=-15:TP=-1.5:LRA=11")
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", src, "-map", "0:a:0", "-vn", "-af", af, "-ar", "32000", "-ac", "2",
-           "-codec:a", "libmp3lame", "-b:a", "128k", "-map_metadata", "-1", "-id3v2_version", "0", "-write_xing", "0", dst]
-    subprocess.run(cmd, check=True)
+    # two passes: trim silence off both ends into a temporary WAV, then even out the loudness and encode.
+    # (one combined filter chain hangs ffmpeg on some long WAV files)
+    tmp = dst + ".trim.wav"
+    trim = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,"
+            "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse")
+    subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", src, "-map", "0:a:0", "-vn", "-af", trim,
+                    "-ac", "2", "-codec:a", "pcm_s16le", tmp], check=True)
+    subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", tmp, "-af", "loudnorm=I=-15:TP=-1.5:LRA=11",
+                    "-ar", "32000", "-ac", "2", "-codec:a", "libmp3lame", "-b:a", "128k", "-map_metadata", "-1",
+                    "-id3v2_version", "0", "-write_xing", "0", dst], check=True)
+    os.remove(tmp)
 
 def main():
     files = sorted(glob.glob(os.path.join(SRC, "music_*.*")))
