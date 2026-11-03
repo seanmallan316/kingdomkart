@@ -61,9 +61,6 @@ static const WheelDef *g_ride_wd[NCHARS][5], *g_view_wd[NCHARS][5]; static Textu
 static float g_wheel_ang[NKARTS]; static Mesh *m_wheel_spr[NKARTS];
 static const TreadDef *g_ride_td[NCHARS][5]; static Texture *tx_tread; static Mesh *m_tread_spr[NKARTS];
 static const TreadDef *tread_def(const char *picture) { for (int i = 0; i < NUM_TREAD_DEFS; i++) if (!strcmp(TREAD_DEFS[i].picture, picture)) return &TREAD_DEFS[i]; return NULL; }
-static void px_tread(int x, int y, uint32_t *o) {   /* tire tread seen edge-on: dark grooves every 16 rows, soft-edged, repeating; a touch of highlight between */
-    int r = y & 15; float g = r < 3 ? 1.0f : (r < 5 ? 0.5f : 0.0f); float hl = (r > 8 && r < 12) ? 0.12f : 0.0f; (void)x;
-    *o = rgba(hl > 0 ? 255 : 0, hl > 0 ? 255 : 0, hl > 0 ? 255 : 0, (int)(g * 150 + hl * 255)); }
 static const WheelDef *wheel_def(const char *picture) { for (int i = 0; i < NUM_WHEEL_DEFS; i++) if (!strcmp(WHEEL_DEFS[i].picture, picture)) return &WHEEL_DEFS[i]; return NULL; }
 static Texture *wheel_tex(const char *picture) { char n[80]; snprintf(n, sizeof n, "wheels_%s", picture); return asset_texture(n, 0, NULL, NULL); }   /* ride_<name>_<b|bl|l|fl|f>: the character sitting in the kart, one picture; used instead of kart + driver when present */
 static float g_shake;
@@ -137,6 +134,9 @@ static float map_x0, map_z0, map_scale;
 static uint32_t rng = 12345u;
 static float frand01(void) { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return (rng & 0xFFFFFF) / 16777216.0f; }
 static uint32_t rgba(int r, int g, int b, int a) { return ((uint32_t)r << 24) | ((uint32_t)g << 16) | ((uint32_t)b << 8) | (uint32_t)a; }
+static void px_tread(int x, int y, uint32_t *o) {   /* tire tread seen edge-on: dark grooves every 16 rows, soft-edged, repeating; a touch of highlight between */
+    int r = y & 15; float g = r < 3 ? 1.0f : (r < 5 ? 0.5f : 0.0f); float hl = (r > 8 && r < 12) ? 0.12f : 0.0f; (void)x;
+    *o = rgba(hl > 0 ? 255 : 0, hl > 0 ? 255 : 0, hl > 0 ? 255 : 0, (int)(g * 150 + hl * 255)); }
 
 // ------------------------------------------------------------------ procedural textures (placeholders until the real art arrives)
 static uint32_t g_px[256 * 256];
