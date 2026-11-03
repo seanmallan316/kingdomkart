@@ -6,7 +6,7 @@ Put the originals in assets/music/ named by what they are for:
     music_beth    Bethlehem Road                  music_heaven   Road to Heaven
     music_gal     Sea of Galilee                  music_elah     David vs Goliath
     music_jeru    Jerusalem Road                  music_results  results screen
-    music_finallap (optional) plays on the last lap of every road
+    music_finallap (optional) plays on the last lap of every road        music_eden     The Garden of Eden
 Any audio format works (mp3, wav, m4a, ogg...). Run  python3 tools/prep_music.py  and each becomes
 content/music/NAME.mp3: silence trimmed off both ends, loudness evened out, 32 kHz stereo 128 kbps, which is
 what the Wii U sound core runs at, so the game never has to resample. Files already up to date are skipped.

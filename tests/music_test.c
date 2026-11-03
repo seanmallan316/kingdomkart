@@ -58,8 +58,8 @@ int main(void) {
     music_want("music_jeru"); run(2, NULL); float loud = run(2, NULL); music_set_duck(0.3f); float quiet = run(2, NULL); music_set_duck(1);
     printf("duck: %.3f -> %.3f\n", loud, quiet); CHECK(quiet < loud * 0.5f, "ducking should lower the music");
     /* 5. every track decodes */
-    static const char *all[] = {"music_beth", "music_gal", "music_jeru", "music_tomb", "music_heaven", "music_elah", "music_results", "music_finallap", "music_select", "music_lose", "music_trophy", "music_credits"};
-    for (int i = 0; i < 12; i++) { if (!music_available(all[i])) { printf("%s: not provided yet\n", all[i]); continue; } music_want(all[i]); run(1.5f, NULL); float rr = run(1, &peak); printf("%-15s rms %.3f peak %.2f\n", all[i], rr, peak); CHECK(rr > 0.01f, "%s is silent", all[i]); }
+    static const char *all[] = {"music_beth", "music_gal", "music_jeru", "music_tomb", "music_heaven", "music_elah", "music_results", "music_finallap", "music_select", "music_lose", "music_trophy", "music_credits", "music_eden"};
+    for (int i = 0; i < 13; i++) { if (!music_available(all[i])) { printf("%s: not provided yet\n", all[i]); continue; } music_want(all[i]); run(1.5f, NULL); float rr = run(1, &peak); printf("%-15s rms %.3f peak %.2f\n", all[i], rr, peak); CHECK(rr > 0.01f, "%s is silent", all[i]); }
     music_shutdown();
     FILE *f = fopen("music_preview.wav", "wb"); if (f) {
         unsigned data = pos * 4; fwrite("RIFF", 1, 4, f); put32(f, 36 + data); fwrite("WAVEfmt ", 1, 8, f); put32(f, 16); put16(f, 1); put16(f, 2); put32(f, 32000); put32(f, 32000 * 4); put16(f, 4); put16(f, 16);
