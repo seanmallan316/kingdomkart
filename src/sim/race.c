@@ -55,7 +55,7 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
     int next = 0;
     for (int i = 0; i < NKARTS; i++) r->character[i] = (i == player_slot) ? player_character : (next < np ? pool[next++] : player_character);
     for (int i = 0; i < NKARTS; i++) r->order[i] = i;
-    float base = difficulty == DIFF_EASY ? 0.55f : (difficulty == DIFF_NORMAL ? 0.78f : 0.95f);
+    float base = difficulty == DIFF_EASY ? 0.52f : (difficulty == DIFF_NORMAL ? 0.68f : 0.80f);
     for (int i = 0; i < r->nk; i++) {
         Kart *k = &r->k[i];
         memset(k, 0, sizeof *k);
@@ -124,7 +124,7 @@ static void use_item(Race *r, int i) {
             push_event(r, EV_USE_LOAVES, i); break;
         case ITEM_SAMARITAN: {  /* the one who fell among thieves is carried: whoever is last (or you, if that is you) */
             int last = r->order[r->nk - 1]; Kart *o = &r->k[last];
-            o->carried_t = 4.0f; o->stun = 0; o->slow_t = 0; o->shield = fmaxf(o->shield, 4.0f);
+            o->carried_t = 3.5f; o->stun = 0; o->slow_t = 0; o->shield = fmaxf(o->shield, 4.0f);
             if (last != i) { bless(r, last, i); give_boost(k, 1.0f, 1.25f); }
             push_event(r, EV_CARRIED, last); push_event(r, EV_USE_SAMARITAN, i); break; }
         case ITEM_SHIELD: {     /* the shield of faith, for you and for the one behind you */
@@ -194,7 +194,7 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
             if (gas && r->gas_since <= 0.65f) { pk->boost_t = 1.1f; pk->boost_mul = 1.32f; pk->rocket = 1; push_event(r, EV_ROCKET_START, r->player); }
             else if (gas && r->gas_since > 1.5f) { pk->slow_t = 1.0f; pk->rocket = -1; push_event(r, EV_WHEELSPIN, r->player); }
             /* some computer drivers get a rocket start too, more of them on Hard */
-            for (int i = 0; i < r->nk; i++) if (i != r->player && rr(r) < 0.15f + 0.2f * r->difficulty) { r->k[i].boost_t = 1.0f; r->k[i].boost_mul = 1.25f; }
+            for (int i = 0; i < r->nk; i++) if (i != r->player && rr(r) < 0.05f + 0.10f * r->difficulty) { r->k[i].boost_t = 1.0f; r->k[i].boost_mul = 1.25f; }
         }
         KartInput none; memset(&none, 0, sizeof none);
         for (int i = 0; i < r->nk; i++) { kart_step(&r->k[i], t, &none, dt); r->k[i].total_time = 0; }
@@ -212,7 +212,7 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
         if (ai) {
             float skill = (i == r->player) ? 0.9f : r->ai_skill[i];
             /* keep the race close without cheating: a little braver when far behind the player, a little more careful when far ahead */
-            if (i != r->player) { float gap = k->dist - r->k[r->player].dist; if (gap < -60) skill += 0.08f; else if (gap > 60) skill -= 0.10f; }
+            if (i != r->player) { float gap = k->dist - r->k[r->player].dist; if (gap < -60) skill += 0.05f; else if (gap > 40) skill -= 0.14f; skill = fminf(skill, 0.95f); }   /* the computer never drives a perfect line */
             kart_autopilot(k, t, &in, clampf(skill, 0.3f, 1.0f));
             r->ai_wobble[i] += dt * 0.7f;
             if (k->finished) { in.steer *= 0.5f; in.gas = k->speed < 14.0f; }

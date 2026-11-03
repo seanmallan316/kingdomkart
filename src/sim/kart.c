@@ -83,7 +83,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     float top = BASE_TOP * st->top_speed * k->boost_mul * (1.0f + 0.01f * (float)k->coins);
     int on_road = k->hit.on_road;
     if (!on_road && !k->air && k->grace_t <= 0) top *= OFFROAD_MUL;
-    if (k->carried_t > 0) { k->carried_t -= dt; k->boost_t = fmaxf(k->boost_t, 0.2f); k->boost_mul = fmaxf(k->boost_mul, 2.0f); k->shield = fmaxf(k->shield, 0.2f); top = BASE_TOP * st->top_speed * 2.0f; }
+    if (k->carried_t > 0) { k->carried_t -= dt; k->boost_t = fmaxf(k->boost_t, 0.2f); k->boost_mul = fmaxf(k->boost_mul, 1.7f); k->shield = fmaxf(k->shield, 0.2f); top = BASE_TOP * st->top_speed * 1.7f; }
     if (k->grace_t > 0) { k->grace_t -= dt; top *= 1.12f; }
     if (k->slow_t > 0) top *= 0.62f;
     float accel = BASE_ACCEL * st->accel * (k->boost_t > 0 ? 1.8f : 1.0f);
@@ -207,7 +207,7 @@ void kart_autopilot(const Kart *k, const Track *t, KartInput *in, float skill) {
     float err = wrap_pi(want - k->yaw);
     in->steer = clampf1(err * 2.5f, -1, 1);
     float sharp = fmaxf(fabsf(curve), fabsf(curve_far) * 0.7f);
-    float limit = BASE_TOP * k->st.top_speed * (1.2f - 0.95f * clampf1(sharp * 1.3f, 0, 1)) * (0.8f + 0.35f * skill);
+    float limit = BASE_TOP * k->st.top_speed * (1.2f - 0.95f * clampf1(sharp * 1.3f, 0, 1)) * (0.60f + 0.40f * skill);   /* lower skill = never quite flat out */
     in->gas = k->speed < limit;
     in->brake = k->speed > limit * 1.3f && !k->air;
     /* drift through real corners (press hard into the turn so the drift starts), let go when it straightens so the mini-turbo fires */
