@@ -18,10 +18,14 @@
 #define MAX_DUST 200
 #define MAX_SPRITE_KINDS 16
 #define SPRITE_DRAW_DIST 340.0f
-#define NUM_GP_ROUNDS_MAX 4
+#define NUM_GP_ROUNDS_MAX 6
 #define NUM_PLAY_TRACKS (NUM_TRACK_DEFS - 3)     /* the last three are the Walls of Jericho, the battle arena and the developers' Test Loop, not roads to pick */
 #define JERICHO_TRACK (NUM_TRACK_DEFS - 3)
-#define NUM_GP_TRACKS 4                          /* the Grand Prix runs the four story roads; bonus roads are for Single Race and Time Trial */
+/* the Grand Prix cups: the Gospel Cup runs the four story roads; Genesis to Glory runs every road in Bible order (earned with the Road to Heaven) */
+typedef struct { const char *name, *sub; int roads[NUM_GP_ROUNDS_MAX]; int n; int needs_heaven; } Cup;
+static const Cup CUPS[2] = { {"THE GOSPEL CUP", "THE STORY OF JESUS IN FOUR ROADS", {0, 1, 2, 3}, 4, 0}, {"GENESIS TO GLORY", "FROM THE GARDEN TO THE GATES: SIX ROADS", {5, 0, 1, 2, 3, 4}, 6, 1} };
+static int g_cup = 0;
+#define NUM_GP_TRACKS (CUPS[g_cup].n)
 #ifndef KK_TOUR_ROAD
 #define KK_TOUR_ROAD 1
 #endif
@@ -33,7 +37,7 @@ static Battle g_battle;            /* the battle holds the race; in the racing m
 #define ARENA_TRACK (NUM_TRACK_DEFS - 2)   /* the Valley of Elah sits just before the Test Loop */
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* demo_char: who drives the title-screen demo */
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1; static Texture *tx_op; static Mesh *m_op;
 static int g_opt_sel = 0;
@@ -1470,9 +1474,27 @@ static void hud_results(void) {
         float sz = text_width(line, 24) > 760 ? 16 : 24; text_c(line, yb + 35 - sz / 2, sz, 1, 0.95f, 0.5f, (int)(g_time * 3) & 1 ? 1.0f : 0.8f);
     }
 }
+static void hud_cup(void) {
+    text_c("CHOOSE A CUP", 40, 40, 1, 0.85f, 0.3f, 1);
+    for (int c = 0; c < 2; c++) { const Cup *cp = &CUPS[c]; int sel = c == g_cup, open = !cp->needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
+        float x = 90 + c * 580, y = 120, w = 520, h = 470;
+        if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
+        batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
+        batch_text(&g_b, cp->name, x + 20, y + 20, 30, 1, 0.95f, 0.5f, 1);
+        batch_text(&g_b, cp->sub, x + 20, y + 62, 13, 0.8f, 0.9f, 1, 1);
+        if (!open) { batch_text(&g_b, "?", x + w / 2 - text_width("?", 110) / 2, y + 140, 110, 0.5f, 0.55f, 0.7f, 1);
+            batch_text(&g_b, "LOCKED", x + w / 2 - text_width("LOCKED", 24) / 2, y + 290, 24, 0.8f, 0.8f, 0.9f, 1);
+            batch_text(&g_b, "WIN THE GOSPEL CUP ON NORMAL OR HARD", x + w / 2 - text_width("WIN THE GOSPEL CUP ON NORMAL OR HARD", 14) / 2, y + 330, 14, 1, 0.9f, 0.5f, 1); continue; }
+        for (int i = 0; i < cp->n; i++) { const TrackDef *td = &TRACK_DEFS[cp->roads[i]]; float ry = y + 100 + i * 56; char nm[8]; snprintf(nm, sizeof nm, "%d.", i + 1);
+            batch_rect(&g_b, x + 20, ry, 44, 44, td->sky_r, td->sky_g, td->sky_b, 1); draw_preview(&g_preview[cp->roads[i]], x + 42, ry + 22, 34, 0.95f, 0.95f, 0.95f);
+            batch_text(&g_b, nm, x + 76, ry + 10, 20, 1, 0.85f, 0.3f, 1); batch_text(&g_b, td->name, x + 110, ry + 10, 20, 1, 1, 1, 1); }
+        { char line[64]; snprintf(line, sizeof line, "%d ROADS   WON: EASY %d  NORMAL %d  HARD %d", cp->n, g_save.gp_wins[0], g_save.gp_wins[1], g_save.gp_wins[2]); if (c == 0) batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); else { snprintf(line, sizeof line, "%d ROADS - THE WHOLE STORY", cp->n); batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); } }
+    }
+    text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 650, 16, 0.8f, 0.85f, 1, 1);
+}
 static void hud_gp(void) {
     panel(290, 80, 700, 560); char buf[64];
-    text_c(g_gp_round >= NUM_GP_TRACKS ? "GRAND PRIX CHAMPION" : "STANDINGS", 100, 40, 1, 0.85f, 0.3f, 1);
+    text_c(g_gp_round >= NUM_GP_TRACKS ? (g_cup == 0 ? "GOSPEL CUP CHAMPION" : "GENESIS TO GLORY CHAMPION") : "STANDINGS", 100, g_gp_round >= NUM_GP_TRACKS && g_cup == 1 ? 32 : 40, 1, 0.85f, 0.3f, 1);
     int nk = g_race.nk; int ord[NKARTS]; for (int i = 0; i < nk; i++) ord[i] = g_race.character[i];
     for (int a2 = 1; a2 < nk; a2++) { int v = ord[a2], j = a2 - 1; while (j >= 0 && g_gp_points[ord[j]] < g_gp_points[v]) { ord[j + 1] = ord[j]; j--; } ord[j + 1] = v; }
     for (int p = 0; p < nk; p++) { int c = ord[p]; float y = 160 + p * 50; int me = c == g_player_char;
@@ -1490,7 +1512,10 @@ static void hud_gp(void) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pads(Pad *pads, float t) {
     static const struct { float t; char key; int slot; } script[] = {
-#if KK_TOUR_ROAD == 10
+#if KK_TOUR_ROAD == 11
+        /* the Grand Prix: title, GRAND PRIX, the second cup (Genesis to Glory), character, kart, the first road (Eden), then the standings */
+        {8, 'A'}, {11, 'A'}, {14, 'R'}, {16, 'A'}, {19, 'A'}, {22, 'A'}, {70, 'P'}, {84, 'P'}, {121, 'A'}, {124, 'A'},
+#elif KK_TOUR_ROAD == 10
         /* the Walls of Jericho: title, menu (down five times), character, kart, race */
         {8, 'A'}, {11, 'D'}, {13, 'D'}, {15, 'D'}, {17, 'D'}, {19, 'D'}, {21, 'A'}, {24, 'A'}, {27, 'A'},
 #elif KK_TOUR_ROAD == 8
@@ -1574,7 +1599,7 @@ static const char *pick_music(void) {
             if (rank > 3 && music_available("music_lose")) return "music_lose"; }
         return music_available("music_results") ? "music_results" : "music_menu";
     }
-    if ((g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR) && music_available("music_select")) return "music_select";
+    if ((g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP) && music_available("music_select")) return "music_select";
     if (g_screen == SCR_CREDITS && music_available("music_credits")) return "music_credits";
     if (g_screen == SCR_OPENER) return music_available("music_opener") ? "music_opener" : NULL;
     return "music_menu";
@@ -1966,7 +1991,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             else if (g_menu_sel == 5) { sfx_play(SFX_MENU_OK, 1, 0); g_mode = MODE_JERICHO; g_screen = SCR_CHAR; g_screen_t = 0; }
             else if (g_menu_sel == 4) { sfx_play(SFX_MENU_OK, 1, 0); g_mode = MODE_VS; memset(g_joined, 0, sizeof g_joined); g_njoined = 0; g_screen = SCR_JOIN; g_screen_t = 0; }
             else if (g_menu_sel == 3) { if (g_save.unlocks & UNLOCK_GOLIATH) { sfx_play(SFX_MENU_OK, 1, 0); g_mode = MODE_BATTLE; g_player_char = 2; begin_battle(); g_screen_t = 0; } else sfx_play(SFX_WRONG_WAY, 1, 0); }
-            else { sfx_play(SFX_MENU_OK, 1, 0); g_mode = g_menu_sel == 0 ? MODE_GP : (g_menu_sel == 1 ? MODE_SINGLE : MODE_TT); g_screen = SCR_CHAR; g_screen_t = 0; } }
+            else { sfx_play(SFX_MENU_OK, 1, 0); g_mode = g_menu_sel == 0 ? MODE_GP : (g_menu_sel == 1 ? MODE_SINGLE : MODE_TT); g_screen = g_mode == MODE_GP ? SCR_CUP : SCR_CHAR; g_screen_t = 0; } }
         if (pb) { g_screen = SCR_TITLE; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_JOIN:
@@ -1990,18 +2015,24 @@ void game_frame(const Pad *pads, int npads, float dt) {
             if (!g_plock[p]) all = 0; }
         if (all && g_screen == SCR_MCHAR && g_screen_t > 0.6f) { g_screen = SCR_TRACK; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
         break; }
+    case SCR_CUP: {
+        int open = !CUPS[g_cup].needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
+        if (mx) { g_cup = (g_cup + mx + 2) % 2; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (pa) { if (open) { g_screen = SCR_CHAR; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); } else sfx_play(SFX_WRONG_WAY, 1, 0); }
+        if (pb) { g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
+        break; }
     case SCR_CHAR:
         if (mx) { int row = g_player_char / 5, ncol = row == 2 ? NCHARS - 10 : 5; g_player_char = row * 5 + ((g_player_char % 5) + mx + ncol) % ncol; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (my) { int nc = g_player_char - my * 5; if (nc < 0) nc += 15; if (nc >= 15) nc -= 15; if (nc >= NCHARS) nc = my < 0 ? nc - 5 : nc % 5; g_player_char = nc; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) sfx_play(char_unlocked(g_player_char) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && char_unlocked(g_player_char)) { g_screen = SCR_KART; g_screen_t = 0; sfx_voice_play(g_voice[g_player_char][VO_START], 1, 0); }
-        if (pb) { g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
+        if (pb) { g_screen = g_mode == MODE_GP ? SCR_CUP : SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_KART:
         if (mx) { g_player_style = (g_player_style + mx + NSTYLES) % NSTYLES; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) sfx_play(style_unlocked(g_player_style) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && style_unlocked(g_player_style)) { race_set_styles(g_player_style, unlocked_styles());
-            if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = i; begin_player_race(); g_screen_t = 0; }
+            if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = CUPS[g_cup].roads[i]; begin_player_race(); g_screen_t = 0; }
             else if (g_mode == MODE_JERICHO) { begin_player_race(); g_screen_t = 0; } else { if (g_track_idx >= NUM_PLAY_TRACKS) { set_track(0); start_race(1); } g_screen = SCR_TRACK; g_screen_t = 0; } }
         if (pb) { g_screen = SCR_CHAR; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
@@ -2265,7 +2296,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
           static Mesh *m_tone = NULL; if (!m_tone) { batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_tone = gfx_mesh_static(g_b.v, g_b.n); batch_clear(&g_b); }
           gfx_bind(NULL); gfx_draw(m_tone, &id, g_def->fog_r, g_def->fog_g, g_def->fog_b, 0.07f);
           gfx_bind(tx_vignette); gfx_draw(m_tone, &id, 1, 1, 1, 1); }
-        int menu_screen = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_GP || g_screen == SCR_JOIN || g_screen == SCR_MCHAR;
+        int menu_screen = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_GP || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP;
         if (menu_screen) batch_rect(&g_b, 0, 0, 1280, 720, 0.02f, 0.03f, 0.1f, g_screen == SCR_TITLE ? 0.25f : 0.55f);
         switch (g_screen) {
             case SCR_TITLE: hud_title(); break;
@@ -2273,6 +2304,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             case SCR_CREDITS: hud_credits(); break;
             case SCR_OPTIONS: hud_options(); break;
             case SCR_CHAR: hud_char(0); break;
+            case SCR_CUP: hud_cup(); break;
             case SCR_MCHAR: hud_char(1); break;
             case SCR_JOIN: hud_join(pads, npads); break;
             case SCR_KART: hud_kart(); break;
