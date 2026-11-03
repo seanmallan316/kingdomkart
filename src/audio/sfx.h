@@ -13,6 +13,7 @@ enum {
     SFX_MINI_TURBO, SFX_SUPER_TURBO, SFX_BOOST_PAD, SFX_BOUNCE, SFX_LAND, SFX_SPLASH,
     SFX_SHOFAR, SFX_FIRE, SFX_LOCUSTS, SFX_DOVE,
     SFX_UNLOCK, SFX_WELCOME_HOME, SFX_WRONG_WAY, SFX_COIN,
+    SFX_CRUMBLE, SFX_SHOUT,                     /* Jericho: a wall section falls; the great shout */
     SFX_COUNTDOWN, SFX_ENGINE_START,            /* only sound when recorded (content/sfx/sting_countdown.wav, kart_engine_start.wav) */
     SFX_COUNT
 };

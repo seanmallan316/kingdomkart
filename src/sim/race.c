@@ -83,7 +83,7 @@ static void race_setup(Race *r, const Track *t, const int *chars_in, const int *
             b->active = 1; b->respawn = 0; b->idx = idx;
         }
     }
-    r->state = RACE_COUNTDOWN; r->cd = 3.5f;
+    r->state = RACE_COUNTDOWN; r->cd = 3.5f; r->time_limit = RACE_TIME_LIMIT;
     race_rank(r);
 }
 void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk) {
@@ -108,6 +108,7 @@ void race_init_multi(Race *r, const Track *t, const int *chars_in, const int *st
         for (int p = 0; p < nhuman; p++) { int slot = nk - nhuman + p; human[slot] = 1; chars[slot] = chars_in[p]; styles[slot] = styles_in ? styles_in[p] : 0; } }
     race_setup(r, t, chars, styles, human, nk, difficulty, 0xBEEF1234u + (uint32_t)chars_in[0] * 7919u + (uint32_t)nhuman * 101u);
 }
+void race_set_jericho(Race *r) { r->jericho = 1; r->nbox = 0; r->wall_fall = 0; r->walls_down = 0; r->time_limit = 300.0f; for (int i = 0; i < NKARTS; i++) r->shofars[i] = 0; }
 int race_human_index(const Race *r, int kart) { if (kart < 0 || kart >= r->nk || !r->human[kart]) return -1; int n = 0; for (int i = 0; i < kart; i++) if (r->human[i]) n++; return n; }
 
 void race_rank(Race *r) {
@@ -271,13 +272,26 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
                 if (fabsf(gap) < need) { float dir = gap >= 0 ? 1.0f : -1.0f; if (fabsf(mlat + dir * need) > track_edge(t, mv->idx) - 1.0f) dir = -dir;
                     in.steer = clampf(in.steer - dir * 0.8f * (1.0f - fabsf(gap) / need), -1.0f, 1.0f); }
             }
-            in.item = ai_wants_item(r, i);
+            in.item = r->jericho ? (k->lap >= t->laps ? r->shofars[i] > 0 : (r->shofars[i] >= 3 && rank_of[i] > 3 && rr(r) < 0.02f)) : ai_wants_item(r, i);
         } else in = hin[i];
-        if (in.item && k->item) use_item(r, i);
+        if (r->jericho) {   /* the shofar: one blow per press; on the last lap every shofar held sounds together */
+            if (in.item && !r->shofar_held[i] && r->shofars[i] > 0 && k->stun <= 0) {
+                if (k->lap >= t->laps) { int n = r->shofars[i]; r->shofars[i] = 0; give_boost(k, 1.0f + 0.4f * n, 1.3f + 0.04f * n); r->wall_fall += 0.06f * n; push_event(r, EV_SHOUT, i); }
+                else { r->shofars[i]--; give_boost(k, 0.8f, 1.2f); r->wall_fall += 0.02f; push_event(r, EV_SHOFAR, i); }
+            }
+            r->shofar_held[i] = in.item;
+        }
+        else if (in.item && k->item) use_item(r, i);
         kart_step(k, t, &in, dt);
         if (k->finished && k->place == 0) { k->place = ++r->nfin; push_event(r, EV_FINISH, i); }
         /* lap events */
-        if (k->lap >= 2 && k->lap_time < dt * 1.5f && !k->finished) push_event(r, k->lap == t->laps ? EV_FINAL_LAP : EV_LAP, i);
+        if (k->lap >= 2 && k->lap_time < dt * 1.5f && !k->finished) { push_event(r, k->lap == t->laps ? EV_FINAL_LAP : EV_LAP, i); if (r->jericho && r->shofars[i] < 6) r->shofars[i]++; }
+    }
+    if (r->jericho) {   /* on the seventh lap the walls come down whatever anyone does (Joshua 6:20) */
+        int last = 0; for (int i = 0; i < r->nk; i++) if (r->k[i].lap >= t->laps) last = 1;
+        if (last) r->wall_fall += dt / 25.0f;
+        if (r->wall_fall >= 1.0f && !r->walls_down) { r->wall_fall = 1.0f; r->walls_down = 1; push_event(r, EV_WALLS_DOWN, -1); }
+        if (r->wall_fall > 1.0f) r->wall_fall = 1.0f;
     }
 
     /* item boxes */
@@ -326,6 +340,7 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
     /* things crossing the road: sheep, carts, boats, rolling stones */
     for (int m = 0; m < t->nmover; m++) {
         const Mover *mv = &t->mover[m]; float mx, my, mz; track_mover_pos(t, mv, r->race_t, &mx, &my, &mz);
+        if (r->jericho && mv->img[1] == 'r' && mv->img[2] == 'u' && r->wall_fall < 0.3f) continue;   /* the rubble is only there once the walls start falling */
         for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; if ((k->air && k->y > my + 1.5f) || k->obstacle_cd > 0 || k->stun > 0) continue;
             float dx = k->x - mx, dz = k->z - mz, d = sqrtf(dx * dx + dz * dz);
             if (d < mv->radius + 0.9f) {
@@ -353,7 +368,7 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
     /* the race ends 7 s after the people finish (or 25 s after the first of them, so one straggler does not hold everyone), when everyone finishes, or at the time limit */
     int any_done = 0, all_done = 1; for (int i = 0; i < r->nk; i++) if (r->human[i]) { if (r->k[i].finished) any_done = 1; else all_done = 0; }
     if (any_done) r->after_t += dt;
-    if ((all_done && r->after_t > 7.0f) || r->after_t > 25.0f || r->nfin >= r->nk || r->race_t >= RACE_TIME_LIMIT) {
+    if ((all_done && r->after_t > 7.0f) || r->after_t > 25.0f || r->nfin >= r->nk || r->race_t >= r->time_limit) {
         /* anyone who has not finished gets a place by progress */
         race_rank(r);
         for (int p = 0; p < r->nk; p++) { Kart *k = &r->k[r->order[p]]; if (!k->finished) { k->finished = 1; k->place = ++r->nfin; } }

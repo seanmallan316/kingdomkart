@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the game
-        run: make && for r in 0 1 2 3 4 5 6 7 8 9; do make tour TOUR_ROAD=$r; done
+        run: make && for r in 0 1 2 3 4 5 6 7 8 9 10; do make tour TOUR_ROAD=$r; done
       - name: Save the finished game file
         uses: actions/upload-artifact@v4
         with:
@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        road: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        road: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     permissions:
       contents: write
     steps:

@@ -1,5 +1,6 @@
 // race_test.c - runs full eight-kart races with no graphics: everyone finishes, items get used, nobody cheats, no NaN.
 #include "../src/sim/race.h"
+#include "../src/world/theme.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +60,17 @@ int main(void) {
         int placed = 1; for (int i = 0; i < r.nk; i++) if (!r.k[i].place) placed = 0; CHECK(placed, "%d people: everyone gets a place", nh);
         printf("%d people + %d computer drivers: ended at %.1fs, winner %s\n", nh, r.nk - nh, r.race_t, CHARACTERS[r.character[r.order[0]]].name);
     }
+    /* the Walls of Jericho: seven laps, shofars blown, the walls down by the end */
+    { Track j; int jd = -1; for (int d = 0; d < NUM_TRACK_DEFS; d++) if (TRACK_DEFS[d].bonus == 3) jd = d;
+      CHECK(jd >= 0, "no Jericho road"); if (jd >= 0) { track_from_def(&j, &TRACK_DEFS[jd]);
+        Race r; race_init(&r, &j, 1, 5, DIFF_NORMAL, NKARTS); race_set_jericho(&r);
+        CHECK(r.nbox == 0, "Jericho has no blessing boxes");
+        KartInput in; memset(&in, 0, sizeof in); float time = 0; int blows = 0, shouts = 0, down_at = -1;
+        while (r.state != RACE_FINISHED && time < 300) { race_step(&r, &in, 1, SIM_DT); time += SIM_DT;
+            for (int e = 0; e < r.nev; e++) { if (r.ev[e].type == EV_SHOFAR) blows++; if (r.ev[e].type == EV_SHOUT) shouts++; if (r.ev[e].type == EV_WALLS_DOWN && down_at < 0) down_at = (int)time; } }
+        CHECK(r.state == RACE_FINISHED, "Jericho never ended"); CHECK(r.race_t < 150, "Jericho took %.0f s", r.race_t);
+        CHECK(blows + shouts > 0, "nobody blew a shofar"); CHECK(r.walls_down, "the walls never fell");
+        printf("Jericho: %.0f s, %d shofar blows, %d great shouts, walls down at %d s, winner %s\n", r.race_t, blows, shouts, down_at, CHARACTERS[r.character[r.order[0]]].name); } }
     printf(bad ? "RACE TEST FAILED\n" : "RACE TEST OK\n");
     return bad;
 }

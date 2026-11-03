@@ -41,7 +41,7 @@ typedef struct { int16_t *d; int n, ch; } Sample;
 enum { SMP_IDLE, SMP_ACCEL, SMP_TOP, SMP_DECEL, SMP_START, SMP_SHIFT, SMP_POP, SMP_BRAKE, SMP_HARDBRAKE, SMP_COUNTDOWN, SMP_UNLOCK, SMP_COUNT };
 static const char *SMP_NAMES[SMP_COUNT] = {"kart_engine_idle", "kart_engine_acceleration", "kart_engine_top_speed", "kart_engine_deceleration", "kart_engine_start", "kart_gear_shift", "kart_exhaust_pop", "kart_braking", "kart_hard_braking", "sting_countdown", "sting_unlock"};
 static const char *SFX_NAMES[SFX_COUNT] = {"menu_move", "menu_ok", "menu_back", "count_tick", "go", "pickup", "use_item", "throw", "hit", "block", "bump", "lap", "final_lap", "finish", "win",
-    "mini_turbo", "super_turbo", "boost_pad", "bounce", "land", "splash", "shofar", "fire", "locusts", "dove", "unlock", "welcome_home", "wrong_way", "coin", "countdown", "engine_start"};
+    "mini_turbo", "super_turbo", "boost_pad", "bounce", "land", "splash", "shofar", "fire", "locusts", "dove", "unlock", "welcome_home", "wrong_way", "coin", "crumble", "shout", "countdown", "engine_start"};
 static Sample smp[SMP_COUNT], smp_fx[SFX_COUNT];
 static void (*logf_)(const char *fmt, ...) = NULL;
 #define LOG(...) do { if (logf_) logf_(__VA_ARGS__); } while (0)
@@ -188,6 +188,10 @@ static void fire(int id, float g, float p) {
     case SFX_WELCOME_HOME: { static const float f[4] = {523, 659, 784, 1047}; for (int i = 0; i < 4; i++) { N(W_TRI, f[i], f[i], 3.0f, 0.3f, 3.0f, 0.22f, 0); N(W_SINE, f[i] * 2, f[i] * 2, 3.0f, 0.5f, 3.0f, 0.1f, 0.3f); } } break;
     case SFX_COIN:      N(W_SQUARE, 1760, 1760, 0.05f, 0.002f, 0.05f, 0.25f, 0); N(W_SQUARE, 2349, 2349, 0.25f, 0.002f, 0.25f, 0.25f, 0.05f); break;
     case SFX_WRONG_WAY: N(W_SQUARE, 400, 400, 0.15f, 0.002f, 0.15f, 0.25f, 0); N(W_SQUARE, 300, 300, 0.2f, 0.002f, 0.2f, 0.25f, 0.18f); break;
+    case SFX_CRUMBLE:   v = N(W_NOISE, 0, 0, 1.4f, 0.05f, 1.4f, 0.55f, 0); v->lp = 500; v->am_rate = 7;      /* stone tumbling: a long low rumble with thuds */
+                        N(W_SINE, 70, 35, 1.2f, 0.01f, 1.2f, 0.6f, 0); N(W_SINE, 90, 40, 0.5f, 0.01f, 0.5f, 0.5f, 0.4f); N(W_SINE, 60, 30, 0.6f, 0.01f, 0.6f, 0.5f, 0.8f); break;
+    case SFX_SHOUT:     { for (int i = 0; i < 5; i++) { v = N(W_SAW, 180 + i * 37, 200 + i * 37, 1.6f, 0.15f, 1.6f, 0.2f, i * 0.04f); v->vib_rate = 4 + i; v->vib_depth = 0.04f; v->lp = 1800; }   /* a crowd of voices and horns */
+                        v = N(W_SAW, 310, 330, 1.6f, 0.08f, 1.6f, 0.35f, 0); v->vib_rate = 5.5f; v->vib_depth = 0.03f; v->lp = 2200; v = N(W_NOISE, 0, 0, 1.6f, 0.2f, 1.6f, 0.2f, 0); v->lp = 1200; } break;
     default: break;
     }
 }

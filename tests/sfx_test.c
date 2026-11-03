@@ -11,7 +11,7 @@ static void put16(FILE *f, unsigned v) { fputc(v & 255, f); fputc((v >> 8) & 255
 int main(void) {
     const int SR = 32000; sfx_init(SR); sfx_load_samples();
     static const char *names[SFX_COUNT] = {"menu move", "menu ok", "menu back", "count tick", "go", "pickup", "use item", "throw", "hit", "block", "bump", "lap", "final lap", "finish", "win",
-        "mini turbo", "super turbo", "boost pad", "bounce", "land", "splash", "shofar", "chariot of fire", "locusts", "dove", "unlock", "welcome home", "wrong way", "coin", "countdown (recorded)", "engine start (recorded)"};
+        "mini turbo", "super turbo", "boost pad", "bounce", "land", "splash", "shofar", "chariot of fire", "locusts", "dove", "unlock", "welcome home", "wrong way", "coin", "walls crumble", "the great shout", "countdown (recorded)", "engine start (recorded)"};
     int total = SR * (SFX_COUNT * 2 + 8); short *L = calloc(total, 2), *R = calloc(total, 2); int pos = 0;
     for (int id = 0; id < SFX_COUNT; id++) {
         sfx_play(id, 1.0f, 0); int n = SR * 2; sfx_render(L + pos, R + pos, n);

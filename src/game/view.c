@@ -19,7 +19,8 @@
 #define MAX_SPRITE_KINDS 16
 #define SPRITE_DRAW_DIST 340.0f
 #define NUM_GP_ROUNDS_MAX 4
-#define NUM_PLAY_TRACKS (NUM_TRACK_DEFS - 2)     /* the last two are the battle arena and the developers' Test Loop, not race roads */
+#define NUM_PLAY_TRACKS (NUM_TRACK_DEFS - 3)     /* the last three are the Walls of Jericho, the battle arena and the developers' Test Loop, not roads to pick */
+#define JERICHO_TRACK (NUM_TRACK_DEFS - 3)
 #define NUM_GP_TRACKS 4                          /* the Grand Prix runs the four story roads; bonus roads are for Single Race and Time Trial */
 #ifndef KK_TOUR_ROAD
 #define KK_TOUR_ROAD 1
@@ -37,7 +38,7 @@ enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, 
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1; static Texture *tx_op; static Mesh *m_op;
 static int g_opt_sel = 0;
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
-enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS };   /* VS: two to four people on a split screen */
+enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO };   /* VS: two to four people on a split screen; JERICHO: seven laps round the walls */
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
 static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
 static int char_unlocked(int c) { return !CHARACTERS[c].bonus || (g_save.unlocks & char_lock_bit(c)); }
@@ -143,7 +144,8 @@ static Spark g_spark[MAX_SPARK]; static Mesh *m_spark;
 /* scenery: cut-out pictures standing beside the road, grouped by picture */
 typedef struct { const char *img; Texture *tex; float aspect; Mesh *mesh; int placeholder, sway; } SpriteKind;   /* sway: 1 tree (slow), 2 cloth (quick) */
 static SpriteKind g_kind[MAX_SPRITE_KINDS]; static int g_nkind;
-typedef struct { Vec3 p; float h, w, glow; int kind; int purple, falls; } Placed;
+typedef struct { Vec3 p; float h, w, glow; int kind; int purple, falls; int wall; float fall_t; } Placed;   /* wall: 0 = not a wall, else its place in the order the walls of Jericho fall (1..n); fall_t: seconds since it began to fall */
+static int g_nwalls;
 static Placed g_placed[MAX_SCENERY]; static int g_nplaced;
 static int g_mover_kind[MAX_MOVERS];
 static int g_was_air[NKARTS];
@@ -702,6 +704,46 @@ static void px_path(int x, int y, uint32_t *o) {         /* a garden path: packe
 }
 static void px_lush(int x, int y, uint32_t *o) { float n = smooth_noise(x / 14.0f, y / 14.0f) * 0.6f + smooth_noise(x / 4.0f, y / 4.0f) * 0.4f; *o = rgba(50 + (int)(n * 50), 150 + (int)(n * 80), 45 + (int)(n * 35), 255); }
 static void px_hedge(int x, int y, uint32_t *o) { float n = smooth_noise(x / 6.0f, y / 6.0f) * 0.6f + smooth_noise(x / 2.5f, y / 2.5f) * 0.4f; int fl = smooth_noise(x / 3.0f + 20, y / 3.0f) > 0.86f; *o = fl ? rgba(255, 120, 150, 255) : rgba(25 + (int)(n * 50), 95 + (int)(n * 80), 30 + (int)(n * 30), 255); }
+/* the Walls of Jericho */
+static void px_jwall(int x, int y, uint32_t *o) {        /* a stretch of city wall, 128 x 64, battlements along the top */
+    *o = 0;
+    if (inrect(x, y, 0, 14, 128, 64)) *o = stone(x, y, 205, 180, 135);
+    if (inrect(x, y, 0, 6, 128, 14) && ((x / 10) & 1)) *o = stone(x, y, 195, 170, 125);
+    if (y >= 14 && ((y / 8 + (x / 16)) & 1) == 0 && (x % 16) < 1) *o = stone(x, y, 170, 148, 108);   /* joints between the stones */
+    if (y >= 14 && (y % 8) == 0) *o = stone(x, y, 175, 152, 112);
+}
+static void px_jtower(int x, int y, uint32_t *o) {       /* a corner tower, taller, with a dark window */
+    *o = 0;
+    if (inrect(x, y, 8, 12, 56, 96)) *o = stone(x, y, 200, 175, 130);
+    if (inrect(x, y, 6, 4, 58, 12) && ((x / 8) & 1)) *o = stone(x, y, 190, 165, 120);
+    if ((y % 8) == 0 && y > 12) *o = stone(x, y, 172, 150, 110);
+    if (inrect(x, y, 27, 36, 37, 50)) *o = rgba(40, 30, 20, 255);
+}
+static void px_rahab(int x, int y, uint32_t *o) {        /* Rahab's house on the wall: a window with the scarlet cord hanging from it (Joshua 2:18) */
+    *o = 0;
+    if (inrect(x, y, 4, 12, 60, 96)) *o = stone(x, y, 205, 180, 135);
+    if (inrect(x, y, 2, 4, 62, 12) && ((x / 8) & 1)) *o = stone(x, y, 195, 170, 125);
+    if (inrect(x, y, 24, 28, 40, 48)) *o = rgba(50, 35, 25, 255);                         /* the window */
+    if (inrect(x, y, 30, 48, 34, 92)) *o = rgba(215, 30, 40, 255);                        /* the scarlet cord */
+}
+static void px_ark(int x, int y, uint32_t *o) {          /* the Ark of the Covenant on its poles, two priests carrying it */
+    *o = 0;
+    px_person(x, y, o, 240, 235, 220, 0); if (x > 32) { uint32_t t = 0; px_person(x - 30, y, &t, 240, 235, 220, 0); if (t) *o = t; }   /* two priests in white */
+    if (inrect(x, y, 2, 50, 62, 54)) *o = rgba(200, 160, 60, 255);                        /* the poles */
+    if (inrect(x, y, 18, 30, 46, 52)) *o = rgba(240, 195, 70, 255);                       /* the gold chest */
+    if (inrect(x, y, 18, 28, 46, 31)) *o = rgba(255, 225, 120, 255);
+    if (inrect(x, y, 24, 20, 30, 28) || inrect(x, y, 34, 20, 40, 28)) *o = rgba(255, 230, 140, 255);   /* the cherubim */
+}
+static void px_priest(int x, int y, uint32_t *o) {       /* a priest with a ram's horn to his lips */
+    px_person(x, y, o, 240, 235, 220, 0);
+    if (y > 14 && y < 24 && x > 36 && x < 36 + (y - 14) * 2 + 4) *o = rgba(190, 150, 90, 255);   /* the shofar, flaring out */
+}
+static void px_rubble(int x, int y, uint32_t *o) {       /* a heap of fallen stones */
+    *o = 0;
+    for (int b = 0; b < 6; b++) { static const int bx[6] = {14, 32, 50, 22, 42, 32}, by[6] = {80, 82, 80, 64, 66, 48}, br[6] = {13, 15, 13, 12, 12, 11};
+        float dx = (float)(x - bx[b]) / br[b], dy = (float)(y - by[b]) / (br[b] * 0.8f); if (dx * dx + dy * dy < 1.0f) *o = stone(x, y, 190 - b * 6, 168 - b * 5, 125 - b * 4); }
+}
+static void px_desert(int x, int y, uint32_t *o) { float n = smooth_noise(x / 12.0f, y / 12.0f) * 0.6f + smooth_noise(x / 4.0f, y / 4.0f) * 0.4f; int d = smooth_noise(x / 6.0f + 30, y / 6.0f) > 0.75f; *o = d ? rgba(150, 140, 95, 255) : rgba(205 + (int)(n * 30), 180 + (int)(n * 30), 125 + (int)(n * 25), 255); }
 static Texture *placeholder_sprite(const char *id, float *aspect) {
     *aspect = (float)PW / (float)PH;
     static const struct { const char *id; void (*fn)(int, int, uint32_t *); } table[] = {
@@ -711,6 +753,12 @@ static Texture *placeholder_sprite(const char *id, float *aspect) {
         {"#israelite", px_israelite}, {"#philistine", px_philistine}, {"#banner_israel", px_banner_israel}, {"#banner_philistine", px_banner_philistine}, {"#tent", px_tent}, {"#camp", px_tent},
         {"#fruittree", px_fruittree}, {"#treeoflife", px_treeoflife}, {"#lion", px_lion}, {"#lamb", px_lamb}, {"#deer", px_deer}, {"#flowers", px_flowers}, {"#fern", px_fern} };
     if (!strcmp(id, "#waterfall")) { *aspect = 0.5f; return make_tex(64, 128, 1, 0, px_waterfall); }
+    if (!strcmp(id, "#jwall")) { *aspect = 2.0f; return make_tex(128, 64, 0, 0, px_jwall); }
+    if (!strcmp(id, "#jtower")) return make_tex(PW, PH, 0, 0, px_jtower);
+    if (!strcmp(id, "#rahab")) return make_tex(PW, PH, 0, 0, px_rahab);
+    if (!strcmp(id, "#ark")) return make_tex(PW, PH, 0, 0, px_ark);
+    if (!strcmp(id, "#priest")) return make_tex(PW, PH, 0, 0, px_priest);
+    if (!strcmp(id, "#rubble")) return make_tex(PW, PH, 0, 0, px_rubble);
     for (size_t i = 0; i < sizeof table / sizeof table[0]; i++) if (!strcmp(id, table[i].id)) return make_tex(PW, PH, 0, 0, table[i].fn);
     if (!strcmp(id, "#house1")) return make_tex(PW, PH, 0, 0, px_house1);
     if (!strcmp(id, "#house2")) return make_tex(PW, PH, 0, 0, px_house2);
@@ -752,10 +800,10 @@ static void free_theme(void) {
 }
 static void load_theme(void) {
     const TrackDef *d = g_def;
-    int heaven = d->grid_idx > 0, eden = !strcmp(d->prefix, "eden");
+    int heaven = d->grid_idx > 0, eden = !strcmp(d->prefix, "eden"), desert = d->bonus == 3;
     tx_road = theme_tex(d->tex_road, 256, 256, heaven ? px_gold : (eden ? px_path : px_road));
-    tx_dirt = theme_tex(d->tex_dirt, 128, 128, d->water ? px_sand : (heaven ? px_cloud : (eden ? px_lush : px_dirt)));
-    tx_grass = theme_tex(d->tex_grass, 128, 128, d->water ? px_water : (eden ? px_lush : px_grass));
+    tx_dirt = theme_tex(d->tex_dirt, 128, 128, d->water ? px_sand : (heaven ? px_cloud : (eden ? px_lush : (desert ? px_sand : px_dirt))));
+    tx_grass = theme_tex(d->tex_grass, 128, 128, d->water ? px_water : (eden ? px_lush : (desert ? px_desert : px_grass)));
     tx_wall = theme_tex(d->tex_wall, 64, 64, heaven ? px_cloud : (eden ? px_hedge : px_wall));
     g_skytop[0] = d->sky_r * 0.8f; g_skytop[1] = d->sky_g * 0.85f; g_skytop[2] = d->sky_b; g_skyhor[0] = d->fog_r; g_skyhor[1] = d->fog_g; g_skyhor[2] = d->fog_b;
     { int sw = 0, sh = 0; Texture *painted = asset_texture(d->tex_sky, 1, &sw, &sh);
@@ -775,7 +823,7 @@ static void load_theme(void) {
     gfx_texture_free(tx_finale); tx_finale = d->finale_img ? asset_texture(d->finale_img, 0, NULL, NULL) : NULL;
     tx_star = NULL;
     if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star && g_sky_wrap > 1.5f) tx_star = make_tex(64, 64, 0, 0, px_star); }
-    g_nkind = 0; g_nplaced = 0;
+    g_nkind = 0; g_nplaced = 0; g_nwalls = 0;
     for (int i = 0; i < g_track.nmover; i++) g_mover_kind[i] = sprite_kind(g_track.mover[i].img);
     for (int i = 0; i < d->nscenery && g_nplaced < MAX_SCENERY; i++) {
         const Scenery *sc = &d->scenery[i]; int idx = sc->idx % g_track.n;
@@ -785,6 +833,7 @@ static void load_theme(void) {
         p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * sc->side, 0, g_track.s[idx].z + g_track.s[idx].nz * sc->side);
         p->p.y = track_surface_height(&g_track, idx, (sc->side < 0 ? -1.0f : 1.0f) * edge) - 0.2f;   /* stands on the ground just outside the wall */
         p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
+        p->wall = (!strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab")) ? ++g_nwalls : 0; p->fall_t = 0;
     }
     m_glow = gfx_mesh_dynamic((MAX_SCENERY + NKARTS) * 6 + 6);
     /* a soft shadow blob under everything that stands by the road */
@@ -818,6 +867,8 @@ static void start_race(int attract) {
     g_nplayers = (g_mode == MODE_VS && !attract && g_njoined >= 2) ? g_njoined : 1;
     if (g_nplayers > 1) race_init_multi(&g_race, &g_track, g_pchar, NULL, g_nplayers, g_difficulty);
     else race_init(&g_race, &g_track, g_player_char, nk == 1 ? 0 : 5, g_difficulty, nk);
+    if (g_def->bonus == 3) race_set_jericho(&g_race);
+    for (int i = 0; i < g_nplaced; i++) g_placed[i].fall_t = 0;
     if (!attract) { sfx_play(SFX_COUNTDOWN, 1, 0); sfx_play(SFX_ENGINE_START, 0.8f, 0); }
     g_skid_n = 0; memset(g_skid, 0, sizeof g_skid); memset(g_dust, 0, sizeof g_dust); memset(g_last_skid, 0, sizeof g_last_skid);
     reset_views();
@@ -1020,8 +1071,16 @@ static void hud_race(const Pad *pad) {
         batch_text(&g_b, place_name(mypos), 1240 - text_width(place_name(mypos), 64), 24, 64, 1, 0.9f, 0.3f, 1);
     }
     snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); batch_text(&g_b, buf, 1240 - text_width(buf, 24), 96, 24, 1, 1, 1, 1);
-    if (g_track.ncoin) { batch_rect(&g_b, 40, 215, 16, 16, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, 62, 214, 18, 1, 0.9f, 0.5f, 1); }
-    if (g_mode != MODE_TT) {
+    if (g_track.ncoin) { float cy2 = r->jericho ? 222 : 215; batch_rect(&g_b, 40, cy2, 16, 16, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, 62, cy2 - 1, 18, 1, 0.9f, 0.5f, 1); }
+    if (r->jericho) {   /* the shofars held, and the great shout on the last lap */
+        int n = r->shofars[r->player], last = k->lap >= g_track.laps;
+        batch_rect(&g_b, 40, 140, 150, 60, 0.05f, 0.1f, 0.25f, 0.7f); batch_rect(&g_b, 43, 143, 144, 54, last ? 0.5f : 0.15f, last ? 0.3f : 0.3f, 0.1f, 0.7f);
+        for (int i = 0; i < 6; i++) batch_rect(&g_b, 50 + i * 22, 150, 16, 16, i < n ? 1.0f : 0.3f, i < n ? 0.8f : 0.33f, i < n ? 0.3f : 0.4f, 1);
+        if (last) batch_text(&g_b, n > 0 ? "ZL: SHOUT!" : "SHOUTED!", 115 - text_width(n > 0 ? "ZL: SHOUT!" : "SHOUTED!", 16) / 2, 172, 16, 1, 0.9f, 0.4f, (int)(g_time * 4) & 1 || n == 0 ? 1.0f : 0.6f);
+        else { snprintf(buf, sizeof buf, "SHOFAR x%d", n); batch_text(&g_b, buf, 115 - text_width(buf, 16) / 2, 172, 16, 0.9f, 0.95f, 1, 1); }
+        batch_rect(&g_b, 40, 206, 150, 8, 0.1f, 0.1f, 0.1f, 0.6f); batch_rect(&g_b, 40, 206, 150 * r->wall_fall, 8, 0.85f, 0.6f, 0.3f, 1);   /* how far the walls have come down */
+    }
+    else if (g_mode != MODE_TT) {
         batch_rect(&g_b, 40, 140, 150, 60, 0.05f, 0.1f, 0.25f, 0.7f);
         batch_rect(&g_b, 43, 143, 144, 54, 0.15f, 0.3f, 0.6f, 0.7f);
         if (g_roulette > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_roulette)) % (ITEM_COUNT - 1); const char *nm = item_name(show);
@@ -1040,7 +1099,8 @@ static void hud_race(const Pad *pad) {
       for (int p = r->nk - 1; p >= 0; p--) { int i = r->order[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]]; float sz = i == r->player ? 12 : 8;
           batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - sz / 2, mz - (q->z - map_z0) * map_scale - sz / 2, sz, sz, c->r, c->g, c->b, 1);
           if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - 3, mz - (q->z - map_z0) * map_scale - 3, 6, 6, 1, 1, 1, 1); } }
-    if (r->state == RACE_COUNTDOWN) { text_c(g_track.name, 180, 34, 1, 1, 1, 1); int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } }
+    if (r->state == RACE_COUNTDOWN) { text_c(g_track.name, 180, 34, 1, 1, 1, 1); int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); }
+        if (r->jericho) { text_c("SEVEN TIMES ROUND THE CITY. A SHOFAR EVERY LAP: ZL BLOWS IT.", 400, 18, 1, 1, 1, 1); text_c("SAVE THEM FOR THE GREAT SHOUT ON THE SEVENTH LAP!", 426, 18, 1, 0.9f, 0.5f, 1); } }
     if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
     if (k->wrongway_t > WRONGWAY_DELAY && ((int)(g_time * 4) & 1)) text_c("WRONG WAY", 330, 56, 1, 0.3f, 0.2f, 1);
     if (g_demo && !g_attract) text_c("DEMO - MOVE THE STICK TO DRIVE", 680, 20, 1, 1, 1, 0.8f);
@@ -1098,10 +1158,11 @@ static void hud_main(void) {
     if (g_save.unlocks & UNLOCK_GOLIATH) menu_item("DAVID VS GOLIATH", 338, g_menu_sel == 3, 30);
     else { menu_item("? LOCKED", 338, g_menu_sel == 3, 30); if (g_menu_sel == 3) text_c("WIN A RACE AS DAVID", 372, 13, 1, 0.9f, 0.5f, 1); }
     menu_item("MULTIPLAYER 2-4", 380, g_menu_sel == 4, 30);
-    snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]); menu_item(buf, 426, g_menu_sel == 5, 26);
-    menu_item("OPTIONS AND RECORDS", 464, g_menu_sel == 6, 24);
-    menu_item("CREDITS", 500, g_menu_sel == 7, 24);
-    text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 538, 16, 0.8f, 0.85f, 1, 1);
+    menu_item("THE WALLS OF JERICHO", 422, g_menu_sel == 5, 30);
+    snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]); menu_item(buf, 466, g_menu_sel == 6, 24);
+    menu_item("OPTIONS AND RECORDS", 500, g_menu_sel == 7, 22);
+    menu_item("CREDITS", 532, g_menu_sel == 8, 22);
+    text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 560, 14, 0.8f, 0.85f, 1, 1);
 }
 static void volume_row(const char *label, int vol, float y, int selected) {
     float x = 400;
@@ -1139,7 +1200,7 @@ static const CreditLine CREDITS[] = {
     {"PROGRAMMING", 18, 1, 0}, {"CLAUDE", 34, 0, 60},
     {"THE ROADS", 18, 1, 0}, {"BETHLEHEM ROAD - LUKE 2", 24, 0, 0}, {"SEA OF GALILEE - MATTHEW 4 AND 14", 24, 0, 0},
     {"JERUSALEM ROAD - MATTHEW 21", 24, 0, 0}, {"SUNRISE AT THE EMPTY TOMB - MATTHEW 28", 24, 0, 0},
-    {"ROAD TO HEAVEN - REVELATION 21 AND 22", 24, 0, 0}, {"THE GARDEN OF EDEN - GENESIS 2", 24, 0, 0}, {"THE VALLEY OF ELAH - 1 SAMUEL 17", 24, 0, 60},
+    {"ROAD TO HEAVEN - REVELATION 21 AND 22", 24, 0, 0}, {"THE GARDEN OF EDEN - GENESIS 2", 24, 0, 0}, {"THE WALLS OF JERICHO - JOSHUA 6", 24, 0, 0}, {"THE VALLEY OF ELAH - 1 SAMUEL 17", 24, 0, 60},
     {"THE RACERS", 18, 1, 0}, {"JESUS - MOSES - DAVID - ESTHER", 24, 0, 0}, {"PETER - MARY - DANIEL", 24, 0, 0},
     {"SAMSON - NOAH - JOSEPH - JONAH - JOHN THE BAPTIST", 24, 0, 60},
     {"BUILT WITH", 18, 1, 0}, {"DEVKITPRO AND WUT - CAFEGLSL - MINIMP3 - STB IMAGE", 20, 0, 0}, {"FOR THE WII U AROMA HOMEBREW ENVIRONMENT", 20, 0, 60},
@@ -1359,7 +1420,7 @@ static void hud_results(void) {
     int podium = g_mode != MODE_TT;
     if (podium) hud_podium();
     panel(podium ? 420 : 290, 90, podium ? 780 : 700, 540);
-    text_c(g_mode == MODE_TT ? "TIME TRIAL" : "RESULTS", 110, 44, 1, 0.85f, 0.3f, 1);
+    text_c(g_mode == MODE_TT ? "TIME TRIAL" : (r->jericho ? "THE WALLS CAME DOWN" : "RESULTS"), 110, 44, 1, 0.85f, 0.3f, 1);
     int rows[NKARTS]; for (int p = 0; p < r->nk; p++) rows[p] = r->order[p];
     for (int a2 = 1; a2 < r->nk; a2++) { int v = rows[a2], j = a2 - 1; while (j >= 0 && r->k[rows[j]].place > r->k[v].place) { rows[j + 1] = rows[j]; j--; } rows[j + 1] = v; }
     for (int p = 0; p < r->nk; p++) { int i = rows[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];
@@ -1373,7 +1434,8 @@ static void hud_results(void) {
         batch_text(&g_b, buf, 720 + ox, y, 30, 1, 1, 1, 1);
         if (g_mode == MODE_GP) { int pl = q->place ? q->place : p + 1; snprintf(buf, sizeof buf, "+%d", GP_POINTS[pl - 1]); batch_text(&g_b, buf, 900 + ox, y, 30, 1, 0.9f, 0.4f, 1); }
         if (r->given[i] > 0) { snprintf(buf, sizeof buf, "%d", r->given[i]); batch_rect(&g_b, 1000 + ox + (g_mode == MODE_GP ? 60 : 0), y + 6, 14, 14, 1, 0.85f, 0.3f, 1); batch_text(&g_b, buf, 1020 + ox + (g_mode == MODE_GP ? 60 : 0), y + 2, 22, 1, 0.9f, 0.5f, 1); } }
-    if (g_mode != MODE_TT) {   /* the Most Generous: whoever blessed the others most */
+    if (r->jericho) text_c("BY FAITH THE WALLS OF JERICHO FELL - HEBREWS 11:30", 548, 18, 1, 0.9f, 0.5f, 1);
+    else if (g_mode != MODE_TT) {   /* the Most Generous: whoever blessed the others most */
         int best = -1, bg = 0; for (int i = 0; i < r->nk; i++) if (r->given[i] > bg) { bg = r->given[i]; best = i; }
         if (best >= 0) { snprintf(buf, sizeof buf, "MOST GENEROUS: %s (%d BLESSINGS)", CHARACTERS[r->character[best]].short_name, bg); text_c(buf, 548, 20, 1, 0.9f, 0.5f, 1); } }
     if (g_mode == MODE_TT) { Kart *k = &r->k[r->player]; fmt_time(buf, sizeof buf, k->best_lap); char line[96]; snprintf(line, sizeof line, "BEST LAP %s", buf); text_c(line, 240, 28, 0.9f, 0.95f, 1, 1);
@@ -1406,7 +1468,10 @@ static void hud_gp(void) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pads(Pad *pads, float t) {
     static const struct { float t; char key; int slot; } script[] = {
-#if KK_TOUR_ROAD == 8
+#if KK_TOUR_ROAD == 10
+        /* the Walls of Jericho: title, menu (down five times), character, kart, race */
+        {8, 'A'}, {11, 'D'}, {13, 'D'}, {15, 'D'}, {17, 'D'}, {19, 'D'}, {21, 'A'}, {24, 'A'}, {27, 'A'},
+#elif KK_TOUR_ROAD == 8
         /* four players: title, menu (down four times to MULTIPLAYER), everyone joins, + starts, everyone locks a character, P1 picks the road */
         {8, 'A'}, {11, 'D'}, {13, 'D'}, {15, 'D'}, {17, 'D'}, {19, 'A'},
         {22, 'A', 0}, {23, 'A', 1}, {24, 'A', 2}, {25, 'A', 3}, {28, 'P', 0},
@@ -1449,7 +1514,7 @@ static Pad merge_pads(const Pad *pads, int npads) {
     return m;
 }
 static const Pad *player_pad(const Pad *pads, int npads, int p) { int sl = g_pslot[p]; static Pad none; return sl >= 0 && sl < npads ? &pads[sl] : &none; }
-static void begin_player_race(void) { set_track(g_mode == MODE_GP ? g_gp_order[g_gp_round] : g_track_idx); start_race(0); g_screen = SCR_RACE; }
+static void begin_player_race(void) { set_track(g_mode == MODE_GP ? g_gp_order[g_gp_round] : (g_mode == MODE_JERICHO ? JERICHO_TRACK : g_track_idx)); start_race(0); g_screen = SCR_RACE; }
 static void begin_battle(void) {
     set_track(ARENA_TRACK); g_attract = 0;
     battle_init(&g_battle, &g_track, g_difficulty); g_nplayers = 1;
@@ -1505,9 +1570,13 @@ static void build_dynamic(void) {
                 float w = pl->w * 0.5f; int scroll = pl->falls && g_kind[kd].placeholder;
                 float v0 = scroll ? g_time * 1.5f : 0.0f, v1 = v0 + (scroll ? pl->h / 3.0f : 1.0f);
                 float sw = g_kind[kd].sway == 1 ? sinf(g_time * 0.9f + i * 1.3f) * 0.025f * pl->h : (g_kind[kd].sway == 2 ? sinf(g_time * 3.0f + i * 2.1f) * 0.03f * pl->h : 0);   /* the top of trees and cloth moves in the wind */
-                Vec3 c = v3(pl->p.x, pl->p.y + pl->h * 0.5f, pl->p.z), r_ = v3(ax.x * w, 0, ax.z * w), u_ = v3(ax.x * sw, pl->h * 0.5f, ax.z * sw);
+                float hh = pl->h;
+                if (pl->wall && pl->fall_t > 0) { float f = clampf(pl->fall_t / 1.2f, 0, 1); f = f * f; hh = pl->h * (1.0f - 0.78f * f); sw += sinf(pl->fall_t * 30.0f) * (1 - f) * 0.04f * pl->h;   /* it shudders, sinks into its own rubble, a quarter of it left standing */
+                    v0 = 1.0f - hh / pl->h; v1 = 1.0f; }   /* the bottom of the picture stays on the ground */
+                Vec3 c = v3(pl->p.x, pl->p.y + hh * 0.5f, pl->p.z), r_ = v3(ax.x * w, 0, ax.z * w), u_ = v3(ax.x * sw, hh * 0.5f, ax.z * sw);
                 batch_quad4(&g_b, v3(c.x - r_.x - u_.x, c.y - u_.y, c.z - r_.z - u_.z), v3(c.x + r_.x - u_.x, c.y - u_.y, c.z + r_.z - u_.z), v3(c.x + r_.x + u_.x, c.y + u_.y, c.z + r_.z + u_.z), v3(c.x - r_.x + u_.x, c.y + u_.y, c.z - r_.z + u_.z), v3(0, 1, 0), 0, v0, 1, v1, 1, 1, 1, 1); }
             for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd) continue; const Mover *mv = &g_track.mover[m];
+                if (r->jericho && mv->img[1] == 'r' && mv->img[2] == 'u' && r->wall_fall < 0.3f) continue;   /* the rubble appears once the walls start to fall */
                 float mx, my, mz; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); float w = mv->height * g_kind[kd].aspect * 0.5f;
                 batch_quad(&g_b, v3(mx, my + mv->height * 0.5f, mz), v3(ax.x * w, 0, ax.z * w), v3(0, mv->height * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
             gfx_mesh_update(g_kind[kd].mesh, g_b.v, g_b.n);
@@ -1790,7 +1859,9 @@ static void hud_split(int p, float vw, float vh) {
     /* the blessing slot, bottom left */
     { float bw = 120 * sc, bh = 44 * sc, bx = 16, by = vh - bh - 12;
       batch_rect(&g_b, bx, by, bw, bh, 0.05f, 0.1f, 0.25f, 0.7f); batch_rect(&g_b, bx + 2, by + 2, bw - 4, bh - 4, 0.15f, 0.3f, 0.6f, 0.7f);
-      if (g_proulette[p] > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_proulette[p])) % (ITEM_COUNT - 1); const char *nm = item_short(show);
+      if (r->jericho) { int n = r->shofars[vk], last = k->lap >= g_track.laps; if (last) snprintf(buf, sizeof buf, n > 0 ? "ZL: SHOUT!" : "SHOUTED!"); else snprintf(buf, sizeof buf, "SHOFAR x%d", n);
+          batch_text(&g_b, buf, bx + bw / 2 - text_width(buf, 12 * sc) / 2, by + bh / 2 - 6 * sc, 12 * sc, 1, 0.9f, 0.4f, 1); }
+      else if (g_proulette[p] > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_proulette[p])) % (ITEM_COUNT - 1); const char *nm = item_short(show);
           float sz = 13 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 0.9f, 0.95f, 1, 0.8f); }
       else if (k->item) { const char *nm = item_short(k->item); float sz = 13 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 1, 0.9f, 0.4f, 1); }
       else batch_text(&g_b, "ZL: BLESS", bx + bw / 2 - text_width("ZL: BLESS", 11 * sc) / 2, by + bh / 2 - 5 * sc, 11 * sc, 0.7f, 0.8f, 1, 0.8f);
@@ -1863,12 +1934,13 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pa || pb || g_screen_t * CREDITS_SPEED > credits_height() + 760) { g_screen = SCR_TITLE; g_screen_t = 0; if (pa || pb) sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_MAIN:
-        if (my) { g_menu_sel = (g_menu_sel - my + 8) % 8; sfx_play(SFX_MENU_MOVE, 1, 0); }
-        if (g_menu_sel == 5 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
+        if (my) { g_menu_sel = (g_menu_sel - my + 9) % 9; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (g_menu_sel == 6 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
         if (pa) {
-            if (g_menu_sel == 7) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
-            else if (g_menu_sel == 6) { g_screen = SCR_OPTIONS; g_opt_sel = 0; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
-            else if (g_menu_sel == 5) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
+            if (g_menu_sel == 8) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 7) { g_screen = SCR_OPTIONS; g_opt_sel = 0; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 6) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 5) { sfx_play(SFX_MENU_OK, 1, 0); g_mode = MODE_JERICHO; g_screen = SCR_CHAR; g_screen_t = 0; }
             else if (g_menu_sel == 4) { sfx_play(SFX_MENU_OK, 1, 0); g_mode = MODE_VS; memset(g_joined, 0, sizeof g_joined); g_njoined = 0; g_screen = SCR_JOIN; g_screen_t = 0; }
             else if (g_menu_sel == 3) { if (g_save.unlocks & UNLOCK_GOLIATH) { sfx_play(SFX_MENU_OK, 1, 0); g_mode = MODE_BATTLE; g_player_char = 2; begin_battle(); g_screen_t = 0; } else sfx_play(SFX_WRONG_WAY, 1, 0); }
             else { sfx_play(SFX_MENU_OK, 1, 0); g_mode = g_menu_sel == 0 ? MODE_GP : (g_menu_sel == 1 ? MODE_SINGLE : MODE_TT); g_screen = SCR_CHAR; g_screen_t = 0; } }
@@ -1906,7 +1978,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (mx) { g_player_style = (g_player_style + mx + NSTYLES) % NSTYLES; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) sfx_play(style_unlocked(g_player_style) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && style_unlocked(g_player_style)) { race_set_styles(g_player_style, unlocked_styles());
-            if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = i; begin_player_race(); g_screen_t = 0; } else { g_screen = SCR_TRACK; g_screen_t = 0; } }
+            if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = i; begin_player_race(); g_screen_t = 0; }
+            else if (g_mode == MODE_JERICHO) { begin_player_race(); g_screen_t = 0; } else { g_screen = SCR_TRACK; g_screen_t = 0; } }
         if (pb) { g_screen = SCR_CHAR; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_TRACK:
@@ -1943,13 +2016,13 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if ((pa && g_pause_sel < 3) || pplus) {
             if (g_pause_sel == 0 || pplus) { g_screen = SCR_RACE; g_screen_t = 0; }
             else if (g_pause_sel == 1) { if (g_mode == MODE_BATTLE) begin_battle(); else start_race(0); g_screen = SCR_RACE; g_screen_t = 0; }
-            else { if (g_mode == MODE_BATTLE) set_track(0); if (g_mode == MODE_VS) g_mode = MODE_SINGLE; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
+            else { if (g_mode == MODE_BATTLE || g_mode == MODE_JERICHO) set_track(0); if (g_mode == MODE_VS || g_mode == MODE_JERICHO) g_mode = MODE_SINGLE; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
         }
         if (pb) { g_screen = SCR_RACE; g_screen_t = 0; save_store(); }
         break;
     case SCR_RESULTS:
         if (pa) { if (g_mode == MODE_GP) { g_gp_round++; g_screen = SCR_GP; g_screen_t = 0; } else if (g_mode == MODE_BATTLE) { begin_battle(); g_screen_t = 0; } else { start_race(0); g_screen = SCR_RACE; g_screen_t = 0; } }
-        if (pb && g_mode != MODE_GP) { set_track(0); if (g_mode == MODE_VS) g_mode = MODE_SINGLE; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
+        if (pb && g_mode != MODE_GP) { set_track(0); if (g_mode == MODE_VS || g_mode == MODE_JERICHO) g_mode = MODE_SINGLE; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
         break;
     case SCR_GP:
         if (pa) { if (g_gp_round >= NUM_GP_TRACKS) { start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
@@ -2040,6 +2113,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case EV_PAD_BOUNCE: if (who >= 0) pmsg(who, 0.7f, "BOING!"); sfx_at(SFX_BOUNCE, ek, 0.9f); break;
                 case EV_COIN: if (who >= 0) sfx_play(SFX_COIN, 0.8f, 0); break;
                 case EV_SLOWED: if (who >= 0) pmsg(who, 1.0f, "SLOWED!"); break;
+                case EV_SHOFAR: sfx_at(SFX_SHOFAR, ek, 0.9f); if (who >= 0) { pmsg(who, 0.9f, "SHOFAR!"); prumble(who, 0.3f, 0.2f); } break;
+                case EV_SHOUT: sfx_at(SFX_SHOUT, ek, 1.0f); if (who >= 0) { pmsg(who, 1.6f, "THE GREAT SHOUT!"); pmsg2(who, 1.6f, "JOSHUA 6:20"); prumble(who, 0.8f, 0.5f); } for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.5f); break;
+                case EV_WALLS_DOWN: sfx_play(SFX_CRUMBLE, 1, 0); for (int p = 0; p < g_nplayers; p++) { pmsg(p, 3.0f, "THE WALLS CAME DOWN!"); pmsg2(p, 3.0f, "AND THE WALL FELL DOWN FLAT - JOSHUA 6:20"); g_view[p].shake = fmaxf(g_view[p].shake, 0.9f); prumble(p, 1.0f, 0.8f); } break;
                 default: break;
             }
         }
@@ -2057,6 +2133,15 @@ void game_frame(const Pad *pads, int npads, float dt) {
     if (steps == 8) acc = 0;
     Kart *k = &r->k[r->player];
     if (sim_running) for (int i = 0; i < MAX_RING; i++) if (g_ring[i].t > 0) g_ring[i].t -= dt;
+    if (r->jericho && sim_running) {   /* the walls of Jericho come down one stretch after another as wall_fall climbs */
+        for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (!pl->wall) continue;
+            float due = (float)(pl->wall - 1) / (float)(g_nwalls > 0 ? g_nwalls : 1);
+            if (pl->fall_t <= 0 && r->wall_fall > due && r->wall_fall > 0.001f) { pl->fall_t = 0.001f;
+                for (int n = 0; n < 10; n++) add_dust(v3(pl->p.x + (frand01() - 0.5f) * pl->w, pl->p.y + frand01() * pl->h * 0.5f, pl->p.z), 3.0f, 2.5f);
+                float dx = pl->p.x - k->x, dz = pl->p.z - k->z, d = sqrtf(dx * dx + dz * dz); float near = clampf(1.3f - d / 90.0f, 0.15f, 1.0f);
+                sfx_play(SFX_CRUMBLE, near, 0); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.35f * near); if (near > 0.6f) prumble(0, near * 0.6f, 0.4f); }
+            else if (pl->fall_t > 0 && pl->fall_t < 2.0f) { pl->fall_t += dt; if (pl->fall_t < 1.2f && frand01() < 0.5f) add_dust(v3(pl->p.x + (frand01() - 0.5f) * pl->w, pl->p.y + 0.3f, pl->p.z), 3.0f, 2.0f); } }
+    }
 
     /* effects */
     for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i];

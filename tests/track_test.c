@@ -10,7 +10,7 @@ int main(void) {
         Track t; track_from_def(&t, &TRACK_DEFS[d]);
         printf("%s: %d samples, %.0f m, %d laps, %d scenery items\n", t.name, t.n, t.length, t.laps, TRACK_DEFS[d].nscenery);
         if (TRACK_DEFS[d].bonus == 2) { printf("  (battle arena: no race checks)\n"); continue; }
-        CHECK(t.length > 400 && t.length < 1500, "length %.0f", t.length);
+        CHECK(t.length * t.laps > 1200 && t.length < 1500, "length %.0f x %d laps", t.length, t.laps);   /* a race is at least 1.2 km (Jericho: a short ring, seven times round) */
         for (int i = 0; i < t.n; i++) for (int j = i + 1; j < t.n; j++) {
             int gap = j - i; if (t.n - gap < gap) gap = t.n - gap; if (gap < 70) continue;
             float dx = t.s[i].x - t.s[j].x, dz = t.s[i].z - t.s[j].z, dd = sqrtf(dx * dx + dz * dz);

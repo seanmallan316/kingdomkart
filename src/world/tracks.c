@@ -296,6 +296,50 @@ static const Mover EDEN_MOVERS[] = {
     {"#deer", 92, 0.0f, 6.0f, 0.6f, 0.0f, 1.5f, 3.0f},                 /* deer bounding across the hill road */
     {"#lamb", 198, 0.0f, 5.5f, 0.45f, 2.0f, 1.4f, 2.0f},               /* lambs wandering the orchard */
 };
+
+// ------------------------------------------------------------------ The Walls of Jericho: seven laps round the walled city (Joshua 6)
+// The road circles the city under its walls: Israel's camp and the priests on the outside, the walls and towers on the inside,
+// the Ark carried ahead on the north road. On the seventh lap the walls come down and the rubble lands on the road.
+static const TrackPoint JERICHO_PTS[] = {
+    {    0, 0.0f,    0, 13, 0.00f},   /* start: the east road, heading north */
+    {    0, 0.0f,   24, 13, 0.00f},
+    {   -6, 0.7f,   46, 13, 0.12f},   /* the north-east corner, banked */
+    {  -24, 1.4f,   59, 13, 0.00f},
+    {  -49, 1.8f,   64, 14, 0.00f},   /* the north road: the Ark goes ahead here */
+    {  -74, 1.4f,   59, 13, 0.00f},
+    {  -91, 0.7f,   46, 13, 0.12f},
+    {  -98, 0.0f,   24, 13, 0.00f},
+    {  -99, 1.0f,    0, 13, 0.00f, 1},/* the west road: a leap over the dry ditch */
+    {  -92, 0.0f,  -21, 13, 0.10f},
+    {  -74, 0.0f,  -34, 13, 0.00f},
+    {  -49, 0.0f,  -38, 14, 0.00f},   /* the south road, past Rahab's house */
+    {  -24, 0.0f,  -34, 13, 0.00f},
+    {   -6, 0.0f,  -21, 13, 0.12f},
+};
+static const Scenery JERICHO_SCENERY[] = {
+    /* the walls and towers, all the way round on the inside (the order of these is the order they fall) */
+    {"#jtower", 2, -18, 14, 0}, {"#jwall", 10, -18, 9, 0}, {"#jwall", 20, -18, 9, 0}, {"#jwall", 30, -18, 9, 0}, {"#jtower", 42, -19, 14, 0},
+    {"#jwall", 54, -18, 9, 0}, {"#jwall", 66, -18, 9, 0}, {"#jwall", 78, -18, 9, 0}, {"#jwall", 90, -18, 9, 0}, {"#jwall", 102, -18, 9, 0}, {"#jtower", 114, -19, 14, 0},
+    {"#jwall", 126, -18, 9, 0}, {"#jwall", 138, -18, 9, 0}, {"#jwall", 150, -18, 9, 0}, {"#jtower", 162, -19, 14, 0}, {"#jwall", 174, -18, 9, 0},
+    {"#jwall", 186, -18, 9, 0}, {"#jwall", 198, -18, 9, 0}, {"#jwall", 210, -18, 9, 0}, {"#rahab", 222, -17, 9, 0}, {"#jwall", 234, -18, 9, 0}, {"#jtower", 246, -19, 14, 0},
+    {"#jwall", 258, -18, 9, 0}, {"#jwall", 270, -18, 9, 0},
+    /* Israel's camp and the priests on the outside */
+    {"#tent", 6, 16, 6, 0}, {"#priest", 14, 13, 4, 0}, {"#banner_israel", 22, 15, 8, 0}, {"#palm", 34, 15, 11, 0}, {"#priest", 46, 13, 4, 0}, {"#tent", 58, 16, 6, 0},
+    {"#priest", 70, 13, 4, 0}, {"#priest", 76, 13, 4, 0}, {"#banner_israel", 86, 15, 8, 0}, {"#priest", 94, 13, 4, 0}, {"#tent", 106, 16, 6, 0}, {"#palm", 118, 15, 11, 0},
+    {"#rock", 130, 14, 3, 0}, {"#tent", 142, 16, 6, 0}, {"#priest", 154, 13, 4, 0}, {"#rock", 166, 14, 3, 0}, {"#banner_israel", 178, 15, 8, 0}, {"#palm", 190, 15, 11, 0},
+    {"#tent", 202, 16, 6, 0}, {"#priest", 214, 13, 4, 0}, {"#tent", 226, 16, 6, 0}, {"#palm", 238, 15, 11, 0}, {"#priest", 250, 13, 4, 0}, {"#banner_israel", 262, 15, 8, 0}, {"#tent", 272, 16, 6, 0},
+};
+static const RoadPad JERICHO_PADS[] = {
+    {12, -2.5f, 2.2f, PAD_BOOST}, {16, 2.5f, 2.2f, PAD_BOOST},         /* the east road */
+    {150, 0.0f, 2.5f, PAD_BOOST},                                      /* run-up to the leap over the ditch */
+    {224, 0.0f, 2.5f, PAD_BOOST},
+};
+static const CoinRow JERICHO_COINS[] = { {26, 5, 3, 2.5f}, {96, 5, 3, -2.5f}, {180, 5, 3, 2.5f}, {240, 5, 3, -2.5f} };
+static const Mover JERICHO_MOVERS[] = {
+    {"#ark", 80, 0.0f, 0.0f, 0.0f, 0.0f, 1.5f, 3.6f},                   /* the Ark carried ahead on the north road: steer round it */
+    {"#rubble", 36, -3.0f, 0.0f, 0.0f, 0.0f, 1.1f, 2.2f}, {"#rubble", 120, 3.0f, 0.0f, 0.0f, 0.0f, 1.1f, 2.2f},   /* stones of the wall on the road once it falls */
+    {"#rubble", 196, -2.5f, 0.0f, 0.0f, 0.0f, 1.1f, 2.2f}, {"#rubble", 256, 3.5f, 0.0f, 0.0f, 0.0f, 1.1f, 2.2f},
+};
 // ------------------------------------------------------------------ Valley of Elah: the battle arena (a wide, flat ring between the two camps)
 static const TrackPoint ELAH_PTS[] = {      /* a ring 80 m wide: the whole valley floor is drivable, with a great rock in the middle */
     {    0.0, 0.0f,    0.0, 64, 0.00f },
@@ -391,6 +435,18 @@ const TrackDef TRACK_DEFS[] = {
       128, 150, 1,                              /* the flower bank on the outside of the Tree of Life bend */
       "eden", EDEN_PADS, (int)(sizeof EDEN_PADS / sizeof EDEN_PADS[0]), EDEN_MOVERS, (int)(sizeof EDEN_MOVERS / sizeof EDEN_MOVERS[0]), 0,
       0, NULL, 0, 0, 0, 0, EDEN_COINS, (int)(sizeof EDEN_COINS / sizeof EDEN_COINS[0]), EDEN_TUNNELS, 1 },
+    { "The Walls of Jericho", 7, JERICHO_PTS, (int)(sizeof JERICHO_PTS / sizeof JERICHO_PTS[0]),
+      0.58f, 0.76f, 0.96f,                      /* hard blue desert sky */
+      0.92f, 0.86f, 0.70f, 100.0f, 460.0f,      /* dusty haze */
+      0.2f, 1.0f, 0.3f, 0.52f,                  /* midday sun */
+      1.0f, 0.96f, 0.86f,
+      1.0f, 0.85f, 0.5f,
+      0, "jericho_road", "jericho_dirt", "jericho_grass", "jericho_wall", "jericho_sky",
+      JERICHO_SCENERY, (int)(sizeof JERICHO_SCENERY / sizeof JERICHO_SCENERY[0]),
+      0, 0, 0, 0,
+      214, 236, -1,                             /* Rahab's house: a strip along the wall on the inside of the south road */
+      "jericho", JERICHO_PADS, (int)(sizeof JERICHO_PADS / sizeof JERICHO_PADS[0]), JERICHO_MOVERS, (int)(sizeof JERICHO_MOVERS / sizeof JERICHO_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 3, JERICHO_COINS, (int)(sizeof JERICHO_COINS / sizeof JERICHO_COINS[0]), NULL, 0 },   /* bonus = 3: the Walls of Jericho mode, not on the road-select screen */
     { "Valley of Elah", 99, ELAH_PTS, (int)(sizeof ELAH_PTS / sizeof ELAH_PTS[0]),
       0.75f, 0.70f, 0.55f,                      /* dusty afternoon */
       0.85f, 0.78f, 0.6f, 120.0f, 500.0f,
