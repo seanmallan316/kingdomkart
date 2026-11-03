@@ -1,0 +1,32 @@
+Spoken lines for KINGDOM KART, made with ElevenLabs (model eleven_v4, one take per line).
+Voice per character (ElevenLabs premade voices):
+  jesus    Brian (deep, resonant, comforting)      nPczCjzI2devNBz1zQrb
+  moses    Bill (wise, mature)                      pqHfZKP75CvOlQylNhV4
+  david    Charlie (young, energetic)               IKne3meq5aSn9XLyUdCD
+  esther   Lily (velvety, confident)                pFZP5JQG7iQjIQuC4Bku
+  peter    Chris (down-to-earth)                    iP95p4xoKVk53GoZ742B
+  mary     Jessica (playful, bright, warm)          cgSgspJ2msm6clMCkdW9
+  daniel   Daniel (steady, formal)                  onwK4e9ZLuTAKqWW03F9
+  samson   Harry (fierce warrior)                   SOYHLrjzK2X1ezoPC6cr
+  noah     Roger (laid-back, resonant)              CwhRBWXzGAHq8TQ4Fs17
+  joseph   Liam (young, warm, energetic)            TX3LPaxmHKxFdv7VOQHJ
+  jonah    Callum (husky, grumpy trickster)         N2lVS1w4EtoT3dr4eOWO
+  john     Will (relaxed optimist)                  bIHbv24MWmeRgasZH58o
+  michael  Adam (dominant, firm)                    pNInz6obpgDQGcFmaJgB
+  gabriel  George (warm, captivating)               JBFqnCBsd6RMkjVDRZzb
+
+Lines (start / boost / trick / win / ouch / bless / fire):
+  jesus    Follow me! / Let's go, my friends! / Ha ha! Wonderful! / Well done, good and faithful! / Oof! Fear not. / Be blessed! / Behold!
+  moses    Let my people race! / Onward! / Ha! Like parting the sea! / To the promised land! / Oy! My staff! / Blessings upon you! / Let there be fire!
+  david    Here we go! / Whoo! Faster! / Yeah! Did you see that? / The Lord is my strength! / Whoa! Not again! / A blessing for you! / Take that, giant!
+  esther   For such a time as this! / Here I come! / Oh yes! / If I perish... but I didn't! / Oh no! / Favor upon you! / Light it up!
+  peter    Let's do this! / Cast off! / Ha ha! Did I just do that? / Rock solid! / Oof! I'm sinking! / Bless you, brother! / Holy fire!
+  mary     Let it be! / Here we go! / Wonderful! / My soul rejoices! / Oh dear! / Blessings, dear one! / Glory!
+  daniel   Stand firm! / Steady on! / Even the lions are impressed! / Shut the lions' mouths! / Hmph! Into the den! / Be blessed, friend! / Fiery furnace!
+  samson   Let's go! / Raaah! Power! / Ha ha! Strong! / Mighty victory! / Argh! My hair! / Strength to you! / Burn, burn!
+  noah     All aboard! / Full sail! / Ha! Two by two! / Dry land at last! / Whoa! Rough seas! / Rainbow blessings! / Here comes the storm!
+  joseph   Dream big! / Many colors, one speed! / Ha ha! Just like I dreamed! / From the pit to the palace! / Ow! My coat! / Bless you, brother! / Hot like Egypt!
+  jonah    Fine, I'll go. / Alright, alright, faster! / Huh. Not bad. / Wait... I actually won? / Ugh! Not the fish again! / Yeah, yeah, be blessed. / Hot enough for ya?
+  john     Love one another! / Onward, beloved! / Ha ha! Beautiful! / Grace and truth! / Oof! Forgive me! / Beloved, be blessed! / The light shines!
+  michael  Charge! / For the King! / Ha! Who is like God? / Victory is the Lord's! / Hngh! Regroup! / Be strong and courageous! / Sword of fire!
+  gabriel  Hear the good news! / Swift as wings! / Ha ha! Glorious! / Rejoice! Great tidings! / Oh! Steady my wings! / Fear not, be blessed! / Trumpet blast!

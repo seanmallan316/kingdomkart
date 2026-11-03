@@ -86,6 +86,9 @@ per character with `python3 tools/prep_voices.py`: `content/sfx/voice_<name>_<ev
 little differently (Samson deepest, Joseph brightest). Events: `start` (at GO), `boost` (rocket start, super turbo,
 boost pad), `trick` (a trick landing), `win` (first across the line), `bless` (a big blessing), `fire` (the Chariot of
 Fire), `ouch` (hit). A file named `voice_<event>.wav` serves every character that has none of their own.
+Spoken lines made with ElevenLabs (one line per file, `assets/voices/lines/<name>_<event>.mp3`, each character in a voice
+of their own) go through `python3 tools/prep_lines.py`, run after prep_voices.py: a line replaces the pitched shout for
+that character and event. The sound effects in `assets/sfx/` were made the same way (`sfx_<effect>`).
 
 ## Project layout
 `src/sim` kart physics and the race (no graphics, runs in tests on a PC) · `src/world` roads and themes · `src/render`
