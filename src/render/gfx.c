@@ -24,7 +24,8 @@
 #include <string.h>
 #include "../platform/cafeglsl.h"
 
-struct Mesh { GX2RBuffer buf[2]; int cur, nbuf; uint32_t count, cap; };
+#define MESH_RING 4   /* a dynamic mesh can be refilled this many times per frame (one per split-screen view) */
+struct Mesh { GX2RBuffer buf[MESH_RING]; int cur, nbuf; uint32_t count, cap; };
 struct Texture { GX2Texture tex; GX2Sampler smp; };
 
 static const char *VS_SRC =
@@ -178,14 +179,14 @@ Mesh *gfx_mesh_static(const Vertex *v, uint32_t n) {
 }
 Mesh *gfx_mesh_dynamic(uint32_t cap) {
     Mesh *m = calloc(1, sizeof *m); if (!m) return NULL;
-    m->nbuf = 2; m->cap = cap; m->count = 0;
-    for (int i = 0; i < 2; i++) if (!buffer_create(&m->buf[i], cap)) { gfx_log("dynamic mesh of %u verts failed", cap); free(m); return NULL; }
+    m->nbuf = MESH_RING; m->cap = cap; m->count = 0;
+    for (int i = 0; i < MESH_RING; i++) if (!buffer_create(&m->buf[i], cap)) { gfx_log("dynamic mesh of %u verts failed", cap); free(m); return NULL; }
     return m;
 }
 void gfx_mesh_update(Mesh *m, const Vertex *v, uint32_t n) {
     if (!m) return;
     if (n > m->cap) n = m->cap;
-    if (m->nbuf == 2) m->cur ^= 1;
+    if (m->nbuf > 1) m->cur = (m->cur + 1) % m->nbuf;
     buffer_fill(&m->buf[m->cur], v, n);
     m->count = n;
 }
@@ -261,6 +262,7 @@ void gfx_frame_begin(void) {
 void gfx_view_begin(int drc, float r, float g, float b) {
     if (drc) WHBGfxBeginRenderDRC(); else WHBGfxBeginRenderTV();
     WHBGfxClearColor(r, g, b, 1.0f);
+    gfx_viewport(drc, 0, 0, 1, 1);
     if (!g_initialized) return;
     GX2SetFetchShader(&g_shader.fetchShader);
     GX2SetVertexShader(g_shader.vertexShader);
@@ -272,6 +274,14 @@ void gfx_view_begin(int drc, float r, float g, float b) {
 void gfx_view_end(int drc) { if (drc) WHBGfxFinishRenderDRC(); else WHBGfxFinishRenderTV(); }
 void gfx_frame_end(void) { WHBGfxFinishRender(); }
 float gfx_aspect(int drc) { return drc ? 854.0f / 480.0f : 1280.0f / 720.0f; }
+/* draws into one rectangle of the current screen (split screen); fractions of the screen, origin top-left */
+void gfx_viewport(int drc, float fx, float fy, float fw, float fh) {
+    GX2ColorBuffer *cb = drc ? WHBGfxGetDRCColourBuffer() : WHBGfxGetTVColourBuffer();
+    float W = (float)cb->surface.width, H = (float)cb->surface.height;
+    float x = floorf(fx * W), y = floorf(fy * H), w = floorf(fw * W), h = floorf(fh * H);
+    GX2SetViewport(x, y, w, h, 0.0f, 1.0f);
+    GX2SetScissor((uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h);
+}
 
 void gfx_camera(const Mat4 *vp, Vec3 l, float ambient, float fr, float fg, float fb, float fs, float fe) {
     FrameBlock fb2; memcpy(fb2.viewproj, vp->m, sizeof fb2.viewproj);
@@ -287,8 +297,13 @@ void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye) {
     g_sun[0] = sun.x; g_sun[1] = sun.y; g_sun[2] = sun.z; g_sky[0] = sky.x; g_sky[1] = sky.y; g_sky[2] = sky.z;
     g_ground[0] = ground.x; g_ground[1] = ground.y; g_ground[2] = ground.z; g_eye[0] = eye.x; g_eye[1] = eye.y; g_eye[2] = eye.z;
 }
-void gfx_camera_2d(void) {
-    FrameBlock fb2; Mat4 id = m4_identity(); memcpy(fb2.viewproj, id.m, sizeof fb2.viewproj);
+void gfx_camera_2d(void) { gfx_camera_2d_virtual(1280.0f, 720.0f); }
+/* the 2D helpers lay out on a 1280 x 720 screen; in a split-screen view the virtual size is the view's own size in pixels, so text keeps its shape */
+void gfx_camera_2d_virtual(float vw, float vh) {
+    FrameBlock fb2; Mat4 id = m4_identity();
+    float a = 1280.0f / vw, b = 720.0f / vh;      /* x' = a x + (a - 1), y' = b y + (1 - b) in clip space */
+    id.m[0] = a; id.m[5] = b; id.m[12] = a - 1.0f; id.m[13] = 1.0f - b;
+    memcpy(fb2.viewproj, id.m, sizeof fb2.viewproj);
     fb2.lightdir[0] = 0; fb2.lightdir[1] = 0; fb2.lightdir[2] = 1; fb2.lightdir[3] = 1.0f;
     fb2.fog[0] = 0; fb2.fog[1] = 1; fb2.fog[2] = 0; fb2.fog[3] = 0;
     for (int i = 0; i < 4; i++) { fb2.sky[i] = fb2.ground[i] = fb2.sun[i] = 1; fb2.eye[i] = 0; }

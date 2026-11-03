@@ -15,16 +15,28 @@ Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
   Loaves and Fishes (Matthew 14), the Good Samaritan (Luke 10), the Shield of Faith (Ephesians 6), the Parting of the Sea
   (Exodus 14), the Jubilee Trumpet (Leviticus 25), the Chariot of Fire (2 Kings 2), Living Water (John 4). Bumping another
   kart gives *them* a boost (turn the other cheek). Boxes float, glow and burst into a rainbow when taken.
-- Modes: Grand Prix (four roads, points, standings), Single Race, Time Trial (records saved), with Easy / Normal / Hard
-  computer drivers that never cheat. Every race is under two minutes.
+- Modes: Grand Prix (four roads, points, standings), Single Race, Time Trial (records saved), **Multiplayer for 2 to 4
+  people on a split screen** (computer drivers fill the other seats), and the David vs Goliath fight, with Easy / Normal /
+  Hard computer drivers that never cheat. Every race is under two minutes.
 - Achievements that unlock the bonus characters, karts and road; progress, records and volume settings saved on the SD card.
 - Options and records screen, credits screen.
 - Sound effects for everything, and a soundtrack: a track per road, the menus, the results screen, the final lap and
   the Goliath fight (MP3 files streamed from the game file; see Music below).
 
-## Controls (GamePad or Pro Controller)
+## Controls (GamePad, Pro Controller or Classic Controller)
 Left stick / D-pad steer and move through menus · **A** gas / choose · **B** brake / back · **ZR** hold to drift
-(let go for a turbo) · **ZL** (or X / Y) use the item · **+** pause · **HOME** quit.
+(let go for a turbo) · **ZL** (or X / Y) use the blessing · **+** pause · **HOME** quit.
+
+**Wii Remote held sideways:** D-pad steer · **2** gas · **1** brake · **B** (trigger) drift · **A** blessing · **+** pause.
+**Wii Remote + Nunchuk:** stick steer · **A** gas · **B** brake · **Z** drift · **C** blessing.
+
+## Multiplayer (2 to 4 people)
+Main menu → **MULTIPLAYER 2-4**. Everyone presses **A** on their own controller to join (the GamePad and up to four Wii
+controllers: Pro Controller, Classic Controller, Wii Remote sideways, or Remote + Nunchuk), then **+** starts. Everyone
+picks a character at the same time (A locks in, B changes), player 1 picks the road, and the TV splits: two players top
+and bottom, three or four in quarters (with three, the fourth quarter shows the map and standings). The GamePad screen
+shows the big map. Computer drivers fill the empty seats so there are always eight karts. Multiplayer races do not count
+toward records or unlocks.
 
 ## Install (Mac or PC, same steps)
 1. Download `kingdomkart.wuhb` from GitHub (next section) and copy it into the `wiiu/apps` folder on the SD card.

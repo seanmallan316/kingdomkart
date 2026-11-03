@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #define NKARTS 8
+#define MAX_HUMANS 4                /* people racing at once: the GamePad and up to three Wii controllers */
 #define NCHARS 12                   /* 7 to begin with, 5 unlockable */
 #define NMAIN 7
 #define NSTYLES 5                   /* kart bodies: standard + 4 unlockable */
@@ -29,14 +30,15 @@ typedef struct { int type, kart; } RaceEvent;
 
 typedef struct {
     const Track *track;
-    Kart k[NKARTS]; int nk, player, difficulty;
+    Kart k[NKARTS]; int nk, player, difficulty;   /* player: the first human's kart (the GamePad's); human[] marks every kart a person drives */
+    int human[NKARTS], nhuman;
     int character[NKARTS], style[NKARTS];
     float ai_skill[NKARTS], ai_wobble[NKARTS];
     ItemBox box[MAX_BOX]; int nbox;
     float coin_respawn[MAX_COINS];           /* 0 = the coin is there, else seconds until it comes back */
     Proj proj[MAX_PROJ];
     int state; float cd, race_t, after_t; int nfin;
-    float gas_since;           /* countdown value when the player began holding gas (-1 = not holding); decides the rocket start */
+    float gas_since[NKARTS];   /* countdown value when a human began holding gas (-1 = not holding); decides the rocket start */
     float parting_t; int parting_idx, parting_len;   /* the parted sea: seconds left, first sample, length in samples */
     float fire_drop[NKARTS];   /* seconds until a blazing kart drops its next fire trail piece */
     int blessed_by[NKARTS]; float blessed_t[NKARTS];
@@ -49,9 +51,12 @@ typedef struct {
 } Race;
 
 void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk);   /* nk = 1 for a time trial */
+void race_init_multi(Race *r, const Track *t, const int *chars, const int *styles, int nhuman, int difficulty);   /* 2..4 people, computer drivers fill the field; humans take the last grid slots in order */
 void race_set_unlocked(unsigned mask);     /* which characters the computer may drive (bit per character) */
 void race_set_styles(int player_style, unsigned unlocked_styles);   /* the player's kart body, and the bodies the computer may use */
 void race_step(Race *r, const KartInput *player_in, int player_auto, float dt);
+void race_step_multi(Race *r, const KartInput *in /* [NKARTS], read for human karts */, int all_auto, float dt);
+int  race_human_index(const Race *r, int kart);   /* 0..nhuman-1 for a human kart (in grid order), -1 for a computer driver */
 void race_rank(Race *r);
 const char *item_name(int item);
 const char *item_verse(int item);          /* the Bible reference behind each blessing */

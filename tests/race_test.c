@@ -41,6 +41,24 @@ int main(void) {
         for (int p = 1; p <= r.nk; p++) CHECK(places[p] == 1, "place %d assigned %d times", p, places[p]);
     }
     printf("wins by character over 12 races:"); for (int c = 0; c < NMAIN; c++) printf(" %s %d", CHARACTERS[c].short_name, wins[c]); printf("\n");
+    /* four people at once (all on autopilot here): they sit in the last four grid slots, every seat is filled, the race ends */
+    for (int nh = 2; nh <= 4; nh++) {
+        Race r; int chars[4] = {0, 1, 0, 3}; race_init_multi(&r, &t, chars, NULL, nh, DIFF_NORMAL);
+        /* the test loop has only the seven starting characters unlocked, so the grid is as full as the unlocked characters allow */
+        int taken[NCHARS] = {0}, distinct = 0; for (int p = 0; p < nh; p++) if (!taken[chars[p]]) { taken[chars[p]] = 1; distinct++; }
+        int expect = nh + (NMAIN - distinct); if (expect > NKARTS) expect = NKARTS;
+        CHECK(r.nk == expect, "%d people: expected a grid of %d, got %d", nh, expect, r.nk);
+        CHECK(r.nhuman == nh, "%d people: nhuman %d", nh, r.nhuman);
+        for (int p = 0; p < nh; p++) { int slot = r.nk - nh + p; CHECK(r.human[slot] && r.character[slot] == chars[p], "%d people: slot %d should be person %d driving %d", nh, slot, p, chars[p]);
+            CHECK(race_human_index(&r, slot) == p, "human index of slot %d", slot); }
+        CHECK(race_human_index(&r, 0) == -1, "slot 0 is a computer driver");
+        CHECK(r.player == r.nk - nh, "player should be the first human");
+        KartInput in[NKARTS]; memset(in, 0, sizeof in); float time = 0;
+        while (r.state != RACE_FINISHED && time < 200) { race_step_multi(&r, in, 1, SIM_DT); time += SIM_DT; }
+        CHECK(r.state == RACE_FINISHED, "%d people: the race never ended", nh);
+        int placed = 1; for (int i = 0; i < r.nk; i++) if (!r.k[i].place) placed = 0; CHECK(placed, "%d people: everyone gets a place", nh);
+        printf("%d people + %d computer drivers: ended at %.1fs, winner %s\n", nh, r.nk - nh, r.race_t, CHARACTERS[r.character[r.order[0]]].name);
+    }
     printf(bad ? "RACE TEST FAILED\n" : "RACE TEST OK\n");
     return bad;
 }

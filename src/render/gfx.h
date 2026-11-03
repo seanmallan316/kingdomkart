@@ -32,9 +32,11 @@ void gfx_view_begin(int drc, float r, float g, float b);      /* drc = 0 for the
 void gfx_view_end(int drc);
 void gfx_frame_end(void);
 float gfx_aspect(int drc);
+void gfx_viewport(int drc, float fx, float fy, float fw, float fh);   /* draw into part of the screen: fractions, origin top-left (split screen); gfx_view_begin resets it */
 
 void gfx_camera(const Mat4 *viewproj, Vec3 lightdir, float ambient, float fog_r, float fog_g, float fog_b, float fog_start, float fog_end);
 void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
+void gfx_camera_2d_virtual(float vw, float vh);               /* the same, with the 2D helpers' 1280 x 720 layout mapped onto a view of vw x vh pixels */
 void gfx_bind(Texture *t);
 void gfx_state(int flags);
 void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye);   /* sun color, ambient from above and from below, camera position; call before gfx_camera */

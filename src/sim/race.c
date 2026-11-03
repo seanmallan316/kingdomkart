@@ -41,31 +41,35 @@ static float rr(Race *r) { r->rng ^= r->rng << 13; r->rng ^= r->rng >> 17; r->rn
 static void push_event(Race *r, int type, int kart) { if (r->nev < 32) { r->ev[r->nev].type = type; r->ev[r->nev].kart = kart; r->nev++; } }
 static float wrap_pi(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (a < -3.14159265f) a += 6.2831853f; return a; }
 
-void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk) {
+static void race_setup(Race *r, const Track *t, const int *chars_in, const int *styles_in, const int *human, int nk, int difficulty, uint32_t seed) {
     memset(r, 0, sizeof *r);
     if (nk < 1) nk = 1;
     if (nk > NKARTS) nk = NKARTS;
-    if (player_slot >= nk) player_slot = 0;
-    { int avail = 1; for (int c = 0; c < NCHARS; c++) if (c != player_character && (g_unlocked >> c) & 1) avail++; if (nk > avail) nk = avail; if (player_slot >= nk) player_slot = nk - 1; }   /* no more karts than characters to drive them */
-    r->track = t; r->nk = nk; r->player = player_slot; r->difficulty = difficulty; r->rng = 0xC0FFEE11u + (uint32_t)player_character * 7919u;
-    /* hand out characters: the player's pick, then the rest in order */
+    r->track = t; r->nk = nk; r->difficulty = difficulty; r->rng = seed;
+    /* hand out characters: the humans' picks, then the rest from the unlocked pool in a random order */
+    int taken[NCHARS] = {0}; for (int i = 0; i < nk; i++) if (human[i] && chars_in[i] >= 0) taken[chars_in[i]] = 1;
     int pool[NCHARS], np = 0;
-    for (int c = 0; c < NCHARS; c++) if (c != player_character && (g_unlocked >> c) & 1) pool[np++] = c;
+    for (int c = 0; c < NCHARS; c++) if (!taken[c] && (g_unlocked >> c) & 1) pool[np++] = c;
     for (int i = np - 1; i > 0; i--) { int j = (int)(rr(r) * (float)(i + 1)); if (j > i) j = i; int tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }   /* random grid */
-    int next = 0;
-    for (int i = 0; i < NKARTS; i++) r->character[i] = (i == player_slot) ? player_character : (next < np ? pool[next++] : player_character);
+    int next = 0; r->player = -1; r->nhuman = 0;
+    for (int i = 0; i < NKARTS; i++) {
+        if (i < nk && human[i]) { r->human[i] = 1; r->nhuman++; if (r->player < 0) r->player = i; r->character[i] = chars_in[i] >= 0 ? chars_in[i] : 0; }
+        else r->character[i] = next < np ? pool[next++] : (chars_in && chars_in[0] >= 0 ? chars_in[0] : 0);
+    }
+    if (r->player < 0) r->player = 0;
     for (int i = 0; i < NKARTS; i++) r->order[i] = i;
     float base = difficulty == DIFF_EASY ? 0.52f : (difficulty == DIFF_NORMAL ? 0.68f : 0.80f);
     for (int i = 0; i < r->nk; i++) {
         Kart *k = &r->k[i];
         memset(k, 0, sizeof *k);
         k->st = CHARACTERS[r->character[i]].st;
-        if (i == player_slot) r->style[i] = g_player_style;
+        if (r->human[i]) r->style[i] = styles_in ? styles_in[i] : g_player_style;
         else { int opts[NSTYLES], no = 0; for (int sty = 0; sty < NSTYLES; sty++) if ((g_styles >> sty) & 1) opts[no++] = sty; r->style[i] = opts[(int)(rr(r) * no) % no]; }
         const KartStats *m = &KART_STYLES[r->style[i]].mul; k->st.top_speed *= m->top_speed; k->st.accel *= m->accel; k->st.handling *= m->handling; k->st.weight *= m->weight;
         kart_reset(k, t, r->nk == 1 ? 0 : i);
         r->ai_skill[i] = base + (rr(r) - 0.5f) * 0.16f;
         r->ai_wobble[i] = rr(r) * 6.28f;
+        r->gas_since[i] = -1;
     }
     /* item boxes: rows of six across the road at three places */
     static const float at[3] = {0.11f, 0.42f, 0.74f};
@@ -79,9 +83,32 @@ void race_init(Race *r, const Track *t, int player_character, int player_slot, i
             b->active = 1; b->respawn = 0; b->idx = idx;
         }
     }
-    r->state = RACE_COUNTDOWN; r->cd = 3.5f; r->gas_since = -1;
+    r->state = RACE_COUNTDOWN; r->cd = 3.5f;
     race_rank(r);
 }
+void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk) {
+    if (nk < 1) nk = 1;
+    if (nk > NKARTS) nk = NKARTS;
+    if (player_slot >= nk) player_slot = 0;
+    { int avail = 1; for (int c = 0; c < NCHARS; c++) if (c != player_character && (g_unlocked >> c) & 1) avail++; if (nk > avail) nk = avail; if (player_slot >= nk) player_slot = nk - 1; }   /* no more karts than characters to drive them */
+    int chars[NKARTS], human[NKARTS]; for (int i = 0; i < NKARTS; i++) { chars[i] = player_character; human[i] = i == player_slot; }
+    race_setup(r, t, chars, NULL, human, nk, difficulty, 0xC0FFEE11u + (uint32_t)player_character * 7919u);
+}
+void race_init_multi(Race *r, const Track *t, const int *chars_in, const int *styles_in, int nhuman, int difficulty) {
+    if (nhuman < 1) nhuman = 1;
+    if (nhuman > MAX_HUMANS) nhuman = MAX_HUMANS;
+    /* the people take the last grid slots (the back rows, side by side), computer drivers the front */
+    int chars[NKARTS], styles[NKARTS], human[NKARTS]; for (int i = 0; i < NKARTS; i++) { chars[i] = chars_in[0]; styles[i] = 0; human[i] = 0; }
+    for (int p = 0; p < nhuman; p++) { int slot = NKARTS - nhuman + p; human[slot] = 1; chars[slot] = chars_in[p]; styles[slot] = styles_in ? styles_in[p] : 0; }
+    /* enough unlocked characters for the computer seats? (people may share a character) */
+    int taken[NCHARS] = {0}; for (int p = 0; p < nhuman; p++) if (chars_in[p] >= 0 && chars_in[p] < NCHARS) taken[chars_in[p]] = 1;
+    int avail = 0; for (int c = 0; c < NCHARS; c++) if (!taken[c] && (g_unlocked >> c) & 1) avail++;
+    int nk = NKARTS; if (nk - nhuman > avail) {   /* fewer computer karts: pack the humans to the back of a shorter grid */
+        nk = nhuman + avail; for (int i = 0; i < NKARTS; i++) human[i] = 0;
+        for (int p = 0; p < nhuman; p++) { int slot = nk - nhuman + p; human[slot] = 1; chars[slot] = chars_in[p]; styles[slot] = styles_in ? styles_in[p] : 0; } }
+    race_setup(r, t, chars, styles, human, nk, difficulty, 0xBEEF1234u + (uint32_t)chars_in[0] * 7919u + (uint32_t)nhuman * 101u);
+}
+int race_human_index(const Race *r, int kart) { if (kart < 0 || kart >= r->nk || !r->human[kart]) return -1; int n = 0; for (int i = 0; i < kart; i++) if (r->human[i]) n++; return n; }
 
 void race_rank(Race *r) {
     float key[NKARTS];
@@ -179,6 +206,11 @@ static int ai_wants_item(Race *r, int i) {
 }
 
 void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
+    KartInput in[NKARTS]; memset(in, 0, sizeof in);
+    if (player_in && r->player >= 0 && r->player < NKARTS) in[r->player] = *player_in;
+    race_step_multi(r, in, player_auto, dt);
+}
+void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
     const Track *t = r->track;
     r->nev = 0;
     if (r->state == RACE_COUNTDOWN) {
@@ -187,14 +219,15 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
         int after = (int)ceilf(r->cd - 0.5f);
         if (after != before && after >= 1 && after <= 3) push_event(r, EV_COUNT_TICK, -1);
         /* rocket start: hold gas from the last half second before GO; hold it from too early and the wheels spin */
-        int gas = player_in && player_in->gas && !player_auto;
-        if (!gas) r->gas_since = -1; else if (r->gas_since < 0) r->gas_since = r->cd + dt;
+        for (int i = 0; i < r->nk; i++) { if (!r->human[i] || all_auto) { r->gas_since[i] = -1; continue; }
+            int gas = hin[i].gas; if (!gas) r->gas_since[i] = -1; else if (r->gas_since[i] < 0) r->gas_since[i] = r->cd + dt; }
         if (r->cd <= 0) { r->state = RACE_RUNNING; push_event(r, EV_GO, -1);
-            Kart *pk = &r->k[r->player];
-            if (gas && r->gas_since <= 0.65f) { pk->boost_t = 1.1f; pk->boost_mul = 1.32f; pk->rocket = 1; push_event(r, EV_ROCKET_START, r->player); }
-            else if (gas && r->gas_since > 1.5f) { pk->slow_t = 1.0f; pk->rocket = -1; push_event(r, EV_WHEELSPIN, r->player); }
-            /* some computer drivers get a rocket start too, more of them on Hard */
-            for (int i = 0; i < r->nk; i++) if (i != r->player && rr(r) < 0.05f + 0.10f * r->difficulty) { r->k[i].boost_t = 1.0f; r->k[i].boost_mul = 1.25f; }
+            for (int i = 0; i < r->nk; i++) { Kart *pk = &r->k[i];
+                if (r->human[i] && !all_auto) { int gas = hin[i].gas;
+                    if (gas && r->gas_since[i] <= 0.65f) { pk->boost_t = 1.1f; pk->boost_mul = 1.32f; pk->rocket = 1; push_event(r, EV_ROCKET_START, i); }
+                    else if (gas && r->gas_since[i] > 1.5f) { pk->slow_t = 1.0f; pk->rocket = -1; push_event(r, EV_WHEELSPIN, i); } }
+                /* some computer drivers get a rocket start too, more of them on Hard */
+                else if (rr(r) < 0.05f + 0.10f * r->difficulty) { pk->boost_t = 1.0f; pk->boost_mul = 1.25f; } }
         }
         KartInput none; memset(&none, 0, sizeof none);
         for (int i = 0; i < r->nk; i++) { kart_step(&r->k[i], t, &none, dt); r->k[i].total_time = 0; }
@@ -204,15 +237,16 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
     r->race_t += dt;
     race_rank(r);
     int rank_of[NKARTS]; for (int p = 0; p < r->nk; p++) rank_of[r->order[p]] = p;
+    float best_human = -1e9f; for (int i = 0; i < r->nk; i++) if (r->human[i] && r->k[i].dist > best_human) best_human = r->k[i].dist;   /* the catch-up looks at the person furthest along */
 
     for (int i = 0; i < r->nk; i++) {
         Kart *k = &r->k[i];
         KartInput in;
-        int ai = (i != r->player) || player_auto;
+        int ai = !r->human[i] || all_auto;
         if (ai) {
-            float skill = (i == r->player) ? 0.9f : r->ai_skill[i];
-            /* keep the race close without cheating: a little braver when far behind the player, a little more careful when far ahead */
-            if (i != r->player) { float gap = k->dist - r->k[r->player].dist; if (gap < -60) skill += 0.05f; else if (gap > 40) skill -= 0.14f; skill = fminf(skill, 0.95f); }   /* the computer never drives a perfect line */
+            float skill = r->human[i] ? 0.9f : r->ai_skill[i];
+            /* keep the race close without cheating: a little braver when far behind the people, a little more careful when far ahead */
+            if (!r->human[i]) { float gap = k->dist - best_human; if (gap < -60) skill += 0.05f; else if (gap > 40) skill -= 0.14f; skill = fminf(skill, 0.95f); }   /* the computer never drives a perfect line */
             kart_autopilot(k, t, &in, clampf(skill, 0.3f, 1.0f));
             r->ai_wobble[i] += dt * 0.7f;
             if (k->finished) { in.steer *= 0.5f; in.gas = k->speed < 14.0f; }
@@ -238,7 +272,7 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
                     in.steer = clampf(in.steer - dir * 0.8f * (1.0f - fabsf(gap) / need), -1.0f, 1.0f); }
             }
             in.item = ai_wants_item(r, i);
-        } else in = *player_in;
+        } else in = hin[i];
         if (in.item && k->item) use_item(r, i);
         kart_step(k, t, &in, dt);
         if (k->finished && k->place == 0) { k->place = ++r->nfin; push_event(r, EV_FINISH, i); }
@@ -316,10 +350,10 @@ void race_step(Race *r, const KartInput *player_in, int player_auto, float dt) {
                 if (v->boost_t <= 0.3f) { give_boost(v, 0.6f, 1.18f); bless(r, bumped, bumper); push_event(r, EV_CHEEK, bumped); } }
         }
     }
-    /* the race ends 7 s after the player finishes, when everyone finishes, or at the time limit */
-    Kart *pk = &r->k[r->player];
-    if (pk->finished) r->after_t += dt;
-    if (r->after_t > 7.0f || r->nfin >= r->nk || r->race_t >= RACE_TIME_LIMIT) {
+    /* the race ends 7 s after the people finish (or 25 s after the first of them, so one straggler does not hold everyone), when everyone finishes, or at the time limit */
+    int any_done = 0, all_done = 1; for (int i = 0; i < r->nk; i++) if (r->human[i]) { if (r->k[i].finished) any_done = 1; else all_done = 0; }
+    if (any_done) r->after_t += dt;
+    if ((all_done && r->after_t > 7.0f) || r->after_t > 25.0f || r->nfin >= r->nk || r->race_t >= RACE_TIME_LIMIT) {
         /* anyone who has not finished gets a place by progress */
         race_rank(r);
         for (int p = 0; p < r->nk; p++) { Kart *k = &r->k[r->order[p]]; if (!k->finished) { k->finished = 1; k->place = ++r->nfin; } }
