@@ -2194,3 +2194,4 @@ void game_frame(const Pad *pads, int npads, float dt) {
     gfx_frame_end();
 }
 int game_debug_screen(void) { return g_screen + 20 * g_mode + 100 * g_menu_sel + 1000 * (int)g_race.state; }
+const char *game_debug_track(void) { return g_track.name; }
