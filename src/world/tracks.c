@@ -246,6 +246,56 @@ static const RoadPad HEAVEN_PADS[] = {
 };
 static const CoinRow HEAVEN_COINS[] = { {158, 5, 3, 2.5f}, {210, 6, 3, -2.5f}, {250, 5, 3, 2.5f}, {300, 6, 3, -2.5f}, {350, 6, 3, 2.5f} };
 static const Tunnel HEAVEN_TUNNELS[] = { {302, 318, 6.0f} };
+
+// ------------------------------------------------------------------ The Garden of Eden: a bright morning in the garden God planted (Genesis 2)
+// Start in the flower meadow, splash through the ford of the river Pishon, climb the hill and circle the Tree of Life,
+// leap the falls of the Gihon, run down through the orchard and under the bower of boughs back to the meadow.
+static const TrackPoint EDEN_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},   /* start: the meadow, heading north */
+    {    5, 0.0f,   55, 14, 0.00f},
+    {   25, -1.2f, 100, 15, 0.00f},   /* down to the ford of the Pishon */
+    {   60, -1.6f, 125, 15, 0.00f},   /* splashing through the shallows */
+    {  100, 1.0f,  135, 13, 0.10f},
+    {  135, 5.0f,  115, 12, 0.00f},   /* climbing the hill */
+    {  155, 9.0f,   80, 12, 0.18f},   /* round the Tree of Life, banked */
+    {  150, 11.0f,  40, 12, 0.18f},
+    {  125, 10.0f,  10, 12, 0.00f, 1},/* the leap over the falls of the Gihon */
+    {  100, 3.0f,  -25, 13, 0.00f},
+    {   65, 1.0f,  -55, 13, 0.00f},   /* the orchard */
+    {   25, 0.5f,  -75, 12, 0.12f},   /* under the bower of boughs */
+    {  -15, 0.0f,  -65, 13, 0.00f},
+    {  -20, 0.0f,  -30, 14, 0.00f},
+};
+static const Scenery EDEN_SCENERY[] = {
+    /* the meadow (samples 0-39): flowers, fruit trees, a lamb and a lion lying down together */
+    {"#flowers", 4, -13, 2.5f, 0}, {"#fruittree", 8, 13, 8, 0}, {"#lamb", 12, -12, 2.2f, 0}, {"#lion", 15, -14, 3.2f, 0}, {"#fruittree", 20, -14, 8, 0}, {"#flowers", 24, 13, 2.5f, 0},
+    {"#palm", 30, 14, 12, 0}, {"#fruittree", 36, -13, 8, 0},
+    /* the ford of the Pishon (40-79): water on both sides, rocks, ferns */
+    {"#waterfall", 44, -19, 9, 0}, {"#rock", 48, 13, 3, 0}, {"#waterfall", 56, 18, 10, 0}, {"#fern", 62, -12, 3, 0}, {"#rock", 68, -13, 3, 0}, {"#fern", 74, 13, 3, 0}, {"#flowers", 78, -12, 2.5f, 0},
+    /* the hill (80-119): fruit trees, deer, and the Tree of Life standing in the middle of the garden */
+    {"#fruittree", 84, 13, 8, 0}, {"#deer", 90, -12, 3.2f, 0}, {"#fruittree", 96, -13, 9, 0}, {"#palm", 104, 14, 12, 0}, {"#fruittree", 112, 13, 8, 0},
+    /* round the Tree of Life (120-159) */
+    {"#treeoflife", 130, -36, 26, 10}, {"#flowers", 124, 13, 2.5f, 0}, {"#fruittree", 134, 14, 9, 0}, {"#lamb", 142, 12, 2.2f, 0}, {"#flowers", 150, 13, 2.5f, 0}, {"#fruittree", 156, 13, 8, 0},
+    /* the falls of the Gihon (160-179) */
+    {"#waterfall", 164, -17, 14, 0}, {"#waterfall", 168, 17, 14, 0}, {"#rock", 174, 12, 3, 0}, {"#fern", 178, -12, 3, 0},
+    /* the orchard (180-219) and the bower (220-239) */
+    {"#fruittree", 184, 13, 8, 0}, {"#fruittree", 190, -13, 9, 0}, {"#deer", 196, 12, 3.2f, 0}, {"#fruittree", 202, -12, 8, 0}, {"#fruittree", 208, 13, 9, 0}, {"#lion", 214, -14, 3.2f, 0},
+    {"#crystal", 224, -12, 3, 2}, {"#crystal", 230, 12, 3, 2}, {"#crystal", 236, -12, 2.5f, 2},
+    /* home to the meadow (240-279) */
+    {"#fruittree", 244, 13, 8, 0}, {"#flowers", 250, -12, 2.5f, 0}, {"#palm", 256, 13, 12, 0}, {"#lamb", 262, -12, 2.2f, 0}, {"#fruittree", 268, -13, 8, 0}, {"#flowers", 274, 13, 2.5f, 0},
+};
+static const RoadPad EDEN_PADS[] = {
+    {10, -2.5f, 2.2f, PAD_BOOST}, {14, 2.5f, 2.2f, PAD_BOOST},         /* across the meadow */
+    {86, 0.0f, 2.5f, PAD_BOOST},                                       /* up the hill */
+    {150, 0.0f, 2.5f, PAD_BOOST},                                      /* run-up to the leap over the falls */
+    {200, 0.0f, 3.0f, PAD_BOUNCE},                                     /* a hop in the orchard */
+};
+static const CoinRow EDEN_COINS[] = { {26, 5, 3, 2.5f}, {60, 5, 3, -2.5f}, {100, 6, 3, 2.5f}, {186, 5, 3, -3.0f}, {250, 5, 3, 2.5f} };
+static const Tunnel EDEN_TUNNELS[] = { {220, 240, 5.5f} };
+static const Mover EDEN_MOVERS[] = {
+    {"#deer", 92, 0.0f, 6.0f, 0.6f, 0.0f, 1.5f, 3.0f},                 /* deer bounding across the hill road */
+    {"#lamb", 198, 0.0f, 5.5f, 0.45f, 2.0f, 1.4f, 2.0f},               /* lambs wandering the orchard */
+};
 // ------------------------------------------------------------------ Valley of Elah: the battle arena (a wide, flat ring between the two camps)
 static const TrackPoint ELAH_PTS[] = {      /* a ring 80 m wide: the whole valley floor is drivable, with a great rock in the middle */
     {    0.0, 0.0f,    0.0, 64, 0.00f },
@@ -329,6 +379,18 @@ const TrackDef TRACK_DEFS[] = {
       140,                                      /* the grid stands on the earth */
       "heaven_gates", 34, 70.0f, 40.0f,         /* the gates with God's open hands, standing across the plaza */
       1, HEAVEN_COINS, (int)(sizeof HEAVEN_COINS / sizeof HEAVEN_COINS[0]), HEAVEN_TUNNELS, 1 },
+    { "The Garden of Eden", 3, EDEN_PTS, (int)(sizeof EDEN_PTS / sizeof EDEN_PTS[0]),
+      0.52f, 0.78f, 0.98f,                      /* clear morning sky */
+      0.82f, 0.94f, 0.86f, 110.0f, 480.0f,      /* soft green haze */
+      0.35f, 1.0f, 0.4f, 0.55f,                 /* high morning sun */
+      1.0f, 0.98f, 0.86f,
+      1.0f, 0.95f, 0.6f,
+      0, "eden_road", "eden_dirt", "eden_grass", "eden_wall", "eden_sky",
+      EDEN_SCENERY, (int)(sizeof EDEN_SCENERY / sizeof EDEN_SCENERY[0]),
+      0, 0, 0, 0,
+      128, 150, 1,                              /* the flower bank on the outside of the Tree of Life bend */
+      "eden", EDEN_PADS, (int)(sizeof EDEN_PADS / sizeof EDEN_PADS[0]), EDEN_MOVERS, (int)(sizeof EDEN_MOVERS / sizeof EDEN_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 0, EDEN_COINS, (int)(sizeof EDEN_COINS / sizeof EDEN_COINS[0]), EDEN_TUNNELS, 1 },
     { "Valley of Elah", 99, ELAH_PTS, (int)(sizeof ELAH_PTS / sizeof ELAH_PTS[0]),
       0.75f, 0.70f, 0.55f,                      /* dusty afternoon */
       0.85f, 0.78f, 0.6f, 120.0f, 500.0f,

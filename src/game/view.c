@@ -637,13 +637,79 @@ static void px_stone(int x, int y, uint32_t *o) {        /* a rolling round ston
     *o = 0; float dx = (x - 32) / 30.0f, dy = (y - 64) / 30.0f;
     if (dx * dx + dy * dy < 1.0f) *o = stone(x, y, 150 - (int)(dy * 40), 140 - (int)(dy * 40), 130 - (int)(dy * 40));
 }
+/* the Garden of Eden */
+static void px_fruittree(int x, int y, uint32_t *o) {    /* a round green tree hung with red fruit */
+    *o = 0;
+    if (y > 58 && abs(x - 32) < 4) *o = rgba(105, 72, 40, 255);
+    float dx = (x - 32) / 29.0f, dy = (y - 36) / 32.0f; float d = dx * dx + dy * dy; float n = smooth_noise(x / 5.0f, y / 5.0f);
+    if (d < 1.0f && n > 0.18f) *o = rgba(40 + (int)(n * 50), 120 + (int)(n * 70), 40 + (int)(n * 30), 255);
+    for (int f = 0; f < 7; f++) { static const int fx[7] = {18, 30, 44, 24, 40, 32, 14}, fy[7] = {30, 22, 32, 48, 50, 38, 44}; int ddx = x - fx[f], ddy = y - fy[f];
+        if (ddx * ddx + ddy * ddy < 9) *o = rgba(220 + (ddx < 0 ? 30 : 0), 40, 40, 255); }
+}
+static void px_treeoflife(int x, int y, uint32_t *o) {   /* the Tree of Life: a great golden-leaved tree with twelve fruits and a glow */
+    *o = 0;
+    float t = y / 96.0f;
+    if (y > 50 && abs(x - 32) < 3 + (int)(6 * (t - 0.5f))) *o = rgba(130, 95, 50, 255);                         /* a wide trunk */
+    if (y > 44 && y < 62 && (abs(x - 20 - (y - 44)) < 2 || abs(x - 44 + (y - 44)) < 2)) *o = rgba(120, 88, 45, 255);   /* two boughs */
+    float dx = (x - 32) / 31.0f, dy = (y - 30) / 28.0f; float d = dx * dx + dy * dy; float n = smooth_noise(x / 4.5f, y / 4.5f);
+    if (d < 1.0f && n > 0.15f) *o = rgba(120 + (int)(n * 60), 170 + (int)(n * 60), 50 + (int)(n * 40), 255);
+    if (d < 1.0f && n > 0.72f) *o = rgba(255, 235, 140, 255);                                                    /* golden leaves */
+    for (int f = 0; f < 12; f++) { float a = f * 0.5236f; int fx = 32 + (int)(cosf(a) * 20), fy = 30 + (int)(sinf(a) * 17); int ddx = x - fx, ddy = y - fy;
+        if (ddx * ddx + ddy * ddy < 8) *o = rgba(255, 200 + (f % 3) * 20, 60, 255); }
+}
+static void px_lion(int x, int y, uint32_t *o) {         /* a lion lying down, peaceful */
+    *o = 0;
+    float bx = (x - 36) / 24.0f, by = (y - 74) / 12.0f; if (bx * bx + by * by < 1.0f) *o = rgba(200, 160, 90, 255);     /* body */
+    float mx = (x - 16) / 13.0f, my = (y - 62) / 13.0f; if (mx * mx + my * my < 1.0f) *o = rgba(150, 95, 40, 255);      /* mane */
+    float hx = (x - 16) / 8.0f, hy = (y - 63) / 7.0f; if (hx * hx + hy * hy < 1.0f) *o = rgba(215, 175, 100, 255);      /* face */
+    if (inrect(x, y, 12, 60, 14, 62) || inrect(x, y, 18, 60, 20, 62)) *o = rgba(40, 30, 20, 255);
+    if (inrect(x, y, 6, 82, 62, 86)) *o = rgba(190, 150, 85, 255);                                                      /* paws and the ground line */
+    if (y > 60 && y < 70 && abs(x - 58 - (y - 60)) < 2) *o = rgba(150, 95, 40, 255);                                    /* tail */
+}
+static void px_lamb(int x, int y, uint32_t *o) {         /* one white lamb */
+    *o = 0; float dx = (x - 34) / 14.0f, dy = (y - 60) / 10.0f;
+    if (dx * dx + dy * dy < 1.0f) *o = rgba(240, 240, 232, 255);
+    if (inrect(x, y, 14, 48, 24, 60)) *o = rgba(40, 35, 30, 255);
+    if (inrect(x, y, 24, 68, 28, 86) || inrect(x, y, 40, 68, 44, 86)) *o = rgba(40, 35, 30, 255);
+}
+static void px_deer(int x, int y, uint32_t *o) {         /* a deer with antlers */
+    *o = 0; float dx = (x - 36) / 16.0f, dy = (y - 56) / 9.0f;
+    if (dx * dx + dy * dy < 1.0f) *o = rgba(170, 120, 70, 255);
+    if (inrect(x, y, 14, 30, 22, 54)) *o = rgba(160, 110, 60, 255);                                                     /* neck and head */
+    if (inrect(x, y, 10, 28, 24, 36)) *o = rgba(165, 115, 65, 255);
+    if (y > 10 && y < 30 && (abs(x - 12 - (30 - y) / 2) < 2 || abs(x - 22 + (30 - y) / 2) < 2)) *o = rgba(110, 80, 50, 255);   /* antlers */
+    if (inrect(x, y, 24, 64, 28, 90) || inrect(x, y, 32, 64, 36, 90) || inrect(x, y, 42, 64, 46, 90) || inrect(x, y, 50, 64, 54, 90)) *o = rgba(140, 95, 55, 255);
+}
+static void px_flowers(int x, int y, uint32_t *o) {      /* a bank of flowers in many colors */
+    *o = 0;
+    for (int f = 0; f < 9; f++) { static const int fx[9] = {8, 18, 28, 38, 48, 58, 14, 34, 52}, fy[9] = {72, 62, 76, 60, 74, 66, 86, 88, 86};
+        static const int fc[9][3] = {{255, 80, 90}, {255, 210, 60}, {120, 110, 255}, {255, 140, 200}, {255, 250, 250}, {255, 150, 40}, {160, 80, 230}, {255, 230, 100}, {90, 160, 255}};
+        if (inrect(x, y, fx[f] - 1, fy[f], fx[f] + 1, 96)) *o = rgba(60, 130, 50, 255);
+        int ddx = x - fx[f], ddy = y - fy[f]; if (ddx * ddx + ddy * ddy < 20) *o = rgba(fc[f][0], fc[f][1], fc[f][2], 255);
+        if (ddx * ddx + ddy * ddy < 4) *o = rgba(255, 240, 150, 255); }
+}
+static void px_fern(int x, int y, uint32_t *o) {         /* a big fern */
+    *o = 0;
+    for (int f = 0; f < 5; f++) { float a = -1.3f + f * 0.65f; float dx = x - 32, dy = y - 92; float px2 = dx * sinf(a) - dy * cosf(a), py2 = dx * cosf(a) + dy * sinf(a);
+        if (px2 > 0 && px2 < 60 && fabsf(py2) < 3.0f + (60 - px2) * 0.12f && ((int)(px2) % 6 < 4)) *o = rgba(40 + (int)(px2), 120 + (int)(px2 * 1.5f), 40, 255); }
+}
+static void px_path(int x, int y, uint32_t *o) {         /* a garden path: packed earth with moss and small stones */
+    float n = smooth_noise(x / 11.0f, y / 11.0f) * 0.6f + smooth_noise(x / 4.0f, y / 4.0f) * 0.4f; float m = smooth_noise(x / 7.0f + 50, y / 7.0f);
+    int r = 150 + (int)(n * 50), g = 125 + (int)(n * 45), b = 80 + (int)(n * 30);
+    if (m > 0.68f) { r = 90 + (int)(n * 30); g = 140 + (int)(n * 40); b = 60; }         /* moss */
+    if (smooth_noise(x / 2.5f + 9, y / 2.5f) > 0.82f) { r += 40; g += 35; b += 30; }      /* small stones */
+    *o = rgba(r > 255 ? 255 : r, g > 255 ? 255 : g, b > 255 ? 255 : b, 255);
+}
+static void px_lush(int x, int y, uint32_t *o) { float n = smooth_noise(x / 14.0f, y / 14.0f) * 0.6f + smooth_noise(x / 4.0f, y / 4.0f) * 0.4f; *o = rgba(50 + (int)(n * 50), 150 + (int)(n * 80), 45 + (int)(n * 35), 255); }
+static void px_hedge(int x, int y, uint32_t *o) { float n = smooth_noise(x / 6.0f, y / 6.0f) * 0.6f + smooth_noise(x / 2.5f, y / 2.5f) * 0.4f; int fl = smooth_noise(x / 3.0f + 20, y / 3.0f) > 0.86f; *o = fl ? rgba(255, 120, 150, 255) : rgba(25 + (int)(n * 50), 95 + (int)(n * 80), 30 + (int)(n * 30), 255); }
 static Texture *placeholder_sprite(const char *id, float *aspect) {
     *aspect = (float)PW / (float)PH;
     static const struct { const char *id; void (*fn)(int, int, uint32_t *); } table[] = {
         {"#hut", px_hut}, {"#net", px_net}, {"#rock", px_rock}, {"#boat", px_boat}, {"#cypress", px_cypress}, {"#pillar", px_pillar},
         {"#tower", px_tower}, {"#wallseg", px_wallseg}, {"#arch", px_arch}, {"#stall", px_stall}, {"#cart", px_cart}, {"#lily", px_lily},
         {"#tomb", px_tomb}, {"#crosses", px_crosses}, {"#stone", px_stone}, {"#cloud", px_cloudpuff}, {"#gpillar", px_gpillar}, {"#crystal", px_crystal},
-        {"#israelite", px_israelite}, {"#philistine", px_philistine}, {"#banner_israel", px_banner_israel}, {"#banner_philistine", px_banner_philistine}, {"#tent", px_tent}, {"#camp", px_tent} };
+        {"#israelite", px_israelite}, {"#philistine", px_philistine}, {"#banner_israel", px_banner_israel}, {"#banner_philistine", px_banner_philistine}, {"#tent", px_tent}, {"#camp", px_tent},
+        {"#fruittree", px_fruittree}, {"#treeoflife", px_treeoflife}, {"#lion", px_lion}, {"#lamb", px_lamb}, {"#deer", px_deer}, {"#flowers", px_flowers}, {"#fern", px_fern} };
     if (!strcmp(id, "#waterfall")) { *aspect = 0.5f; return make_tex(64, 128, 1, 0, px_waterfall); }
     for (size_t i = 0; i < sizeof table / sizeof table[0]; i++) if (!strcmp(id, table[i].id)) return make_tex(PW, PH, 0, 0, table[i].fn);
     if (!strcmp(id, "#house1")) return make_tex(PW, PH, 0, 0, px_house1);
@@ -670,7 +736,7 @@ static int sprite_kind(const char *img) {
       if (k->tex) k->aspect = (float)w / (float)h; }
     k->placeholder = k->tex == NULL;
     if (!k->tex) k->tex = placeholder_sprite(img, &k->aspect);
-    k->sway = (strstr(img, "palm") || strstr(img, "olive") || strstr(img, "cypress") || strstr(img, "tree")) ? 1 : ((strstr(img, "banner") || strstr(img, "flag") || strstr(img, "net") || strstr(img, "tent")) ? 2 : 0);
+    k->sway = (strstr(img, "palm") || strstr(img, "olive") || strstr(img, "cypress") || strstr(img, "tree") || strstr(img, "fern") || strstr(img, "flowers")) ? 1 : ((strstr(img, "banner") || strstr(img, "flag") || strstr(img, "net") || strstr(img, "tent")) ? 2 : 0);
     k->mesh = gfx_mesh_dynamic((MAX_SCENERY + MAX_MOVERS) * 6);
     return g_nkind++;
 }
@@ -686,11 +752,11 @@ static void free_theme(void) {
 }
 static void load_theme(void) {
     const TrackDef *d = g_def;
-    int heaven = d->grid_idx > 0;
-    tx_road = theme_tex(d->tex_road, 256, 256, heaven ? px_gold : px_road);
-    tx_dirt = theme_tex(d->tex_dirt, 128, 128, d->water ? px_sand : (heaven ? px_cloud : px_dirt));
-    tx_grass = theme_tex(d->tex_grass, 128, 128, d->water ? px_water : px_grass);
-    tx_wall = theme_tex(d->tex_wall, 64, 64, heaven ? px_cloud : px_wall);
+    int heaven = d->grid_idx > 0, eden = !strcmp(d->prefix, "eden");
+    tx_road = theme_tex(d->tex_road, 256, 256, heaven ? px_gold : (eden ? px_path : px_road));
+    tx_dirt = theme_tex(d->tex_dirt, 128, 128, d->water ? px_sand : (heaven ? px_cloud : (eden ? px_lush : px_dirt)));
+    tx_grass = theme_tex(d->tex_grass, 128, 128, d->water ? px_water : (eden ? px_lush : px_grass));
+    tx_wall = theme_tex(d->tex_wall, 64, 64, heaven ? px_cloud : (eden ? px_hedge : px_wall));
     g_skytop[0] = d->sky_r * 0.8f; g_skytop[1] = d->sky_g * 0.85f; g_skytop[2] = d->sky_b; g_skyhor[0] = d->fog_r; g_skyhor[1] = d->fog_g; g_skyhor[2] = d->fog_b;
     { int sw = 0, sh = 0; Texture *painted = asset_texture(d->tex_sky, 1, &sw, &sh);
       if (painted) { tx_sky = painted; g_sky_wrap = sw >= sh * 3 ? 1.0f : 3.0f; }
@@ -1073,7 +1139,7 @@ static const CreditLine CREDITS[] = {
     {"PROGRAMMING", 18, 1, 0}, {"CLAUDE", 34, 0, 60},
     {"THE ROADS", 18, 1, 0}, {"BETHLEHEM ROAD - LUKE 2", 24, 0, 0}, {"SEA OF GALILEE - MATTHEW 4 AND 14", 24, 0, 0},
     {"JERUSALEM ROAD - MATTHEW 21", 24, 0, 0}, {"SUNRISE AT THE EMPTY TOMB - MATTHEW 28", 24, 0, 0},
-    {"ROAD TO HEAVEN - REVELATION 21 AND 22", 24, 0, 0}, {"THE VALLEY OF ELAH - 1 SAMUEL 17", 24, 0, 60},
+    {"ROAD TO HEAVEN - REVELATION 21 AND 22", 24, 0, 0}, {"THE GARDEN OF EDEN - GENESIS 2", 24, 0, 0}, {"THE VALLEY OF ELAH - 1 SAMUEL 17", 24, 0, 60},
     {"THE RACERS", 18, 1, 0}, {"JESUS - MOSES - DAVID - ESTHER", 24, 0, 0}, {"PETER - MARY - DANIEL", 24, 0, 0},
     {"SAMSON - NOAH - JOSEPH - JONAH - JOHN THE BAPTIST", 24, 0, 60},
     {"BUILT WITH", 18, 1, 0}, {"DEVKITPRO AND WUT - CAFEGLSL - MINIMP3 - STB IMAGE", 20, 0, 0}, {"FOR THE WII U AROMA HOMEBREW ENVIRONMENT", 20, 0, 60},
@@ -1205,34 +1271,39 @@ static void draw_kart_models(void) {    /* little 3D karts turning in the kart-s
         gfx_state(ST_DEPTH | ST_DEPTH_WRITE | ST_CULL); gfx_bind(NULL); Mat4 id = m4_identity();
         gfx_draw(m_body_style[i], &id, c->r, c->g, c->b, 1); gfx_draw(m_rest_style[i], &id, 1, 1, 1, 1); }
 }
+/* the road cards: six across the screen */
+#define CARD_W (1200.0f / NUM_PLAY_TRACKS - 10.0f)
+#define CARD_STEP (1200.0f / NUM_PLAY_TRACKS)
+#define CARD_IN (CARD_W - 24.0f)
 static void hud_track(void) {
     text_c("CHOOSE A ROAD", 30, 40, 1, 0.85f, 0.3f, 1);
     for (int d = 0; d < NUM_PLAY_TRACKS; d++) {
-        int sel = d == g_track_idx, open = track_unlocked(d); float x = 40 + d * 245, y = 110, w = 225, h = 400;
+        int sel = d == g_track_idx, open = track_unlocked(d); float x = 40 + d * CARD_STEP, y = 110, w = CARD_W, h = 400, iw = CARD_IN;
         if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
         batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
-        const TrackDef *td = &TRACK_DEFS[d]; char buf[48];
+        const TrackDef *td = &TRACK_DEFS[d]; char buf[48]; float ty = y + 12 + iw + 14;
         if (!open) {
-            batch_rect(&g_b, x + 12, y + 12, 200, 200, 0.2f, 0.22f, 0.3f, 1);
-            batch_text(&g_b, "?", x + 112 - text_width("?", 90) / 2, y + 60, 90, 0.5f, 0.55f, 0.7f, 1);
-            batch_text(&g_b, "BONUS ROAD", x + 12, y + 225, 18, 1, 0.85f, 0.3f, 1);
-            batch_text(&g_b, "WIN THE", x + 12, y + 255, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "GRAND PRIX", x + 12, y + 275, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "ON NORMAL", x + 12, y + 295, 14, 0.9f, 0.9f, 1, 1);
+            batch_rect(&g_b, x + 12, y + 12, iw, iw, 0.2f, 0.22f, 0.3f, 1);
+            batch_text(&g_b, "?", x + 12 + iw / 2 - text_width("?", 90) / 2, y + 12 + iw / 2 - 45, 90, 0.5f, 0.55f, 0.7f, 1);
+            batch_text(&g_b, "BONUS ROAD", x + 12, ty, 18, 1, 0.85f, 0.3f, 1);
+            batch_text(&g_b, "WIN THE", x + 12, ty + 30, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "GRAND PRIX", x + 12, ty + 50, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "ON NORMAL", x + 12, ty + 70, 14, 0.9f, 0.9f, 1, 1);
             continue;
         }
-        batch_rect(&g_b, x + 12, y + 12, 200, 200, td->sky_r, td->sky_g, td->sky_b, 1);
-        if (tx_card[d]) draw_preview(&g_preview[d], x + 112, y + 165, 80, 0.95f, 0.95f, 0.95f);   /* the picture goes on top (drawn after the HUD batch), the map small under it */
-        else draw_preview(&g_preview[d], x + 112, y + 112, 175, 0.95f, 0.95f, 0.95f);
+        batch_rect(&g_b, x + 12, y + 12, iw, iw, td->sky_r, td->sky_g, td->sky_b, 1);
+        if (tx_card[d]) draw_preview(&g_preview[d], x + 12 + iw / 2, y + 12 + iw * 0.77f, iw * 0.4f, 0.95f, 0.95f, 0.95f);   /* the picture goes on top (drawn after the HUD batch), the map small under it */
+        else draw_preview(&g_preview[d], x + 12 + iw / 2, y + 12 + iw / 2, iw * 0.875f, 0.95f, 0.95f, 0.95f);
         /* the name, split onto two lines when long */
         const char *nm = td->name; size_t len = strlen(nm);
         size_t cut = 0;    /* the space nearest the middle of the name, if any */
         for (size_t q = 0; q < len; q++) if (nm[q] == ' ' && (cut == 0 || labs((long)q - (long)len / 2) < labs((long)cut - (long)len / 2))) cut = q;
         if (text_width(nm, 18) > w - 24 && cut > 0) { char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
-            batch_text(&g_b, l1, x + 12, y + 225, 18, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, y + 248, 18, 1, 1, 1, 1); }
-        else batch_text(&g_b, nm, x + 12, y + 225, text_width(nm, 18) > w - 24 ? 15 : 18, 1, 1, 1, 1);
-        snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : "%d LAPS", td->laps); batch_text(&g_b, buf, x + 12, y + 280, 14, 0.8f, 0.9f, 1, 1);
-        if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, y + 305, 14, 1, 0.9f, 0.5f, 1); }
-        if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, y + 328, 14, 0.7f, 0.95f, 0.8f, 1); }
-        if (td->bonus) batch_text(&g_b, "BONUS ROAD", x + 12, y + 360, 14, 1, 0.85f, 0.3f, 1);
+            float sz = fmaxf(text_width(l1, 18), text_width(l2, 18)) > w - 24 ? 14 : 18;
+            batch_text(&g_b, l1, x + 12, ty, sz, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, ty + 23, sz, 1, 1, 1, 1); }
+        else batch_text(&g_b, nm, x + 12, ty, text_width(nm, 18) > w - 24 ? 14 : 18, 1, 1, 1, 1);
+        snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : "%d LAPS", td->laps); batch_text(&g_b, buf, x + 12, ty + 55, text_width(buf, 14) > w - 24 ? 11 : 14, 0.8f, 0.9f, 1, 1);
+        if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, ty + 80, 14, 1, 0.9f, 0.5f, 1); }
+        if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, ty + 103, 14, 0.7f, 0.95f, 0.8f, 1); }
+        if (td->bonus) batch_text(&g_b, "BONUS ROAD", x + 12, ty + 135, 14, 1, 0.85f, 0.3f, 1);
     }
     text_c("A: RACE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
 }
@@ -1347,7 +1418,7 @@ static void tour_pads(Pad *pads, float t) {
         {88, 'B'}, {91, 'A'}, {94, 'U'}, {96, 'U'}, {98, 'A'},
 #else
         {8, 'A'}, {11, 'D'}, {13, KK_TOUR_ROAD == 5 ? 'D' : 0}, {15, KK_TOUR_ROAD == 5 ? 'D' : 0}, {18, KK_TOUR_ROAD == 5 ? 'A' : 0}, {14, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {17, KK_TOUR_ROAD == 5 ? 0 : 'R'}, {22, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {26, KK_TOUR_ROAD == 5 ? 0 : 'A'},
-        {27, KK_TOUR_ROAD >= 1 ? 'R' : 0}, {29, KK_TOUR_ROAD >= 2 ? 'R' : 0}, {31, KK_TOUR_ROAD >= 3 ? 'R' : 0}, {33, KK_TOUR_ROAD >= 4 ? 'R' : 0}, {36, 'A'},
+        {27, KK_TOUR_ROAD >= 1 ? 'R' : 0}, {29, KK_TOUR_ROAD >= 2 ? 'R' : 0}, {31, KK_TOUR_ROAD >= 3 ? 'R' : 0}, {33, KK_TOUR_ROAD >= 4 ? 'R' : 0}, {35, KK_TOUR_ROAD == 9 ? 'R' : 0}, {36, 'A'},   /* road 9: the Garden of Eden (sixth card) */
         {70, 'P'}, {84, 'P'}
 #endif
     };
@@ -2106,7 +2177,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (g_screen == SCR_CHAR || g_screen == SCR_MCHAR) draw_portraits();
         if (g_screen == SCR_RESULTS && g_mode != MODE_TT && g_mode != MODE_BATTLE) draw_podium_karts();
         if (g_screen == SCR_TRACK) for (int d = 0; d < NUM_PLAY_TRACKS && d < 8; d++) { if (!tx_card[d] || !track_unlocked(d)) continue;
-            if (!m_card[d]) { float x = 40 + d * 245 + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, 200, 108, 0, 0, 1, 1, 1, 1, 1, 1); m_card[d] = gfx_mesh_static(g_b.v, g_b.n); }
+            if (!m_card[d]) { float x = 40 + d * CARD_STEP + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, CARD_IN, CARD_IN * 0.54f, 0, 0, 1, 1, 1, 1, 1, 1); m_card[d] = gfx_mesh_static(g_b.v, g_b.n); }
             gfx_bind(tx_card[d]); gfx_draw(m_card[d], &id, 1, 1, 1, 1); }
         if (g_screen == SCR_KART) { draw_kart_models(); gfx_camera_2d(); gfx_state(ST_HUD);
             if (tx_kart[g_player_char]) { int two = tx_kartback[g_player_char] != NULL; float a = g_kart_aspect[g_player_char], ph = 220, pw = ph * a; if (pw > (two ? 330 : 500)) { pw = two ? 330 : 500; ph = pw / a; }
