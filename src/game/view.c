@@ -40,7 +40,7 @@ static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* 
 enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1; static Texture *tx_op; static Mesh *m_op;
-static int g_opt_sel = 0;
+static int g_opt_sel = 0; static char g_pause_reason[48]; static float g_erase_hold = 0;
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO };   /* VS: two to four people on a split screen; JERICHO: seven laps round the walls */
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
@@ -1196,6 +1196,7 @@ static void hud_race(const Pad *pad) {
 static void hud_title(void) {
     float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);   /* the logo settles in */
     float sc = 1.6f - 0.6f * ease, al = ease;
+    batch_text(&g_b, "VERSION " KK_VERSION, 20, 690, 11, 1, 1, 1, 0.5f);
     if (tx_title_bg) return;   /* Sean's whole title picture is drawn instead (it carries its own "press any button") */
     if (tx_title) {   /* Sean's logo is drawn separately (draw_title_logo); the words go under it */
         float y = 60 + g_title_h + 10;
@@ -1263,15 +1264,18 @@ static void hud_options(void) {
     { float x = 400, y = 200; if (g_opt_sel == 2) batch_rect(&g_b, x - 16, y - 6, 480, 36, 1, 0.85f, 0.3f, 0.25f);
       batch_text(&g_b, "CONTROLLER RUMBLE", x, y, 24, g_opt_sel == 2 ? 1 : 0.9f, g_opt_sel == 2 ? 0.85f : 0.95f, g_opt_sel == 2 ? 0.3f : 1, 1);
       batch_text(&g_b, g_save.rumble ? "ON" : "OFF", x + 270, y, 24, g_save.rumble ? 1 : 0.6f, g_save.rumble ? 0.85f : 0.65f, g_save.rumble ? 0.3f : 0.75f, 1); }
-    text_c("LEFT/RIGHT: CHANGE   B: BACK", 236, 14, 0.8f, 0.85f, 1, 1);
-    batch_text(&g_b, "RECORDS", 280, 262, 24, 1, 0.85f, 0.3f, 1);
-    batch_text(&g_b, "ROAD", 280, 300, 16, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "BEST TIME", 720, 300, 16, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "TARGET", 900, 300, 16, 0.8f, 0.85f, 1, 1);
-    for (int d = 0; d < NUM_PLAY_TRACKS && d < SAVE_MAX_ROADS; d++) { float y = 326 + d * 30;
+    { float x = 400, y = 236; if (g_opt_sel == 3) batch_rect(&g_b, x - 16, y - 6, 480, 30, 1, 0.5f, 0.3f, 0.25f);
+      batch_text(&g_b, "ERASE ALL PROGRESS", x, y, 18, g_opt_sel == 3 ? 1 : 0.8f, g_opt_sel == 3 ? 0.6f : 0.75f, g_opt_sel == 3 ? 0.4f : 0.8f, 1);
+      if (g_opt_sel == 3) { batch_text(&g_b, "HOLD A", x + 270, y, 18, 1, 0.9f, 0.5f, 1); if (g_erase_hold > 0) batch_rect(&g_b, x + 350, y + 4, 100 * clampf(g_erase_hold / 2.0f, 0, 1), 12, 1, 0.4f, 0.3f, 1); } }
+    text_c("LEFT/RIGHT: CHANGE   B: BACK", 268, 14, 0.8f, 0.85f, 1, 1);
+    batch_text(&g_b, "RECORDS", 280, 292, 22, 1, 0.85f, 0.3f, 1);
+    batch_text(&g_b, "ROAD", 280, 322, 14, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "BEST TIME", 720, 322, 14, 0.8f, 0.85f, 1, 1); batch_text(&g_b, "TARGET", 900, 322, 14, 0.8f, 0.85f, 1, 1);
+    for (int d = 0; d < NUM_PLAY_TRACKS && d < SAVE_MAX_ROADS; d++) { float y = 344 + d * 27;
         batch_text(&g_b, TRACK_DEFS[d].name, 280, y, 18, 1, 1, 1, 1);
         if (g_save.best_ms[d] > 0) { fmt_time(buf, sizeof buf, g_save.best_ms[d] / 1000.0f); int beat = save_par_time(d) > 0 && g_save.best_ms[d] <= (int)(save_par_time(d) * 1000); batch_text(&g_b, buf, 720, y, 18, 1, beat ? 0.85f : 1, beat ? 0.3f : 1, 1); }
         else batch_text(&g_b, "--:--.--", 720, y, 18, 0.6f, 0.65f, 0.75f, 1);
         if (save_par_time(d) > 0) { fmt_time(buf, sizeof buf, save_par_time(d)); batch_text(&g_b, buf, 900, y, 18, 0.8f, 0.85f, 1, 1); } }
-    float y = 326 + NUM_PLAY_TRACKS * 30 + 16;
+    float y = 344 + NUM_PLAY_TRACKS * 27 + 10;
     snprintf(buf, sizeof buf, "RACES FINISHED %d   RACES WON %d", g_save.races, g_save.wins); batch_text(&g_b, buf, 280, y, 18, 1, 1, 1, 1);
     snprintf(buf, sizeof buf, "GRAND PRIX WON: EASY %d  NORMAL %d  HARD %d", g_save.gp_wins[0], g_save.gp_wins[1], g_save.gp_wins[2]); batch_text(&g_b, buf, 280, y + 30, 18, 1, 1, 1, 1);
     snprintf(buf, sizeof buf, "GOLIATH: %d FIGHTS, %d WON", g_save.battles, g_save.battle_wins); batch_text(&g_b, buf, 280, y + 60, 18, 1, 1, 1, 1);
@@ -1471,7 +1475,9 @@ static void hud_pause(void) {
     menu_item("QUIT TO MENU", 362, g_pause_sel == 2, 32);
     volume_row("MUSIC", g_save.music_vol, 420, g_pause_sel == 3);
     volume_row("SOUND", g_save.sfx_vol, 460, g_pause_sel == 4);
-    text_c("LEFT/RIGHT: VOLUME", 510, 14, 0.8f, 0.85f, 1, 1);
+    text_c("LEFT/RIGHT: VOLUME", 500, 14, 0.8f, 0.85f, 1, 1);
+    text_c(g_race.jericho ? "A GAS   B BRAKE   ZR DRIFT   ZL SHOFAR" : "A GAS   B BRAKE   ZR HOLD TO DRIFT   ZL BLESSING", 526, 13, 0.7f, 0.8f, 1, 1);
+    if (g_pause_reason[0]) text_c(g_pause_reason, 150, 18, 1, 0.5f, 0.4f, 1);
 }
 static void hud_battle(void) {
     Battle *b = &g_battle; char buf[64];
@@ -2038,7 +2044,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
 
     int sim_running = 1;
     switch (g_screen) {
-    case SCR_TITLE: if (pa || pb || pplus || pad->x || pad->y) { g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; sfx_play(SFX_MENU_OK, 1, 0); } break;
+    case SCR_TITLE: if (pa || pb || pplus || pad->x || pad->y) { g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+#ifndef KK_TOUR
+        else if (g_screen_t > 90.0f && g_op_frames > 0 && m_op) { g_screen = SCR_OPENER; g_screen_t = 0; g_op_cur = -1; }   /* left alone, the title screen plays the opener again */
+#endif
+        break;
     case SCR_OPENER: {
         int want = (int)(g_screen_t * g_op_fps);
         if (pa || pb || pplus || pad->x || pad->y || want >= g_op_frames) { g_screen = SCR_TITLE; g_screen_t = 0; gfx_texture_free(tx_op); tx_op = NULL; g_op_cur = -1; break; }
@@ -2046,7 +2056,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
             if (nt) { gfx_texture_free(tx_op); tx_op = nt; } g_op_cur = want; }
         break; }
     case SCR_OPTIONS:
-        if (my) { g_opt_sel = (g_opt_sel - my + 3) % 3; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (my) { g_opt_sel = (g_opt_sel - my + 4) % 4; sfx_play(SFX_MENU_MOVE, 1, 0); g_erase_hold = 0; }
+        if (g_opt_sel == 3) { if (pad->a) { g_erase_hold += dt; if (g_erase_hold >= 2.0f) { int mv = g_save.music_vol, sv = g_save.sfx_vol, rb = g_save.rumble; memset(&g_save, 0, sizeof g_save); g_save.music_vol = mv; g_save.sfx_vol = sv; g_save.rumble = rb; g_save.dirty = 1; save_store();
+                    for (int d = 0; d < 8; d++) g_best_time[d] = 0; g_ghost_n = 0; race_set_unlocked(unlocked_mask()); race_set_styles(0, unlocked_styles()); g_erase_hold = 0; g_opt_sel = 0; sfx_play(SFX_WRONG_WAY, 1, 0); } } else g_erase_hold = 0; pa = 0; }
         if (mx && g_opt_sel < 2) { int *v = g_opt_sel == 0 ? &g_save.music_vol : &g_save.sfx_vol; *v = *v + mx < 0 ? 0 : (*v + mx > 10 ? 10 : *v + mx); g_save.dirty = 1; apply_volumes(); sfx_play(SFX_MENU_MOVE, 1, 0); }
         if ((mx || pa) && g_opt_sel == 2) { g_save.rumble = !g_save.rumble; g_save.dirty = 1; sfx_play(SFX_MENU_MOVE, 1, 0); if (g_save.rumble) platform_rumble(0.6f, 0.25f); }
         if (pb || (pa && g_opt_sel != 2)) { save_store(); g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
@@ -2116,7 +2128,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pb) { g_screen = SCR_KART; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_RACE:
-        if (pplus && r->state != RACE_FINISHED && g_screen_t > 0.5f) { g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; }
+        if (pplus && r->state != RACE_FINISHED && g_screen_t > 0.5f) { g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; g_pause_reason[0] = 0; }
+        if (g_nplayers > 1 && r->state != RACE_FINISHED && g_screen_t > 2.0f) for (int p = 0; p < g_nplayers; p++) { int sl = g_pslot[p]; if (sl < npads && !pads[sl].source) {   /* a controller went away */
+            g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; snprintf(g_pause_reason, sizeof g_pause_reason, "PLAYER %d'S CONTROLLER DISCONNECTED", p + 1); break; } }
         if (r->state == RACE_FINISHED) {
             g_results_t += dt;
             if (g_results_t > 1.5f) {
@@ -2168,6 +2182,10 @@ void game_frame(const Pad *pads, int npads, float dt) {
         int real_input = pad->source && (fabsf(pad->sx) > 0.15f || pad->a || pad->b || pad->zr || pad->zl);
         if (real_input) { g_idle = 0; g_demo = 0; } else { g_idle += dt; if (g_idle > 8.0f) g_demo = 1; }
     }
+    if (g_screen == SCR_RACE && r->state == RACE_RUNNING && !g_attract && g_mode != MODE_BATTLE) {   /* taking (or losing) the lead */
+        static int last_pos[MAX_HUMANS]; for (int p = 0; p < g_nplayers; p++) { int vk = human_kart(p), pos = 0; for (int q = 0; q < r->nk; q++) if (r->order[q] == vk) pos = q + 1;
+            if (r->race_t < 3.0f) last_pos[p] = pos;
+            else if (pos != last_pos[p] && r->nk > 1 && !r->k[vk].finished) { if (pos == 1) { pmsg(p, 1.2f, "YOU TOOK THE LEAD!"); sfx_play(SFX_LAP, 0.7f, 0); } else if (last_pos[p] == 1) pmsg(p, 1.0f, "YOU LOST THE LEAD"); last_pos[p] = pos; } } }
     for (int p = 0; p < g_nplayers; p++) {
         if (g_pmsg_t[p] > 0) { g_pmsg_t[p] -= dt; if (g_pmsg_t[p] <= 0) g_pmsg2[p][0] = 0; }
         if (g_proulette[p] > 0) { g_proulette[p] -= dt; g_prou_tick[p] -= dt;

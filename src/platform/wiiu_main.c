@@ -21,7 +21,6 @@
 #include "../game/save.h"
 #include "wiiu_audio.h"
 
-#define KK_VERSION "M8-0.1"
 void gfx_set_logfile(FILE *f);
 
 static void read_pads(Pad *pads) {

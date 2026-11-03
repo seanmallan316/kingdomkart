@@ -3,6 +3,7 @@
 #define KK_GAME_H
 #include "../sim/kart.h"
 
+#define KK_VERSION "1.0 BETA"
 #define KK_PADS 5      /* controller slots: 0 the GamePad, 1..4 the Wii controllers (Pro Controller, Classic Controller, Wii Remote held sideways, or Remote + Nunchuk) */
 typedef struct { float sx, sy; int a, b, zl, zr, plus, x, y; int source; } Pad;   /* source bits: 1 GamePad, 2 Pro Controller, 4 Wii Remote, 8 Classic Controller, 16 Nunchuk; 0 = nothing in this slot */
 
