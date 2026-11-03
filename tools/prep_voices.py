@@ -15,7 +15,7 @@ MALE = {"start": "male_start", "boost": "male_yahoo", "trick": "male_trick", "wi
 FEMALE = {"start": "female_start", "boost": "female_whoo", "trick": "female_whoo", "win": "male_win", "bless": "female_bless", "fire": "female_whoo"}
 # semitones up (+) or down (-) for each character; the female win is "Hallelujah" lifted a fourth
 CHARS = {"jesus": ("m", 0), "moses": ("m", -3), "david": ("m", 2), "esther": ("f", 0), "peter": ("m", -1.5), "mary": ("f", 1.5), "daniel": ("m", 1),
-         "samson": ("m", -4), "noah": ("m", -2.5), "joseph": ("m", 3), "jonah": ("m", -0.5), "john": ("m", -2)}
+         "samson": ("m", -4), "noah": ("m", -2.5), "joseph": ("m", 3), "jonah": ("m", -0.5), "john": ("m", -2), "michael": ("m", -1), "gabriel": ("m", 2)}
 EXTRA = {("f", "win"): 5}        # the male Hallelujah serves the women, lifted
 
 def run(args): subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error"] + args, check=True)

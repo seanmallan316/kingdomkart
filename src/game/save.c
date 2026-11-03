@@ -33,6 +33,7 @@ void save_load(void) {
         else if (!strcmp(key, "rumble")) g_save.rumble = (int)val;
         else if (!strcmp(key, "jericho")) g_save.jericho_ms = (int)val;
         else if (!strcmp(key, "jerichowins")) g_save.jericho_wins = (int)val;
+        else if (!strcmp(key, "glorywins")) g_save.glory_wins = (int)val;
     }
     fclose(f);
     gfx_log("save loaded: %d races, %d wins, unlocks %u", g_save.races, g_save.wins, g_save.unlocks);
@@ -49,7 +50,7 @@ void save_store(void) {
     fprintf(f, "winchars %u\nunlocks %u\nbattles %d\nbattlewins %d\n", g_save.win_chars, g_save.unlocks, g_save.battles, g_save.battle_wins);
     fprintf(f, "musicvol %d\nsfxvol %d\nrumble %d\n", g_save.music_vol, g_save.sfx_vol, g_save.rumble);
     if (g_save.jericho_ms) fprintf(f, "jericho %d\n", g_save.jericho_ms);
-    fprintf(f, "jerichowins %d\n", g_save.jericho_wins);
+    fprintf(f, "jerichowins %d\nglorywins %d\n", g_save.jericho_wins, g_save.glory_wins);
     fclose(f);
     g_save.dirty = 0;
 }
@@ -68,6 +69,8 @@ unsigned save_check_unlocks(void) {
     if (g_save.races >= 25) want |= UNLOCK_KART_ARK;
     if (g_save.win_chars & (1u << 2)) want |= UNLOCK_GOLIATH;
     if (g_save.battle_wins >= 1) want |= UNLOCK_KART_SLING;
+    if (g_save.jericho_wins >= 1) want |= UNLOCK_MICHAEL;
+    if (g_save.glory_wins >= 1) want |= UNLOCK_GABRIEL;
     unsigned fresh = want & ~g_save.unlocks;
     if (fresh) { g_save.unlocks = want; g_save.dirty = 1; }
     return fresh;
@@ -80,6 +83,7 @@ const char *unlock_name(int bit) {
         case UNLOCK_SAMSON: return "SAMSON"; case UNLOCK_NOAH: return "NOAH"; case UNLOCK_JOSEPH: return "JOSEPH"; case UNLOCK_JONAH: return "JONAH"; case UNLOCK_JOHN: return "JOHN THE BAPTIST"; case UNLOCK_HEAVEN: return "ROAD TO HEAVEN";
         case UNLOCK_KART_CHARIOT: return "CHARIOT KART"; case UNLOCK_KART_BOAT: return "GALILEE BOAT KART"; case UNLOCK_KART_ARK: return "ARK KART";
         case UNLOCK_GOLIATH: return "DAVID VS GOLIATH"; case UNLOCK_KART_SLING: return "SLING KART";
+        case UNLOCK_MICHAEL: return "MICHAEL THE ARCHANGEL"; case UNLOCK_GABRIEL: return "GABRIEL THE ARCHANGEL";
         default: return "";
     }
 }
@@ -89,6 +93,7 @@ const char *unlock_hint(int bit) {
         case UNLOCK_JONAH: return "BEAT THE TARGET ON THE SEA OF GALILEE"; case UNLOCK_JOHN: return "WIN THE GRAND PRIX ON HARD"; case UNLOCK_HEAVEN: return "WIN THE GRAND PRIX ON NORMAL";
         case UNLOCK_KART_CHARIOT: return "WIN 10 RACES"; case UNLOCK_KART_BOAT: return "BEAT THE TARGET TIME ON EVERY ROAD"; case UNLOCK_KART_ARK: return "FINISH 25 RACES";
         case UNLOCK_GOLIATH: return "WIN A RACE AS DAVID"; case UNLOCK_KART_SLING: return "BEAT GOLIATH";
+        case UNLOCK_MICHAEL: return "WIN THE WALLS OF JERICHO"; case UNLOCK_GABRIEL: return "WIN THE GENESIS TO GLORY CUP";
         default: return "";
     }
 }

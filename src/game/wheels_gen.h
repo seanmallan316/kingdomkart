@@ -27,6 +27,8 @@ static const WheelDef WHEEL_DEFS[] = {
     {"ride_john_bl", 2, -1, {0.450f, 0.800f}, {0.760f, 0.740f}, {0.105f, 0.075f}, {0.160f, 0.120f}},
     {"ride_goliath_bl", 2, -1, {0.560f, 0.880f}, {0.760f, 0.730f}, {0.110f, 0.085f}, {0.170f, 0.140f}},
     {"ride_daniel_bl", 2, -1, {0.600f, 0.900f}, {0.760f, 0.700f}, {0.115f, 0.085f}, {0.170f, 0.130f}},
+    {"kartview_michael_l", 2, 1, {0.258f, 0.740f}, {0.800f, 0.800f}, {0.134f, 0.134f}, {0.165f, 0.165f}},
+    {"kartview_gabriel_l", 2, 1, {0.244f, 0.798f}, {0.780f, 0.780f}, {0.137f, 0.137f}, {0.170f, 0.170f}},
 };
 #define NUM_WHEEL_DEFS (int)(sizeof WHEEL_DEFS / sizeof WHEEL_DEFS[0])
 typedef struct { const char *picture; int n; float cx[3], cy[3], hw[3], hh[3]; } TreadDef;
@@ -43,5 +45,7 @@ static const TreadDef TREAD_DEFS[] = {
     {"ride_david_b", 2, {0.170f, 0.830f}, {0.810f, 0.800f}, {0.110f, 0.110f}, {0.170f, 0.180f}},
     {"ride_moses_b", 2, {0.170f, 0.830f}, {0.800f, 0.800f}, {0.110f, 0.120f}, {0.180f, 0.180f}},
     {"ride_jesus_b", 2, {0.160f, 0.830f}, {0.810f, 0.810f}, {0.100f, 0.110f}, {0.170f, 0.160f}},
+    {"ride_michael_b", 2, {0.170f, 0.800f}, {0.810f, 0.810f}, {0.110f, 0.090f}, {0.170f, 0.170f}},
+    {"ride_gabriel_b", 2, {0.160f, 0.830f}, {0.830f, 0.820f}, {0.100f, 0.090f}, {0.150f, 0.150f}},
 };
 #define NUM_TREAD_DEFS (int)(sizeof TREAD_DEFS / sizeof TREAD_DEFS[0])

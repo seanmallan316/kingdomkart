@@ -16,7 +16,9 @@ enum {
     UNLOCK_KART_ARK = 1 << 8,      /* finish 25 races */
     UNLOCK_GOLIATH = 1 << 9,       /* win a race as David: opens the battle */
     UNLOCK_KART_SLING = 1 << 10,   /* beat Goliath */
-    UNLOCK_COUNT = 11
+    UNLOCK_MICHAEL = 1 << 11,      /* win the Walls of Jericho */
+    UNLOCK_GABRIEL = 1 << 12,      /* win the Genesis to Glory cup */
+    UNLOCK_COUNT = 13
 };
 
 typedef struct {
@@ -30,6 +32,7 @@ typedef struct {
     int rumble;                    /* controller vibration on (1) or off (0) */
     int jericho_ms;                /* best Walls of Jericho time in milliseconds, 0 = none */
     int jericho_wins;
+    int glory_wins;                /* Genesis to Glory cups won */
     int dirty;
 } Save;
 

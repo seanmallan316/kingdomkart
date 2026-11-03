@@ -16,6 +16,8 @@ const Character CHARACTERS[NCHARS] = {
     {"Joseph", "JOSEPH", {1.00f, 1.06f, 1.02f, 0.92f}, 0.90f, 0.55f, 0.20f, 1}, /* bonus: coat of many colors, quick off the line */
     {"Jonah",  "JONAH",  {0.97f, 1.00f, 1.08f, 0.98f}, 0.25f, 0.55f, 0.90f, 1}, /* bonus: sea blue, the best handling */
     {"John",   "JOHN",   {1.08f, 1.00f, 0.94f, 1.00f}, 0.60f, 0.42f, 0.22f, 1}, /* bonus: John the Baptist, the fastest of all */
+    {"Michael", "MICHAEL", {1.05f, 1.02f, 0.98f, 1.12f}, 0.90f, 0.15f, 0.15f, 1}, /* bonus: the archangel with the sword, strong and quick */
+    {"Gabriel", "GABRIEL", {1.02f, 1.06f, 1.06f, 0.88f}, 0.25f, 0.35f, 0.85f, 1}, /* bonus: the archangel with the trumpet, light and nimble */
 };
 static unsigned g_unlocked = 0x7F;      /* the computer drives only unlocked characters */
 void race_set_unlocked(unsigned mask) { g_unlocked = mask | 0x7F; }

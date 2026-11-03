@@ -4,8 +4,9 @@ An original 3D kart racing game for the modded Wii U (Aroma homebrew), with Bibl
 Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
 
 ## What is in the game right now
-- **Eight characters** (Jesus, Moses, David, Esther, Peter, Paul, Mary, Daniel) with different speed, acceleration, handling
-  and weight, plus two to unlock (Noah, Elijah). Four kart bodies (Standard, Chariot, Boat, Ark), three to unlock.
+- **Seven characters to begin with** (Jesus, Moses, David, Esther, Peter, Mary, Daniel) with different speed,
+  acceleration, handling and weight, and **seven to unlock** (Samson, Noah, Joseph, Jonah, John the Baptist, and the
+  archangels Michael and Gabriel). Five kart bodies (Standard, Chariot, Boat, Ark, Sling), four to unlock.
 - **Four story roads**: Bethlehem Road (night, under the Star), Sea of Galilee (causeway over the water), Jerusalem Road
   (into the city), Sunrise at the Empty Tomb — and the unlockable **Road to Heaven**, one run from the earth up through the
   clouds to the gates.
