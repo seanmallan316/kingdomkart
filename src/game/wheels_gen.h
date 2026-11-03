@@ -26,5 +26,6 @@ static const WheelDef WHEEL_DEFS[] = {
     {"kartview_samson_l", 2, 1, {0.250f, 0.740f}, {0.790f, 0.790f}, {0.130f, 0.130f}, {0.150f, 0.150f}},
     {"ride_john_bl", 2, -1, {0.450f, 0.800f}, {0.760f, 0.740f}, {0.105f, 0.075f}, {0.160f, 0.120f}},
     {"ride_goliath_bl", 2, -1, {0.560f, 0.880f}, {0.760f, 0.730f}, {0.110f, 0.085f}, {0.170f, 0.140f}},
+    {"ride_daniel_bl", 2, -1, {0.600f, 0.900f}, {0.760f, 0.700f}, {0.115f, 0.085f}, {0.170f, 0.130f}},
 };
 #define NUM_WHEEL_DEFS (int)(sizeof WHEEL_DEFS / sizeof WHEEL_DEFS[0])
