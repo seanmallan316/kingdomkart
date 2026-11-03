@@ -33,7 +33,10 @@ def key_background(im, mode):
     im = im.convert("RGBA")
     px = im.load(); w, h = im.size
     corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
-    bg = max(set(c[:3] for c in corners), key=[c[:3] for c in corners].count)
+    inset = [px[int(w * 0.03), int(h * 0.03)], px[w - 1 - int(w * 0.03), int(h * 0.03)], px[int(w * 0.03), h - 1 - int(h * 0.03)], px[w - 1 - int(w * 0.03), h - 1 - int(h * 0.03)]]   # a little in from the corners: sheets cut from a grid have pale dividing lines at the very edge
+    samples = corners + inset
+    greens = [c[:3] for c in samples if c[1] > c[0] + 80 and c[1] > c[2] + 80]
+    bg = greens[0] if greens else max(set(c[:3] for c in samples), key=[c[:3] for c in samples].count)
     tol = 70 if mode == "cutout" else 40
     green_screen = bg[1] > bg[0] + 80 and bg[1] > bg[2] + 80
     out = Image.new("RGBA", im.size)
