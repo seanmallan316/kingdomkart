@@ -27,6 +27,9 @@ typedef struct {
     unsigned win_chars;            /* bit per character that has won a race */
     unsigned unlocks;              /* UNLOCK_* bits */
     int music_vol, sfx_vol;        /* 0..10 */
+    int rumble;                    /* controller vibration on (1) or off (0) */
+    int jericho_ms;                /* best Walls of Jericho time in milliseconds, 0 = none */
+    int jericho_wins;
     int dirty;
 } Save;
 

@@ -15,7 +15,7 @@ const char *save_dir_path(char *buf, int n, const char *file) {
 }
 
 void save_load(void) {
-    memset(&g_save, 0, sizeof g_save); g_save.music_vol = 8; g_save.sfx_vol = 10;
+    memset(&g_save, 0, sizeof g_save); g_save.music_vol = 8; g_save.sfx_vol = 10; g_save.rumble = 1;
     FILE *f = fopen(g_path, "r");
     if (!f) { gfx_log("no save file at %s (first run)", g_path); return; }
     char key[32]; long val;
@@ -30,6 +30,9 @@ void save_load(void) {
         else if (!strcmp(key, "battlewins")) g_save.battle_wins = (int)val;
         else if (!strcmp(key, "musicvol")) g_save.music_vol = (int)val;
         else if (!strcmp(key, "sfxvol")) g_save.sfx_vol = (int)val;
+        else if (!strcmp(key, "rumble")) g_save.rumble = (int)val;
+        else if (!strcmp(key, "jericho")) g_save.jericho_ms = (int)val;
+        else if (!strcmp(key, "jerichowins")) g_save.jericho_wins = (int)val;
     }
     fclose(f);
     gfx_log("save loaded: %d races, %d wins, unlocks %u", g_save.races, g_save.wins, g_save.unlocks);
@@ -44,7 +47,9 @@ void save_store(void) {
     fprintf(f, "races %d\nwins %d\n", g_save.races, g_save.wins);
     for (int i = 0; i < 3; i++) fprintf(f, "gpwins%d %d\n", i, g_save.gp_wins[i]);
     fprintf(f, "winchars %u\nunlocks %u\nbattles %d\nbattlewins %d\n", g_save.win_chars, g_save.unlocks, g_save.battles, g_save.battle_wins);
-    fprintf(f, "musicvol %d\nsfxvol %d\n", g_save.music_vol, g_save.sfx_vol);
+    fprintf(f, "musicvol %d\nsfxvol %d\nrumble %d\n", g_save.music_vol, g_save.sfx_vol, g_save.rumble);
+    if (g_save.jericho_ms) fprintf(f, "jericho %d\n", g_save.jericho_ms);
+    fprintf(f, "jerichowins %d\n", g_save.jericho_wins);
     fclose(f);
     g_save.dirty = 0;
 }
