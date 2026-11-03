@@ -129,7 +129,7 @@ void sfx_engine(float speed, int drifting, int boosting, int offroad, int in_air
     }
     p_active = active; p_boost = boosting; p_brake = brake; p_drift = drifting; p_speed = speed;
 }
-#define MAX_NAMED 64
+#define MAX_NAMED 128
 static Sample smp_named[MAX_NAMED]; static char named_name[MAX_NAMED][48]; static int n_named = 0;
 int sfx_voice_load(const char *name) {
     for (int i = 0; i < n_named; i++) if (!strcmp(named_name[i], name)) return smp_named[i].d ? i : -1;

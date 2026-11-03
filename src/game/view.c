@@ -96,8 +96,8 @@ static Texture *tx_title, *tx_title_bg; static Mesh *m_title, *m_title_bg, *m_lo
 static Texture *tx_card[8]; static Mesh *m_card[8];   /* card_<prefix>.png: the road pictures on the road-select cards */
 static Texture *tx_item[ITEM_COUNT];        /* item pictures for the HUD slot, when Sean's files exist */
 /* the drivers' voices: content/sfx/voice_<name>_<event>.wav for one character, or voice_<event>.wav shared by all; silent when missing */
-enum { VO_BOOST, VO_TRICK, VO_WIN, VO_OUCH, VO_BLESS, VO_COUNT };
-static const char *VO_NAMES[VO_COUNT] = {"boost", "trick", "win", "ouch", "bless"};
+enum { VO_START, VO_BOOST, VO_TRICK, VO_WIN, VO_OUCH, VO_BLESS, VO_FIRE, VO_COUNT };   /* start: at GO; boost: rocket start / super turbo / boost pad; fire: the Chariot of Fire */
+static const char *VO_NAMES[VO_COUNT] = {"start", "boost", "trick", "win", "ouch", "bless", "fire"};
 static int g_voice[NCHARS][VO_COUNT];
 static Pad g_prev; static float g_nav_t, g_screen_t;
 static const int GP_POINTS[8] = {10, 8, 6, 5, 4, 3, 2, 1};
@@ -2097,7 +2097,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             Kart *ek = ev->kart >= 0 ? &r->k[ev->kart] : NULL;
             switch (ev->type) {
                 case EV_COUNT_TICK: sfx_play(SFX_COUNT_TICK, 1, 0); break;
-                case EV_GO: for (int p = 0; p < g_nplayers; p++) pmsg(p, 1.0f, "GO!"); sfx_play(SFX_GO, 1, 0); break;
+                case EV_GO: for (int p = 0; p < g_nplayers; p++) { pmsg(p, 1.0f, "GO!"); if (p == 0 || frand01() < 0.5f) voice_at(human_kart(p), VO_START); } sfx_play(SFX_GO, 1, 0); break;
                 case EV_LAP: if (who >= 0) sfx_play(SFX_LAP, 1, 0); break;
                 case EV_FINAL_LAP: if (who >= 0) { pmsg(who, 2.0f, "FINAL LAP!"); sfx_play(SFX_FINAL_LAP, 1, 0); } break;
                 case EV_FINISH: if (ek->place == 1) voice_at(ev->kart, VO_WIN);
@@ -2119,7 +2119,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case EV_USE_SHIELD: sfx_at(SFX_BLOCK, ek, 0.7f); if (who >= 0) pmsg(who, 1.0f, "SHIELD OF FAITH!"); break;
                 case EV_USE_PARTING: voice_at(ev->kart, VO_BLESS); sfx_at(SFX_SPLASH, ek, 1.0f); sfx_play(SFX_SHOFAR, 0.4f, 0); if (who >= 0) pmsg(who, 1.5f, "THE SEA PARTS!"); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.4f); break;
                 case EV_USE_JUBILEE: voice_at(ev->kart, VO_BLESS); sfx_at(SFX_SHOFAR, ek, 1.0f); if (who >= 0) pmsg(who, 1.5f, "JUBILEE!"); for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.95f, 0.6f); break;
-                case EV_USE_FIRE: sfx_at(SFX_FIRE, ek, 1.0f); if (who >= 0) { pmsg(who, 1.5f, "CHARIOT OF FIRE!"); prumble(who, 0.6f, 0.4f); } break;
+                case EV_USE_FIRE: voice_at(ev->kart, VO_FIRE); sfx_at(SFX_FIRE, ek, 1.0f); if (who >= 0) { pmsg(who, 1.5f, "CHARIOT OF FIRE!"); prumble(who, 0.6f, 0.4f); } break;
                 case EV_USE_WATER: sfx_at(SFX_SPLASH, ek, 0.8f); if (who >= 0) pmsg(who, 1.0f, "LIVING WATER!"); bless_sparkle(ek, 0.5f, 0.8f, 1); break;
                 case EV_BLESSED: { int by = r->blessed_by[ev->kart]; if (who >= 0 && by >= 0 && by < r->nk) { char line[64]; snprintf(line, sizeof line, "BLESSED BY %s", CHARACTERS[r->character[by]].short_name); pmsg2(who, 1.2f, line); } bless_sparkle(ek, 1, 0.9f, 0.5f); } break;
                 case EV_TRAIL_BOOST: if (who >= 0) pmsg(who, 1.0f, "BLESSING ON THE ROAD!"); sfx_at(SFX_BOOST_PAD, ek, 0.7f); break;

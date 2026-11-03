@@ -78,6 +78,12 @@ engine uses `kart_engine_idle`, `kart_engine_acceleration`, `kart_engine_top_spe
 unlocked. Any synthesized effect can be replaced by a recording named `sfx_<effect>.wav` (`sfx_coin`, `sfx_lap`, ...).
 Without the files, the game synthesizes everything itself.
 
+**Driver voices:** the shouts in `assets/voices/` (`male_start.wav` "let's do this", `female_win.wav`, ...) become one set
+per character with `python3 tools/prep_voices.py`: `content/sfx/voice_<name>_<event>.wav`, each character pitched a
+little differently (Samson deepest, Joseph brightest). Events: `start` (at GO), `boost` (rocket start, super turbo,
+boost pad), `trick` (a trick landing), `win` (first across the line), `bless` (a big blessing), `fire` (the Chariot of
+Fire), `ouch` (hit). A file named `voice_<event>.wav` serves every character that has none of their own.
+
 ## Project layout
 `src/sim` kart physics and the race (no graphics, runs in tests on a PC) · `src/world` roads and themes · `src/render`
 GX2 drawing · `src/game` screens and the race view · `src/audio` sound synthesizer and music player · `src/platform` Wii U entry point,

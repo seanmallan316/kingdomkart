@@ -30,5 +30,10 @@ int main(void) {
         unsigned data = pos * 4; fwrite("RIFF", 1, 4, f); put32(f, 36 + data); fwrite("WAVEfmt ", 1, 8, f); put32(f, 16); put16(f, 1); put16(f, 2); put32(f, SR); put32(f, SR * 4); put16(f, 4); put16(f, 16);
         fwrite("data", 1, 4, f); put32(f, data); for (int i = 0; i < pos; i++) { put16(f, (unsigned short)L[i]); put16(f, (unsigned short)R[i]); } fclose(f); printf("wrote sfx_preview.wav (%.0f s)\n", pos / (float)SR); }
     free(L); free(R);
+    /* the drivers' voices: every character has a set, and one plays */
+    { static const char *who[] = {"jesus", "moses", "david", "esther", "peter", "mary", "daniel", "samson", "noah", "joseph", "jonah", "john"}; int missing = 0;
+      for (int c = 0; c < 12; c++) { char nm[64]; snprintf(nm, sizeof nm, "voice_%s_win", who[c]); if (sfx_voice_load(nm) < 0) missing++; }
+      printf("driver voices: %d of 12 characters missing a win shout\n", missing);
+      int h = sfx_voice_load("voice_david_win"); if (h >= 0) { sfx_voice_play(h, 1, 0); int n = SR * 2; short *VL = calloc(n, 2), *VR = calloc(n, 2); sfx_render(VL, VR, n); float pk = 0; for (int i = 0; i < n; i++) { float a = fabsf(VL[i] / 32768.0f); if (a > pk) pk = a; } free(VL); free(VR); printf("David's Hallelujah: peak %.2f\n", pk); CHECK(pk > 0.1f, "the voice did not play"); } }
     printf(bad ? "SFX TEST FAILED\n" : "SFX TEST OK\n"); return bad;
 }
