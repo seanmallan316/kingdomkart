@@ -1210,8 +1210,8 @@ static void hud_join(const Pad *pads, int npads) {
     for (int sl = 0; sl < KK_PADS && sl < npads; sl++) { float y = 200 + sl * 62; int here = pads[sl].source != 0, j = g_joined[sl];
         const char *what = pads[sl].source & 2 ? "PRO CONTROLLER" : (pads[sl].source & 8 ? "CLASSIC CONTROLLER" : (pads[sl].source & 16 ? "REMOTE + NUNCHUK" : (pads[sl].source & 4 ? "WII REMOTE (SIDEWAYS)" : (pads[sl].source & 1 ? "GAMEPAD" : "NOT CONNECTED"))));
         if (j) batch_rect(&g_b, 220, y - 8, 840, 50, PLAYER_COL[j - 1][0], PLAYER_COL[j - 1][1], PLAYER_COL[j - 1][2], 0.3f);
-        batch_text(&g_b, kinds[sl], 240, y, 22, here ? 1 : 0.5f, here ? 1 : 0.55f, here ? 1 : 0.65f, 1);
-        batch_text(&g_b, what, 560, y + 4, 14, 0.8f, 0.85f, 1, here ? 1 : 0.6f);
+        batch_text(&g_b, kinds[sl], 240, y + 2, 18, here ? 1 : 0.5f, here ? 1 : 0.55f, here ? 1 : 0.65f, 1);
+        batch_text(&g_b, what, 600, y + 5, 13, 0.8f, 0.85f, 1, here ? 1 : 0.6f);
         if (j) { char tag[16]; snprintf(tag, sizeof tag, "PLAYER %d", j); batch_text(&g_b, tag, 880, y, 22, PLAYER_COL[j - 1][0], PLAYER_COL[j - 1][1], PLAYER_COL[j - 1][2], 1); }
         else if (here) batch_text(&g_b, (int)(g_time * 2) & 1 ? "PRESS A" : "", 880, y, 22, 1, 1, 1, 1); }
     if (g_njoined >= 2) text_c("PRESS + TO START", 540, 26, 1, 0.9f, 0.4f, (int)(g_time * 2) & 1 ? 1.0f : 0.7f);
@@ -1296,11 +1296,12 @@ static void hud_track(void) {
         const char *nm = td->name; size_t len = strlen(nm);
         size_t cut = 0;    /* the space nearest the middle of the name, if any */
         for (size_t q = 0; q < len; q++) if (nm[q] == ' ' && (cut == 0 || labs((long)q - (long)len / 2) < labs((long)cut - (long)len / 2))) cut = q;
-        if (text_width(nm, 18) > w - 24 && cut > 0) { char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
-            float sz = fmaxf(text_width(l1, 18), text_width(l2, 18)) > w - 24 ? 14 : 18;
+        float fit = iw * 0.9f;   /* the bold font runs a little wider than measured */
+        if (text_width(nm, 18) > fit && cut > 0) { char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
+            float sz = fmaxf(text_width(l1, 18), text_width(l2, 18)) > fit ? 14 : 18;
             batch_text(&g_b, l1, x + 12, ty, sz, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, ty + 23, sz, 1, 1, 1, 1); }
-        else batch_text(&g_b, nm, x + 12, ty, text_width(nm, 18) > w - 24 ? 14 : 18, 1, 1, 1, 1);
-        snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : "%d LAPS", td->laps); batch_text(&g_b, buf, x + 12, ty + 55, text_width(buf, 14) > w - 24 ? 11 : 14, 0.8f, 0.9f, 1, 1);
+        else batch_text(&g_b, nm, x + 12, ty, text_width(nm, 18) > fit ? 14 : 18, 1, 1, 1, 1);
+        snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : "%d LAPS", td->laps); batch_text(&g_b, buf, x + 12, ty + 55, text_width(buf, 14) > fit ? 11 : 14, 0.8f, 0.9f, 1, 1);
         if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, ty + 80, 14, 1, 0.9f, 0.5f, 1); }
         if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, ty + 103, 14, 0.7f, 0.95f, 0.8f, 1); }
         if (td->bonus) batch_text(&g_b, "BONUS ROAD", x + 12, ty + 135, 14, 1, 0.85f, 0.3f, 1);
@@ -1771,6 +1772,10 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
     }
 }
 /* the HUD of one split-screen view, laid out on a virtual screen of vw x vh pixels */
+static const char *item_short(int item) {
+    switch (item) { case ITEM_MANNA: return "MANNA"; case ITEM_LOAVES: return "LOAVES"; case ITEM_SAMARITAN: return "SAMARITAN"; case ITEM_SHIELD: return "SHIELD";
+                    case ITEM_PARTING: return "PARTING"; case ITEM_JUBILEE: return "JUBILEE"; case ITEM_FIRE: return "FIRE"; case ITEM_WATER: return "WATER"; default: return ""; }
+}
 static void hud_split(int p, float vw, float vh) {
     Race *r = &g_race; int vk = human_kart(p); Kart *k = &r->k[vk]; char buf[64]; float sc = vw < 1000 ? 0.75f : 1.0f;
     int lap = k->lap < 1 ? 1 : (k->lap > g_track.laps ? g_track.laps : k->lap);
@@ -1785,9 +1790,9 @@ static void hud_split(int p, float vw, float vh) {
     /* the blessing slot, bottom left */
     { float bw = 120 * sc, bh = 44 * sc, bx = 16, by = vh - bh - 12;
       batch_rect(&g_b, bx, by, bw, bh, 0.05f, 0.1f, 0.25f, 0.7f); batch_rect(&g_b, bx + 2, by + 2, bw - 4, bh - 4, 0.15f, 0.3f, 0.6f, 0.7f);
-      if (g_proulette[p] > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_proulette[p])) % (ITEM_COUNT - 1); const char *nm = item_name(show);
-          float sz = 12 * sc; if (text_width(nm, sz) > bw - 8) sz = 9 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 0.9f, 0.95f, 1, 0.8f); }
-      else if (k->item) { const char *nm = item_name(k->item); float sz = 12 * sc; if (text_width(nm, sz) > bw - 8) sz = 9 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 1, 0.9f, 0.4f, 1); }
+      if (g_proulette[p] > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_proulette[p])) % (ITEM_COUNT - 1); const char *nm = item_short(show);
+          float sz = 13 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 0.9f, 0.95f, 1, 0.8f); }
+      else if (k->item) { const char *nm = item_short(k->item); float sz = 13 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 1, 0.9f, 0.4f, 1); }
       else batch_text(&g_b, "ZL: BLESS", bx + bw / 2 - text_width("ZL: BLESS", 11 * sc) / 2, by + bh / 2 - 5 * sc, 11 * sc, 0.7f, 0.8f, 1, 0.8f);
       if (g_track.ncoin) { batch_rect(&g_b, bx + bw + 10, by + bh - 16 * sc, 12 * sc, 12 * sc, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, bx + bw + 26 * sc, by + bh - 18 * sc, 14 * sc, 1, 0.9f, 0.5f, 1); } }
     if (k->drifting) { float c = clampf(k->drift_charge / 1.6f, 0, 1), w = 140 * sc; batch_rect(&g_b, vw - 16 - w, vh - 24, w, 10, 0.1f, 0.1f, 0.1f, 0.6f);
