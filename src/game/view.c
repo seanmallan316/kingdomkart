@@ -93,12 +93,13 @@ static View *cv = &g_view[0];                   /* the view being updated or dra
 #define g_orbit (cv->orbit)
 static const float PLAYER_COL[MAX_HUMANS][3] = {{1.0f, 0.85f, 0.3f}, {0.35f, 0.65f, 1.0f}, {1.0f, 0.4f, 0.35f}, {0.4f, 0.9f, 0.45f}};   /* P1 gold, P2 blue, P3 red, P4 green */
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
+static Texture *tx_bearer; static float g_bearer_aspect = 0.67f; static Mesh *m_bearer;   /* Goliath's shield-bearer (char_shieldbearer.png, or a drawn one) */
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
 static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
 static Texture *tx_finale; static Mesh *m_finale;
 static Texture *tx_title, *tx_title_bg; static Mesh *m_title, *m_title_bg, *m_logo_small; static float g_title_h;      /* title_art.png: the logo on the title screen, when Sean has made it */
 static Texture *tx_card[8]; static Mesh *m_card[8];   /* card_<prefix>.png: the road pictures on the road-select cards */
-static Texture *tx_item[ITEM_COUNT];        /* item pictures for the HUD slot, when Sean's files exist */
+static Texture *tx_item[ITEM_COUNT]; static int g_item_sq[ITEM_COUNT];   /* item pictures for the HUD slot: Sean's files, or drawn ones (square) */
 /* the drivers' voices: content/sfx/voice_<name>_<event>.wav for one character, or voice_<event>.wav shared by all; silent when missing */
 enum { VO_START, VO_BOOST, VO_TRICK, VO_WIN, VO_OUCH, VO_BLESS, VO_FIRE, VO_COUNT };   /* start: at GO; boost: rocket start / super turbo / boost pad; fire: the Chariot of Fire */
 static const char *VO_NAMES[VO_COUNT] = {"start", "boost", "trick", "win", "ouch", "bless", "fire"};
@@ -751,6 +752,52 @@ static void px_rubble(int x, int y, uint32_t *o) {       /* a heap of fallen sto
     for (int b = 0; b < 6; b++) { static const int bx[6] = {14, 32, 50, 22, 42, 32}, by[6] = {80, 82, 80, 64, 66, 48}, br[6] = {13, 15, 13, 12, 12, 11};
         float dx = (float)(x - bx[b]) / br[b], dy = (float)(y - by[b]) / (br[b] * 0.8f); if (dx * dx + dy * dy < 1.0f) *o = stone(x, y, 190 - b * 6, 168 - b * 5, 125 - b * 4); }
 }
+/* drawn blessing icons, 64 x 64, until Sean's arrive */
+static int g_icon_kind;
+static float dist2(int x, int y, float cx, float cy, float rx, float ry) { float dx = (x - cx) / rx, dy = (y - cy) / ry; return dx * dx + dy * dy; }
+static void px_icon(int x, int y, uint32_t *o) {
+    *o = 0; float n = smooth_noise(x / 5.0f, y / 5.0f);
+    switch (g_icon_kind) {
+    case ITEM_MANNA:       /* a round loaf under rays of light */
+        for (int r2 = 0; r2 < 7; r2++) { float a = -1.3f + r2 * 0.43f; float dx = x - 32, dy = y - 46; float along = dx * sinf(a) - dy * cosf(a), across = dx * cosf(a) + dy * sinf(a); if (along > 10 && along < 34 && fabsf(across) < 1.5f) *o = rgba(255, 240, 150, 255); }
+        if (dist2(x, y, 32, 46, 22, 13) < 1) *o = rgba(205 + (int)(n * 40), 150 + (int)(n * 40), 80, 255);
+        if (dist2(x, y, 32, 44, 20, 9) < 1 && y < 44) *o = rgba(235 + (int)(n * 20), 190 + (int)(n * 30), 110, 255); break;
+    case ITEM_LOAVES:      /* a basket with loaves and two fish */
+        if (y > 36 && y < 58 && abs(x - 32) < 24 - (y - 36) / 2) *o = rgba(150 + (int)(n * 40) + (((x + y) / 4) & 1) * 20, 100 + (int)(n * 30), 45, 255);
+        for (int l = 0; l < 5; l++) if (dist2(x, y, 14 + l * 9, 34, 6, 5) < 1) *o = rgba(225, 175, 95, 255);
+        for (int f = 0; f < 2; f++) { float cx = 20 + f * 24, cy = 16; if (dist2(x, y, cx, cy, 10, 4) < 1 || (x > cx + 8 && x < cx + 14 && abs(y - (int)cy) < (x - (int)cx - 7))) *o = rgba(90, 150, 220, 255); if (dist2(x, y, cx - 5, cy - 1, 1.2f, 1.2f) < 1) *o = rgba(20, 20, 40, 255); } break;
+    case ITEM_SAMARITAN:   /* a flask of oil and a bandage */
+        if (inrect(x, y, 6, 30, 58, 42) && ((x / 6) & 1)) *o = rgba(245, 240, 230, 255); else if (inrect(x, y, 6, 30, 58, 42)) *o = rgba(225, 220, 205, 255);
+        if (dist2(x, y, 32, 44, 13, 15) < 1 || inrect(x, y, 27, 14, 37, 32)) *o = rgba(230 + (int)(n * 20), 150, 40, 255);
+        if (inrect(x, y, 25, 10, 39, 16)) *o = rgba(120, 80, 40, 255); break;
+    case ITEM_SHIELD:      /* a round shield with a gold cross */
+        if (dist2(x, y, 32, 32, 27, 27) < 1) *o = rgba(120 + (int)(n * 30), 125 + (int)(n * 30), 140, 255);
+        if (dist2(x, y, 32, 32, 27, 27) < 1 && dist2(x, y, 32, 32, 23, 23) > 1) *o = rgba(200, 160, 60, 255);
+        if (inrect(x, y, 28, 12, 36, 52) || inrect(x, y, 16, 22, 48, 30)) *o = rgba(240, 200, 70, 255); break;
+    case ITEM_PARTING:     /* two walls of water with the dry path between */
+        if ((x < 22 || x > 42) && y > 8 + (int)(n * 6)) *o = rgba(40 + (int)(n * 40), 120 + (int)(n * 60), 210 + (int)(n * 40), 255);
+        if ((x < 22 || x > 42) && y > 8 + (int)(n * 6) && y < 16 + (int)(n * 6)) *o = rgba(230, 245, 255, 255);
+        if (x >= 22 && x <= 42 && y > 30) *o = rgba(200 + (int)(n * 30), 170 + (int)(n * 30), 110, 255); break;
+    case ITEM_JUBILEE:     /* a ram's horn */
+        { float t = (x - 8) / 48.0f; float cy = 46 - t * t * 30; float w = 3 + t * 9; if (x >= 8 && x < 58 && fabsf(y - cy) < w) *o = rgba(190 + (int)(n * 40), 150 + (int)(n * 30), 90, 255); } break;
+    case ITEM_FIRE:        /* a chariot wheel in flames */
+        if (dist2(x, y, 32, 40, 20, 20) < 1 && dist2(x, y, 32, 40, 15, 15) > 1) *o = rgba(80, 55, 30, 255);
+        for (int sp = 0; sp < 4; sp++) { float a = sp * 0.785f; float dx = x - 32, dy = y - 40; float across = dx * cosf(a) + dy * sinf(a); float along = -dx * sinf(a) + dy * cosf(a); if (fabsf(across) < 1.6f && fabsf(along) < 18) *o = rgba(90, 60, 35, 255); }
+        if (dist2(x, y, 32, 40, 4, 4) < 1) *o = rgba(200, 160, 60, 255);
+        for (int f = 0; f < 5; f++) { float cx = 12 + f * 10, h = 14 + (f % 2) * 8 + n * 6; if (y < 26 && y > 26 - h && fabsf(x - cx) < (26 - y) * 0.35f + 1) *o = y < 26 - h * 0.6f ? rgba(255, 220, 80, 255) : rgba(255, 120 + (int)(n * 60), 30, 255); } break;
+    case ITEM_WATER:       /* a jar pouring living water */
+        if (dist2(x, y, 24, 30, 12, 16) < 1 || inrect(x, y, 16, 10, 32, 18)) *o = rgba(180 + (int)(n * 30), 120 + (int)(n * 30), 70, 255);
+        if (inrect(x, y, 14, 8, 34, 12)) *o = rgba(140, 90, 50, 255);
+        { float t = (y - 14) / 46.0f; float cx = 36 + t * t * 14; if (y > 14 && fabsf(x - cx) < 3 + t * 4) *o = rgba(120 + (int)(n * 60), 200 + (int)(n * 40), 255, 255); }
+        for (int d = 0; d < 3; d++) if (dist2(x, y, 44 + d * 6, 52 + (d % 2) * 6, 2.5f, 3.5f) < 1) *o = rgba(200, 240, 255, 255); break;
+    }
+}
+static void px_shieldbearer(int x, int y, uint32_t *o) {   /* a Philistine soldier behind a tall bronze shield */
+    px_person(x, y, o, 150, 40, 40, 1);
+    float dx = (x - 30) / 20.0f, dy = (y - 52) / 34.0f; if (dx * dx + dy * dy < 1.0f) { float n = smooth_noise(x / 4.0f, y / 4.0f); *o = rgba(190 + (int)(n * 40), 140 + (int)(n * 30), 50, 255); }
+    if (dx * dx + dy * dy < 1.0f && dx * dx + dy * dy > 0.8f) *o = rgba(120, 80, 30, 255);
+    if (dx * dx + dy * dy < 0.05f) *o = rgba(235, 200, 90, 255);
+}
 static void px_desert(int x, int y, uint32_t *o) { float n = smooth_noise(x / 12.0f, y / 12.0f) * 0.6f + smooth_noise(x / 4.0f, y / 4.0f) * 0.4f; int d = smooth_noise(x / 6.0f + 30, y / 6.0f) > 0.75f; *o = d ? rgba(150, 140, 95, 255) : rgba(205 + (int)(n * 30), 180 + (int)(n * 30), 125 + (int)(n * 25), 255); }
 static Texture *placeholder_sprite(const char *id, float *aspect) {
     *aspect = (float)PW / (float)PH;
@@ -925,10 +972,12 @@ int game_init(int status) {
         tx_tread = make_tex(16, 64, 1, 0, px_tread);
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_loaves", "icon_samaritan", "icon_shield", "icon_parting", "shofar", "icon_fire", "icon_water"};
-        for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
+        for (int i = 1; i < ITEM_COUNT; i++) { int w = 1, h = 1; tx_item[i] = asset_texture(in[i], 0, &w, &h); g_item_sq[i] = w == h;
+            if (!tx_item[i]) { g_icon_kind = i; tx_item[i] = make_tex(64, 64, 0, 0, px_icon); g_item_sq[i] = 1; } }
         for (int c = 0; c < NCHARS; c++) for (int e = 0; e < VO_COUNT; e++) { char vn[64]; snprintf(vn, sizeof vn, "voice_%s_%s", pn[c] + 9, VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn);
             if (g_voice[c][e] < 0) { snprintf(vn, sizeof vn, "voice_%s", VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn); } }
-        { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192); }
+        { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192);
+          w = 2; h = 3; tx_bearer = asset_texture("char_shieldbearer", 0, &w, &h); if (tx_bearer) g_bearer_aspect = (float)w / (float)h; else { tx_bearer = make_tex(PW, PH, 0, 0, px_shieldbearer); g_bearer_aspect = (float)PW / (float)PH; } m_bearer = gfx_mesh_dynamic(6); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
         for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
         if (tx_title) { int w = 1024, h = 437; gfx_texture_free(tx_title); tx_title = asset_texture("title_art", 0, &w, &h); float lw = 820, lh = lw * h / (float)w;
@@ -1074,6 +1123,21 @@ static void hud_gamepad(void) {     /* the GamePad shows the big map and the sta
     { char tb[32]; fmt_time(tb, sizeof tb, r->k[r->player].total_time); snprintf(buf, sizeof buf, "TIME %s", tb); batch_text(&g_b, buf, 800, 600, 22, 1, 1, 1, 1); }
     if (g_nplayers <= 1 && g_msg_t > 0) text_c(g_msg, 660, 30, 1, 0.95f, 0.4f, 1);
 }
+/* a verse for each road, shown during the countdown (King James text) */
+static const char *road_verse(const char *prefix, const char **ref) {
+    static const struct { const char *p, *v, *r; } V[] = {
+        {"beth", "FOR UNTO YOU IS BORN THIS DAY IN THE CITY OF DAVID A SAVIOUR", "LUKE 2:11"},
+        {"gal", "FOLLOW ME, AND I WILL MAKE YOU FISHERS OF MEN", "MATTHEW 4:19"},
+        {"jeru", "BLESSED IS HE THAT COMETH IN THE NAME OF THE LORD", "MATTHEW 21:9"},
+        {"tomb", "HE IS NOT HERE: FOR HE IS RISEN, AS HE SAID", "MATTHEW 28:6"},
+        {"heaven", "BEHOLD, I MAKE ALL THINGS NEW", "REVELATION 21:5"},
+        {"eden", "AND THE LORD GOD PLANTED A GARDEN EASTWARD IN EDEN", "GENESIS 2:8"},
+        {"jericho", "SHOUT, FOR THE LORD HATH GIVEN YOU THE CITY", "JOSHUA 6:16"},
+        {"elah", "THE BATTLE IS THE LORD'S", "1 SAMUEL 17:47"},
+        {"test", "LET US RUN WITH PATIENCE THE RACE THAT IS SET BEFORE US", "HEBREWS 12:1"} };
+    for (unsigned i = 0; i < sizeof V / sizeof V[0]; i++) if (!strcmp(V[i].p, prefix)) { *ref = V[i].r; return V[i].v; }
+    *ref = "HEBREWS 12:1"; return "LET US RUN WITH PATIENCE THE RACE THAT IS SET BEFORE US";
+}
 static void hud_race(const Pad *pad) {
     Race *r = &g_race; Kart *k = &r->k[r->player]; char buf[64];
     int lap = k->lap < 1 ? 1 : (k->lap > g_track.laps ? g_track.laps : k->lap);
@@ -1103,6 +1167,8 @@ static void hud_race(const Pad *pad) {
         batch_rect(&g_b, 43, 143, 144, 54, 0.15f, 0.3f, 0.6f, 0.7f);
         if (g_roulette > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_roulette)) % (ITEM_COUNT - 1); const char *nm = item_name(show);
             float sz = text_width(nm, 16) > 136 ? 12 : 16; batch_text(&g_b, nm, 115 - text_width(nm, sz) / 2, 160, sz, 0.9f, 0.95f, 1, 0.8f); }
+        else if (k->item && tx_item[k->item] && g_item_sq[k->item]) { const char *nm = item_name(k->item); float sz = text_width(nm, 13) > 84 ? 10 : 13;   /* the icon sits on the left, the name beside it */
+            batch_text(&g_b, nm, 140 - text_width(nm, sz) / 2, 156, sz, 1, 0.9f, 0.4f, 1); batch_text(&g_b, item_verse(k->item), 140 - text_width(item_verse(k->item), 10) / 2, 178, 10, 0.8f, 0.85f, 1, 1); }
         else if (k->item && tx_item[k->item]) batch_text(&g_b, item_name(k->item), 115 - text_width(item_name(k->item), 12) / 2, 203, 12, 1, 0.9f, 0.4f, 1);
         else if (k->item) { float sz = text_width(item_name(k->item), 16) > 136 ? 12 : 16; batch_text(&g_b, item_name(k->item), 115 - text_width(item_name(k->item), sz) / 2, 152, sz, 1, 0.9f, 0.4f, 1);
             batch_text(&g_b, item_verse(k->item), 115 - text_width(item_verse(k->item), 11) / 2, 178, 11, 0.8f, 0.85f, 1, 1); }
@@ -1118,6 +1184,7 @@ static void hud_race(const Pad *pad) {
           batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - sz / 2, mz - (q->z - map_z0) * map_scale - sz / 2, sz, sz, c->r, c->g, c->b, 1);
           if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - 3, mz - (q->z - map_z0) * map_scale - 3, 6, 6, 1, 1, 1, 1); } }
     if (r->state == RACE_COUNTDOWN) { text_c(g_track.name, 180, 34, 1, 1, 1, 1); int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); }
+        if (!r->jericho) { const char *ref, *v = road_verse(g_def->prefix, &ref); float a = clampf(r->cd * 1.2f, 0, 1); text_c(v, 404, text_width(v, 20) > 1100 ? 16 : 20, 1, 1, 1, a); text_c(ref, 434, 15, 1, 0.9f, 0.5f, a); }
         if (r->jericho) { text_c("SEVEN TIMES ROUND THE CITY. A SHOFAR EVERY LAP: ZL BLOWS IT.", 400, 18, 1, 1, 1, 1); text_c("SAVE THEM FOR THE GREAT SHOUT ON THE SEVENTH LAP!", 426, 18, 1, 0.9f, 0.5f, 1); } }
     if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
     if (k->wrongway_t > WRONGWAY_DELAY && ((int)(g_time * 4) & 1)) text_c("WRONG WAY", 330, 56, 1, 0.3f, 0.2f, 1);
@@ -1415,7 +1482,7 @@ static void hud_battle(void) {
     batch_text(&g_b, "GOLIATH", 1240 - text_width("GOLIATH", 22), 30, 22, 1, 1, 1, 1);
     for (int i = 0; i < BATTLE_WIN_HITS; i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < BATTLE_WIN_HITS - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
     { char tb[32]; fmt_time(tb, sizeof tb, RACE_TIME_LIMIT - b->race.race_t > 0 ? RACE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
-    if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, FACE HIM, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); }
+    if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); text_c("HIS SHIELD-BEARER BLOCKS THE FRONT: HIT HIM FROM THE SIDE", 204, 16, 1, 0.9f, 0.5f, 1); }
     if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
     if (b->quote >= 0 && b->quote < BATTLE_NQUOTES) {      /* the words of 1 Samuel 17, wrapped into a panel at the bottom */
         const BattleQuote *q = &BATTLE_QUOTES[b->quote]; float y0 = 560;
@@ -1434,6 +1501,7 @@ static void hud_battle_results(void) {
     text_c(b->won ? "GIANT SLAYER!" : "GOLIATH WINS", 175, 44, 1, 0.85f, 0.3f, 1);
     snprintf(buf, sizeof buf, "HITS ON GOLIATH: %d OF %d", b->hits_on_goliath, BATTLE_WIN_HITS); text_c(buf, 260, 24, 1, 1, 1, 1);
     snprintf(buf, sizeof buf, "HITS ON DAVID: %d OF %d", b->hits_on_david, BATTLE_LIVES); text_c(buf, 300, 24, 1, 1, 1, 1);
+    if (b->blocks) { snprintf(buf, sizeof buf, "STONES THE SHIELD-BEARER CAUGHT: %d", b->blocks); text_c(buf, 370, 18, 0.8f, 0.9f, 1, 1); }
     { char tb[32]; fmt_time(tb, sizeof tb, b->race.race_t); snprintf(buf, sizeof buf, "TIME %s", tb); text_c(buf, 340, 24, 1, 1, 1, 1); }
     if (b->won) text_c("THE BATTLE IS THE LORD'S", 400, 20, 0.9f, 0.95f, 1, 1);
     text_c("A: FIGHT AGAIN   B: MENU", 500, 20, 0.9f, 0.95f, 1, 1);
@@ -1876,6 +1944,10 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                 else batch_quad(&g_b, c, v3(ax.x * hw, 0, ax.z * hw), v3(fx * lean * hgt * 0.5f, hgt * 0.5f, fz * lean * hgt * 0.5f), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
                 gfx_mesh_update(m_goliath, g_b.v, g_b.n); gfx_bind(tx_goliath);
                 float tint = b->gstate == GOL_STUNNED ? 0.5f : 1.0f; gfx_draw(m_goliath, &id, sr, sg * tint, sb * tint, 1);
+                if (tx_bearer && b->gstate != GOL_DOWN) {   /* the shield-bearer walks before him */
+                    float bx = b->gx + sinf(b->sb_yaw) * 3.2f, bz = b->gz + cosf(b->sb_yaw) * 3.2f; TrackHit bh; track_locate(&g_track, bx, bz, -1, &bh); float bhg = 4.2f, bhw = bhg * 0.5f * g_bearer_aspect;
+                    batch_clear(&g_b); batch_quad(&g_b, v3(bx, bh.height + bhg * 0.5f, bz), v3(ax.x * bhw, 0, ax.z * bhw), v3(0, bhg * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
+                    gfx_mesh_update(m_bearer, g_b.v, g_b.n); gfx_bind(tx_bearer); gfx_draw(m_bearer, &id, sr, sg, sb, 1); }
                 gfx_state(ST_SOLID); gfx_bind(NULL); }
         }
         /* shields */
@@ -1910,12 +1982,13 @@ static void hud_split(int p, float vw, float vh) {
           batch_text(&g_b, buf, bx + bw / 2 - text_width(buf, 12 * sc) / 2, by + bh / 2 - 6 * sc, 12 * sc, 1, 0.9f, 0.4f, 1); }
       else if (g_proulette[p] > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_proulette[p])) % (ITEM_COUNT - 1); const char *nm = item_short(show);
           float sz = 13 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 0.9f, 0.95f, 1, 0.8f); }
-      else if (k->item) { const char *nm = item_short(k->item); float sz = 13 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 1, 0.9f, 0.4f, 1); }
+      else if (k->item) { const char *nm = item_short(k->item); float sz = 13 * sc, off = tx_item[k->item] && g_item_sq[k->item] ? 22 * sc : 0; batch_text(&g_b, nm, bx + off + (bw - off) / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 1, 0.9f, 0.4f, 1); }
       else batch_text(&g_b, "ZL: BLESS", bx + bw / 2 - text_width("ZL: BLESS", 11 * sc) / 2, by + bh / 2 - 5 * sc, 11 * sc, 0.7f, 0.8f, 1, 0.8f);
       if (g_track.ncoin) { batch_rect(&g_b, bx + bw + 10, by + bh - 16 * sc, 12 * sc, 12 * sc, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, bx + bw + 26 * sc, by + bh - 18 * sc, 14 * sc, 1, 0.9f, 0.5f, 1); } }
     if (k->drifting) { float c = clampf(k->drift_charge / 1.6f, 0, 1), w = 140 * sc; batch_rect(&g_b, vw - 16 - w, vh - 24, w, 10, 0.1f, 0.1f, 0.1f, 0.6f);
         batch_rect(&g_b, vw - 16 - w, vh - 24, w * c, 10, c >= 1 ? 1.0f : 0.3f, c >= 0.5f ? 0.9f : 0.4f, 0.2f, 1); }
-    if (r->state == RACE_COUNTDOWN) { int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); batch_text(&g_b, buf, vw / 2 - text_width(buf, 80 * sc) / 2, vh * 0.3f, 80 * sc, 1, 0.9f, 0.3f, 1); } }
+    if (r->state == RACE_COUNTDOWN) { int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); batch_text(&g_b, buf, vw / 2 - text_width(buf, 80 * sc) / 2, vh * 0.3f, 80 * sc, 1, 0.9f, 0.3f, 1); }
+        if (p == 0 && !r->jericho) { const char *ref, *v = road_verse(g_def->prefix, &ref); float fs = 12 * sc; if (text_width(v, fs) > vw - 30) fs = 9 * sc; batch_text(&g_b, v, vw / 2 - text_width(v, fs) / 2, vh * 0.62f, fs, 1, 1, 1, clampf(r->cd * 1.2f, 0, 1)); } }
     if (g_pmsg_t[p] > 0) { float sz = 40 * sc; if (text_width(g_pmsg[p], sz) > vw - 40) sz = 26 * sc; batch_text(&g_b, g_pmsg[p], vw / 2 - text_width(g_pmsg[p], sz) / 2, vh * 0.32f, sz, 1, 0.95f, 0.4f, 1);
         if (g_pmsg2[p][0]) batch_text(&g_b, g_pmsg2[p], vw / 2 - text_width(g_pmsg2[p], 16 * sc) / 2, vh * 0.32f + sz + 6, 16 * sc, 0.9f, 0.95f, 1, 1); }
     if (k->wrongway_t > WRONGWAY_DELAY && ((int)(g_time * 4) & 1)) batch_text(&g_b, "WRONG WAY", vw / 2 - text_width("WRONG WAY", 36 * sc) / 2, vh * 0.5f, 36 * sc, 1, 0.3f, 0.2f, 1);
@@ -2124,6 +2197,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             for (int e = 0; e < g_battle.nev; e++) switch (g_battle.ev[e]) {
                 case BEV_STONE_PICKED: sfx_play(SFX_COIN, 0.8f, 0); break;
                 case BEV_STONE_THROWN: sfx_play(SFX_THROW, 1, 0); break;
+                case BEV_SHIELD: snprintf(g_msg, sizeof g_msg, "THE SHIELD-BEARER!"); snprintf(g_msg2, sizeof g_msg2, "HIT HIM FROM THE SIDE - 1 SAMUEL 17:41"); g_msg_t = 1.2f; sfx_play(SFX_BLOCK, 1, 0); break;
                 case BEV_GOLIATH_HIT: snprintf(g_msg, sizeof g_msg, "HIT!"); g_msg_t = 0.8f; sfx_play(SFX_HIT, 1, 0); add_dust(v3(g_battle.gx, 2, g_battle.gz), 3, 3); break;
                 case BEV_DAVID_HIT: snprintf(g_msg, sizeof g_msg, "OUCH!"); g_msg_t = 0.8f; sfx_play(SFX_HIT, 1, 0); platform_rumble(1.0f, 0.45f); break;
                 case BEV_SPEAR: sfx_play(SFX_THROW, 0.7f, 0); break;
@@ -2275,7 +2349,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 hud_split(p, vw, vh);
                 gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
                 int it = r->k[human_kart(p)].item;
-                if (it > 0 && it < ITEM_COUNT && tx_item[it]) { float sc = vw < 1000 ? 0.75f : 1.0f; batch_clear(&g_b); batch_rect_uv(&g_b, 20, vh - 44 * sc - 10, 112 * sc, 40 * sc, 0, 0, 1, 1, 1, 1, 1, 1);
+                if (it > 0 && it < ITEM_COUNT && tx_item[it] && g_proulette[p] <= 0) { float sc = vw < 1000 ? 0.75f : 1.0f; batch_clear(&g_b);
+                    if (g_item_sq[it]) batch_rect_uv(&g_b, 18, vh - 44 * sc - 12, 44 * sc, 44 * sc, 0, 0, 1, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, 20, vh - 44 * sc - 10, 112 * sc, 40 * sc, 0, 0, 1, 1, 1, 1, 1, 1);
                     gfx_mesh_update(m_kartpic, g_b.v, g_b.n); gfx_bind(tx_item[it]); gfx_draw(m_kartpic, &id, 1, 1, 1, 1); } }
             if (g_nplayers == 3) { gfx_viewport(drc, 0.5f, 0.5f, 0.5f, 0.5f); gfx_camera_2d_virtual(640, 360); gfx_state(ST_HUD); batch_clear(&g_b); hud_quarter_map(); gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1); }
             gfx_viewport(drc, 0, 0, 1, 1); gfx_camera_2d(); gfx_state(ST_HUD); batch_clear(&g_b);
@@ -2339,8 +2414,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (two) { static Mesh *m2 = NULL; if (!m2) m2 = gfx_mesh_dynamic(6); a = g_kartback_aspect[g_player_char]; ph = 220; pw = ph * a; if (pw > 330) { pw = 330; ph = pw / a; }
                     batch_clear(&g_b); batch_rect_uv(&g_b, 810 - pw / 2, 67 + (220 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m2, g_b.v, g_b.n); gfx_bind(tx_kartback[g_player_char]); gfx_draw(m2, &id, 1, 1, 1, 1); } } }
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
-            if (it > 0 && it < ITEM_COUNT && tx_item[it]) { static Mesh *im = NULL; if (!im) im = gfx_mesh_dynamic(6);
-                batch_clear(&g_b); batch_rect_uv(&g_b, 48, 146, 134, 48, 0, 0, 1, 1, 1, 1, 1, 1);
+            if (it > 0 && it < ITEM_COUNT && tx_item[it] && !(g_roulette > 0)) { static Mesh *im = NULL; if (!im) im = gfx_mesh_dynamic(6);
+                batch_clear(&g_b); if (g_item_sq[it]) batch_rect_uv(&g_b, 46, 146, 48, 48, 0, 0, 1, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, 48, 146, 134, 48, 0, 0, 1, 1, 1, 1, 1, 1);
                 gfx_mesh_update(im, g_b.v, g_b.n); gfx_bind(tx_item[it]); gfx_draw(im, &id, 1, 1, 1, 1); } }
         gfx_view_end(drc);
     }

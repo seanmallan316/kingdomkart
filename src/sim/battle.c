@@ -23,7 +23,7 @@ void battle_init(Battle *b, const Track *arena, int difficulty) {
     b->race.cd = 3.5f;
     /* Goliath starts at the far side of the arena */
     const TrackSample *s = &arena->s[arena->n / 2];
-    b->gx = s->x; b->gz = s->z; b->gyaw = atan2f(-s->tx, -s->tz); b->gstate = GOL_STALK; b->gtimer = 2.0f;
+    b->gx = s->x; b->gz = s->z; b->gyaw = atan2f(-s->tx, -s->tz); b->sb_yaw = b->gyaw; b->gstate = GOL_STALK; b->gtimer = 2.0f;
     /* stones lie along the road, spaced around the arena */
     for (int i = 0; i < BATTLE_STONES; i++) { int idx = (arena->n * (i + 1)) / (BATTLE_STONES + 1); float lat = (i & 1) ? arena->s[idx].width * 0.3f : -arena->s[idx].width * 0.3f;
         b->stone_x[i] = arena->s[idx].x + arena->s[idx].nx * lat; b->stone_z[i] = arena->s[idx].z + arena->s[idx].nz * lat; }
@@ -58,7 +58,12 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
             float gd = sqrtf((b->gx - k->x) * (b->gx - k->x) + (b->gz - k->z) * (b->gz - k->z));
             if (b->stones_held > 0 && gd < 20.0f && b->gstate == GOL_CHARGE) { in.steer = err > 0 ? -1.0f : 1.0f; in.gas = 1; in.brake = 0; }   /* swerve out of a charge */
             else if (b->stones_held > 0 && gd < 14.0f) { float away = wrap_pi(atan2f(k->x - b->gx, k->z - b->gz) - k->yaw); in.steer = away > 0 ? 1.0f : -1.0f; in.gas = 1; in.brake = 0; }   /* keep slinging distance */
-            in.item = b->stones_held > 0 && fabsf(wrap_pi(atan2f(b->gx - k->x, b->gz - k->z) - k->yaw)) < 1.1f && gd < 40.0f && gd > 8.0f;
+            float head_on = -((b->gx - k->x) * sinf(b->sb_yaw) + (b->gz - k->z) * cosf(b->sb_yaw)) / (gd + 1e-3f);   /* 1 = David is straight behind the shield-bearer */
+            int open_side = head_on < 0.5f || b->gstate == GOL_CHARGE || b->gstate == GOL_STUNNED;
+            if (b->stones_held > 0 && !open_side && gd < 30.0f && gd > 8.0f) {   /* the shield-bearer is in the way: swing round to Goliath's side (he turns slower than a kart) */
+                float side = (k->x - b->gx) * cosf(b->sb_yaw) - (k->z - b->gz) * sinf(b->sb_yaw) >= 0 ? 1.0f : -1.0f;
+                float want = atan2f(b->gx - k->x, b->gz - k->z) + side * 1.2f; float e2 = wrap_pi(want - k->yaw); in.steer = e2 > 0 ? fminf(e2 * 2.5f, 1.0f) : fmaxf(e2 * 2.5f, -1.0f); in.gas = 1; in.brake = 0; }
+            in.item = b->stones_held > 0 && fabsf(wrap_pi(atan2f(b->gx - k->x, b->gz - k->z) - k->yaw)) < 1.1f && gd < 40.0f && gd > 8.0f && open_side;
             /* dodge a spear coming in */
             for (int i = 0; i < BATTLE_SPEARS; i++) { const Missile *m = &b->spear[i]; if (!m->alive) continue; float sx = k->x - m->x, sz = k->z - m->z, sd = sqrtf(sx * sx + sz * sz) + 1e-3f;
                 float closing = (sx * m->vx + sz * m->vz) / sd; if (closing > 10.0f && sd < 18.0f) { float side = m->vx * sz - m->vz * sx; in.steer = side > 0 ? -1.0f : 1.0f; in.gas = 1; } } }
@@ -119,6 +124,7 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
         case GOL_DOWN: b->gspeed = 0; break;
     }
     /* his footsteps: the ground shakes with every stride, faster when he charges */
+    b->sb_yaw += wrap_pi(b->gyaw - b->sb_yaw) * fminf(1.0f, (r->difficulty == DIFF_HARD ? 1.6f : 1.0f) * dt);   /* the shield-bearer keeps up with Goliath only slowly */
     if (b->gspeed > 0) { b->step_t -= dt * (b->gstate == GOL_CHARGE ? 3.0f : 1.0f); if (b->step_t <= 0) { b->step_t = 0.9f; bev(b, BEV_STEP); } }
     /* Goliath walks, kept inside the arena walls */
     b->gx += sinf(b->gyaw) * b->gspeed * dt; b->gz += cosf(b->gyaw) * b->gspeed * dt;
@@ -134,6 +140,10 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *m = &b->stone[i]; if (!m->alive) continue;
         m->x += m->vx * dt; m->z += m->vz * dt; m->life -= dt; if (m->life <= 0) m->alive = 0;
         float sx = m->x - b->gx, sz = m->z - b->gz;
+        if (sx * sx + sz * sz < 3.4f * 3.4f && b->gstate != GOL_DOWN && b->gstate != GOL_STUNNED && b->gstate != GOL_CHARGE) {   /* the shield-bearer walks before him: a stone from straight ahead is caught */
+            float vl = sqrtf(m->vx * m->vx + m->vz * m->vz) + 1e-3f; float head_on = -(m->vx / vl * sinf(b->sb_yaw) + m->vz / vl * cosf(b->sb_yaw));
+            float cone = r->difficulty == DIFF_EASY ? 0.85f : (r->difficulty == DIFF_HARD ? 0.55f : 0.7f);
+            if (head_on > cone) { m->alive = 0; b->blocks++; bev(b, BEV_SHIELD); continue; } }
         if (sx * sx + sz * sz < 2.6f * 2.6f && b->gstate != GOL_DOWN) { m->alive = 0; b->hits_on_goliath++; b->gstate = GOL_STUNNED; b->gstun = r->difficulty == DIFF_EASY ? 1.8f : (r->difficulty == DIFF_HARD ? 0.8f : 1.3f); bev(b, BEV_GOLIATH_HIT);
             if (b->hits_on_goliath >= BATTLE_WIN_HITS) { b->gstate = GOL_DOWN; b->over = 1; b->won = 1; r->state = RACE_FINISHED; k->finished = 1; k->place = 1; bev(b, BEV_WIN); b->quotes_said &= ~(1 << 5); say(b, 5); b->quote_t = 30.0f; } }
     }

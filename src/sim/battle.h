@@ -10,7 +10,7 @@
 #define BATTLE_LIVES 3
 
 enum { GOL_STALK, GOL_WINDUP, GOL_CHARGE, GOL_THROW, GOL_STUNNED, GOL_DOWN };
-enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE, BEV_STEP, BEV_QUOTE };
+enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE, BEV_STEP, BEV_QUOTE, BEV_SHIELD };   /* SHIELD: the shield-bearer caught a stone */
 /* words from 1 Samuel 17 (King James Version), spoken during the fight */
 typedef struct { const char *who; const char *line; const char *ref; } BattleQuote;
 extern const BattleQuote BATTLE_QUOTES[];
@@ -36,6 +36,8 @@ typedef struct {
     float roar_t, step_t;
     int quote; float quote_t;        /* the quote on screen (-1 none) and how long it has left */
     int quotes_said;                 /* bit per quote */
+    int blocks;                      /* stones the shield-bearer caught (1 Samuel 17:41: he walks before Goliath; hit him from the side or behind) */
+    float sb_yaw;                    /* which way the shield-bearer stands from Goliath: he follows Goliath's turn, but slowly, so a quick kart can get round him */
 } Battle;
 
 void battle_init(Battle *b, const Track *arena, int difficulty);
