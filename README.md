@@ -64,7 +64,7 @@ whenever one exists and draws its own placeholder otherwise.
 
 ## Music
 Soundtrack files live in `assets/music/` named by what they are for (`music_menu`, `music_select`, `music_beth`, `music_gal`,
-`music_jeru`, `music_tomb`, `music_heaven`, `music_eden`, `music_elah`, `music_results`, `music_lose`, `music_trophy`, `music_finallap`,
+`music_jeru`, `music_tomb`, `music_heaven`, `music_eden`, `music_jericho`, `music_elah`, `music_results`, `music_lose`, `music_trophy`, `music_finallap`,
 `music_credits`), in any audio format.
 `python3 tools/prep_music.py` trims silence, evens the loudness and writes 32 kHz MP3s into `content/music/`, which
 the game streams and loops (with a crossfade from the end back to the start). A road without its own file borrows
