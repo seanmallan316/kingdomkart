@@ -1443,7 +1443,7 @@ static void hud_track(void) {
         if (!open) {
             batch_rect(&g_b, x + 12, y + 12, iw, iw, 0.2f, 0.22f, 0.3f, 1);
             batch_text(&g_b, "?", x + 12 + iw / 2 - text_width("?", 90) / 2, y + 12 + iw / 2 - 45, 90, 0.5f, 0.55f, 0.7f, 1);
-            batch_text(&g_b, "BONUS ROAD", x + 12, ty, 18, 1, 0.85f, 0.3f, 1);
+            batch_text(&g_b, "BONUS ROAD", x + 12, ty, 14, 1, 0.85f, 0.3f, 1);
             batch_text(&g_b, "WIN THE", x + 12, ty + 30, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "GRAND PRIX", x + 12, ty + 50, 14, 0.9f, 0.9f, 1, 1); batch_text(&g_b, "ON NORMAL", x + 12, ty + 70, 14, 0.9f, 0.9f, 1, 1);
             continue;
         }
@@ -1454,7 +1454,7 @@ static void hud_track(void) {
         const char *nm = td->name; size_t len = strlen(nm);
         size_t cut = 0;    /* the space nearest the middle of the name, if any */
         for (size_t q = 0; q < len; q++) if (nm[q] == ' ' && (cut == 0 || labs((long)q - (long)len / 2) < labs((long)cut - (long)len / 2))) cut = q;
-        float fit = iw * 0.9f;   /* the bold font runs a little wider than measured */
+        float fit = iw * 0.78f;   /* the bold font runs wider than measured */
         if (text_width(nm, 18) > fit && cut > 0) { char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
             float sz = fmaxf(text_width(l1, 18), text_width(l2, 18)) > fit ? 14 : 18;
             batch_text(&g_b, l1, x + 12, ty, sz, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, ty + 23, sz, 1, 1, 1, 1); }
