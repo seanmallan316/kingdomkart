@@ -8,10 +8,12 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMG = os.path.join(ROOT, "content", "img")
 CELL, R = 128, 0.42
-rows = []
+rows = []; treads = []
 for line in open(os.path.join(ROOT, "tools", "wheels.txt")):
     line = line.split("#")[0].split()
     if len(line) < 6: continue
+    if line[0] == "tread":
+        nums = [float(x) for x in line[2:]]; treads.append((line[1], [tuple(nums[i:i + 4]) for i in range(0, len(nums) - 3, 4)][:3])); continue
     name, spin = line[0], int(line[1]); nums = [float(x) for x in line[2:]]
     wheels = [tuple(nums[i:i + 4]) for i in range(0, len(nums) - 3, 4)][:3]
     src = os.path.join(IMG, name + ".png")
@@ -38,6 +40,11 @@ with open(os.path.join(ROOT, "src", "game", "wheels_gen.h"), "w") as f:
         cx = ", ".join(f"{w[0]:.3f}f" for w in wheels); cy = ", ".join(f"{w[1]:.3f}f" for w in wheels); rx = ", ".join(f"{w[2]:.3f}f" for w in wheels); ry = ", ".join(f"{w[3]:.3f}f" for w in wheels)
         f.write(f'    {{"{name}", {len(wheels)}, {spin}, {{{cx}}}, {{{cy}}}, {{{rx}}}, {{{ry}}}}},\n')
     f.write("};\n#define NUM_WHEEL_DEFS (int)(sizeof WHEEL_DEFS / sizeof WHEEL_DEFS[0])\n")
+    f.write("typedef struct { const char *picture; int n; float cx[3], cy[3], hw[3], hh[3]; } TreadDef;\nstatic const TreadDef TREAD_DEFS[] = {\n")
+    for name, ts in treads:
+        cx = ", ".join(f"{w[0]:.3f}f" for w in ts); cy = ", ".join(f"{w[1]:.3f}f" for w in ts); hw = ", ".join(f"{w[2]:.3f}f" for w in ts); hh = ", ".join(f"{w[3]:.3f}f" for w in ts)
+        f.write(f'    {{"{name}", {len(ts)}, {{{cx}}}, {{{cy}}}, {{{hw}}}, {{{hh}}}}},\n')
+    f.write("};\n#define NUM_TREAD_DEFS (int)(sizeof TREAD_DEFS / sizeof TREAD_DEFS[0])\n")
 # check sheets: the ellipses drawn over the pictures
 if len(sys.argv) > 1:
     out = sys.argv[1]; os.makedirs(out, exist_ok=True)

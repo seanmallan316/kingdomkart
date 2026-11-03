@@ -9,6 +9,10 @@ static char g_path[256] = "kingdomkart_save.txt";
 static const float PAR_TIME[SAVE_MAX_ROADS] = {78.0f, 84.0f, 70.0f, 78.0f, 50.0f, 0, 0, 0};   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
 
 void save_set_path(const char *path) { snprintf(g_path, sizeof g_path, "%s", path); }
+const char *save_dir_path(char *buf, int n, const char *file) {
+    const char *slash = strrchr(g_path, '/'); int len = slash ? (int)(slash - g_path + 1) : 0;
+    snprintf(buf, n, "%.*s%s", len, g_path, file); return buf;
+}
 
 void save_load(void) {
     memset(&g_save, 0, sizeof g_save); g_save.music_vol = 8; g_save.sfx_vol = 10;

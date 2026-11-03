@@ -101,7 +101,7 @@ static int give_item(Race *r, int position) {           /* back of the pack gets
     return ITEM_MANNA;
 }
 static int rank_pos(Race *r, int i) { for (int p = 0; p < r->nk; p++) if (r->order[p] == i) return p; return 0; }
-static void bless(Race *r, int who, int by) { if (who == by) return; r->blessed_by[who] = by; r->blessed_t[who] = 2.5f; r->stat_blessings++; push_event(r, EV_BLESSED, who); }
+static void bless(Race *r, int who, int by) { if (who == by || by < 0 || by >= r->nk) return; r->blessed_by[who] = by; r->blessed_t[who] = 2.5f; r->given[by]++; r->stat_blessings++; push_event(r, EV_BLESSED, who); }
 static void give_boost(Kart *k, float t, float mul) { if (k->stun > 0) return; k->boost_t = fmaxf(k->boost_t, t); k->boost_mul = fmaxf(k->boost_mul, mul); }
 
 /* a piece of trail dropped on the road where the kart is (manna, or the fire of the chariot) */

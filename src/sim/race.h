@@ -39,7 +39,8 @@ typedef struct {
     float gas_since;           /* countdown value when the player began holding gas (-1 = not holding); decides the rocket start */
     float parting_t; int parting_idx, parting_len;   /* the parted sea: seconds left, first sample, length in samples */
     float fire_drop[NKARTS];   /* seconds until a blazing kart drops its next fire trail piece */
-    int blessed_by[NKARTS]; float blessed_t[NKARTS];   /* who last blessed this kart and how long ago (for the "BLESSED BY ..." message) */
+    int blessed_by[NKARTS]; float blessed_t[NKARTS];
+    int given[NKARTS];         /* blessings each kart has given to others (the Most Generous award) */   /* who last blessed this kart and how long ago (for the "BLESSED BY ..." message) */
     int order[NKARTS];                       /* order[0] is the leader */
     RaceEvent ev[32]; int nev;               /* events raised this step, for sounds and messages */
     uint32_t rng;

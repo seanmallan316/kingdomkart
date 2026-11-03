@@ -27,3 +27,9 @@ kartview_samson_l  +1  0.25 0.79 0.13 0.15  0.74 0.79 0.13 0.15
 ride_john_bl    -1  0.45 0.76 0.105 0.16  0.80 0.74 0.075 0.12
 ride_goliath_bl -1  0.56 0.76 0.11 0.17  0.88 0.73 0.085 0.14
 ride_daniel_bl  -1  0.60 0.76 0.115 0.17  0.90 0.70 0.085 0.13
+# edge-on tires in the straight-behind pictures: a moving tread is drawn over them (center x, center y, half width, half height)
+tread ride_daniel_b   0.13 0.80 0.11 0.17  0.87 0.80 0.11 0.17
+tread ride_goliath_b  0.11 0.78 0.09 0.17  0.89 0.78 0.09 0.17
+tread ride_john_b     0.11 0.80 0.09 0.15  0.89 0.80 0.09 0.15
+tread ride_jonah_b    0.11 0.78 0.10 0.16  0.89 0.78 0.10 0.16
+tread ride_mary_b     0.12 0.78 0.11 0.17  0.88 0.78 0.11 0.17

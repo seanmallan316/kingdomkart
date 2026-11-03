@@ -33,6 +33,7 @@ typedef struct {
 extern Save g_save;
 
 void save_set_path(const char *path);
+const char *save_dir_path(char *buf, int n, const char *file);   /* a file next to the save file (ghost recordings) */
 void save_load(void);
 void save_store(void);                         /* writes the file if anything changed */
 unsigned save_check_unlocks(void);             /* works out new unlocks from the stats; returns the bits that are new */
