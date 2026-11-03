@@ -33,7 +33,8 @@ int main(void) {
     /* the drivers' voices: every character has a set, and one plays */
     { static const char *who[] = {"jesus", "moses", "david", "esther", "peter", "mary", "daniel", "samson", "noah", "joseph", "jonah", "john"}; int missing = 0;
       for (int c = 0; c < 12; c++) { char nm[64]; snprintf(nm, sizeof nm, "voice_%s_win", who[c]); if (sfx_voice_load(nm) < 0) missing++; }
-      printf("driver voices: %d of 12 characters missing a win shout\n", missing);
+      printf("driver voices: %d of 12 characters without a win line of their own (they use voice_win.wav)\n", missing);
+      CHECK(sfx_voice_load("voice_win") >= 0, "the fallback voice_win.wav is missing");
       int h = sfx_voice_load("voice_david_win"); if (h >= 0) { sfx_voice_play(h, 1, 0); int n = SR * 2; short *VL = calloc(n, 2), *VR = calloc(n, 2); sfx_render(VL, VR, n); float pk = 0; for (int i = 0; i < n; i++) { float a = fabsf(VL[i] / 32768.0f); if (a > pk) pk = a; } free(VL); free(VR); printf("David's Hallelujah: peak %.2f\n", pk); CHECK(pk > 0.1f, "the voice did not play"); } }
     printf(bad ? "SFX TEST FAILED\n" : "SFX TEST OK\n"); return bad;
 }
