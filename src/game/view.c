@@ -1482,7 +1482,7 @@ static void hud_battle(void) {
     batch_text(&g_b, "GOLIATH", 1240 - text_width("GOLIATH", 22), 30, 22, 1, 1, 1, 1);
     for (int i = 0; i < BATTLE_WIN_HITS; i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < BATTLE_WIN_HITS - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
     { char tb[32]; fmt_time(tb, sizeof tb, RACE_TIME_LIMIT - b->race.race_t > 0 ? RACE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
-    if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); text_c("HIS SHIELD-BEARER BLOCKS THE FRONT: HIT HIM FROM THE SIDE", 204, 16, 1, 0.9f, 0.5f, 1); }
+    if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); text_c("HIS SHIELD-BEARER GUARDS HIS FRONT AS HE WALKS: SLING FROM THE SIDE, OR WHEN HE STOPS", 204, 15, 1, 0.9f, 0.5f, 1); }
     if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
     if (b->quote >= 0 && b->quote < BATTLE_NQUOTES) {      /* the words of 1 Samuel 17, wrapped into a panel at the bottom */
         const BattleQuote *q = &BATTLE_QUOTES[b->quote]; float y0 = 560;

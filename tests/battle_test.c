@@ -15,7 +15,7 @@ int main(void) {
         KartInput in; memset(&in, 0, sizeof in); float time = 0; int thrown = 0, ghits = 0, dhits = 0, spears = 0;
         while (!b.over && time < 130) { battle_step(&b, &in, 1, SIM_DT); time += SIM_DT;
             for (int e = 0; e < b.nev; e++) { thrown += b.ev[e] == BEV_STONE_THROWN; ghits += b.ev[e] == BEV_GOLIATH_HIT; dhits += b.ev[e] == BEV_DAVID_HIT; spears += b.ev[e] == BEV_SPEAR; } }
-        printf("difficulty %d run %d: %s after %.1fs, stones thrown %d, Goliath hit %d, David hit %d, spears %d\n", diff, rep, b.won ? "DAVID WINS" : "goliath wins", b.race.race_t, thrown, ghits, dhits, spears);
+        printf("difficulty %d run %d: %s after %.1fs, stones thrown %d, Goliath hit %d, David hit %d, spears %d, caught by the shield-bearer %d\n", diff, rep, b.won ? "DAVID WINS" : "goliath wins", b.race.race_t, thrown, ghits, dhits, spears, b.blocks);
         CHECK(b.over, "the battle did not end");
         CHECK(thrown > 0, "David never threw a stone");
         wins += b.won; losses += !b.won;
