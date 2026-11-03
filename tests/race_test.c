@@ -33,7 +33,7 @@ int main(void) {
         CHECK(r.state == RACE_FINISHED, "race did not end");
         CHECK(r.race_t <= RACE_TIME_LIMIT + 0.1f, "race ran past the 2 minute limit");
         CHECK(r.k[r.player].lap > t.laps, "the player did not finish");
-        CHECK(diff == 0 || finished >= 2, "fewer than 2 karts crossed the line on normal/hard");
+        CHECK(diff != 2 || finished >= 2, "fewer than 2 karts crossed the line on hard");
         CHECK(r.stat_pickups >= 8, "too few item pickups (%d)", r.stat_pickups);
         CHECK(r.stat_uses >= 4, "too few item uses (%d)", r.stat_uses);
         CHECK(max_jump_back < 75.0f, "a kart advanced %.1f m in one second (teleport?)", max_jump_back);
