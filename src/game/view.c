@@ -95,6 +95,10 @@ static Texture *tx_finale; static Mesh *m_finale;
 static Texture *tx_title, *tx_title_bg; static Mesh *m_title, *m_title_bg, *m_logo_small; static float g_title_h;      /* title_art.png: the logo on the title screen, when Sean has made it */
 static Texture *tx_card[8]; static Mesh *m_card[8];   /* card_<prefix>.png: the road pictures on the road-select cards */
 static Texture *tx_item[ITEM_COUNT];        /* item pictures for the HUD slot, when Sean's files exist */
+/* the drivers' voices: content/sfx/voice_<name>_<event>.wav for one character, or voice_<event>.wav shared by all; silent when missing */
+enum { VO_BOOST, VO_TRICK, VO_WIN, VO_OUCH, VO_BLESS, VO_COUNT };
+static const char *VO_NAMES[VO_COUNT] = {"boost", "trick", "win", "ouch", "bless"};
+static int g_voice[NCHARS][VO_COUNT];
 static Pad g_prev; static float g_nav_t, g_screen_t;
 static const int GP_POINTS[8] = {10, 8, 6, 5, 4, 3, 2, 1};
 typedef struct { float x[80], z[80]; int n; } Preview;
@@ -918,6 +922,8 @@ int game_init(int status) {
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_loaves", "icon_samaritan", "icon_shield", "icon_parting", "shofar", "icon_fire", "icon_water"};
         for (int i = 1; i < ITEM_COUNT; i++) tx_item[i] = asset_texture(in[i], 0, NULL, NULL);
+        for (int c = 0; c < NCHARS; c++) for (int e = 0; e < VO_COUNT; e++) { char vn[64]; snprintf(vn, sizeof vn, "voice_%s_%s", pn[c] + 9, VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn);
+            if (g_voice[c][e] < 0) { snprintf(vn, sizeof vn, "voice_%s", VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn); } }
         { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
         for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
@@ -974,6 +980,14 @@ static int human_kart(int p) { Race *r = &g_race; if (g_nplayers <= 1) return r-
 static void pmsg(int who, float t, const char *s) { if (who < 0 || who >= MAX_HUMANS) return; snprintf(g_pmsg[who], sizeof g_pmsg[who], "%s", s); g_pmsg_t[who] = t; }
 static void pmsg2(int who, float min_t, const char *s) { if (who < 0 || who >= MAX_HUMANS) return; snprintf(g_pmsg2[who], sizeof g_pmsg2[who], "%s", s); if (g_pmsg_t[who] < min_t) g_pmsg_t[who] = min_t; }
 static void prumble(int who, float strength, float seconds) { if (who < 0) return; if (g_nplayers <= 1) platform_rumble(strength, seconds); else platform_rumble_pad(g_pslot[who], strength, seconds); }
+/* a driver shouts: the player's own voice full on, a computer driver's only when close */
+static void voice_at(int kart, int ev) {
+    Race *r = &g_race; if (kart < 0 || kart >= r->nk || ev < 0 || ev >= VO_COUNT) return; int ch = r->character[kart]; int h = g_voice[ch][ev]; if (h < 0) return;
+    Kart *q = &r->k[kart], *k = &r->k[r->player];
+    if (race_human_index(r, kart) >= 0) { sfx_voice_play(h, 1.0f, 0); return; }
+    float dx = q->x - k->x, dz = q->z - k->z, d = sqrtf(dx * dx + dz * dz); if (d > 45.0f || frand01() < 0.4f) return;
+    float side = -(dx * cosf(cam_yaw) - dz * sinf(cam_yaw)); sfx_voice_play(h, 0.8f / (1.0f + d * 0.05f), clampf(side * 0.05f, -0.8f, 0.8f));
+}
 static void add_spark(Vec3 p, Vec3 v, float size, float life, float r, float g, float b) {
     for (int i = 0; i < MAX_SPARK; i++) if (g_spark[i].life <= 0) { Spark *s = &g_spark[i]; s->p = p; s->v = v; s->size = size; s->life = life; s->r = r; s->g = g; s->b = b; return; }
 }
@@ -2086,30 +2100,31 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case EV_GO: for (int p = 0; p < g_nplayers; p++) pmsg(p, 1.0f, "GO!"); sfx_play(SFX_GO, 1, 0); break;
                 case EV_LAP: if (who >= 0) sfx_play(SFX_LAP, 1, 0); break;
                 case EV_FINAL_LAP: if (who >= 0) { pmsg(who, 2.0f, "FINAL LAP!"); sfx_play(SFX_FINAL_LAP, 1, 0); } break;
-                case EV_FINISH: if (who >= 0) { pmsg(who, 3.0f, g_def->grid_idx ? "WELCOME HOME!" : "FINISH!"); sfx_play(g_def->grid_idx ? SFX_WELCOME_HOME : SFX_FINISH, 1, 0);
+                case EV_FINISH: if (ek->place == 1) voice_at(ev->kart, VO_WIN);
+                    if (who >= 0) { pmsg(who, 3.0f, g_def->grid_idx ? "WELCOME HOME!" : "FINISH!"); sfx_play(g_def->grid_idx ? SFX_WELCOME_HOME : SFX_FINISH, 1, 0);
                     if (!g_attract && !g_demo) { if (g_nplayers <= 1) { g_slowmo = 1.1f; g_view[0].orbit = 0; } g_view[who].finish_t = 0.001f; g_view[who].orbit = 0; } } break;
-                case EV_HIT: if (who >= 0) { pmsg(who, 0.8f, "OUCH!"); prumble(who, 1.0f, 0.45f); } add_dust(v3(ek->x, ek->y, ek->z), 2.0f, 3.0f); sfx_at(SFX_HIT, ek, 1.0f); break;
+                case EV_HIT: voice_at(ev->kart, VO_OUCH); if (who >= 0) { pmsg(who, 0.8f, "OUCH!"); prumble(who, 1.0f, 0.45f); } add_dust(v3(ek->x, ek->y, ek->z), 2.0f, 3.0f); sfx_at(SFX_HIT, ek, 1.0f); break;
                 case EV_BLOCK: if (who >= 0) pmsg(who, 0.8f, "BLOCKED!"); sfx_at(SFX_BLOCK, ek, 0.9f); break;
                 case EV_BUMP: sfx_at(SFX_BUMP, ek, 0.7f); if (who >= 0) prumble(who, 0.4f, 0.12f); break;
                 case EV_TRICK: if (who >= 0) { pmsg(who, 0.6f, "TRICK!"); sfx_play(SFX_MINI_TURBO, 0.5f, 0); } break;
-                case EV_TRICK_LAND: if (who >= 0) { pmsg(who, 0.9f, "NICE LANDING!"); sfx_play(SFX_MINI_TURBO, 0.9f, 0); prumble(who, 0.5f, 0.15f); } add_dust(v3(ek->x, ek->y, ek->z), 1.0f, 2.0f); break;
-                case EV_ROCKET_START: if (who >= 0) { pmsg(who, 1.2f, "ROCKET START!"); sfx_play(SFX_SUPER_TURBO, 1, 0); prumble(who, 0.7f, 0.35f); } break;
+                case EV_TRICK_LAND: voice_at(ev->kart, VO_TRICK); if (who >= 0) { pmsg(who, 0.9f, "NICE LANDING!"); sfx_play(SFX_MINI_TURBO, 0.9f, 0); prumble(who, 0.5f, 0.15f); } add_dust(v3(ek->x, ek->y, ek->z), 1.0f, 2.0f); break;
+                case EV_ROCKET_START: voice_at(ev->kart, VO_BOOST); if (who >= 0) { pmsg(who, 1.2f, "ROCKET START!"); sfx_play(SFX_SUPER_TURBO, 1, 0); prumble(who, 0.7f, 0.35f); } break;
                 case EV_WHEELSPIN: if (who >= 0) { pmsg(who, 1.2f, "TOO EARLY!"); sfx_play(SFX_WRONG_WAY, 0.8f, 0); prumble(who, 0.3f, 0.5f); } add_dust(v3(ek->x, ek->y, ek->z), 1.5f, 2.5f); break;
                 case EV_PICKUP: { rainbow_burst(v3(ek->x, ek->y, ek->z));
                     if (who >= 0) { g_proulette[who] = 1.1f; g_prou_tick[who] = 0; sfx_play(SFX_PICKUP, 1, 0); } else sfx_at(SFX_PICKUP, ek, 0.5f); } break;
                 case EV_USE_MANNA: sfx_at(SFX_USE_ITEM, ek, 0.9f); if (who >= 0) pmsg(who, 0.8f, "MANNA!"); break;
-                case EV_USE_LOAVES: sfx_at(SFX_COIN, ek, 1.0f); if (who >= 0) pmsg(who, 1.2f, "BREAD FOR EVERYONE!"); for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.85f, 0.3f); break;
+                case EV_USE_LOAVES: voice_at(ev->kart, VO_BLESS); sfx_at(SFX_COIN, ek, 1.0f); if (who >= 0) pmsg(who, 1.2f, "BREAD FOR EVERYONE!"); for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.85f, 0.3f); break;
                 case EV_USE_SAMARITAN: sfx_at(SFX_UNLOCK, ek, 0.8f); break;
                 case EV_CARRIED: if (who >= 0) { pmsg(who, 1.5f, "CARRIED BY THE SAMARITAN!"); prumble(who, 0.5f, 0.3f); } bless_sparkle(ek, 1, 1, 1); break;
                 case EV_USE_SHIELD: sfx_at(SFX_BLOCK, ek, 0.7f); if (who >= 0) pmsg(who, 1.0f, "SHIELD OF FAITH!"); break;
-                case EV_USE_PARTING: sfx_at(SFX_SPLASH, ek, 1.0f); sfx_play(SFX_SHOFAR, 0.4f, 0); if (who >= 0) pmsg(who, 1.5f, "THE SEA PARTS!"); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.4f); break;
-                case EV_USE_JUBILEE: sfx_at(SFX_SHOFAR, ek, 1.0f); if (who >= 0) pmsg(who, 1.5f, "JUBILEE!"); for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.95f, 0.6f); break;
+                case EV_USE_PARTING: voice_at(ev->kart, VO_BLESS); sfx_at(SFX_SPLASH, ek, 1.0f); sfx_play(SFX_SHOFAR, 0.4f, 0); if (who >= 0) pmsg(who, 1.5f, "THE SEA PARTS!"); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.4f); break;
+                case EV_USE_JUBILEE: voice_at(ev->kart, VO_BLESS); sfx_at(SFX_SHOFAR, ek, 1.0f); if (who >= 0) pmsg(who, 1.5f, "JUBILEE!"); for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.95f, 0.6f); break;
                 case EV_USE_FIRE: sfx_at(SFX_FIRE, ek, 1.0f); if (who >= 0) { pmsg(who, 1.5f, "CHARIOT OF FIRE!"); prumble(who, 0.6f, 0.4f); } break;
                 case EV_USE_WATER: sfx_at(SFX_SPLASH, ek, 0.8f); if (who >= 0) pmsg(who, 1.0f, "LIVING WATER!"); bless_sparkle(ek, 0.5f, 0.8f, 1); break;
                 case EV_BLESSED: { int by = r->blessed_by[ev->kart]; if (who >= 0 && by >= 0 && by < r->nk) { char line[64]; snprintf(line, sizeof line, "BLESSED BY %s", CHARACTERS[r->character[by]].short_name); pmsg2(who, 1.2f, line); } bless_sparkle(ek, 1, 0.9f, 0.5f); } break;
                 case EV_TRAIL_BOOST: if (who >= 0) pmsg(who, 1.0f, "BLESSING ON THE ROAD!"); sfx_at(SFX_BOOST_PAD, ek, 0.7f); break;
                 case EV_CHEEK: if (who >= 0) pmsg(who, 1.0f, "THE OTHER CHEEK!"); break;
-                case EV_PAD_BOOST: if (who >= 0) { pmsg(who, 0.7f, "BOOST!"); prumble(who, 0.35f, 0.2f); } add_dust(v3(ek->x, ek->y, ek->z), 1.0f, 2.0f); sfx_at(SFX_BOOST_PAD, ek, 0.9f); break;
+                case EV_PAD_BOOST: if (frand01() < 0.5f) voice_at(ev->kart, VO_BOOST); if (who >= 0) { pmsg(who, 0.7f, "BOOST!"); prumble(who, 0.35f, 0.2f); } add_dust(v3(ek->x, ek->y, ek->z), 1.0f, 2.0f); sfx_at(SFX_BOOST_PAD, ek, 0.9f); break;
                 case EV_PAD_BOUNCE: if (who >= 0) pmsg(who, 0.7f, "BOING!"); sfx_at(SFX_BOUNCE, ek, 0.9f); break;
                 case EV_COIN: if (who >= 0) sfx_play(SFX_COIN, 0.8f, 0); break;
                 case EV_SLOWED: if (who >= 0) pmsg(who, 1.0f, "SLOWED!"); break;
@@ -2124,7 +2139,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             float hx = sinf(q->yaw + q->slide), hz = cosf(q->yaw + q->slide), rx = cosf(q->yaw + q->slide), rz = -sinf(q->yaw + q->slide);
             if (q->skid && !q->air) add_skid(i, v3(q->x - rx * 0.85f - hx * 0.8f, q->y + 0.04f, q->z - rz * 0.85f - hz * 0.8f), v3(q->x + rx * 0.85f - hx * 0.8f, q->y + 0.04f, q->z + rz * 0.85f - hz * 0.8f));
             else g_last_skid[i] = 0;
-            if (who >= 0 && q->mini_turbo_tier && !g_attract) { pmsg(who, 1.2f, q->mini_turbo_tier == 2 ? "SUPER TURBO!" : "MINI TURBO!"); sfx_play(q->mini_turbo_tier == 2 ? SFX_SUPER_TURBO : SFX_MINI_TURBO, 1, 0); }
+            if (who >= 0 && q->mini_turbo_tier && !g_attract) { if (q->mini_turbo_tier == 2) voice_at(i, VO_BOOST); pmsg(who, 1.2f, q->mini_turbo_tier == 2 ? "SUPER TURBO!" : "MINI TURBO!"); sfx_play(q->mini_turbo_tier == 2 ? SFX_SUPER_TURBO : SFX_MINI_TURBO, 1, 0); }
             if (who >= 0 && !g_attract && g_was_air[i] && !q->air) { sfx_play(g_track.water && !q->hit.on_road ? SFX_SPLASH : SFX_LAND, 0.8f, 0); prumble(who, 0.3f, 0.1f); }
             g_was_air[i] = q->air;
             g_wheel_ang[i] += q->speed / 0.42f * SIM_DT;   /* the wheels turn with the distance driven (drawn spinning in every view) */

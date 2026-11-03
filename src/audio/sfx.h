@@ -26,6 +26,8 @@ void sfx_set_volume(float vol);                            /* 0..1, the player's
 void sfx_set_logger(void (*log)(const char *fmt, ...));
 void sfx_load_samples(void);                               /* reads the recorded sounds from content/sfx once; without them everything is synthesized */
 int  sfx_has_sample(int id);                               /* 1 if a recording replaces this effect */
+int  sfx_voice_load(const char *name);                     /* a named recording (content/sfx/NAME.wav), loaded once at startup; returns a handle, or -1 when the file is missing */
+void sfx_voice_play(int handle, float volume, float pan);  /* plays one (a driver's shout); a -1 handle is silent */
 void sfx_render(int16_t *left, int16_t *right, int n);  /* called from the audio thread */
 int  sfx_voices_active(void);                            /* for tests */
 #endif

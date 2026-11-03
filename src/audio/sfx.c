@@ -129,8 +129,18 @@ void sfx_engine(float speed, int drifting, int boosting, int offroad, int in_air
     }
     p_active = active; p_boost = boosting; p_brake = brake; p_drift = drifting; p_speed = speed;
 }
+#define MAX_NAMED 64
+static Sample smp_named[MAX_NAMED]; static char named_name[MAX_NAMED][48]; static int n_named = 0;
+int sfx_voice_load(const char *name) {
+    for (int i = 0; i < n_named; i++) if (!strcmp(named_name[i], name)) return smp_named[i].d ? i : -1;
+    if (n_named >= MAX_NAMED) return -1;
+    int i = n_named++; snprintf(named_name[i], sizeof named_name[i], "%s", name);
+    if (!load_wav(name, &smp_named[i])) { smp_named[i].d = NULL; return -1; }
+    return i;
+}
+void sfx_voice_play(int handle, float volume, float pan) { if (handle < 0 || handle >= n_named || !smp_named[handle].d) return; sfx_play(1000 + handle, volume, pan); }
 void sfx_play(int id, float volume, float pan) {
-    if (id < 0 || id >= SFX_COUNT + 8) return;
+    if (id < 0 || (id >= SFX_COUNT + 8 && id < 1000) || id >= 1000 + MAX_NAMED) return;
     int w = rq_w; if (w - rq_r >= 60) return;
     rq[w & 63].id = id; rq[w & 63].vol = volume; rq[w & 63].pan = pan;
     __sync_synchronize(); rq_w = w + 1;
@@ -149,6 +159,7 @@ static Voice *voice(int wave, float f0, float f1, float dur, float att, float de
 static void fire(int id, float g, float p) {
     Voice *v;
     /* requests above SFX_COUNT are the engine's own one-shots: 1 gear shift, 2 exhaust pop, 3 braking, 4 hard braking */
+    if (id >= 1000) { if (id - 1000 < n_named && smp_named[id - 1000].d) svoice_start(&smp_named[id - 1000], 1.0f, g, p, 0); return; }
     if (id > SFX_COUNT) { static const int map[5] = {0, SMP_SHIFT, SMP_POP, SMP_BRAKE, SMP_HARDBRAKE}; if (id - SFX_COUNT < 5) svoice_start(&smp[map[id - SFX_COUNT]], 1.0f, g, p, 0); return; }
     if (smp_fx[id].d) { svoice_start(&smp_fx[id], 1.0f, g, p, 0); return; }   /* a recorded replacement for this effect */
     if (id == SFX_COUNTDOWN) { svoice_start(&smp[SMP_COUNTDOWN], 1.0f, g * 0.8f, p, 0); return; }
