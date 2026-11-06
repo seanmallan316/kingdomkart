@@ -278,6 +278,9 @@ Texture *gfx_texture_stream(int w, int h) {
     GX2InitSampler(&t->smp, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_LINEAR);
     return t;
 }
+void *gfx_texture_stream_pixels(Texture *t, int *pitch_px) { if (!t) return NULL; if (pitch_px) *pitch_px = (int)t->tex.surface.pitch; return t->tex.surface.image; }
+void gfx_texture_stream_flush_cpu(Texture *t) { if (t) DCFlushRange(t->tex.surface.image, t->tex.surface.imageSize); }   /* any thread: push the new pixels out of the CPU cache */
+void gfx_texture_stream_gpu(Texture *t) { if (t) GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, t->tex.surface.image, t->tex.surface.imageSize); }   /* drawing thread: the GPU forgets its old copy */
 void gfx_texture_stream_put(Texture *t, const uint32_t *pixels, int w, int h) {
     if (!t || !pixels) return;
     GX2Surface *sf = &t->tex.surface; if ((int)sf->width < w) w = (int)sf->width; if ((int)sf->height < h) h = (int)sf->height;

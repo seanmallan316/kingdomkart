@@ -40,6 +40,8 @@ static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* 
 enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1, g_op_w = 0, g_op_h = 0, g_op_vid = 0; static float g_op_buf = 0; static Texture *tx_op; static Mesh *m_op;   /* g_op_vid: the background decoder is running; g_op_buf: seconds spent filling it before the clock starts */
+static float g_title_press = 0;   /* seconds since a button was pressed on the title screen (0 = not yet) */
+static float g_track_wait = 0; static int g_loaded_track = -1;
 static int g_opt_sel = 0; static char g_pause_reason[48]; static float g_erase_hold = 0;
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO };   /* VS: two to four people on a split screen; JERICHO: seven laps round the walls */
@@ -125,6 +127,8 @@ static Batch g_b;
 
 /* camera state lives in the views (cam_x and friends are the view being handled) */
 static float g_slowmo = 0;      /* finish-line slow motion (single player): seconds left */
+#define CELE_T 4.5f            /* the victory lap of the camera round a kart that has finished */
+static float cele_bounce(const Race *r, int i);
 /* Time Trial ghost: the best run is recorded ten times a second and replayed as a see-through kart */
 #define GHOST_HZ 10
 #define GHOST_MAX (GHOST_HZ * 180)
@@ -1035,7 +1039,9 @@ static void load_theme(void) {
 
 // ------------------------------------------------------------------ setup
 static void set_track(int idx) {
-    g_track_idx = idx % NUM_TRACK_DEFS; g_def = &TRACK_DEFS[g_track_idx];
+    idx %= NUM_TRACK_DEFS;
+    if (idx == g_loaded_track && g_status == GFX_OK) { g_track_idx = idx; return; }   /* already loaded: nothing to do */
+    g_track_idx = idx; g_def = &TRACK_DEFS[g_track_idx]; g_loaded_track = idx;
     track_from_def(&g_track, g_def);
     float minx = 1e9f, maxx = -1e9f, minz = 1e9f, maxz = -1e9f;
     for (int i = 0; i < g_track.n; i++) { TrackSample *sm = &g_track.s[i]; if (sm->x < minx) minx = sm->x; if (sm->x > maxx) maxx = sm->x; if (sm->z < minz) minz = sm->z; if (sm->z > maxz) maxz = sm->z; }
@@ -1043,6 +1049,10 @@ static void set_track(int idx) {
     if (g_status == GFX_OK) { free_theme(); free_track_meshes(); load_theme(); build_track_meshes(); }
 }
 static int human_kart(int p);
+static float cele_bounce(const Race *r, int i) {   /* a finished player's kart hops for joy while the camera goes round */
+    if (g_attract || i < 0 || i >= r->nk || !r->human[i] || !r->k[i].finished) return 0;
+    for (int p = 0; p < g_nplayers; p++) if (human_kart(p) == i && g_view[p].finish_t > 0.6f && g_view[p].finish_t < CELE_T + 3.0f) return fabsf(sinf((g_view[p].finish_t - 0.6f) * 5.5f)) * 0.55f;
+    return 0; }
 static void reset_views(void) {   /* every player's camera starts just behind their kart */
     for (int p = 0; p < MAX_HUMANS; p++) { View *v = &g_view[p]; Kart *k = &g_race.k[p < g_nplayers ? human_kart(p) : g_race.player];
         v->yaw = k->yaw; v->x = k->x - sinf(k->yaw) * 8; v->z = k->z - cosf(k->yaw) * 8; v->y = k->y + 3.5f; v->fov = 62.0f; v->shake = 0; v->orbit = 0; v->finish_t = 0;
@@ -1221,6 +1231,15 @@ static void draw_loading(const char *msg) {
     for (int drc = 0; drc < 2; drc++) { gfx_view_begin(drc, 0.02f, 0.04f, 0.12f); gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m, &id, 1, 1, 1, 1); gfx_view_end(drc); }
     gfx_frame_end();
 }
+/* the GamePad touch screen: each menu marks where its buttons and cards are as it draws (TV pass only, same layout on
+   both screens); a tap on one picks it and confirms it, like moving there and pressing A */
+enum { TZ_SEL, TZ_A, TZ_B, TZ_PLUS, TZ_LEFT, TZ_RIGHT };
+typedef struct { float x, y, w, h; int kind, val; } TZone;
+static TZone g_tz[64], g_tz_prev[64]; static int g_ntz, g_ntz_prev, g_tz_rec;
+static void tzone(float x, float y, float w, float h, int kind, int val) { if (!g_tz_rec || g_ntz >= 64) return; TZone *z = &g_tz[g_ntz++]; z->x = x; z->y = y; z->w = w; z->h = h; z->kind = kind; z->val = val; }
+static void back_button(void) {   /* a BACK button to tap, bottom left */
+    batch_rect(&g_b, 20, 652, 150, 50, 1, 0.85f, 0.3f, 0.9f); batch_rect(&g_b, 23, 655, 144, 44, 0.08f, 0.14f, 0.36f, 1);
+    batch_text(&g_b, "< BACK", 95 - text_width("< BACK", 22) / 2, 666, 22, 1, 1, 1, 1); tzone(10, 640, 175, 75, TZ_B, 0); }
 static void menu_item(const char *s, float y, int selected, float size) {
     if (selected) { batch_rect(&g_b, 400, y - 8, 480, size + 16, 0.95f, 0.78f, 0.3f, 0.35f); text_c(s, y, size, 1, 0.95f, 0.5f, 1); }
     else text_c(s, y, size, 0.9f, 0.92f, 1, 1);
@@ -1324,6 +1343,30 @@ static void hud_race(const Pad *pad) {
 }
 
 // ------------------------------------------------------------------ screens
+/* "PRESS ANY BUTTON" (painted into Sean's title picture): beams of light turn slowly behind it, it glows and a shine
+   runs across it; pressed, it sinks in with a flash before the menu opens */
+static void draw_title_button(const Mat4 *id, float fade) {
+    static Vertex tv[160]; Batch tb; batch_init(&tb, tv, 160);   /* its own little batch: the HUD batch is still being filled */
+    static Mesh *m_rays = NULL, *m_btn = NULL; if (!m_rays) { m_rays = gfx_mesh_dynamic(40 * 6); m_btn = gfx_mesh_dynamic(4 * 6); }
+    const float cx = 640, cy = 597, u0 = 415.0f / 1280, u1 = 865.0f / 1280, v0 = 568.0f / 720, v1 = 627.0f / 720;
+    float pr = g_title_press, push = pr > 0 ? (pr < 0.12f ? pr / 0.12f : fmaxf(0.0f, 1.0f - (pr - 0.12f) / 0.25f)) : 0;   /* 0..1..0: down, then back up */
+    float flash = pr > 0 ? fmaxf(0.0f, 1.0f - pr / 0.45f) : 0, beat = 0.5f + 0.5f * sinf(g_time * 3.2f);
+    batch_clear(&tb);
+    for (int i = 0; i < 14; i++) {   /* the beams: long soft rays turning slowly round the words */
+        float a = g_time * 0.25f + i * 6.2831853f / 14, len = 210 + 40 * sinf(g_time * 1.3f + i * 1.7f) + 120 * flash, wid = 15;
+        float dx = cosf(a), dy = sinf(a) * 0.55f;   /* flattened: the words are wide, not tall */
+        Vec3 c = v3(cx + dx * len * 0.55f, cy + dy * len * 0.55f, 0);
+        batch_quad(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.9f, 0.55f, (0.22f + 0.12f * beat + 0.4f * flash) * fade); }
+    batch_quad(&tb, v3(cx, cy, 0), v3(300 + 30 * beat, 0, 0), v3(0, 62 + 8 * beat, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.95f, 0.75f, (0.3f + 0.2f * beat + 0.6f * flash) * fade);   /* the glow */
+    { float t = fmodf(g_time, 2.6f) / 0.9f; if (t < 1) { float x = 400 + t * 480; batch_quad(&tb, v3(x, cy, 0), v3(22, 0, 0), v3(-14, 30, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 0.55f * fade); } }   /* the shine running across */
+    gfx_mesh_update(m_rays, tb.v, tb.n); gfx_state(ST_HUD | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_rays, id, 1, 1, 1, 1); gfx_state(ST_HUD);
+    if (pr > 0) {   /* pressed: the words sink in, a little smaller and lower, with a flash */
+        float sc = 1.0f - 0.1f * push, w = (u1 - u0) * 1280 * sc, h = (v1 - v0) * 720 * sc, y = cy + 5 * push;
+        batch_clear(&tb);
+        batch_rect_uv(&tb, cx - w * 0.5f, y - h * 0.5f + 4, w, h, u0, v0, u1, v1, 0, 0, 0, 0.35f * push);   /* its shadow */
+        batch_rect_uv(&tb, cx - w * 0.5f, y - h * 0.5f, w, h, u0, v0, u1, v1, 1, 1, 1, 1);
+        gfx_mesh_update(m_btn, tb.v, tb.n); gfx_bind(tx_title_bg); gfx_draw(m_btn, id, 1 - 0.15f * push, 1 - 0.15f * push, 1 - 0.15f * push, 1); }
+}
 static void hud_title(void) {
     float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);   /* the logo settles in */
     float sc = 1.6f - 0.6f * ease, al = ease;
@@ -1378,6 +1421,8 @@ static void hud_main(void) {
     snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]); menu_item(buf, 466, g_menu_sel == 6, 24);
     menu_item("OPTIONS AND RECORDS", 500, g_menu_sel == 7, 22);
     menu_item("CREDITS", 532, g_menu_sel == 8, 22);
+    { static const float ys[9] = {212, 254, 296, 338, 380, 422, 466, 500, 532}, hs[9] = {30, 30, 30, 30, 30, 30, 24, 22, 22};
+      for (int i = 0; i < 9; i++) tzone(380, ys[i] - 8, 520, i < 8 ? ys[i + 1] - ys[i] : hs[i] + 16, TZ_SEL, i); }
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 560, 14, 0.8f, 0.85f, 1, 1);
 }
 static void volume_row(const char *label, int vol, float y, int selected) {
@@ -1391,6 +1436,8 @@ static void hud_options(void) {
     text_c("OPTIONS AND RECORDS", 80, 36, 1, 0.85f, 0.3f, 1);
     volume_row("MUSIC VOLUME", g_save.music_vol, 128, g_opt_sel == 0);
     volume_row("SOUND VOLUME", g_save.sfx_vol, 164, g_opt_sel == 1);
+    for (int r2 = 0; r2 < 2; r2++) { tzone(384, 122 + r2 * 36, 340, 36, TZ_LEFT, r2); tzone(724, 122 + r2 * 36, 180, 36, TZ_RIGHT, r2); }   /* tap the left of a volume bar for quieter, the right for louder */
+    tzone(384, 194, 480, 36, TZ_SEL, 2);
     { float x = 400, y = 200; if (g_opt_sel == 2) batch_rect(&g_b, x - 16, y - 6, 480, 36, 1, 0.85f, 0.3f, 0.25f);
       batch_text(&g_b, "CONTROLLER RUMBLE", x, y, 24, g_opt_sel == 2 ? 1 : 0.9f, g_opt_sel == 2 ? 0.85f : 0.95f, g_opt_sel == 2 ? 0.3f : 1, 1);
       batch_text(&g_b, g_save.rumble ? "ON" : "OFF", x + 270, y, 24, g_save.rumble ? 1 : 0.6f, g_save.rumble ? 0.85f : 0.65f, g_save.rumble ? 0.3f : 0.75f, 1); }
@@ -1454,7 +1501,7 @@ static void hud_char(int multi) {
     text_c(multi ? "EVERYONE: CHOOSE YOUR CHARACTER" : "CHOOSE YOUR CHARACTER", 22, 36, 1, 0.85f, 0.3f, 1);
     for (int i = 0; i < NCHARS; i++) {
         const Character *c = &CHARACTERS[i]; int sel = !multi && i == g_player_char, open = char_unlocked(i);
-        float x, y, w = 225, h = 186; char_card_pos(i, &x, &y);
+        float x, y, w = 225, h = 186; char_card_pos(i, &x, &y); tzone(x, y, w, h, TZ_SEL, i);
         if (sel) batch_rect(&g_b, x - 6, y - 6, w + 12, h + 12, 1, 0.85f, 0.3f, 1);
         if (multi) { int n = 0; for (int p = 0; p < g_njoined; p++) if (g_pchar[p] == i) {   /* each player's colored frame, nested when they sit on the same card */
                 float in = 6.0f - n * 3.0f; batch_rect(&g_b, x - in, y - in, w + 2 * in, 3, PLAYER_COL[p][0], PLAYER_COL[p][1], PLAYER_COL[p][2], 1); batch_rect(&g_b, x - in, y + h + in - 3, w + 2 * in, 3, PLAYER_COL[p][0], PLAYER_COL[p][1], PLAYER_COL[p][2], 1);
@@ -1500,8 +1547,9 @@ static void hud_join(const Pad *pads, int npads) {
         batch_text(&g_b, what, 600, y + 5, 13, 0.8f, 0.85f, 1, here ? 1 : 0.6f);
         if (j) { char tag[16]; snprintf(tag, sizeof tag, "PLAYER %d", j); batch_text(&g_b, tag, 880, y, 22, PLAYER_COL[j - 1][0], PLAYER_COL[j - 1][1], PLAYER_COL[j - 1][2], 1); }
         else if (here) batch_text(&g_b, (int)(g_time * 2) & 1 ? "PRESS A" : "", 880, y, 22, 1, 1, 1, 1); }
-    if (g_njoined >= 2) text_c("PRESS + TO START", 540, 26, 1, 0.9f, 0.4f, (int)(g_time * 2) & 1 ? 1.0f : 0.7f);
+    if (g_njoined >= 2) { text_c("PRESS + TO START (OR TAP HERE)", 540, 26, 1, 0.9f, 0.4f, (int)(g_time * 2) & 1 ? 1.0f : 0.7f); tzone(240, 525, 800, 60, TZ_PLUS, 0); }
     else text_c("WAITING FOR AT LEAST 2 PLAYERS", 540, 18, 0.8f, 0.85f, 1, 1);
+    tzone(220, 192, 840, 54, TZ_A, 0);   /* the GamePad's own row: tap to join */
     text_c("B: LEAVE   -   WII REMOTE SIDEWAYS: 2 GAS, 1 BRAKE, B DRIFT, A BLESSING", 600, 14, 0.8f, 0.85f, 1, 1);
 }
 static void draw_portraits(void) {   /* the real portraits are separate textures, drawn after the HUD batch; one mesh each (a dynamic mesh can only be filled once per frame) */
@@ -1518,7 +1566,7 @@ static void hud_kart(void) {
     if (tx_kart[g_player_char]) { batch_rect(&g_b, 290, 62, 700, 230, 0.05f, 0.08f, 0.2f, 0.6f); text_c("CHOOSE A BODY", 300, 20, 1, 0.85f, 0.3f, 1); }
     static const char *desc[NSTYLES][2] = {{"THE EVERYDAY KART", "BALANCED"}, {"BUILT FOR SPEED", "WIDER TURNS"}, {"LIGHT AND NIMBLE", "QUICK TURNS"}, {"HEAVY AND STURDY", "FAST OFF THE LINE"}, {"DAVID'S SLING CART", "NIMBLE AND QUICK"}};
     for (int i = 0; i < NSTYLES; i++) {
-        int sel = i == g_player_style, open = style_unlocked(i); float x = 40 + i * 245, y = tx_kart[g_player_char] ? 330 : 150, w = 230, h = tx_kart[g_player_char] ? 340 : 360;
+        int sel = i == g_player_style, open = style_unlocked(i); float x = 40 + i * 245, y = tx_kart[g_player_char] ? 330 : 150, w = 230, h = tx_kart[g_player_char] ? 340 : 360; tzone(x, y, w, h, TZ_SEL, i);
         if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
         batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
         if (!open) {
@@ -1542,20 +1590,15 @@ static void hud_kart(void) {
     }
     text_c("A: CHOOSE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
 }
-static void draw_kart_models(void) {    /* little 3D karts turning in the kart-select windows */
-    const Character *c = &CHARACTERS[g_player_char];
+static int g_emb_kind; static void px_emblem(int x, int y, uint32_t *o);
+static void draw_kart_models(void) {    /* the kart-body cards: an emblem for each kind of kart (the 3D stand-ins looked like an early build) */
+    static Texture *tx_emb[NSTYLES]; static Mesh *m_emb[NSTYLES]; Mat4 id = m4_identity();
+    gfx_camera_2d(); gfx_state(ST_HUD);
     for (int i = 0; i < NSTYLES; i++) { if (!style_unlocked(i)) continue;
-        float x = 40 + i * 245 + 115, y = (tx_kart[g_player_char] ? 330 : 150) + 95;
-        /* a tiny perspective view into the window: the kart at the origin, camera in front */
-        Mat4 view = m4_look_at(v3(3.2f * sinf(g_time * 0.8f), 1.6f, 3.2f * cosf(g_time * 0.8f)), v3(0, 0.7f, 0), v3(0, 1, 0));
-        Mat4 proj = m4_perspective(40.0f * 3.14159265f / 180.0f, 190.0f / 150.0f, 0.3f, 50.0f);
-        Mat4 vp = m4_mul(proj, view);
-        /* squeeze it into the window: scale and shift in clip space */
-        Mat4 win = m4_identity(); win.m[0] = 190.0f / 1280.0f; win.m[5] = 150.0f / 720.0f; win.m[12] = (x / 640.0f) - 1.0f; win.m[13] = 1.0f - (y / 360.0f);
-        Mat4 full = m4_mul(win, vp);
-        gfx_camera(&full, v3(0.3f, 1, 0.5f), 0.5f, 0, 0, 0, 1e6f, 2e6f);
-        gfx_state(ST_DEPTH | ST_DEPTH_WRITE | ST_CULL); gfx_bind(NULL); Mat4 id = m4_identity();
-        gfx_draw(m_body_style[i], &id, c->r, c->g, c->b, 1); gfx_draw(m_rest_style[i], &id, 1, 1, 1, 1); }
+        if (!tx_emb[i]) { g_emb_kind = i; tx_emb[i] = make_tex(128, 96, 0, 0, px_emblem); m_emb[i] = gfx_mesh_dynamic(6); }
+        float x = 40 + i * 245 + 20, y = (tx_kart[g_player_char] ? 330 : 150) + 20, bob = (i == g_player_style) ? 4.0f * sinf(g_time * 4.0f) : 0;
+        Vertex tv[6]; Batch tb; batch_init(&tb, tv, 6); batch_rect_uv(&tb, x + 15, y + 10 + bob, 160, 120, 0, 0, 1, 1, 1, 1, 1, 1);
+        gfx_mesh_update(m_emb[i], tb.v, tb.n); gfx_bind(tx_emb[i]); gfx_draw(m_emb[i], &id, 1, 1, 1, i == g_player_style ? 1.0f : 0.75f); }
 }
 /* the road cards across the screen: the six roads, plus the Walls of Jericho in multiplayer */
 static int ncards(void) { return g_mode == MODE_VS ? NUM_PLAY_TRACKS + 1 : NUM_PLAY_TRACKS; }
@@ -1567,7 +1610,7 @@ static int track_card(int t) { return t < NUM_PLAY_TRACKS ? t : NUM_PLAY_TRACKS;
 static void hud_track(void) {
     text_c("CHOOSE A ROAD", 30, 40, 1, 0.85f, 0.3f, 1);
     for (int c2 = 0; c2 < ncards(); c2++) { int d = card_track(c2);
-        int sel = d == g_track_idx, open = track_unlocked(d); float x = 40 + c2 * CARD_STEP, y = 110, w = CARD_W, h = 400, iw = CARD_IN;
+        int sel = d == g_track_idx, open = track_unlocked(d); float x = 40 + c2 * CARD_STEP, y = 110, w = CARD_W, h = 400, iw = CARD_IN; tzone(x, y, w, h, TZ_SEL, d);
         if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
         batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
         const TrackDef *td = &TRACK_DEFS[d]; char buf[48]; float ty = y + 12 + iw + 14;
@@ -1606,6 +1649,8 @@ static void hud_pause(void) {
     menu_item("QUIT TO MENU", 362, g_pause_sel == 2, 32);
     volume_row("MUSIC", g_save.music_vol, 420, g_pause_sel == 3);
     volume_row("SOUND", g_save.sfx_vol, 460, g_pause_sel == 4);
+    for (int i = 0; i < 3; i++) tzone(400, 254 + i * 50, 480, 48, TZ_SEL, i);
+    for (int r2 = 0; r2 < 2; r2++) { tzone(384, 414 + r2 * 40, 340, 40, TZ_LEFT, 3 + r2); tzone(724, 414 + r2 * 40, 180, 40, TZ_RIGHT, 3 + r2); }
     text_c("LEFT/RIGHT: VOLUME", 500, 14, 0.8f, 0.85f, 1, 1);
     text_c(g_race.jericho ? "A GAS   B BRAKE   ZR DRIFT   ZL SHOFAR" : "A GAS   B BRAKE   ZR HOLD TO DRIFT   ZL BLESSING", 526, 13, 0.7f, 0.8f, 1, 1);
     if (g_pause_reason[0]) text_c(g_pause_reason, 150, 18, 1, 0.5f, 0.4f, 1);
@@ -1686,7 +1731,7 @@ static void hud_cup(void) {
     for (int c = 0; c < 2; c++) { const Cup *cp = &CUPS[c]; int sel = c == g_cup, open = !cp->needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
         float x = 90 + c * 580, y = 120, w = 520, h = 470;
         if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
-        batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f);
+        batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f); tzone(x, y, w, h, TZ_SEL, c);
         batch_text(&g_b, cp->name, x + 20, y + 20, 30, 1, 0.95f, 0.5f, 1);
         batch_text(&g_b, cp->sub, x + 20, y + 62, 13, 0.8f, 0.9f, 1, 1);
         if (!open) { batch_text(&g_b, "?", x + w / 2 - text_width("?", 110) / 2, y + 140, 110, 0.5f, 0.55f, 0.7f, 1);
@@ -1716,6 +1761,38 @@ static void hud_gp(void) {
 
 // ------------------------------------------------------------------ the trophy ceremony at the end of a cup
 static float seg_dist(float px, float py, float ax, float ay, float bx, float by) { float dx = bx - ax, dy = by - ay, t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy); t = t < 0 ? 0 : t > 1 ? 1 : t; float ex = px - ax - t * dx, ey = py - ay - t * dy; return sqrtf(ex * ex + ey * ey); }
+/* emblems for the five kart bodies (128 x 96, gold on clear): what kind of kart it is, at a glance */
+
+static float emb_ring(float px, float py, float cx, float cy, float r) { return fabsf(sqrtf((px - cx) * (px - cx) + (py - cy) * (py - cy)) - r); }
+static float emb_wheel(float px, float py, float cx, float cy, float r, int spokes) {
+    float d = emb_ring(px, py, cx, cy, r) - 3.5f, hub = sqrtf((px - cx) * (px - cx) + (py - cy) * (py - cy)) - 6.0f; if (hub < d) d = hub;
+    for (int k = 0; k < spokes; k++) { float a = k * 3.14159265f / spokes; float sd = seg_dist(px, py, cx - cosf(a) * r, cy - sinf(a) * r, cx + cosf(a) * r, cy + sinf(a) * r) - 1.8f; if (sd < d) d = sd; }
+    return d; }
+static float emb_box(float px, float py, float x0, float y0, float x1, float y1) { float dx = fmaxf(x0 - px, px - x1), dy = fmaxf(y0 - py, py - y1); return fmaxf(dx, dy); }
+static void px_emblem(int x, int y, uint32_t *o) {
+    float px = x + 0.5f, py = y + 0.5f, d = 99;
+    switch (g_emb_kind) {
+        case 0: d = emb_wheel(px, py, 64, 48, 32, 3); break;                                         /* standard: one good wheel */
+        case 1: d = emb_wheel(px, py, 46, 52, 30, 4);                                                 /* chariot: a big wheel, racing */
+            for (int k = 0; k < 3; k++) { float sd = seg_dist(px, py, 86, 34 + k * 16, 120 - k * 8, 34 + k * 16) - 3.0f; if (sd < d) d = sd; }
+            { float sd = seg_dist(px, py, 20, 26, 74, 18) - 3.0f; if (sd < d) d = sd; } break;
+        case 2: { float hull = fmaxf(emb_box(px, py, 18, 56, 110, 72), (py - 56) * 0.9f - (px - 18) * 0.0f - 999); hull = fmaxf(emb_box(px, py, 18, 56, 110, 72), fmaxf(28 - px + (py - 56) * 0.75f, px - 100 - (72 - py) * 0.0f + (py - 56) * 0.75f)); d = hull;   /* boat: hull, mast and sail over a wave */
+            float m = seg_dist(px, py, 62, 16, 62, 56) - 2.0f; if (m < d) d = m;
+            float sail = fmaxf(fmaxf(66 - px, py - 50), (px - 66) * 1.2f - (py - 18)); if (sail < d) d = sail;
+            float wv = fabsf(py - (82 + 4 * sinf(px * 0.2f))) - 2.5f; if (wv < d) d = wv; } break;
+        case 3: { d = fmaxf(emb_box(px, py, 12, 52, 116, 74), fmaxf(20 - px + (74 - py) * 0.4f, px - 108 + (74 - py) * 0.4f) - 999);   /* ark: long hull, house, roof */
+            d = emb_box(px, py, 14, 54, 114, 72); float h2 = emb_box(px, py, 40, 36, 88, 54); if (h2 < d) d = h2;
+            float roof = fmaxf(py - 36, fabsf(px - 64) * 0.55f - (py - 18)); if (roof < d) d = roof; } break;
+        case 4: { d = 99; for (int k = 0; k < 2; k++) { float sx = k ? 112 : 16; for (int q = 0; q < 8; q++) {   /* sling: two cords curving down to the pouch, with its stone */
+                float t0 = q / 8.0f, t1 = (q + 1) / 8.0f; float ax = sx + (64 - sx) * t0, ay = 14 + 56 * sqrtf(t0), bx = sx + (64 - sx) * t1, by = 14 + 56 * sqrtf(t1);
+                float sd = seg_dist(px, py, ax, ay, bx, by) - 2.0f; if (sd < d) d = sd; } }
+            float pouch = sqrtf((px - 64) * (px - 64) / 1.8f + (py - 70) * (py - 70)) - 11; if (pouch < d) d = pouch;
+            float stone = sqrtf((px - 64) * (px - 64) + (py - 66) * (py - 66)) - 7; if (stone < 0) { *o = rgba(225, 220, 205, 255); return; } } break;
+    }
+    float a = clampf(0.5f - d, 0, 1), rim = clampf(2.5f - d, 0, 1);   /* soft edge, with a dark outline round the gold */
+    int r = (int)(255 * a + 50 * (1 - a)), g = (int)(205 * a + 30 * (1 - a)), b = (int)(80 * a + 20 * (1 - a));
+    *o = rgba(r, g, b, (int)(255 * fmaxf(a, rim * 0.85f)));
+}
 static void px_qbox(int x, int y, uint32_t *o) {   /* one face of the blessing box: a frosted pane, brighter at the rim, with a smooth white question mark outlined in dark (128 x 128) */
     float fx = (x - 63.5f) / 64.0f, fy = (y - 63.5f) / 64.0f, edge = fmaxf(fabsf(fx), fabsf(fy));
     int a = 70 + (int)(edge * edge * 120.0f), v = 200 + (int)(edge * 55.0f);
@@ -1910,7 +1987,7 @@ static void build_dynamic(void) {
         for (int kd = 0; kd < g_nkind; kd++) {
             batch_clear(&g_b);
             for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->kind != kd) continue;
-                float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; float sdd = g_nplayers >= 3 ? SPRITE_DRAW_DIST * 0.6f : SPRITE_DRAW_DIST; if (dx * dx + dz * dz > sdd * sdd) continue;
+                float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; float sdd = g_nplayers >= 3 ? SPRITE_DRAW_DIST * 0.6f : (g_nplayers == 2 ? SPRITE_DRAW_DIST * 0.8f : SPRITE_DRAW_DIST); if (dx * dx + dz * dz > sdd * sdd) continue;
                 float w = pl->w * 0.5f; int scroll = pl->falls && g_kind[kd].placeholder;
                 float v0 = scroll ? g_time * 1.5f : 0.0f, v1 = v0 + (scroll ? pl->h / 3.0f : 1.0f);
                 float sw = g_kind[kd].sway == 1 ? sinf(g_time * 0.9f + i * 1.3f) * 0.025f * pl->h : (g_kind[kd].sway == 2 ? sinf(g_time * 3.0f + i * 2.1f) * 0.03f * pl->h : 0);   /* the top of trees and cloth moves in the wind */
@@ -1997,6 +2074,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
     Kart *k = &r->k[vk];
     float shk = g_shake * g_shake * 0.6f;
     Vec3 eye = v3(cam_x + sinf(g_time * 37.0f) * shk, cam_y + sinf(g_time * 53.0f) * shk, cam_z + cosf(g_time * 41.0f) * shk), at = v3(k->x + sinf(k->yaw) * 3.0f, k->y + 1.2f, k->z + cosf(k->yaw) * 3.0f);
+    if (cv->finish_t > 0 && !g_attract && g_mode != MODE_BATTLE) at = v3(k->x, k->y + 1.0f, k->z);   /* the celebration looks at the kart itself */
     {
         Mat4 view = m4_look_at(eye, at, v3(0, 1, 0));
         Mat4 proj = m4_perspective(cam_fov * fov_mul * 3.14159265f / 180.0f, aspect, 0.3f, 1200.0f);
@@ -2087,7 +2165,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             float pitch = -atan2f(q->hit.slope, 1.0f) * (q->air ? 0.3f : 1.0f) + (q->air ? -q->vy * 0.03f : 0.0f);
             float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f;
             float sq = 1.0f - q->squash * 0.25f;
-            Mat4 m = m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f, q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.04f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f)))));
+            Mat4 m = m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f + cele_bounce(r, i), q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.04f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f)))));
             int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
             if (tx_kartback[r->character[i]]) continue;      /* drawn as a picture below */
             gfx_draw(m_body_style[sty], &m, c->r, c->g, c->b, 1);
@@ -2122,7 +2200,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                 const WheelDef *wd = g_view_wd[ch][v]; Texture *wtex = g_view_wtex[ch][v]; const TreadDef *td = NULL;
                 if (tx_ride[ch][rv]) { ktex = tx_ride[ch][rv]; kasp = g_ride_aspect[ch][rv]; v = rv; ride = 1; wd = g_ride_wd[ch][rv]; wtex = g_ride_wtex[ch][rv]; td = g_ride_td[ch][rv]; }
                 float kw = v == 2 ? 3.4f : (v == 1 || v == 3 ? 3.0f : 2.6f), kh = kw / kasp, klean = q->steer_vis * -0.08f + q->slide * 0.15f;
-                Vec3 kc = v3(q->x, q->y + q->hop * 0.4f + kh * 0.5f - 0.1f, q->z);
+                Vec3 kc = v3(q->x, q->y + q->hop * 0.4f + cele_bounce(r, i) + kh * 0.5f - 0.1f, q->z);
                 batch_clear(&g_b);
                 float u0 = mirror ? 1.0f : 0.0f, u1 = mirror ? 0.0f : 1.0f;
                 batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), u0, 0, u1, 1, 1, 1, 1, 1);
@@ -2151,7 +2229,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                     for (int n = 0; n < td->n; n++) { float cx = mirror ? 1.0f - td->cx[n] : td->cx[n], fx = (cx - 0.5f) * 2.0f, fy = (0.5f - td->cy[n]) * 2.0f, hw = td->hw[n] * 2.0f, hh = td->hh[n] * 2.0f;
                         Vec3 c = v3(kc.x + R.x * fx + U.x * fy, kc.y + R.y * fx + U.y * fy + 0.01f, kc.z + R.z * fx + U.z * fy);
                         float v0 = -roll * 4.0f;
-                        batch_quad(&g_b, c, v3(R.x * hw, R.y * hw, R.z * hw), v3(U.x * hh, U.y * hh, U.z * hh), v3(0, 1, 0), 0, v0, 1, v0 + 2.0f, 1, 1, 1, 0.8f); }
+                        batch_quad(&g_b, c, v3(R.x * hw, R.y * hw, R.z * hw), v3(U.x * hh, U.y * hh, U.z * hh), v3(0, 1, 0), 0, v0, 1, v0 + 2.0f, 1, 1, 1, 0.35f); }   /* faint: a hint of the tread turning, not stripes */
                     gfx_mesh_update(m_tread_spr[i], g_b.v, g_b.n); gfx_state(ST_TRANSPARENT); gfx_bind(tx_tread); gfx_draw_ex(m_tread_spr[i], &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_state(ST_CUTOUT); }
                 if (ride) continue; }
             if (!tx_char[ch]) continue;
@@ -2160,7 +2238,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             float hgt = (pic ? 1.5f : 1.75f) * part, hw = (pic ? 1.5f : 1.75f) * 0.5f * g_char_aspect[ch];
             float bob = sinf(g_time * 11.0f + i) * 0.015f * fminf(fabsf(q->speed) / 20.0f, 1.0f);   /* a little engine shake */
             hgt *= 1.0f - q->squash * 0.18f + (q->air && q->hop <= 0 ? -0.08f : 0);                 /* lands with a bounce, tucks in on jumps */
-            Vec3 c = v3(q->x - hx * 0.35f, q->y + q->hop * 0.4f + bob + (pic ? 0.85f : 0.55f) + hgt * 0.5f, q->z - hz * 0.35f);
+            Vec3 c = v3(q->x - hx * 0.35f, q->y + q->hop * 0.4f + cele_bounce(r, i) + bob + (pic ? 0.85f : 0.55f) + hgt * 0.5f, q->z - hz * 0.35f);
             float lean = q->steer_vis * -0.12f;       /* leans into the turn */
             batch_clear(&g_b);
             batch_quad(&g_b, c, v3(ax.x * hw, 0, ax.z * hw), v3(ax.x * lean * hgt * 0.5f, hgt * 0.5f, ax.z * lean * hgt * 0.5f), v3(0, 1, 0), 0, 0, 1, part, 1, 1, 1, 1);
@@ -2278,7 +2356,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
     /* tire treads seen edge-on: at racing speed the real roll (dozens of grooves a second) would jump a whole groove or more
        between frames and look frozen, so the drawn roll is capped at 0.35 of a groove per frame - always visibly rolling */
     for (int i = 0; i < NKARTS && i < g_race.nk; i++) { float rate = g_race.k[i].speed / 0.42f / 6.2831853f * dt, cap = 0.35f * 0.25f / 4.0f;
-        if (rate > cap) rate = cap; if (rate < -cap) rate = -cap; g_tread_ph[i] += rate; if (g_tread_ph[i] > 1000.0f) g_tread_ph[i] -= 1000.0f; }
+        if (rate > cap) rate = cap; if (rate < -cap) rate = -cap; g_tread_ph[i] += rate; if (g_tread_ph[i] > 1000.0f) g_tread_ph[i] -= 1000.0f;
+        /* the wheels seen from the side: the real turn rate (ten turns a second at speed) strobes on a 60 Hz screen and the
+           hubcaps whirl like a cartoon, so they turn with the kart's speed but never more than about two turns a second */
+        float wr = g_race.k[i].speed / 0.42f * dt, wcap = 12.0f * dt; if (wr > wcap) wr = wcap; if (wr < -wcap) wr = -wcap;
+        g_wheel_ang[i] += wr; if (g_wheel_ang[i] > 6283.0f) g_wheel_ang[i] -= 6283.1853f; }
     { /* speed report for the log file (the real Wii U's frame rate is only visible here): every 10 seconds */
       static float acc = 0, worst = 0; static int nf = 0, slow = 0; acc += dt; nf++; if (g_frame_ms > worst) worst = g_frame_ms; if (g_frame_ms > 17.5f) slow++;
       if (acc >= 10.0f) { gfx_log("speed: %.1f fps average, slowest frame %.1f ms, %d of %d frames over 1/60 s (screen %d)", nf / acc, worst, slow, nf, (int)g_screen); acc = 0; worst = 0; nf = 0; slow = 0; } }
@@ -2301,10 +2383,39 @@ void game_frame(const Pad *pads, int npads, float dt) {
     if (nx != pnx || ny != pny) { mx = nx; my = ny; g_nav_t = 0; } else if (nx || ny) { g_nav_t += dt; if (g_nav_t > 0.35f) { mx = nx; my = ny; g_nav_t = 0.22f; } }
     g_prev = *pad;
     if (g_screen_t < 0.3f) { pa = pb = 0; mx = my = 0; }      /* ignore presses right after a screen change */
+    {   /* the GamePad touch screen */
+        static int was_touch = 0, tz_screen = -1; const Pad *gp = npads > 0 ? &pads[0] : NULL; int tap = gp && gp->touch && !was_touch; was_touch = gp && gp->touch;
+        if (tz_screen != g_screen) { g_ntz_prev = 0; tz_screen = g_screen; }   /* buttons from the screen before do not count */
+        if (tap && g_screen_t > 0.3f) { int hit = -1;
+            for (int z = 0; z < g_ntz_prev; z++) { const TZone *q = &g_tz_prev[z]; if (gp->tx >= q->x && gp->tx < q->x + q->w && gp->ty >= q->y && gp->ty < q->y + q->h) hit = z; }
+            if (hit >= 0) { const TZone *q = &g_tz_prev[hit];
+                if (q->kind == TZ_A) { pa = 1; pa_s[0] = 1; }
+                else if (q->kind == TZ_B) { pb = 1; pb_s[0] = 1; }
+                else if (q->kind == TZ_PLUS) { pplus = 1; pplus_s[0] = 1; }
+                else {   /* pick the card or line, then left/right or confirm */
+                    switch (g_screen) {
+                        case SCR_MAIN: g_menu_sel = q->val; break;
+                        case SCR_CUP: g_cup = q->val; break;
+                        case SCR_CHAR: g_player_char = q->val; break;
+                        case SCR_MCHAR: if (!g_plock[0]) g_pchar[0] = q->val; break;
+                        case SCR_KART: g_player_style = q->val; break;
+                        case SCR_TRACK: g_track_idx = q->val; break;
+                        case SCR_OPTIONS: g_opt_sel = q->val; break;
+                        case SCR_PAUSE: g_pause_sel = q->val; break;
+                    }
+                    if (q->kind == TZ_LEFT) mx = -1; else if (q->kind == TZ_RIGHT) mx = 1;
+                    else if (g_screen == SCR_MCHAR) pa_s[0] = 1; else pa = 1; }
+                sfx_play(SFX_MENU_MOVE, 0.6f, 0); }
+            else if (g_screen == SCR_TITLE || g_screen == SCR_RESULTS || g_screen == SCR_GP || g_screen == SCR_TROPHY || g_screen == SCR_CREDITS || g_screen == SCR_OPENER) pa = 1;   /* a tap anywhere carries on */
+        }
+        memcpy(g_tz_prev, g_tz, sizeof g_tz); g_ntz_prev = g_ntz; g_ntz = 0;
+    }
 
     int sim_running = 1;
     switch (g_screen) {
-    case SCR_TITLE: if (pa || pb || pplus || pad->x || pad->y) { g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+    case SCR_TITLE:
+        if (g_title_press > 0) { g_title_press += dt; if (g_title_press > 0.5f) { g_title_press = 0; g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; } break; }   /* the button shows being pressed, then the menu */
+        if (pa || pb || pplus || pad->x || pad->y) { g_title_press = 0.001f; sfx_play(SFX_MENU_OK, 1, 0); sfx_play(SFX_UNLOCK, 0.55f, 0); platform_rumble(0.5f, 0.12f); }
 #ifndef KK_TOUR
         else if (g_screen_t > 90.0f && g_op_frames > 0 && m_op) { g_screen = SCR_OPENER; g_screen_t = 0; g_op_cur = -1; }   /* left alone, the title screen plays the opener again */
 #endif
@@ -2386,7 +2497,10 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pb) { g_screen = SCR_CHAR; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_TRACK:
-        if (mx) { sfx_play(SFX_MENU_MOVE, 1, 0); int n = ncards(), d = card_track((track_card(g_track_idx) + mx + n) % n); g_track_idx = d; if (track_unlocked(d)) { set_track(d); start_race(1); } }
+        if (mx) { sfx_play(SFX_MENU_MOVE, 1, 0); int n = ncards(), d = card_track((track_card(g_track_idx) + mx + n) % n); g_track_idx = d; g_track_wait = g_mode == MODE_VS ? 0 : 0.6f; }
+        /* the road behind the cards changes only once the cursor rests (loading a road takes a moment; doing it on every
+           move made the cursor stick); in multiplayer it does not change at all */
+        if (g_track_wait > 0) { g_track_wait -= dt; if (g_track_wait <= 0 && track_unlocked(g_track_idx) && g_track_idx != g_loaded_track) { set_track(g_track_idx); start_race(1); } }
         if (pa) sfx_play(track_unlocked(g_track_idx) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && track_unlocked(g_track_idx)) { begin_player_race(); g_screen_t = 0; }
         if (pb) { g_screen = SCR_KART; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
@@ -2397,7 +2511,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; snprintf(g_pause_reason, sizeof g_pause_reason, "PLAYER %d'S CONTROLLER DISCONNECTED", p + 1); break; } }
         if (r->state == RACE_FINISHED) {
             g_results_t += dt;
-            if (g_results_t > 1.5f) {
+            if (g_results_t > 0.6f) {
                 if (g_mode == MODE_GP) { race_rank(r); for (int p = 0; p < r->nk; p++) { Kart *q = &r->k[r->order[p]]; int pl = q->place ? q->place : p + 1; g_gp_points[r->character[r->order[p]]] += GP_POINTS[pl - 1]; }
                     int best = -1, bg = 0; for (int i = 0; i < r->nk; i++) if (r->given[i] > bg) { bg = r->given[i]; best = i; } if (best >= 0) g_gp_points[r->character[best]] += 2; }
                 if (g_mode == MODE_TT) { Kart *k = &r->k[r->player]; if (k->lap > g_track.laps && (g_best_time[g_track_idx] <= 0 || k->total_time < g_best_time[g_track_idx])) { g_best_time[g_track_idx] = k->total_time; if (g_track_idx < SAVE_MAX_ROADS) { g_save.best_ms[g_track_idx] = (int)(k->total_time * 1000); g_save.dirty = 1; } if (g_rec_n > 0) ghost_save(g_track_idx); } }
@@ -2558,7 +2672,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             if (who >= 0 && q->mini_turbo_tier && !g_attract) { if (q->mini_turbo_tier == 2) voice_at(i, VO_BOOST); pmsg(who, 1.2f, q->mini_turbo_tier == 2 ? "SUPER TURBO!" : "MINI TURBO!"); sfx_play(q->mini_turbo_tier == 2 ? SFX_SUPER_TURBO : SFX_MINI_TURBO, 1, 0); }
             if (who >= 0 && !g_attract && g_was_air[i] && !q->air) { sfx_play(g_track.water && !q->hit.on_road ? SFX_SPLASH : SFX_LAND, 0.8f, 0); prumble(who, 0.3f, 0.1f); }
             g_was_air[i] = q->air;
-            g_wheel_ang[i] += q->speed / 0.42f * SIM_DT;   /* the wheels turn with the distance driven (drawn spinning in every view) */
+            (void)q;
         }
     }
     if (steps == 8) acc = 0;
@@ -2602,13 +2716,21 @@ void game_frame(const Pad *pads, int npads, float dt) {
 
     /* every player's camera */
     for (int p = 0; p < g_nplayers; p++) { cv = &g_view[p]; k = &r->k[human_kart(p)];
-    if (cv->finish_t > 0 && cv->finish_t < 1.2f) { cv->finish_t += dt; if (g_nplayers > 1) cv->orbit += dt * 1.6f; }   /* after the finish the camera swings round the kart (the sim slows too when playing alone) */
+    if (cv->finish_t > 0) cv->finish_t += dt;   /* after the finish: the celebration, the camera all the way round the kart */
     /* the race intro: during the countdown the camera sweeps around the grid and settles in behind the player */
     if (r->state == RACE_COUNTDOWN && !g_attract && g_mode != MODE_BATTLE && r->cd > 0.6f) {
         float u = clampf((3.5f + RACE_READY_T - r->cd) / (2.9f + RACE_READY_T), 0, 1), e = u * u * (3 - 2 * u);         /* 0 at the start of the countdown, 1 just before GO */
         float a = k->yaw + 3.14159f * (1.0f - e) * 0.9f + 0.6f * (1.0f - e);               /* starts in front and to the side, swings round to behind */
         float dist = 9.0f - 4.4f * e, hgt = 4.5f - 1.8f * e;
         cam_yaw = k->yaw; cam_x = k->x - sinf(a) * dist; cam_z = k->z - cosf(a) * dist; cam_y = k->y + hgt; cam_fov = 58.0f + 4.0f * e;
+    } else if (cv->finish_t > 0 && !g_attract && g_mode != MODE_BATTLE) {
+        /* the celebration: in close and low, swinging once all the way round the kart, then drifting on slowly */
+        float u = clampf(cv->finish_t / CELE_T, 0, 1), e = u * u * (3 - 2 * u), a = k->yaw + 6.2831853f * e + (cv->finish_t > CELE_T ? (cv->finish_t - CELE_T) * 0.4f : 0);
+        float in = clampf(cv->finish_t / 0.9f, 0, 1), dist = 6.0f - 2.4f * in, hgt = 2.6f - 0.9f * in;
+        float tx = k->x - sinf(a) * dist, tz = k->z - cosf(a) * dist, ty = k->y + hgt;
+        float f = fminf(1.0f, 8.0f * dt); cam_x += (tx - cam_x) * f; cam_z += (tz - cam_z) * f; cam_y += (ty - cam_y) * f;
+        cam_yaw = atan2f(k->x - cam_x, k->z - cam_z); cam_fov += (55.0f - cam_fov) * fminf(1.0f, 3.0f * dt);
+        if ((int)(cv->finish_t * 2.5f) != (int)((cv->finish_t - dt) * 2.5f) && cv->finish_t < CELE_T) { const Character *ch = &CHARACTERS[r->character[human_kart(p)]]; bless_sparkle(k, 1, 0.85f, 0.3f); bless_sparkle(k, ch->r, ch->g, ch->b); }   /* confetti */
     } else {
     /* chase camera: sits behind the kart, lags on turns, pulls back with speed */
     int orbiting = g_nplayers > 1 ? (cv->finish_t > 0 && cv->finish_t < 1.2f) : (g_slowmo > 0);
@@ -2645,7 +2767,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             for (int p = 0; p < g_nplayers; p++) { float fx, fy, fw, fh; split_rect(p, g_nplayers, &fx, &fy, &fw, &fh);
                 gfx_viewport(drc, fx, fy, fw, fh); cv = &g_view[p]; build_dynamic();
                 float vw = fw * 1280.0f, vh = fh * 720.0f;
-                draw_scene(human_kart(p), vw / vh, g_nplayers == 2 ? 0.62f : 1.0f, g_nplayers >= 3);
+                draw_scene(human_kart(p), vw / vh, g_nplayers == 2 ? 0.62f : 1.0f, 1);
                 gfx_camera_2d_virtual(vw, vh); gfx_state(ST_HUD); batch_clear(&g_b);
                 hud_split(p, vw, vh);
                 gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
@@ -2659,9 +2781,12 @@ void game_frame(const Pad *pads, int npads, float dt) {
             gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id, 1, 1, 1, 1);
             cv = &g_view[0]; gfx_view_end(drc); continue; }
         cv = &g_view[0];
-        gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
+        /* on the GamePad the menus sit on a plain background: drawing the 3D road behind them a second time halved the
+           frame rate of every menu (the log from the real Wii U: 30 a second instead of 60) */
+        int plain_bg = drc && (g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP || g_screen == SCR_OPTIONS || g_screen == SCR_CREDITS || g_screen == SCR_GP);
+        if (plain_bg) gfx_view_begin(drc, 0.06f, 0.09f, 0.24f); else gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 id = m4_identity();
-        draw_scene(g_mode == MODE_BATTLE ? 0 : r->player, gfx_aspect(drc), 1.0f, 0);
+        if (!plain_bg) draw_scene(g_mode == MODE_BATTLE ? 0 : r->player, gfx_aspect(drc), 1.0f, 0);
         /* ---- HUD and menus */
         gfx_camera_2d(); gfx_state(ST_HUD);
         batch_clear(&g_b);
@@ -2671,6 +2796,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
           gfx_bind(tx_vignette); gfx_draw(m_tone, &id, 1, 1, 1, 1); }
         int menu_screen = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_GP || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP;
         if (menu_screen) batch_rect(&g_b, 0, 0, 1280, 720, 0.02f, 0.03f, 0.1f, g_screen == SCR_TITLE ? 0.25f : 0.55f);
+        g_tz_rec = !drc;
         switch (g_screen) {
             case SCR_TITLE: hud_title(); break;
             case SCR_MAIN: hud_main(); break;
@@ -2688,7 +2814,10 @@ void game_frame(const Pad *pads, int npads, float dt) {
             case SCR_GP: hud_gp(); break;
             case SCR_TROPHY: hud_trophy(); break;
         }
-        if (g_screen == SCR_TITLE && tx_title_bg && m_title_bg) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; gfx_bind(tx_title_bg); gfx_draw(m_title_bg, &id, 1, 1, 1, u); }
+        if (drc && (g_screen == SCR_MAIN || g_screen == SCR_CUP || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_OPTIONS || g_screen == SCR_JOIN || g_screen == SCR_MCHAR)) back_button();
+        else if (!drc && (g_screen == SCR_MAIN || g_screen == SCR_CUP || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_OPTIONS || g_screen == SCR_JOIN || g_screen == SCR_MCHAR)) tzone(10, 640, 175, 75, TZ_B, 0);
+        g_tz_rec = 0;
+        if (g_screen == SCR_TITLE && tx_title_bg && m_title_bg) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; gfx_bind(tx_title_bg); gfx_draw(m_title_bg, &id, 1, 1, 1, u); draw_title_button(&id, u); }
         else if (g_screen == SCR_TITLE && tx_title && m_title) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);
             gfx_bind(tx_title); gfx_draw(m_title, &id, 1, 1, 1, ease); }
         /* a quick fade from black when a new screen opens */

@@ -78,6 +78,7 @@ static void vsleep_ms(int ms) { OSSleepTicks(OSMillisecondsToTicks(ms)); }
 #else
 #include <pthread.h>
 #include <unistd.h>
+#include <time.h>
 typedef pthread_mutex_t VidLock;
 static void vlock_init(VidLock *m) { pthread_mutex_init(m, NULL); }
 static void vlock(VidLock *m) { pthread_mutex_lock(m); }
@@ -85,18 +86,21 @@ static void vunlock(VidLock *m) { pthread_mutex_unlock(m); }
 static void vsleep_ms(int ms) { usleep((useconds_t)ms * 1000); }
 #endif
 
-enum { VS_EMPTY, VS_WORKING, VS_READY };
-#define VID_SLOTS 10
-#define VID_WORKERS 3
-typedef struct { volatile int state; int frame; unsigned char *px; } VidSlot;
+enum { VS_EMPTY, VS_WORKING, VS_READY, VS_SHOWN, VS_RETIRED };
+#define VID_SLOTS 12
+#define VID_WORKERS 2
+/* Each slot owns a picture in GPU-readable memory. A helper thread decodes a frame straight into a free slot's picture;
+   the drawing thread only switches which slot it draws (no copying on the main thread). A slot that has just been on
+   screen waits two more frames before it is reused, as the GPU may still be drawing from it. */
+typedef struct { volatile int state; int frame, retired_at; Texture *tex; } VidSlot;
 static struct {
-    int open, nframes, w, h, shown, cur_tex, threads;
+    int open, nframes, w, h, shown, cur, threads, upd;
     volatile int want, next_load;
     char prefix[64];
     VidSlot slot[VID_SLOTS];
-    Texture *tex[2];
     VidLock lock;
     volatile int quit;
+    volatile int decoded, dec_ms_total; int put;
 #ifdef __WIIU__
     OSThread *thr[VID_WORKERS]; void *stack[VID_WORKERS];
 #else
@@ -104,31 +108,41 @@ static struct {
 #endif
 } V;
 
-static unsigned char *vid_read_decode(int frame) {   /* the pixels of one frame, or NULL */
+static int vid_ms(void) {
+#ifdef __WIIU__
+    return (int)OSTicksToMilliseconds(OSGetTime());
+#else
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return (int)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+#endif
+}
+static int vid_read_decode_into(int frame, Texture *tx) {   /* 1 if the frame's pixels are now in the picture */
     char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "%s%03d.jpg", V.prefix, frame);
     int len = 0; unsigned char *raw = read_file(path, &len);
-    if (!raw) return NULL;
-    int w = 0, h = 0, comp = 0;
+    if (!raw) return 0;
+    int w = 0, h = 0, comp = 0, t0 = vid_ms();
     unsigned char *px = stbi_load_from_memory(raw, len, &w, &h, &comp, 4);
 #ifdef VID_TEST_DELAY
     vsleep_ms(VID_TEST_DELAY);   /* host test: pretend to be a slower CPU */
 #endif
     free(raw);
-    if (px && (w != V.w || h != V.h)) { stbi_image_free(px); px = NULL; }
-    return px;
+    if (!px) return 0;
+    int ok = 0, pitch = 0; uint8_t *dst = gfx_texture_stream_pixels(tx, &pitch);
+    if (dst && w == V.w && h == V.h) { for (int y = 0; y < h; y++) memcpy(dst + (size_t)y * pitch * 4, px + (size_t)y * w * 4, (size_t)w * 4); gfx_texture_stream_flush_cpu(tx); ok = 1; }
+    stbi_image_free(px);
+    V.dec_ms_total += vid_ms() - t0; V.decoded++;
+    return ok;
 }
-static int vid_work(void) {   /* a helper thread: claim the next frame, read and decode it; 0 when there was nothing to do */
+static int vid_work(void) {   /* a helper thread: claim the next frame and a free slot, read and decode; 0 when there was nothing to do */
     int i = -1, frame = -1;
     vlock(&V.lock);
     if (V.next_load < V.want) V.next_load = V.want;
-    if (V.next_load < V.nframes && V.next_load < V.want + VID_SLOTS)
+    if (V.next_load < V.nframes && V.next_load < V.want + VID_SLOTS - 4)
         for (int k = 0; k < VID_SLOTS; k++) if (V.slot[k].state == VS_EMPTY) { i = k; frame = V.next_load++; V.slot[k].state = VS_WORKING; V.slot[k].frame = frame; break; }
     vunlock(&V.lock);
     if (i < 0) return 0;
-    unsigned char *px = frame >= V.want ? vid_read_decode(frame) : NULL;   /* already late: skip it */
+    int ok = frame >= V.want ? vid_read_decode_into(frame, V.slot[i].tex) : 0;   /* already late: skip it */
     vlock(&V.lock);
-    if (px && frame >= V.shown) { V.slot[i].px = px; V.slot[i].state = VS_READY; }
-    else { if (px) stbi_image_free(px); V.slot[i].state = VS_EMPTY; }
+    V.slot[i].state = ok && frame > V.shown ? VS_READY : VS_EMPTY;
     vunlock(&V.lock);
     return 1;
 }
@@ -141,9 +155,9 @@ static void *vid_worker(void *arg) { (void)arg; while (!V.quit) if (!vid_work())
 int vid_open(const char *prefix, int nframes, int w, int h) {
     vid_close();
     memset(&V, 0, sizeof V);
-    snprintf(V.prefix, sizeof V.prefix, "%s", prefix); V.nframes = nframes; V.w = w; V.h = h; V.shown = -1;
-    V.tex[0] = gfx_texture_stream(w, h); V.tex[1] = gfx_texture_stream(w, h);
-    if (!V.tex[0] || !V.tex[1]) { gfx_texture_free(V.tex[0]); gfx_texture_free(V.tex[1]); V.tex[0] = V.tex[1] = NULL; gfx_log("video: no memory for the picture"); return 0; }
+    snprintf(V.prefix, sizeof V.prefix, "%s", prefix); V.nframes = nframes; V.w = w; V.h = h; V.shown = -1; V.cur = -1;
+    for (int i = 0; i < VID_SLOTS; i++) { V.slot[i].tex = gfx_texture_stream(w, h);
+        if (!V.slot[i].tex) { for (int j = 0; j < i; j++) gfx_texture_free(V.slot[j].tex); memset(&V, 0, sizeof V); gfx_log("video: no memory for the pictures"); return 0; } }
     vlock_init(&V.lock);
     for (int i = 0; i < VID_WORKERS; i++) {
 #ifdef __WIIU__
@@ -151,7 +165,7 @@ int vid_open(const char *prefix, int nframes, int w, int h) {
         V.thr[i] = memalign(16, sizeof(OSThread)); V.stack[i] = memalign(16, ss);
         if (!V.thr[i] || !V.stack[i]) break;
         memset(V.thr[i], 0, sizeof(OSThread));
-        if (!OSCreateThread(V.thr[i], vid_worker, 0, NULL, (uint8_t *)V.stack[i] + ss, ss, 20, i == 0 ? OS_THREAD_ATTRIB_AFFINITY_CPU0 : i == 1 ? OS_THREAD_ATTRIB_AFFINITY_CPU2 : OS_THREAD_ATTRIB_AFFINITY_CPU1)) break;
+        if (!OSCreateThread(V.thr[i], vid_worker, 0, NULL, (uint8_t *)V.stack[i] + ss, ss, 20, i == 0 ? OS_THREAD_ATTRIB_AFFINITY_CPU0 : OS_THREAD_ATTRIB_AFFINITY_CPU2)) break;
         OSSetThreadName(V.thr[i], "kk video");
         OSResumeThread(V.thr[i]);
 #else
@@ -163,30 +177,32 @@ int vid_open(const char *prefix, int nframes, int w, int h) {
     gfx_log("video: %d frames %dx%d, %d decoding threads", nframes, w, h, V.threads);
     return 1;
 }
-static void vid_put(const unsigned char *px, int frame) { V.cur_tex ^= 1; gfx_texture_stream_put(V.tex[V.cur_tex], (const uint32_t *)px, V.w, V.h); V.shown = frame; }
 int vid_update(int want) {   /* returns how many frames are decoded and waiting (for the start-up buffering) */
     if (!V.open) return 0;
     if (want >= V.nframes) want = V.nframes - 1;
     if (want < 0) want = 0;
-    if (V.threads == 0) {   /* no helper threads: read and decode right here, one frame at a time (the old way) */
-        if (V.shown != want) { unsigned char *px = vid_read_decode(want); if (px) { vid_put(px, want); stbi_image_free(px); } else V.shown = want; }
+    V.upd++;
+    if (V.threads == 0) {   /* no helper threads: read and decode right here, one frame at a time, two slots in turn */
+        if (V.shown != want) { int i = V.cur == 0 ? 1 : 0; if (vid_read_decode_into(want, V.slot[i].tex)) { gfx_texture_stream_gpu(V.slot[i].tex); V.cur = i; V.put++; } V.shown = want; }
         return VID_SLOTS;
     }
     int show = -1, ready = 0;
     vlock(&V.lock);
     V.want = want;
     for (int i = 0; i < VID_SLOTS; i++) { VidSlot *s = &V.slot[i];
-        if (s->state == VS_READY && s->frame <= want && (show < 0 || s->frame > V.slot[show].frame)) show = i; }
+        if (s->state == VS_READY && s->frame <= want && (show < 0 || s->frame > V.slot[show].frame)) show = i;
+        if (s->state == VS_RETIRED && V.upd - s->retired_at >= 3) s->state = VS_EMPTY; }   /* the GPU is surely done with it now */
+    if (show >= 0) {
+        if (V.cur >= 0) { V.slot[V.cur].state = VS_RETIRED; V.slot[V.cur].retired_at = V.upd; }
+        V.cur = show; V.slot[show].state = VS_SHOWN; V.shown = V.slot[show].frame; V.put++;
+        for (int i = 0; i < VID_SLOTS; i++) if (V.slot[i].state == VS_READY && V.slot[i].frame < V.shown) V.slot[i].state = VS_EMPTY;   /* skipped: never drawn */
+    }
+    for (int i = 0; i < VID_SLOTS; i++) if (V.slot[i].state == VS_READY) ready++;
     vunlock(&V.lock);
-    if (show >= 0 && V.slot[show].frame != V.shown) vid_put(V.slot[show].px, V.slot[show].frame);   /* only this thread empties a ready slot, so it is safe to read */
-    vlock(&V.lock);
-    for (int i = 0; i < VID_SLOTS; i++) { VidSlot *s = &V.slot[i];   /* frames already passed are finished with */
-        if (s->state == VS_READY && s->frame <= V.shown) { stbi_image_free(s->px); s->px = NULL; s->state = VS_EMPTY; }
-        if (s->state == VS_READY) ready++; }
-    vunlock(&V.lock);
+    if (show >= 0) gfx_texture_stream_gpu(V.slot[show].tex);
     return ready;
 }
-Texture *vid_texture(void) { return V.open && V.shown >= 0 ? V.tex[V.cur_tex] : NULL; }
+Texture *vid_texture(void) { return V.open && V.cur >= 0 ? V.slot[V.cur].tex : NULL; }
 void vid_close(void) {
     if (!V.open) return;
     V.quit = 1;
@@ -200,8 +216,8 @@ void vid_close(void) {
 #ifdef __WIIU__
     for (int i = 0; i < VID_WORKERS; i++) { free(V.thr[i]); free(V.stack[i]); }
 #endif
-    for (int i = 0; i < VID_SLOTS; i++) if (V.slot[i].px) stbi_image_free(V.slot[i].px);
-    gfx_texture_free(V.tex[0]); gfx_texture_free(V.tex[1]);
+    gfx_log("video: %d of %d frames shown, %d decoded, %d ms per decode", V.put, V.nframes, V.decoded, V.decoded ? V.dec_ms_total / V.decoded : 0);
+    for (int i = 0; i < VID_SLOTS; i++) gfx_texture_free(V.slot[i].tex);
     memset(&V, 0, sizeof V);
 }
 int vid_debug_shown(void) { return V.shown; }

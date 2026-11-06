@@ -38,6 +38,9 @@ static void read_pads(Pad *pads) {
         p->zl = !!(vs.hold & (VPAD_BUTTON_ZL | VPAD_BUTTON_L)); p->zr = !!(vs.hold & (VPAD_BUTTON_ZR | VPAD_BUTTON_R));
         p->plus = !!(vs.trigger & VPAD_BUTTON_PLUS);
         p->source = 1;
+        if (vs.tpNormal.touched && vs.tpNormal.validity == VPAD_VALID) {   /* the touch screen, in the same 1280 x 720 units the menus are laid out in */
+            VPADTouchData tp; VPADGetTPCalibratedPointEx(VPAD_CHAN_0, VPAD_TP_1280X720, &tp, &vs.tpNormal);
+            p->touch = 1; p->tx = tp.x; p->ty = tp.y; }
     }
     /* the Wii controllers, one slot each: a Pro Controller, a Classic Controller, a Wii Remote held sideways, or a Remote with a Nunchuk */
     for (int ch = 0; ch < 4; ch++) {

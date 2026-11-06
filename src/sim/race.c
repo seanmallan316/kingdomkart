@@ -275,7 +275,7 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
                     in.steer = clampf(in.steer - dir * 0.8f * (1.0f - fabsf(gap) / need), -1.0f, 1.0f); }
             }
             in.item = r->jericho ? (k->lap >= t->laps ? r->shofars[i] > 0 : (r->shofars[i] >= 3 && rank_of[i] > 3 && rr(r) < 0.02f)) : ai_wants_item(r, i);
-        } else in = hin[i];
+        } else { in = hin[i]; if (k->finished) { in.gas = 0; in.brake = k->speed > 3.0f; in.steer = 0; in.drift = 0; in.item = 0; } }   /* past the line: the kart rolls to a stop for its celebration */
         if (r->jericho) {   /* the shofar: one blow per press; on the last lap every shofar held sounds together */
             if (in.item && !r->shofar_held[i] && r->shofars[i] > 0 && k->stun <= 0) {
                 if (k->lap >= t->laps) { int n = r->shofars[i]; r->shofars[i] = 0; give_boost(k, 1.0f + 0.4f * n, 1.3f + 0.04f * n); if (r->collapse_t <= 0) r->collapse_t = 0.001f; push_event(r, EV_SHOUT, i); }
@@ -378,10 +378,10 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
                 if (v->boost_t <= 0.3f) { give_boost(v, 0.6f, 1.18f); bless(r, bumped, bumper); push_event(r, EV_CHEEK, bumped); } }
         }
     }
-    /* the race ends 7 s after the people finish (or 25 s after the first of them, so one straggler does not hold everyone), when everyone finishes, or at the time limit */
+    /* the race ends 4.5 s after the people finish (or 25 s after the first of them, so one straggler does not hold everyone), when everyone finishes, or at the time limit */
     int any_done = 0, all_done = 1; for (int i = 0; i < r->nk; i++) if (r->human[i]) { if (r->k[i].finished) any_done = 1; else all_done = 0; }
     if (any_done) r->after_t += dt;
-    if ((all_done && r->after_t > 7.0f) || r->after_t > 25.0f || r->nfin >= r->nk || r->race_t >= r->time_limit) {
+    if ((all_done && r->after_t > 4.5f) || r->after_t > 25.0f || r->nfin >= r->nk || r->race_t >= r->time_limit) {
         /* anyone who has not finished gets a place by progress */
         race_rank(r);
         for (int p = 0; p < r->nk; p++) { Kart *k = &r->k[r->order[p]]; if (!k->finished) { k->finished = 1; k->place = ++r->nfin; } }

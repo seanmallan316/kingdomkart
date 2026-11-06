@@ -28,6 +28,9 @@ Texture *gfx_texture_rgba_ex(const uint32_t *pixels, int w, int h, int repeat, i
 void gfx_texture_free(Texture *t);
 Texture *gfx_texture_stream(int w, int h);                                      /* for pictures rewritten every frame (video) */
 void gfx_texture_stream_put(Texture *t, const uint32_t *pixels, int w, int h);
+void *gfx_texture_stream_pixels(Texture *t, int *pitch_px);   /* the picture's memory, to write straight into (any thread) */
+void gfx_texture_stream_flush_cpu(Texture *t);                 /* after writing it (any thread) */
+void gfx_texture_stream_gpu(Texture *t);                       /* before drawing with it (drawing thread) */
 
 void gfx_frame_begin(void);
 void gfx_view_begin(int drc, float r, float g, float b);      /* drc = 0 for the TV, 1 for the GamePad */

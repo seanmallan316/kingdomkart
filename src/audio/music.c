@@ -159,7 +159,7 @@ static void deck_block(Deck *d, float *l, float *r, int n) {
    second, which is not noticeable under the fade) */
 static void ring_catch_up(void) {
     uint32_t r = ring_r; int ahead = (int)(ring_w - r);
-    if (ahead > 3200) { __sync_synchronize(); ring_w = r + 3200; }
+    if (ahead > 8000) { __sync_synchronize(); ring_w = r + 8000; }   /* keep a quarter second: a slow frame while a road loads must not run the music dry */
 }
 void music_want(const char *name) {
     if (!name) { for (int i = 0; i < 2; i++) if (D[i].target > 0) { D[i].target = 0; ring_catch_up(); } return; }
