@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_THREAD_LOCALS       /* the Wii U executable format has no thread-local storage */
 #define STBI_ONLY_PNG
@@ -41,6 +42,34 @@ Texture *asset_texture_file(const char *relpath, int mipmaps, int *out_w, int *o
     stbi_image_free(px);
     if (out_w) *out_w = w;
     if (out_h) *out_h = h;
+    return t;
+}
+/* a cut-out of the blue lettering in a rectangle of a picture (u, v from 0 to 1): the blue letters and their white rim
+   stay, the sky behind them becomes clear, so the words can be drawn again over effects without a box round them */
+Texture *asset_texture_letters(const char *name, float u0, float v0, float u1, float v1, int *out_w, int *out_h) {
+    char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "img/%s.png", name);
+    int len = 0; unsigned char *raw = read_file(path, &len);
+    if (!raw) return NULL;
+    int w = 0, h = 0, comp = 0;
+    unsigned char *px = stbi_load_from_memory(raw, len, &w, &h, &comp, 4);
+    free(raw);
+    if (!px) return NULL;
+    int x0 = (int)(u0 * w), y0 = (int)(v0 * h), cw = (int)((u1 - u0) * w), ch = (int)((v1 - v0) * h);
+    if (cw <= 0 || ch <= 0 || x0 + cw > w || y0 + ch > h) { stbi_image_free(px); return NULL; }
+    float *m = calloc((size_t)cw * ch, sizeof(float)); unsigned char *out = malloc((size_t)cw * ch * 4);
+    if (!m || !out) { free(m); free(out); stbi_image_free(px); return NULL; }
+    for (int y = 0; y < ch; y++) for (int x = 0; x < cw; x++) { const unsigned char *p = px + ((size_t)(y0 + y) * w + x0 + x) * 4;
+        float blue = ((float)p[2] - (float)p[0] - 40.0f) / 70.0f; m[y * cw + x] = blue < 0 ? 0 : (blue > 1 ? 1 : blue); }
+    int rad = (int)(cw / 120.0f) + 2;   /* grow the letters a little so their white rim comes too */
+    for (int y = 0; y < ch; y++) for (int x = 0; x < cw; x++) { float a = 0;
+        for (int dy = -rad; dy <= rad; dy++) for (int dx = -rad; dx <= rad; dx++) { int xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= cw || yy >= ch || dx * dx + dy * dy > rad * rad) continue;
+            float v = m[yy * cw + xx] * (1.0f - 0.35f * sqrtf((float)(dx * dx + dy * dy)) / rad); if (v > a) a = v; }
+        const unsigned char *p = px + ((size_t)(y0 + y) * w + x0 + x) * 4; unsigned char *o = out + ((size_t)y * cw + x) * 4;
+        o[0] = p[0]; o[1] = p[1]; o[2] = p[2]; o[3] = (unsigned char)(a * 255.0f); }
+    Texture *t = gfx_texture_rgba((const uint32_t *)out, cw, ch, 0, 0);
+    free(m); free(out); stbi_image_free(px);
+    if (out_w) *out_w = cw;
+    if (out_h) *out_h = ch;
     return t;
 }
 Texture *asset_texture(const char *name, int repeat, int *out_w, int *out_h) {

@@ -8,6 +8,7 @@
 Texture *asset_texture(const char *name, int repeat, int *out_w, int *out_h);   /* NULL if the picture is missing */
 Texture *asset_texture_file(const char *relpath, int mipmaps, int *out_w, int *out_h);   /* any png/jpg under content/, e.g. "video/opener_012.jpg" */
 int asset_exists(const char *relpath);
+Texture *asset_texture_letters(const char *name, float u0, float v0, float u1, float v1, int *out_w, int *out_h);   /* the blue lettering cut out of part of a picture */
 /* the opener video: frames content/<prefix>NNN.jpg decoded ahead of time on the other CPU cores */
 int vid_open(const char *prefix, int nframes, int w, int h);   /* 0 if there is no memory for it */
 int vid_update(int want);                                      /* call every frame with the frame that should be showing; returns frames waiting */

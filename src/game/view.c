@@ -1347,25 +1347,32 @@ static void hud_race(const Pad *pad) {
    runs across it; pressed, it sinks in with a flash before the menu opens */
 static void draw_title_button(const Mat4 *id, float fade) {
     static Vertex tv[160]; Batch tb; batch_init(&tb, tv, 160);   /* its own little batch: the HUD batch is still being filled */
-    static Mesh *m_rays = NULL, *m_btn = NULL; if (!m_rays) { m_rays = gfx_mesh_dynamic(40 * 6); m_btn = gfx_mesh_dynamic(4 * 6); }
-    const float cx = 640, cy = 597, u0 = 415.0f / 1280, u1 = 865.0f / 1280, v0 = 568.0f / 720, v1 = 627.0f / 720;
+    static Mesh *m_rays = NULL, *m_btn = NULL, *m_shine = NULL; if (!m_rays) { m_rays = gfx_mesh_dynamic(40 * 6); m_btn = gfx_mesh_dynamic(4 * 6); m_shine = gfx_mesh_dynamic(2 * 6); }
+    const float cx = 640, cy = 597, u0 = 412.0f / 1280, u1 = 868.0f / 1280, v0 = 566.0f / 720, v1 = 629.0f / 720;
     float pr = g_title_press, push = pr > 0 ? (pr < 0.12f ? pr / 0.12f : fmaxf(0.0f, 1.0f - (pr - 0.12f) / 0.25f)) : 0;   /* 0..1..0: down, then back up */
     float flash = pr > 0 ? fmaxf(0.0f, 1.0f - pr / 0.45f) : 0, beat = 0.5f + 0.5f * sinf(g_time * 3.2f);
+    /* golden beams turning slowly round the words, and a warm glow (blended, not added: the sky behind is nearly white) */
+    for (int i = 0; i < 16; i++) {
+        float a = g_time * 0.3f + i * 6.2831853f / 16, len = 230 + 50 * sinf(g_time * 1.3f + i * 1.7f) + 160 * flash, wid = 13;
+        float dx = cosf(a), dy = sinf(a) * 0.5f, dl = sqrtf(dx * dx + dy * dy); dx /= dl; dy /= dl;
+        Vec3 c = v3(cx + dx * len * 0.5f, cy + dy * len * 0.5f, 0);
+        batch_quad(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.78f, 0.25f, (0.35f + 0.2f * beat + 0.4f * flash) * fade); }
+    batch_quad(&tb, v3(cx, cy, 0), v3(290 + 25 * beat, 0, 0), v3(0, 58 + 6 * beat, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.82f, 0.3f, (0.45f + 0.2f * beat + 0.5f * flash) * fade);
+    gfx_mesh_update(m_rays, tb.v, tb.n); gfx_state(ST_HUD); gfx_bind(tx_blob); gfx_draw(m_rays, id, 1, 1, 1, 1);
+    /* the words themselves, cut from the picture and drawn again on top: they breathe in and out, and sink in when pressed */
+    float sc = (1.0f + 0.03f * beat) * (1.0f - 0.12f * push), w = (u1 - u0) * 1280 * sc, h = (v1 - v0) * 720 * sc, y = cy + 6 * push;
+    static Texture *tx_letters = NULL; static int tried = 0;
+    if (!tried) { tried = 1; tx_letters = asset_texture_letters("title_bg", u0 + 0.025f, v0, u1 - 0.025f, v1, NULL, NULL); }
     batch_clear(&tb);
-    for (int i = 0; i < 14; i++) {   /* the beams: long soft rays turning slowly round the words */
-        float a = g_time * 0.25f + i * 6.2831853f / 14, len = 210 + 40 * sinf(g_time * 1.3f + i * 1.7f) + 120 * flash, wid = 15;
-        float dx = cosf(a), dy = sinf(a) * 0.55f;   /* flattened: the words are wide, not tall */
-        Vec3 c = v3(cx + dx * len * 0.55f, cy + dy * len * 0.55f, 0);
-        batch_quad(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.9f, 0.55f, (0.22f + 0.12f * beat + 0.4f * flash) * fade); }
-    batch_quad(&tb, v3(cx, cy, 0), v3(300 + 30 * beat, 0, 0), v3(0, 62 + 8 * beat, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.95f, 0.75f, (0.3f + 0.2f * beat + 0.6f * flash) * fade);   /* the glow */
-    { float t = fmodf(g_time, 2.6f) / 0.9f; if (t < 1) { float x = 400 + t * 480; batch_quad(&tb, v3(x, cy, 0), v3(22, 0, 0), v3(-14, 30, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 0.55f * fade); } }   /* the shine running across */
-    gfx_mesh_update(m_rays, tb.v, tb.n); gfx_state(ST_HUD | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_rays, id, 1, 1, 1, 1); gfx_state(ST_HUD);
-    if (pr > 0) {   /* pressed: the words sink in, a little smaller and lower, with a flash */
-        float sc = 1.0f - 0.1f * push, w = (u1 - u0) * 1280 * sc, h = (v1 - v0) * 720 * sc, y = cy + 5 * push;
-        batch_clear(&tb);
-        batch_rect_uv(&tb, cx - w * 0.5f, y - h * 0.5f + 4, w, h, u0, v0, u1, v1, 0, 0, 0, 0.35f * push);   /* its shadow */
-        batch_rect_uv(&tb, cx - w * 0.5f, y - h * 0.5f, w, h, u0, v0, u1, v1, 1, 1, 1, 1);
-        gfx_mesh_update(m_btn, tb.v, tb.n); gfx_bind(tx_title_bg); gfx_draw(m_btn, id, 1 - 0.15f * push, 1 - 0.15f * push, 1 - 0.15f * push, 1); }
+    { float lu0 = tx_letters ? 0 : u0, lu1 = tx_letters ? 1 : u1, lv0 = tx_letters ? 0 : v0, lv1 = tx_letters ? 1 : v1, ww = tx_letters ? w * (1.0f - 0.05f / (u1 - u0)) : w;
+      if (push > 0) batch_rect_uv(&tb, cx - ww * 0.5f, y - h * 0.5f + 5, ww, h, lu0, lv0, lu1, lv1, 0, 0, 0, 0.4f * push);   /* its shadow, while pressed */
+      batch_rect_uv(&tb, cx - ww * 0.5f, y - h * 0.5f, ww, h, lu0, lv0, lu1, lv1, 1, 1, 1, fade); }
+    gfx_mesh_update(m_btn, tb.v, tb.n); gfx_bind(tx_letters ? tx_letters : tx_title_bg); gfx_draw(m_btn, id, 1 - 0.15f * push, 1 - 0.15f * push, 1 - 0.15f * push, 1);
+    /* a shine sweeping across, and the white flash of the press */
+    batch_clear(&tb);
+    { float t = fmodf(g_time, 2.6f) / 0.9f; if (t < 1) batch_quad(&tb, v3(400 + t * 480, cy, 0), v3(20, 0, 0), v3(-14, 30, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 0.6f * fade); }
+    if (flash > 0) batch_quad(&tb, v3(cx, cy, 0), v3(260, 0, 0), v3(0, 46, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, flash);
+    if (tb.n) { gfx_mesh_update(m_shine, tb.v, tb.n); gfx_state(ST_HUD | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_shine, id, 1, 1, 1, 1); gfx_state(ST_HUD); }
 }
 static void hud_title(void) {
     float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);   /* the logo settles in */
