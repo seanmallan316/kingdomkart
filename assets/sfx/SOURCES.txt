@@ -1,0 +1,19 @@
+Where the recorded sound effects come from (all free to use; credit is optional but given in the game's credits).
+
+BigSoundBank.com - recordings by Joseph Sardin, CC0 (public domain)
+  sfx_shofar        Horn #3 (2522)                 sfx_lap           Bell #3 (2115)
+  sfx_final_lap     Bell #2 (2114)                 sfx_welcome_home  1 church bell (0830)
+  sfx_pickup        Cluster chimes #1 (2686)       sfx_unlock        Cluster chimes #3 (2688)
+  sfx_finish, sfx_win, sfx_shout   Applause, 300 people (0020)
+  sfx_mini_turbo    Gasoline fire #1 (1340)        sfx_super_turbo   Gasoline fire #5 (1344)
+  sfx_fire          Gasoline fire #4 (1343)        sfx_splash        Splash, big #2 (1520)
+  sfx_locusts       Many flies (0822)              sfx_dove          Flight of a pigeon (0476)
+  sfx_use_item      Whoosh #1 (0572)               sfx_throw         Whoosh #2 (0573)
+  sfx_boost_pad     Whoosh #3 (0574)               sfx_bounce        Boing, cartoon #3 (2279)
+
+Kenney.nl - Impact Sounds and Interface Sounds, CC0 (public domain)
+  sfx_hit (impactPunch_heavy), sfx_block (impactMetal_heavy), sfx_bump and sfx_land (impactSoft_heavy),
+  sfx_go (impactBell_heavy), sfx_menu_move (select), sfx_menu_ok (confirmation), sfx_menu_back (back),
+  sfx_count_tick (tick), sfx_wrong_way (error)
+
+ElevenLabs (made for this game): sfx_coin, sfx_crumble
