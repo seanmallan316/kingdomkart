@@ -1625,8 +1625,8 @@ static void hud_trophy(void) {
         snprintf(buf, sizeof buf, "%d", p + 1); batch_text(&g_b, buf, x - text_width(buf, 54) / 2, top + 26, 54, col[p][0], col[p][1], col[p][2], 1);
         if (t >= CER_T[p] + 0.4f) { const char *nm = CHARACTERS[ord[p]].short_name; batch_text(&g_b, nm, x - text_width(nm, 20) / 2, 652, 20, 1, 1, 1, clampf((t - CER_T[p] - 0.4f) * 3, 0, 1)); } }
     batch_rect(&g_b, 0, 640, 1280, 4, 1, 0.85f, 0.4f, 0.6f);
-    const char *cup = g_cup == 0 ? "GOSPEL CUP" : "GENESIS TO GLORY CUP"; text_c(cup, 22, 40, 1, 0.85f, 0.3f, 1);
-    if (t >= 3.4f) { snprintf(buf, sizeof buf, "CHAMPION: %s", CHARACTERS[ord[0]].name); text_c(buf, 72, 26, 1, 1, 1, clampf((t - 3.4f) * 2, 0, 1)); }
+    const char *cup = g_cup == 0 ? "GOSPEL CUP" : "GENESIS TO GLORY CUP"; text_c(cup, 12, 36, 1, 0.85f, 0.3f, 1);
+    if (t >= 3.4f) { snprintf(buf, sizeof buf, "CHAMPION: %s", CHARACTERS[ord[0]].name); text_c(buf, 56, 22, 1, 1, 1, clampf((t - 3.4f) * 2, 0, 1)); }
 }
 static void hud_trophy_top(void) {   /* drawn over the pictures: confetti, the player's place, the verse */
     float t = g_screen_t; char buf[96]; int ord[NKARTS]; int nk = cer_order(ord);
@@ -1636,10 +1636,10 @@ static void hud_trophy_top(void) {   /* drawn over the pictures: confetti, the p
             batch_rect(&g_b, x, y, 7, (i & 1) ? 11 : 6, c[0], c[1], c[2], 0.95f); } }
     int me = -1; for (int i = 0; i < nk; i++) if (ord[i] == g_player_char) me = i;
     if (t >= 4.0f && me >= 0) { float a = clampf((t - 4.0f) * 2, 0, 1);
-        if (me == 0) text_c("YOU WON THE CUP!", 520, 34, 1, 0.9f, 0.3f, a);
-        else { snprintf(buf, sizeof buf, "YOU FINISHED %s", place_name(me + 1)); text_c(buf, 520, 30, 1, 1, 1, a); } }
+        if (me == 0) text_c("YOU WON THE CUP!", 86, 22, 1, 0.9f, 0.3f, a);
+        else { snprintf(buf, sizeof buf, "YOU FINISHED %s", place_name(me + 1)); text_c(buf, 86, 20, 0.85f, 0.9f, 1, a); } }
     if (t >= 4.6f) { float a = clampf((t - 4.6f) * 2, 0, 1); text_c("I HAVE FOUGHT A GOOD FIGHT, I HAVE FINISHED MY COURSE, I HAVE KEPT THE FAITH", 684, 14, 1, 1, 1, a); text_c("2 TIMOTHY 4:7", 702, 12, 1, 0.85f, 0.4f, a); }
-    if (t >= 5.5f && ((int)(g_time * 2) & 1)) text_c("A: CONTINUE", 560, 18, 0.9f, 0.95f, 1, 1);
+    if (t >= 5.5f && ((int)(g_time * 2) & 1)) batch_text(&g_b, "A: CONTINUE", 1260 - text_width("A: CONTINUE", 16), 690, 16, 0.9f, 0.95f, 1, 1);
 }
 static void draw_trophy_pictures(void) {   /* the three characters stand on the podium; the cup appears over the winner */
     int ord[NKARTS]; cer_order(ord); Mat4 id = m4_identity(); static Mesh *pm[4] = {0}; float t = g_screen_t;
@@ -1649,8 +1649,8 @@ static void draw_trophy_pictures(void) {   /* the three characters stand on the 
         float bounce = (p == 0 && t > CER_T[0] + 0.55f) ? sinf((t - CER_T[0]) * 3.0f) * 4 * expf(-(t - CER_T[0] - 0.55f) * 1.5f) : 0;
         batch_clear(&g_b); batch_rect_uv(&g_b, x - w / 2, bot - h + bounce, w, h, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(pm[p], g_b.v, g_b.n); gfx_bind(tx_char[ch]); gfx_draw(pm[p], &id, 1, 1, 1, 1); }
     if (t >= 3.4f && tx_trophy) { if (!pm[3]) pm[3] = gfx_mesh_dynamic(6);
-        float u = clampf((t - 3.4f) / 0.5f, 0, 1), sz = 130 * (u < 1 ? (1.25f * u - 0.25f * u * u) : 1.0f) * (1 + 0.04f * sinf(t * 3)), top = 640 - CER_H[0] - 250 - sz - 6;
-        if (top < 100) top = 100;
+        float u = clampf((t - 3.4f) / 0.5f, 0, 1), sz = 104 * (u < 1 ? (1.25f * u - 0.25f * u * u) : 1.0f) * (1 + 0.04f * sinf(t * 3)), top = 640 - CER_H[0] - 250 - sz - 4;
+        if (top < 116) top = 116;
         batch_clear(&g_b); batch_rect_uv(&g_b, 640 - sz / 2 - (1 - u) * 0, top, sz, sz, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(pm[3], g_b.v, g_b.n); gfx_bind(tx_trophy); gfx_draw(pm[3], &id, 1, 1, 1, 1); }
 }
 
