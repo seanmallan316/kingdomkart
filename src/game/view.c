@@ -77,7 +77,7 @@ static int g_pslot[MAX_HUMANS] = {0, 1, 2, 3};  /* controller slot of each playe
 static int g_pchar[MAX_HUMANS], g_plock[MAX_HUMANS];   /* multiplayer character select: each player's cursor, and whether they have locked in */
 static int g_joined[KK_PADS];                   /* join screen: player number + 1 for each controller slot, 0 = not joined */
 static Pad g_prev_pads[KK_PADS];
-static char g_pside[MAX_HUMANS][40]; static float g_pside_t[MAX_HUMANS];   /* a small note that pops up beside your own kart ("BLESSED BY MARY") */
+static char g_pside[MAX_HUMANS][40]; static float g_pside_t[MAX_HUMANS], g_coin_pop[MAX_HUMANS];   /* a small note that pops up beside your own kart ("BLESSED BY MARY") */
 static char g_pmsg[MAX_HUMANS][40], g_pmsg2[MAX_HUMANS][64]; static float g_pmsg_t[MAX_HUMANS], g_proulette[MAX_HUMANS], g_prou_tick[MAX_HUMANS];
 #define g_msg (g_pmsg[0])
 #define g_msg2 (g_pmsg2[0])
@@ -100,7 +100,7 @@ static unsigned g_fresh_unlocks;             /* unlock bits earned by the race j
 static Texture *tx_finale; static Mesh *m_finale;
 static Texture *tx_title, *tx_title_bg; static Mesh *m_title, *m_title_bg, *m_logo_small; static float g_title_h;      /* title_art.png: the logo on the title screen, when Sean has made it */
 static Texture *tx_card[8]; static Mesh *m_card[8];   /* card_<prefix>.png: the road pictures on the road-select cards */
-static Texture *tx_item[ITEM_COUNT]; static int g_item_sq[ITEM_COUNT];   /* item pictures for the HUD slot: Sean's files, or drawn ones (square) */
+static Texture *tx_item[ITEM_COUNT]; static int g_item_sq[ITEM_COUNT]; static float g_item_asp[ITEM_COUNT];   /* item pictures for the HUD slot: Sean's files, or drawn ones (square) */
 /* the drivers' voices: content/sfx/voice_<name>_<event>.wav for one character, or voice_<event>.wav shared by all; silent when missing */
 enum { VO_START, VO_BOOST, VO_TRICK, VO_WIN, VO_OUCH, VO_BLESS, VO_FIRE, VO_COUNT };   /* start: at GO; boost: rocket start / super turbo / boost pad; fire: the Chariot of Fire */
 static const char *VO_NAMES[VO_COUNT] = {"start", "boost", "trick", "win", "ouch", "bless", "fire"};
@@ -796,6 +796,67 @@ static void px_icon(int x, int y, uint32_t *o) {
         for (int d = 0; d < 3; d++) if (dist2(x, y, 44 + d * 6, 52 + (d % 2) * 6, 2.5f, 3.5f) < 1) *o = rgba(200, 240, 255, 255); break;
     }
 }
+/* a "cute" item icon: the drawing, outlined in dark, on a round colored badge with a white rim and a shine */
+static Texture *make_icon(int kind) {
+    static const uint8_t badge[ITEM_COUNT][3] = {{0,0,0}, {255,214,120}, {240,180,110}, {150,215,140}, {140,170,240}, {110,190,240}, {230,170,110}, {250,130,80}, {130,210,240}};
+    static uint32_t src[64 * 64], out[96 * 96];
+    g_icon_kind = kind; for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++) px_icon(x, y, &src[y * 64 + x]);
+    for (int y = 0; y < 96; y++) for (int x = 0; x < 96; x++) {
+        float dx = (x + 0.5f - 48) / 46.0f, dy = (y + 0.5f - 48) / 46.0f, d = sqrtf(dx * dx + dy * dy); uint32_t o = 0;
+        if (d < 1.0f) { float sh = 1.08f - 0.35f * (dy + 1) * 0.5f; int r = (int)(badge[kind][0] * sh), g = (int)(badge[kind][1] * sh), b = (int)(badge[kind][2] * sh);
+            if (r > 255) r = 255; if (g > 255) g = 255; if (b > 255) b = 255; o = d > 0.9f ? rgba(255, 255, 255, 255) : rgba(r, g, b, 255);
+        }   /* badge with a white rim, lighter at the top */
+        int sx = (x - 16), sy = (y - 16);                                                                                   /* the drawing sits in the middle 64 x 64 */
+        if (sx >= 0 && sx < 64 && sy >= 0 && sy < 64 && (src[sy * 64 + sx] & 255) > 40) o = src[sy * 64 + sx] | 255;
+        else if (d < 0.9f) { int near = 0; for (int oy = -2; oy <= 2 && !near; oy++) for (int ox = -2; ox <= 2; ox++) { int qx = sx + ox, qy = sy + oy;
+                if (qx >= 0 && qx < 64 && qy >= 0 && qy < 64 && (src[qy * 64 + qx] & 255) > 40) { near = 1; break; } }
+            if (near) o = rgba(40, 30, 50, 255); }                                                                        /* dark outline */
+        out[y * 96 + x] = o; }
+    for (int y = 6; y < 30; y++) for (int x = 22; x < 50; x++) { float dx = (x - 36) / 14.0f, dy = (y - 18) / 7.0f; if (dx * dx + dy * dy < 1 && (out[y * 96 + x] & 255)) {   /* a soft shine */
+        uint32_t c = out[y * 96 + x]; int r = ((c >> 24) & 255) + 50, g = ((c >> 16) & 255) + 50, b = ((c >> 8) & 255) + 50; if (r > 255) r = 255; if (g > 255) g = 255; if (b > 255) b = 255; out[y * 96 + x] = rgba(r, g, b, 255); } }
+    return gfx_texture_rgba(out, 96, 96, 0, 0);
+}
+static int human_kart(int p);
+/* the item window: after a box it spins through the blessings like a rolodex, slows, and stops on the one you got */
+#define ROU_N 14
+#define ROU_T 1.4f
+static uint8_t g_rou_seq[MAX_HUMANS][ROU_N + 1]; static float g_rou_land[MAX_HUMANS]; static int g_rou_last[MAX_HUMANS];
+static Mesh *m_rou[MAX_HUMANS][2];
+static void rou_start(int p, int item) {
+    static uint32_t seed = 12345; int prev = 0;
+    for (int i = 0; i < ROU_N; i++) { int v; do { seed = seed * 1664525u + 1013904223u; v = 1 + (int)((seed >> 16) % (ITEM_COUNT - 1)); } while (v == prev || (i == ROU_N - 1 && v == item)); g_rou_seq[p][i] = (uint8_t)v; prev = v; }
+    g_rou_seq[p][ROU_N] = (uint8_t)item; g_rou_land[p] = 99; g_rou_last[p] = 0;
+}
+static float rou_phase(int p) { float u = 1.0f - g_proulette[p] / ROU_T; if (u < 0) u = 0; if (u > 1) u = 1; return (1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u)) * ROU_N; }
+static void icon_rect_clipped(Batch *b, int item, float x, float top, float size, float clip0, float clip1, float scale) {
+    float pad = size * 0.06f, avail = (size - 2 * pad) * scale, asp = g_item_asp[item] > 0 ? g_item_asp[item] : 1.0f;
+    float iw = asp >= 1 ? avail : avail * asp, ih = asp >= 1 ? avail / asp : avail, ix = x + (size - iw) / 2, iy = top + (size - ih) / 2;
+    float y0 = iy > clip0 ? iy : clip0, y1 = iy + ih < clip1 ? iy + ih : clip1; if (y1 <= y0) return;
+    batch_rect_uv(b, ix, y0, iw, y1 - y0, 0, (y0 - iy) / ih, 1, (y1 - iy) / ih, 1, 1, 1, 1);
+}
+static void draw_item_window(int p, float x, float y, float size) {   /* the pictures in the window (the frame is in the HUD batch) */
+    Kart *k = &g_race.k[human_kart(p)]; Mat4 id = m4_identity(); if (!k->item) return;
+    for (int j = 0; j < 2; j++) if (!m_rou[p][j]) m_rou[p][j] = gfx_mesh_dynamic(6);
+    if (g_proulette[p] > 0) { float f = rou_phase(p); int i0 = (int)f; float fr = f - i0;
+        for (int j = 0; j < 2; j++) { int idx = i0 + j; if (idx > ROU_N) break; int it = g_rou_seq[p][idx]; if (!tx_item[it]) continue;
+            batch_clear(&g_b); icon_rect_clipped(&g_b, it, x, y + (j - fr) * size, size, y, y + size, 1.0f);
+            if (!g_b.n) continue; gfx_mesh_update(m_rou[p][j], g_b.v, g_b.n); gfx_bind(tx_item[it]); gfx_draw(m_rou[p][j], &id, 1, 1, 1, 1); } }
+    else if (tx_item[k->item]) { float t = g_rou_land[p] < 99 ? g_rou_land[p] : 1, pop = 1.0f + 0.22f * expf(-t * 6.0f) * cosf(t * 18.0f);
+        batch_clear(&g_b); icon_rect_clipped(&g_b, k->item, x, y, size, y - size, y + 2 * size, pop);
+        gfx_mesh_update(m_rou[p][0], g_b.v, g_b.n); gfx_bind(tx_item[k->item]); gfx_draw(m_rou[p][0], &id, 1, 1, 1, 1); }
+}
+static void hud_item_window(int p, float x, float y, float size, int text_below) {   /* the frame and the name */
+    Kart *k = &g_race.k[human_kart(p)];
+    batch_rect(&g_b, x - 4, y - 4, size + 8, size + 8, 1, 0.82f, 0.35f, 0.95f);
+    batch_rect(&g_b, x, y, size, size, 0.05f, 0.08f, 0.22f, 0.88f);
+    batch_rect(&g_b, x, y, size, size * 0.12f, 1, 1, 1, 0.08f);
+    if (!k->item) { const char *h = "ZL"; batch_text(&g_b, h, x + size / 2 - text_width(h, size * 0.22f) / 2, y + size / 2 - size * 0.11f, size * 0.22f, 0.6f, 0.7f, 0.9f, 0.6f); return; }
+    if (g_proulette[p] > 0) return;
+    const char *nm = item_name(k->item); float fs = size * 0.15f; if (fs < 11) fs = 11;
+    if (text_below) { if (text_width(nm, fs) > size * 1.9f) fs *= 0.8f; batch_text(&g_b, nm, x + size / 2 - text_width(nm, fs) / 2, y + size + 10, fs, 1, 0.9f, 0.4f, 1);
+        if (g_rou_land[p] < 3.0f) { const char *v = item_verse(k->item); batch_text(&g_b, v, x + size / 2 - text_width(v, fs * 0.72f) / 2, y + size + 14 + fs, fs * 0.72f, 0.8f, 0.85f, 1, clampf(3.0f - g_rou_land[p], 0, 1)); } }
+    else batch_text(&g_b, nm, x + size + 10, y + size / 2 - fs / 2, fs, 1, 0.9f, 0.4f, 1);
+}
 static void px_shieldbearer(int x, int y, uint32_t *o) {   /* a Philistine soldier behind a tall bronze shield */
     px_person(x, y, o, 150, 40, 40, 1);
     float dx = (x - 30) / 20.0f, dy = (y - 52) / 34.0f; if (dx * dx + dy * dy < 1.0f) { float n = smooth_noise(x / 4.0f, y / 4.0f); *o = rgba(190 + (int)(n * 40), 140 + (int)(n * 30), 50, 255); }
@@ -979,8 +1040,8 @@ int game_init(int status) {
         tx_trophy = make_tex(128, 128, 0, 0, px_trophy);
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_loaves", "icon_samaritan", "icon_shield", "icon_parting", "shofar", "icon_fire", "icon_water"};
-        for (int i = 1; i < ITEM_COUNT; i++) { int w = 1, h = 1; tx_item[i] = asset_texture(in[i], 0, &w, &h); g_item_sq[i] = w == h;
-            if (!tx_item[i]) { g_icon_kind = i; tx_item[i] = make_tex(64, 64, 0, 0, px_icon); g_item_sq[i] = 1; } }
+        for (int i = 1; i < ITEM_COUNT; i++) { int w = 1, h = 1; tx_item[i] = asset_texture(in[i], 0, &w, &h); g_item_sq[i] = w == h; g_item_asp[i] = h > 0 ? (float)w / (float)h : 1.0f;
+            if (!tx_item[i]) { tx_item[i] = make_icon(i); g_item_sq[i] = 1; g_item_asp[i] = 1.0f; } }
         for (int c = 0; c < NCHARS; c++) for (int e = 0; e < VO_COUNT; e++) { char vn[64]; snprintf(vn, sizeof vn, "voice_%s_%s", pn[c] + 9, VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn);
             if (g_voice[c][e] < 0) { snprintf(vn, sizeof vn, "voice_%s", VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn); } }
         { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192);
@@ -1161,7 +1222,9 @@ static void hud_race(const Pad *pad) {
         batch_text(&g_b, place_name(mypos), 1240 - text_width(place_name(mypos), 64), 24, 64, 1, 0.9f, 0.3f, 1);
     }
     snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); batch_text(&g_b, buf, 1240 - text_width(buf, 24), 96, 24, 1, 1, 1, 1);
-    if (g_track.ncoin) { float cy2 = r->jericho ? 222 : 215; batch_rect(&g_b, 40, cy2, 16, 16, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, 62, cy2 - 1, 18, 1, 0.9f, 0.5f, 1); }
+    if (g_track.ncoin) { float cy2 = r->jericho ? 222 : 262, pop = 1.0f + 0.6f * fmaxf(g_coin_pop[0], 0) / 0.5f, cs2 = 22 * pop;   /* the coin counter grows for a moment on each pickup */
+        batch_rect(&g_b, 44 - 1, cy2 - 1, cs2 + 2, cs2 + 2, 0.45f, 0.3f, 0.05f, 1); batch_rect(&g_b, 44, cy2, cs2, cs2, 1, 0.82f, 0.25f, 1); batch_rect(&g_b, 44 + cs2 * 0.25f, cy2 + cs2 * 0.2f, cs2 * 0.2f, cs2 * 0.6f, 1, 0.97f, 0.7f, 1);
+        snprintf(buf, sizeof buf, k->coins >= 10 ? "x%d MAX" : "x%d", k->coins); batch_text(&g_b, buf, 44 + cs2 + 8, cy2 + 1, 22 * pop, 1, 0.9f, 0.5f, 1); }
     if (r->jericho) {   /* the shofars held, and the great shout on the last lap */
         int n = r->shofars[r->player], last = k->lap >= g_track.laps;
         batch_rect(&g_b, 40, 140, 150, 60, 0.05f, 0.1f, 0.25f, 0.7f); batch_rect(&g_b, 43, 143, 144, 54, last ? 0.5f : 0.15f, last ? 0.3f : 0.3f, 0.1f, 0.7f);
@@ -1170,18 +1233,7 @@ static void hud_race(const Pad *pad) {
         else { snprintf(buf, sizeof buf, "SHOFAR x%d", n); batch_text(&g_b, buf, 115 - text_width(buf, 16) / 2, 172, 16, 0.9f, 0.95f, 1, 1); }
         batch_rect(&g_b, 40, 206, 150, 8, 0.1f, 0.1f, 0.1f, 0.6f); batch_rect(&g_b, 40, 206, 150 * r->wall_fall, 8, 0.85f, 0.6f, 0.3f, 1);   /* how far the walls have come down */
     }
-    else if (g_mode != MODE_TT) {
-        batch_rect(&g_b, 40, 140, 150, 60, 0.05f, 0.1f, 0.25f, 0.7f);
-        batch_rect(&g_b, 43, 143, 144, 54, 0.15f, 0.3f, 0.6f, 0.7f);
-        if (g_roulette > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_roulette)) % (ITEM_COUNT - 1); const char *nm = item_name(show);
-            float sz = text_width(nm, 16) > 136 ? 12 : 16; batch_text(&g_b, nm, 115 - text_width(nm, sz) / 2, 160, sz, 0.9f, 0.95f, 1, 0.8f); }
-        else if (k->item && tx_item[k->item] && g_item_sq[k->item]) { const char *nm = item_name(k->item); float sz = text_width(nm, 13) > 84 ? 10 : 13;   /* the icon sits on the left, the name beside it */
-            batch_text(&g_b, nm, 140 - text_width(nm, sz) / 2, 156, sz, 1, 0.9f, 0.4f, 1); batch_text(&g_b, item_verse(k->item), 140 - text_width(item_verse(k->item), 10) / 2, 178, 10, 0.8f, 0.85f, 1, 1); }
-        else if (k->item && tx_item[k->item]) batch_text(&g_b, item_name(k->item), 115 - text_width(item_name(k->item), 12) / 2, 203, 12, 1, 0.9f, 0.4f, 1);
-        else if (k->item) { float sz = text_width(item_name(k->item), 16) > 136 ? 12 : 16; batch_text(&g_b, item_name(k->item), 115 - text_width(item_name(k->item), sz) / 2, 152, sz, 1, 0.9f, 0.4f, 1);
-            batch_text(&g_b, item_verse(k->item), 115 - text_width(item_verse(k->item), 11) / 2, 178, 11, 0.8f, 0.85f, 1, 1); }
-        else batch_text(&g_b, "ZL: ITEM", 115 - text_width("ZL: ITEM", 16) / 2, 162, 16, 0.7f, 0.8f, 1, 0.8f);
-    }
+    else if (g_mode != MODE_TT) hud_item_window(0, 44, 118, 104, 1);
     if (k->drifting) { float c = clampf(k->drift_charge / 1.6f, 0, 1); batch_rect(&g_b, 1040, 130, 200, 14, 0.1f, 0.1f, 0.1f, 0.6f);
         batch_rect(&g_b, 1040, 130, 200 * c, 14, c >= 1 ? 1.0f : 0.3f, c >= 0.5f ? 0.9f : 0.4f, 0.2f, 1); }
     { float mx = 1070, mz = 560;
@@ -2060,13 +2112,10 @@ static void hud_split(int p, float vw, float vh) {
     snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); batch_text(&g_b, buf, vw - 16 - text_width(buf, 16 * sc), 12 + 52 * sc, 16 * sc, 1, 1, 1, 1);
     /* the blessing slot, bottom left */
     { float bw = 120 * sc, bh = 44 * sc, bx = 16, by = vh - bh - 12;
-      batch_rect(&g_b, bx, by, bw, bh, 0.05f, 0.1f, 0.25f, 0.7f); batch_rect(&g_b, bx + 2, by + 2, bw - 4, bh - 4, 0.15f, 0.3f, 0.6f, 0.7f);
+      if (r->jericho) { batch_rect(&g_b, bx, by, bw, bh, 0.05f, 0.1f, 0.25f, 0.7f); batch_rect(&g_b, bx + 2, by + 2, bw - 4, bh - 4, 0.15f, 0.3f, 0.6f, 0.7f); }
       if (r->jericho) { int n = r->shofars[vk], last = k->lap >= g_track.laps; if (last) snprintf(buf, sizeof buf, n > 0 ? "ZL: SHOUT!" : "SHOUTED!"); else snprintf(buf, sizeof buf, "SHOFAR x%d", n);
           batch_text(&g_b, buf, bx + bw / 2 - text_width(buf, 12 * sc) / 2, by + bh / 2 - 6 * sc, 12 * sc, 1, 0.9f, 0.4f, 1); }
-      else if (g_proulette[p] > 0 && k->item) { int show = 1 + (int)(g_time * (8.0f + 30.0f * g_proulette[p])) % (ITEM_COUNT - 1); const char *nm = item_short(show);
-          float sz = 13 * sc; batch_text(&g_b, nm, bx + bw / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 0.9f, 0.95f, 1, 0.8f); }
-      else if (k->item) { const char *nm = item_short(k->item); float sz = 13 * sc, off = tx_item[k->item] && g_item_sq[k->item] ? 22 * sc : 0; batch_text(&g_b, nm, bx + off + (bw - off) / 2 - text_width(nm, sz) / 2, by + bh / 2 - sz / 2, sz, 1, 0.9f, 0.4f, 1); }
-      else batch_text(&g_b, "ZL: BLESS", bx + bw / 2 - text_width("ZL: BLESS", 11 * sc) / 2, by + bh / 2 - 5 * sc, 11 * sc, 0.7f, 0.8f, 1, 0.8f);
+      else hud_item_window(p, 16, vh - 64 * sc - 14, 64 * sc, 0);
       if (g_track.ncoin) { batch_rect(&g_b, bx + bw + 10, by + bh - 16 * sc, 12 * sc, 12 * sc, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, bx + bw + 26 * sc, by + bh - 18 * sc, 14 * sc, 1, 0.9f, 0.5f, 1); } }
     if (k->drifting) { float c = clampf(k->drift_charge / 1.6f, 0, 1), w = 140 * sc; batch_rect(&g_b, vw - 16 - w, vh - 24, w, 10, 0.1f, 0.1f, 0.1f, 0.6f);
         batch_rect(&g_b, vw - 16 - w, vh - 24, w * c, 10, c >= 1 ? 1.0f : 0.3f, c >= 0.5f ? 0.9f : 0.4f, 0.2f, 1); }
@@ -2295,9 +2344,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
     for (int p = 0; p < g_nplayers; p++) {
         if (g_pmsg_t[p] > 0) { g_pmsg_t[p] -= dt; if (g_pmsg_t[p] <= 0) g_pmsg2[p][0] = 0; }
         if (g_pside_t[p] > 0) g_pside_t[p] -= dt;
-        if (g_proulette[p] > 0) { g_proulette[p] -= dt; g_prou_tick[p] -= dt;
-            if (g_prou_tick[p] <= 0) { sfx_play(SFX_MENU_MOVE, 0.5f, 0); g_prou_tick[p] = 0.05f + (1.1f - g_proulette[p]) * 0.12f; }   /* the ticks slow down as it settles */
-            if (g_proulette[p] <= 0) { Kart *pk = &g_race.k[human_kart(p)]; if (pk->item) { pmsg(p, 1.4f, item_name(pk->item)); pmsg2(p, 1.4f, item_verse(pk->item)); sfx_play(SFX_MENU_OK, 0.8f, 0); } } } }
+        if (g_coin_pop[p] > 0) g_coin_pop[p] -= dt;
+        if (g_rou_land[p] < 99) g_rou_land[p] += dt;
+        if (g_proulette[p] > 0) { g_proulette[p] -= dt;
+            int pos = (int)rou_phase(p); if (pos != g_rou_last[p]) { g_rou_last[p] = pos; sfx_play(SFX_MENU_MOVE, 0.45f, 0); }   /* a tick as each picture rolls past; they slow as it settles */
+            if (g_proulette[p] <= 0) { g_proulette[p] = 0; g_rou_land[p] = 0; Kart *pk = &g_race.k[human_kart(p)]; if (pk->item) sfx_play(SFX_MENU_OK, 0.9f, 0); } } }
     { Kart *pk = &r->k[r->player]; int racing = (g_screen == SCR_RACE) && !g_attract && r->state != RACE_FINISHED;
       sfx_engine(fabsf(pk->speed) / (36.0f * pk->st.top_speed), pk->drifting, pk->boost_t > 0, !pk->hit.on_road, pk->air, g_track.water, racing, g_screen == SCR_RACE && pad->a, g_screen == SCR_RACE && pad->b);
       static float ww_t = 0; if (racing && pk->wrongway_t > WRONGWAY_DELAY) { ww_t += dt; if (ww_t > 1.0f) { ww_t = 0; sfx_play(SFX_WRONG_WAY, 0.8f, 0); } } else ww_t = 1.0f; }
@@ -2356,7 +2407,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case EV_ROCKET_START: voice_at(ev->kart, VO_BOOST); if (who >= 0) { pmsg(who, 1.2f, "ROCKET START!"); sfx_play(SFX_SUPER_TURBO, 1, 0); prumble(who, 0.7f, 0.35f); } break;
                 case EV_WHEELSPIN: if (who >= 0) { pmsg(who, 1.2f, "TOO EARLY!"); sfx_play(SFX_WRONG_WAY, 0.8f, 0); prumble(who, 0.3f, 0.5f); } add_dust(v3(ek->x, ek->y, ek->z), 1.5f, 2.5f); break;
                 case EV_PICKUP: { rainbow_burst(v3(ek->x, ek->y, ek->z));
-                    if (who >= 0) { g_proulette[who] = 1.1f; g_prou_tick[who] = 0; sfx_play(SFX_PICKUP, 1, 0); } else sfx_at(SFX_PICKUP, ek, 0.5f); } break;
+                    if (who >= 0) { g_proulette[who] = ROU_T; g_prou_tick[who] = 0; rou_start(who, g_race.k[human_kart(who)].item); sfx_play(SFX_PICKUP, 1, 0); } else sfx_at(SFX_PICKUP, ek, 0.5f); } break;
                 case EV_USE_MANNA: sfx_at(SFX_USE_ITEM, ek, 0.9f); if (who >= 0) pmsg(who, 0.8f, "MANNA!"); break;
                 case EV_USE_LOAVES: voice_at(ev->kart, VO_BLESS); sfx_at(SFX_COIN, ek, 1.0f); if (who >= 0) pmsg(who, 1.2f, "BREAD FOR EVERYONE!"); for (int q2 = 0; q2 < r->nk; q2++) bless_sparkle(&r->k[q2], 1, 0.85f, 0.3f); break;
                 case EV_USE_SAMARITAN: sfx_at(SFX_UNLOCK, ek, 0.8f); break;
@@ -2371,7 +2422,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case EV_CHEEK: if (who >= 0) pmsg(who, 1.0f, "THE OTHER CHEEK!"); break;
                 case EV_PAD_BOOST: if (frand01() < 0.5f) voice_at(ev->kart, VO_BOOST); if (who >= 0) { pmsg(who, 0.7f, "BOOST!"); prumble(who, 0.35f, 0.2f); } add_dust(v3(ek->x, ek->y, ek->z), 1.0f, 2.0f); sfx_at(SFX_BOOST_PAD, ek, 0.9f); break;
                 case EV_PAD_BOUNCE: if (who >= 0) pmsg(who, 0.7f, "BOING!"); sfx_at(SFX_BOUNCE, ek, 0.9f); break;
-                case EV_COIN: if (who >= 0) sfx_play(SFX_COIN, 0.8f, 0); break;
+                case EV_COIN: if (!ek) break; bless_sparkle(ek, 1, 0.85f, 0.25f); if (who >= 0) { sfx_play(SFX_COIN, 1.0f, 0); g_coin_pop[who] = 0.5f; char cl[32]; if (ek->coins >= 10) snprintf(cl, sizeof cl, "COINS FULL - TOP SPEED +10%%"); else snprintf(cl, sizeof cl, "+1 COIN  (%d/10)", ek->coins); pside(who, 0.9f, cl); } break;
                 case EV_SLOWED: if (who >= 0) pmsg(who, 1.0f, "SLOWED!"); break;
                 case EV_SHOFAR: sfx_at(SFX_SHOFAR, ek, 0.9f); if (who >= 0) { pmsg(who, 0.9f, "SHOFAR!"); prumble(who, 0.3f, 0.2f); } break;
                 case EV_SHOUT: sfx_at(SFX_SHOUT, ek, 1.0f); if (who >= 0) { pmsg(who, 1.6f, "THE GREAT SHOUT!"); pmsg2(who, 1.6f, "JOSHUA 6:20"); prumble(who, 0.8f, 0.5f); } for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.5f); break;
@@ -2474,9 +2525,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 hud_split(p, vw, vh);
                 gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
                 int it = r->k[human_kart(p)].item;
-                if (it > 0 && it < ITEM_COUNT && tx_item[it] && g_proulette[p] <= 0) { float sc = vw < 1000 ? 0.75f : 1.0f; batch_clear(&g_b);
-                    if (g_item_sq[it]) batch_rect_uv(&g_b, 18, vh - 44 * sc - 12, 44 * sc, 44 * sc, 0, 0, 1, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, 20, vh - 44 * sc - 10, 112 * sc, 40 * sc, 0, 0, 1, 1, 1, 1, 1, 1);
-                    gfx_mesh_update(m_kartpic, g_b.v, g_b.n); gfx_bind(tx_item[it]); gfx_draw(m_kartpic, &id, 1, 1, 1, 1); } }
+                if (it > 0 && it < ITEM_COUNT && !r->jericho) { float sc = vw < 1000 ? 0.75f : 1.0f; draw_item_window(p, 16, vh - 64 * sc - 14, 64 * sc); } }
             if (g_nplayers == 3) { gfx_viewport(drc, 0.5f, 0.5f, 0.5f, 0.5f); gfx_camera_2d_virtual(640, 360); gfx_state(ST_HUD); batch_clear(&g_b); hud_quarter_map(); gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1); }
             gfx_viewport(drc, 0, 0, 1, 1); gfx_camera_2d(); gfx_state(ST_HUD); batch_clear(&g_b);
             batch_rect(&g_b, 0, 358, 1280, 4, 0.02f, 0.03f, 0.08f, 1); if (g_nplayers >= 3) batch_rect(&g_b, 638, 0, 4, 720, 0.02f, 0.03f, 0.08f, 1);   /* the bars between the views */
@@ -2536,9 +2585,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (two) { static Mesh *m2 = NULL; if (!m2) m2 = gfx_mesh_dynamic(6); a = g_kartback_aspect[g_player_char]; ph = 220; pw = ph * a; if (pw > 330) { pw = 330; ph = pw / a; }
                     batch_clear(&g_b); batch_rect_uv(&g_b, 810 - pw / 2, 67 + (220 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m2, g_b.v, g_b.n); gfx_bind(tx_kartback[g_player_char]); gfx_draw(m2, &id, 1, 1, 1, 1); } } }
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
-            if (it > 0 && it < ITEM_COUNT && tx_item[it] && !(g_roulette > 0)) { static Mesh *im = NULL; if (!im) im = gfx_mesh_dynamic(6);
-                batch_clear(&g_b); if (g_item_sq[it]) batch_rect_uv(&g_b, 46, 146, 48, 48, 0, 0, 1, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, 48, 146, 134, 48, 0, 0, 1, 1, 1, 1, 1, 1);
-                gfx_mesh_update(im, g_b.v, g_b.n); gfx_bind(tx_item[it]); gfx_draw(im, &id, 1, 1, 1, 1); } }
+            if (it > 0 && it < ITEM_COUNT && !r->jericho) draw_item_window(0, 44, 118, 104); }
         gfx_view_end(drc);
     }
     gfx_frame_end();

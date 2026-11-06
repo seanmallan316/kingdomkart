@@ -314,9 +314,9 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
         if (r->coin_respawn[c] > 0) { r->coin_respawn[c] -= dt; continue; }
         const Coin *cn = &t->coin[c]; const TrackSample *s = &t->s[cn->idx];
         float cx = s->x + s->nx * cn->lateral, cz = s->z + s->nz * cn->lateral;
-        for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; if (k->coins >= 10 || k->finished) continue;
+        for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; if (k->finished) continue;
             float dx = k->x - cx, dz = k->z - cz;
-            if (dx * dx + dz * dz < 1.6f * 1.6f && k->y < s->y + 3.0f) { k->coins++; r->coin_respawn[c] = 10.0f; r->stat_coins++; push_event(r, EV_COIN, i); break; } }
+            if (dx * dx + dz * dz < 2.0f * 2.0f && k->y < s->y + 3.0f) { if (k->coins < 10) k->coins++; r->coin_respawn[c] = 10.0f; r->stat_coins++; push_event(r, EV_COIN, i); break; } }
     }
     /* the parted sea: karts inside the window drive the shoulders as if they were road */
     if (r->parting_t > 0) { r->parting_t -= dt;
