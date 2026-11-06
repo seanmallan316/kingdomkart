@@ -1345,6 +1345,9 @@ static void hud_race(const Pad *pad) {
 // ------------------------------------------------------------------ screens
 /* "PRESS ANY BUTTON" (painted into Sean's title picture): beams of light turn slowly behind it, it glows and a shine
    runs across it; pressed, it sinks in with a flash before the menu opens */
+/* a quad in screen pixels (center, two half-axes) for the 2D layer, which works in -1..1 units with y up */
+static void q2d(Batch *b, Vec3 c, Vec3 ax, Vec3 ay, Vec3 n, float u0, float v0, float u1, float v1, float r, float g, float bl, float a) {
+    batch_quad(b, scr(c.x, c.y), v3(ax.x / 640.0f, -ax.y / 360.0f, 0), v3(ay.x / 640.0f, -ay.y / 360.0f, 0), n, u0, v0, u1, v1, r, g, bl, a); }
 static void draw_title_button(const Mat4 *id, float fade) {
     static Vertex tv[160]; Batch tb; batch_init(&tb, tv, 160);   /* its own little batch: the HUD batch is still being filled */
     static Mesh *m_rays = NULL, *m_btn = NULL, *m_shine = NULL; if (!m_rays) { m_rays = gfx_mesh_dynamic(40 * 6); m_btn = gfx_mesh_dynamic(4 * 6); m_shine = gfx_mesh_dynamic(2 * 6); }
@@ -1356,8 +1359,8 @@ static void draw_title_button(const Mat4 *id, float fade) {
         float a = g_time * 0.3f + i * 6.2831853f / 16, len = 230 + 50 * sinf(g_time * 1.3f + i * 1.7f) + 160 * flash, wid = 13;
         float dx = cosf(a), dy = sinf(a) * 0.5f, dl = sqrtf(dx * dx + dy * dy); dx /= dl; dy /= dl;
         Vec3 c = v3(cx + dx * len * 0.5f, cy + dy * len * 0.5f, 0);
-        batch_quad(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.78f, 0.25f, (0.35f + 0.2f * beat + 0.4f * flash) * fade); }
-    batch_quad(&tb, v3(cx, cy, 0), v3(290 + 25 * beat, 0, 0), v3(0, 58 + 6 * beat, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.82f, 0.3f, (0.45f + 0.2f * beat + 0.5f * flash) * fade);
+        q2d(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.78f, 0.25f, (0.35f + 0.2f * beat + 0.4f * flash) * fade); }
+    q2d(&tb, v3(cx, cy, 0), v3(290 + 25 * beat, 0, 0), v3(0, 58 + 6 * beat, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.82f, 0.3f, (0.45f + 0.2f * beat + 0.5f * flash) * fade);
     gfx_mesh_update(m_rays, tb.v, tb.n); gfx_state(ST_HUD); gfx_bind(tx_blob); gfx_draw(m_rays, id, 1, 1, 1, 1);
     /* the words themselves, cut from the picture and drawn again on top: they breathe in and out, and sink in when pressed */
     float sc = (1.0f + 0.03f * beat) * (1.0f - 0.12f * push), w = (u1 - u0) * 1280 * sc, h = (v1 - v0) * 720 * sc, y = cy + 6 * push;
@@ -1370,8 +1373,8 @@ static void draw_title_button(const Mat4 *id, float fade) {
     gfx_mesh_update(m_btn, tb.v, tb.n); gfx_bind(tx_letters ? tx_letters : tx_title_bg); gfx_draw(m_btn, id, 1 - 0.15f * push, 1 - 0.15f * push, 1 - 0.15f * push, 1);
     /* a shine sweeping across, and the white flash of the press */
     batch_clear(&tb);
-    { float t = fmodf(g_time, 2.6f) / 0.9f; if (t < 1) batch_quad(&tb, v3(400 + t * 480, cy, 0), v3(20, 0, 0), v3(-14, 30, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 0.6f * fade); }
-    if (flash > 0) batch_quad(&tb, v3(cx, cy, 0), v3(260, 0, 0), v3(0, 46, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, flash);
+    { float t = fmodf(g_time, 2.6f) / 0.9f; if (t < 1) q2d(&tb, v3(400 + t * 480, cy, 0), v3(20, 0, 0), v3(-14, 30, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 0.6f * fade); }
+    if (flash > 0) q2d(&tb, v3(cx, cy, 0), v3(260, 0, 0), v3(0, 46, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, flash);
     if (tb.n) { gfx_mesh_update(m_shine, tb.v, tb.n); gfx_state(ST_HUD | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_shine, id, 1, 1, 1, 1); gfx_state(ST_HUD); }
 }
 static void hud_title(void) {
