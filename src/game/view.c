@@ -64,7 +64,7 @@ static Texture *tx_ride[NCHARS][5]; static float g_ride_aspect[NCHARS][5];
 /* spinning wheels: the wheel discs cut from each picture (content/img/wheels_<picture>.png) and where they sit */
 static const WheelDef *g_ride_wd[NCHARS][5], *g_view_wd[NCHARS][5]; static Texture *g_ride_wtex[NCHARS][5], *g_view_wtex[NCHARS][5];
 static float g_wheel_ang[NKARTS], g_tread_ph[NKARTS]; static Mesh *m_wheel_spr[NKARTS];
-static const TreadDef *g_ride_td[NCHARS][5]; static Texture *tx_tread, *tx_trophy; static void px_trophy(int x, int y, uint32_t *o); static Mesh *m_tread_spr[NKARTS];
+static const TreadDef *g_ride_td[NCHARS][5]; static Texture *tx_tread, *tx_trophy, *tx_qbox; static void px_trophy(int x, int y, uint32_t *o); static void px_qbox(int x, int y, uint32_t *o); static Mesh *m_qface, *m_qframe; static Mesh *m_tread_spr[NKARTS];
 static const TreadDef *tread_def(const char *picture) { for (int i = 0; i < NUM_TREAD_DEFS; i++) if (!strcmp(TREAD_DEFS[i].picture, picture)) return &TREAD_DEFS[i]; return NULL; }
 static const WheelDef *wheel_def(const char *picture) { for (int i = 0; i < NUM_WHEEL_DEFS; i++) if (!strcmp(WHEEL_DEFS[i].picture, picture)) return &WHEEL_DEFS[i]; return NULL; }
 static Texture *wheel_tex(const char *picture) { char n[80]; snprintf(n, sizeof n, "wheels_%s", picture); return asset_texture(n, 0, NULL, NULL); }   /* ride_<name>_<b|bl|l|fl|f>: the character sitting in the kart, one picture; used instead of kart + driver when present */
@@ -332,7 +332,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
-    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -437,15 +437,21 @@ static void build_track_meshes(void) {
       for (int sd = -1; sd <= 1; sd += 2) { Vec3 base = road_point(t, i, sd * (e + 0.5f)); batch_box(&g_b, v3(base.x, base.y + 3.2f, base.z), v3(0.45f, 3.2f, 0.45f), 0.95f, 0.85f, 0.4f); }
       Vec3 mid = road_point(t, i, 0); batch_box(&g_b, v3(mid.x, mid.y + 6.1f, mid.z), v3(e + 1.0f, 0.75f, 0.3f), 1, 1, 1); }
     m_arch = gfx_mesh_static(g_b.v, g_b.n);
-    /* a coin: a thin golden eight-sided disc, drawn spinning at every coin spot */
+    /* a coin: a thick gold medal - sixteen-sided rim, raised outer ring, and a cross standing out on both faces */
     batch_clear(&g_b);
-    { Vec3 c = v3(0, 0, 0); float rad = 0.55f, hw = 0.06f;
-      for (int q = 0; q < 8; q++) { float a0 = q * 6.2831853f / 8, a1 = (q + 1) * 6.2831853f / 8;
+    { const int N = 16; float rad = 0.6f, hw = 0.1f, rin = 0.47f;
+      for (int q = 0; q < N; q++) { float a0 = q * 6.2831853f / N, a1 = (q + 1) * 6.2831853f / N, am = (a0 + a1) * 0.5f;
           Vec3 p0 = v3(cosf(a0) * rad, sinf(a0) * rad, hw), p1 = v3(cosf(a1) * rad, sinf(a1) * rad, hw), p2 = v3(cosf(a1) * rad, sinf(a1) * rad, -hw), p3 = v3(cosf(a0) * rad, sinf(a0) * rad, -hw);
-          batch_quad4(&g_b, p0, p1, p2, p3, v3(cosf((a0 + a1) * 0.5f), sinf((a0 + a1) * 0.5f), 0), 0, 0, 1, 1, 0.9f, 0.7f, 0.2f, 1);
-          Vertex f0 = {c.x, c.y, hw, 0, 0, 1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, f1 = {p0.x, p0.y, hw, 0, 0, 1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, f2 = {p1.x, p1.y, hw, 0, 0, 1, 0, 0, 1.0f, 0.85f, 0.35f, 1};
-          Vertex b0 = {c.x, c.y, -hw, 0, 0, -1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, b1 = {p1.x, p1.y, -hw, 0, 0, -1, 0, 0, 1.0f, 0.85f, 0.35f, 1}, b2 = {p0.x, p0.y, -hw, 0, 0, -1, 0, 0, 1.0f, 0.85f, 0.35f, 1};
-          if (g_b.n + 6 <= g_b.cap) { g_b.v[g_b.n++] = f0; g_b.v[g_b.n++] = f1; g_b.v[g_b.n++] = f2; g_b.v[g_b.n++] = b0; g_b.v[g_b.n++] = b1; g_b.v[g_b.n++] = b2; } } }
+          batch_quad4(&g_b, p0, p1, p2, p3, v3(cosf(am), sinf(am), 0), 0, 0, 1, 1, 0.85f, 0.6f, 0.12f, 1);   /* the milled edge, a deeper gold */
+          for (int sd = -1; sd <= 1; sd += 2) { float z = hw * sd, zi = (hw - 0.035f) * sd;   /* raised ring on each face, then the sunken middle */
+              Vec3 o0 = v3(cosf(a0) * rad, sinf(a0) * rad, z), o1 = v3(cosf(a1) * rad, sinf(a1) * rad, z), i0 = v3(cosf(a0) * rin, sinf(a0) * rin, z), i1 = v3(cosf(a1) * rin, sinf(a1) * rin, z);
+              Vec3 d0 = v3(i0.x, i0.y, zi), d1 = v3(i1.x, i1.y, zi), n = v3(0, 0, (float)sd);
+              if (sd > 0) { batch_quad4(&g_b, i0, o0, o1, i1, n, 0, 0, 1, 1, 1.0f, 0.86f, 0.35f, 1); batch_quad4(&g_b, d0, i0, i1, d1, v3(-cosf(am), -sinf(am), 0), 0, 0, 1, 1, 0.8f, 0.58f, 0.15f, 1); }
+              else        { batch_quad4(&g_b, i1, o1, o0, i0, n, 0, 0, 1, 1, 1.0f, 0.86f, 0.35f, 1); batch_quad4(&g_b, d1, i1, i0, d0, v3(-cosf(am), -sinf(am), 0), 0, 0, 1, 1, 0.8f, 0.58f, 0.15f, 1); }
+              Vertex c0 = {0, 0, zi, 0, 0, (float)sd, 0, 0, 0.95f, 0.74f, 0.24f, 1}, c1 = {d0.x, d0.y, zi, 0, 0, (float)sd, 0, 0, 0.95f, 0.74f, 0.24f, 1}, c2 = {d1.x, d1.y, zi, 0, 0, (float)sd, 0, 0, 0.95f, 0.74f, 0.24f, 1};
+              if (g_b.n + 3 <= g_b.cap) { g_b.v[g_b.n++] = c0; if (sd > 0) { g_b.v[g_b.n++] = c1; g_b.v[g_b.n++] = c2; } else { g_b.v[g_b.n++] = c2; g_b.v[g_b.n++] = c1; } } } }
+      batch_box(&g_b, v3(0, 0.03f, 0), v3(0.07f, 0.32f, hw - 0.005f), 1.0f, 0.93f, 0.55f);   /* the cross, standing proud of both faces */
+      batch_box(&g_b, v3(0, 0.12f, 0), v3(0.22f, 0.07f, hw - 0.005f), 1.0f, 0.93f, 0.55f); }
     m_coin = gfx_mesh_static(g_b.v, g_b.n);
     m_coins = gfx_mesh_dynamic(MAX_COINS * 6);
     /* ground: a big grass plane under everything */
@@ -523,6 +529,14 @@ static void build_track_meshes(void) {
     for (int i = 0; i < NKARTS; i++) m_driver_spr[i] = gfx_mesh_dynamic(6);
     /* item box: a cube */
     batch_clear(&g_b); batch_box(&g_b, v3(0, 0, 0), v3(0.65f, 0.65f, 0.65f), 1, 1, 1); m_cube = gfx_mesh_static(g_b.v, g_b.n);
+    /* the blessing box: six see-through faces with a question mark, inside a solid white frame of twelve rounded edges */
+    batch_clear(&g_b); batch_box(&g_b, v3(0, 0, 0), v3(0.62f, 0.62f, 0.62f), 1, 1, 1); m_qface = gfx_mesh_static(g_b.v, g_b.n);
+    batch_clear(&g_b);
+    { const float e = 0.66f, t = 0.075f;
+      for (int a = 0; a < 3; a++) for (int i = 0; i < 4; i++) { float u = (i & 1) ? e : -e, w = (i & 2) ? e : -e;
+          Vec3 c = a == 0 ? v3(0, u, w) : a == 1 ? v3(u, 0, w) : v3(u, w, 0), h = a == 0 ? v3(e + t, t, t) : a == 1 ? v3(t, e + t, t) : v3(t, t, e + t);
+          batch_box(&g_b, c, h, 1, 1, 1); } }
+    m_qframe = gfx_mesh_static(g_b.v, g_b.n);
     /* shield: a bigger cube drawn transparent around the kart */
     batch_clear(&g_b); batch_box(&g_b, v3(0, 0.8f, 0), v3(1.4f, 1.2f, 1.6f), 1, 1, 1); m_shield = gfx_mesh_static(g_b.v, g_b.n);
     m_items = gfx_mesh_dynamic(MAX_PROJ * 12 + 80 * 12 + NKARTS * 12 + 64);
@@ -1038,6 +1052,7 @@ int game_init(int status) {
         for (int i = 0; i < NKARTS; i++) { m_kart_spr[i] = gfx_mesh_dynamic(6); m_wheel_spr[i] = gfx_mesh_dynamic(18); m_tread_spr[i] = gfx_mesh_dynamic(18); }
         tx_tread = make_tex(16, 64, 1, 0, px_tread);
         tx_trophy = make_tex(128, 128, 0, 0, px_trophy);
+        tx_qbox = make_tex(128, 128, 0, 0, px_qbox);
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_loaves", "icon_samaritan", "icon_shield", "icon_parting", "shofar", "icon_fire", "icon_water"};
         for (int i = 1; i < ITEM_COUNT; i++) { int w = 1, h = 1; tx_item[i] = asset_texture(in[i], 0, &w, &h); g_item_sq[i] = w == h; g_item_asp[i] = h > 0 ? (float)w / (float)h : 1.0f;
@@ -1642,6 +1657,27 @@ static void hud_gp(void) {
 }
 
 // ------------------------------------------------------------------ the trophy ceremony at the end of a cup
+static float seg_dist(float px, float py, float ax, float ay, float bx, float by) { float dx = bx - ax, dy = by - ay, t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy); t = t < 0 ? 0 : t > 1 ? 1 : t; float ex = px - ax - t * dx, ey = py - ay - t * dy; return sqrtf(ex * ex + ey * ey); }
+static void px_qbox(int x, int y, uint32_t *o) {   /* one face of the blessing box: a frosted pane, brighter at the rim, with a smooth white question mark outlined in dark (128 x 128) */
+    float fx = (x - 63.5f) / 64.0f, fy = (y - 63.5f) / 64.0f, edge = fmaxf(fabsf(fx), fabsf(fy));
+    int a = 70 + (int)(edge * edge * 120.0f), v = 200 + (int)(edge * 55.0f);
+    if (edge > 0.93f) { a = 235; v = 255; }   /* a bright border on each pane */
+    /* the mark: an arc over the top, a short slant down to the stem, and the dot (distance to the stroke, so the edges are soft) */
+    float px = x + 0.5f, py = y + 0.5f, cx = 64, cy = 44, R = 22, half = 8.0f;
+    float ang = atan2f(py - cy, px - cx), d;   /* -pi..pi, screen y points down so the top of the circle is -pi/2 */
+    float a0 = -3.4907f, a1 = 1.0472f;         /* from 200 degrees round over the top to 60 degrees */
+    float aa = ang; if (aa > a1) aa -= 6.2831853f;
+    if (aa >= a0) d = fabsf(sqrtf((px - cx) * (px - cx) + (py - cy) * (py - cy)) - R);
+    else { float e0x = cx + R * cosf(a0), e0y = cy + R * sinf(a0), e1x = cx + R * cosf(a1), e1y = cy + R * sinf(a1);
+           d = fminf(sqrtf((px - e0x) * (px - e0x) + (py - e0y) * (py - e0y)), sqrtf((px - e1x) * (px - e1x) + (py - e1y) * (py - e1y))); }
+    d = fminf(d, seg_dist(px, py, cx + R * cosf(a1), cy + R * sinf(a1), 64, 80));
+    d = fminf(d, seg_dist(px, py, 64, 80, 64, 83));
+    float dd = sqrtf((px - 64) * (px - 64) + (py - 108) * (py - 108)) - 1.5f; if (dd < d) d = dd;
+    float ink = clampf(half + 0.5f - d, 0, 1), rim = clampf(half + 5.5f - d, 0, 1);
+    float br = v + (40 - v) * rim, bg = v + (25 - v) * rim, bb = v + (80 - v) * rim, ba = a + (235 - a) * rim;
+    br += (255 - br) * ink; bg += (255 - bg) * ink; bb += (255 - bb) * ink; ba += (255 - ba) * ink;
+    *o = rgba((int)br, (int)bg, (int)bb, (int)ba);
+}
 static void px_trophy(int x, int y, uint32_t *o) {   /* a gold cup with two handles, a stem, a base, and a cross on the bowl (128 x 128) */
     float fx = x + 0.5f, fy = y + 0.5f, hw = -1; int part = 0;
     if (fy >= 14 && fy < 74) { float u = (fy - 14) / 60.0f; hw = 40.0f * sqrtf(fmaxf(0, 1 - u * u)); if (hw < 9) hw = 9; part = 1; }   /* bowl */
@@ -1956,24 +1992,24 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
           batch_clear(&g_b);
           for (int b = 0; b < r->nbox; b++) { ItemBox *bx = &r->box[b]; if (!bx->active) continue; float yb = bx->y + 1.1f + 0.25f * sinf(g_time * 2.0f + b);
               float pul = 0.85f + 0.15f * sinf(g_time * 4.0f + b * 0.7f), sz = 1.9f * pul;
-              batch_quad(&g_b, v3(bx->x, yb, bx->z), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.75f, 0.85f, 1.0f, 0.45f);
+              batch_quad(&g_b, v3(bx->x, yb, bx->z), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz, 0), v3(0, 1, 0), 0, 0, 1, 1, 0.75f, 0.85f, 1.0f, 0.3f);
               batch_quad(&g_b, v3(bx->x, bx->y + 0.05f, bx->z), v3(1.2f, 0, 0), v3(0, 0, -1.2f), v3(0, 1, 0), 0, 0, 1, 1, 0.6f, 0.8f, 1.0f, 0.3f); }
           gfx_mesh_update(m_boxglow, g_b.v, g_b.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_boxglow, &id, 1, 1, 1, 1); }
-        gfx_state(ST_TRANSPARENT | ST_CULL); gfx_bind(NULL);
+        for (int pass = 0; pass < 2; pass++)   /* inside faces first (seen through the front), then the frame and the front faces */
         for (int b = 0; b < r->nbox; b++) { ItemBox *bx = &r->box[b]; if (!bx->active) continue; float yb = bx->y + 1.1f + 0.25f * sinf(g_time * 2.0f + b);
-            float hue = g_time * 1.2f + b * 0.9f; float cr = 0.55f + 0.45f * sinf(hue), cg = 0.55f + 0.45f * sinf(hue + 2.094f), cb = 0.55f + 0.45f * sinf(hue + 4.189f);
-            Mat4 m = m4_mul(m4_translate(bx->x, yb, bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_rotate_x(0.6f + 0.2f * sinf(g_time + b))));
-            gfx_draw_ex(m_cube, &m, cr, cg, cb, 0.6f, 0.9f, 0, 0, 0);
-            Mat4 m2 = m4_mul(m, m4_scale(0.5f, 0.5f, 0.5f)); gfx_draw(m_cube, &m2, 1.0f, 0.95f, 0.7f, 0.95f);
-            /* a gold cross standing inside */
-            Mat4 cv = m4_mul(m4_translate(bx->x, yb, bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_scale(0.12f, 0.9f, 0.12f))); gfx_draw(m_cube, &cv, 1.0f, 0.85f, 0.3f, 1);
-            Mat4 ch = m4_mul(m4_translate(bx->x, yb + 0.15f, bx->z), m4_mul(m4_rotate_y(g_time * 1.5f + b), m4_scale(0.6f, 0.12f, 0.12f))); gfx_draw(m_cube, &ch, 1.0f, 0.85f, 0.3f, 1); }
+            float ddx = bx->x - cam_x, ddz = bx->z - cam_z; if (ddx * ddx + ddz * ddz > 170.0f * 170.0f) continue;
+            float hue = g_time * 1.2f + b * 0.9f; float cr = 0.6f + 0.4f * sinf(hue), cg = 0.6f + 0.4f * sinf(hue + 2.094f), cb = 0.6f + 0.4f * sinf(hue + 4.189f);
+            Mat4 m = m4_mul(m4_translate(bx->x, yb, bx->z), m4_mul(m4_rotate_y(g_time * 1.3f + b), m4_rotate_x(0.45f + 0.15f * sinf(g_time + b))));
+            if (pass == 0) { Mat4 inside = m4_mul(m, m4_scale(-1, 1, 1)); gfx_state(ST_TRANSPARENT | ST_CULL); gfx_bind(tx_qbox); gfx_draw_ex(m_qface, &inside, cr, cg, cb, 0.55f, 0.2f, 0, 0, 0); continue; }
+            gfx_state(ST_SOLID); gfx_bind(NULL); gfx_draw_ex(m_qframe, &m, 1.0f, 0.97f, 0.9f, 1, 1.0f, 0, 0, 0);
+            gfx_state(ST_TRANSPARENT | ST_CULL); gfx_bind(tx_qbox); gfx_draw_ex(m_qface, &m, cr, cg, cb, 0.85f, 1.0f, 0, 0, 0); }
+        gfx_bind(NULL);
         /* coins: spinning discs */
         gfx_state(ST_SOLID); gfx_bind(NULL);
         for (int c = 0; c < g_track.ncoin; c++) { if (r->coin_respawn[c] > 0) continue; const Coin *cn = &g_track.coin[c]; const TrackSample *cs = &g_track.s[cn->idx];
             float cx = cs->x + cs->nx * cn->lateral, cz = cs->z + cs->nz * cn->lateral; float ddx = cx - cam_x, ddz = cz - cam_z; if (ddx * ddx + ddz * ddz > 160.0f * 160.0f) continue;
             Mat4 m = m4_mul(m4_translate(cx, track_surface_height(&g_track, cn->idx, cn->lateral) + 1.0f + 0.1f * sinf(g_time * 3.0f + c), cz), m4_rotate_y(g_time * 3.0f + c * 0.7f));
-            gfx_draw(m_coin, &m, 1, 1, 1, 1); }
+            gfx_draw_ex(m_coin, &m, 1, 1, 1, 1, 1.2f, 0, 0, 0); }
         /* the karts */
         gfx_state(ST_SOLID); gfx_bind(NULL);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];
