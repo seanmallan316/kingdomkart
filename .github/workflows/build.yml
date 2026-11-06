@@ -42,6 +42,29 @@ jobs:
             kingdomkart-tour*.rpx
             content/
 
+  sd-card:
+    # Everything that goes on the SD card, already in the right folders: download, unzip, copy the "wiiu" folder over.
+    name: Ready-to-copy SD card folder
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KingdomKart
+          path: dl
+      - name: Put the game and the shader compiler in their folders
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p sd/wiiu/apps sd/wiiu/libs
+          cp dl/kingdomkart.wuhb sd/wiiu/apps/
+          gh release download --repo Exzap/CafeGLSL --pattern 'glslcompiler.rpl' --dir sd/wiiu/libs
+          ls -laR sd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KingdomKart-SD-card
+          path: sd/
+
   emulator-screenshot:
     # Best effort: try to run the build in the Cemu emulator with no graphics card and photograph it.
     # If anything here fails the game build above is still fine; this job only exists so Claude can see the game.

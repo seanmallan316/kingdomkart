@@ -55,7 +55,9 @@ toward records or unlocks.
 
 ## Getting the game file from GitHub
 Open the repository's **Actions** tab. Every change builds itself ("Build Wii U game", a few minutes). Open the newest
-green run and download **KingdomKart** at the bottom; unzip it to get `kingdomkart.wuhb`.
+green run and download **KingdomKart-SD-card** at the bottom: unzip it and copy the `wiiu` folder inside onto the SD
+card (merge it with the one already there). It holds the game and the shader compiler, each in its folder.
+**KingdomKart** is the game file on its own.
 
 The same run also plays the game in a Wii U emulator and photographs every screen (the `ci-screenshots-road0` … `road4`
 branches). That is how the game is checked without a console; it has not yet been run on a real Wii U.
