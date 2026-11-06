@@ -153,5 +153,5 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
         float sx = m->x - k->x, sz = m->z - k->z;
         if (sx * sx + sz * sz < 1.6f * 1.6f && b->invuln <= 0 && !k->air) { m->alive = 0; if (kart_hit(k, 1.2f)) { b->hits_on_david++; b->invuln = 2.5f; bev(b, BEV_DAVID_HIT); } }
     }
-    if (b->hits_on_david >= BATTLE_LIVES || r->race_t >= RACE_TIME_LIMIT - 0.5f) { b->over = 1; b->won = 0; r->state = RACE_FINISHED; bev(b, BEV_LOSE); }
+    if (b->hits_on_david >= BATTLE_LIVES || r->race_t >= BATTLE_TIME_LIMIT - 0.5f) { b->over = 1; b->won = 0; r->state = RACE_FINISHED; bev(b, BEV_LOSE); }
 }

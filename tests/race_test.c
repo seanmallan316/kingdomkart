@@ -32,7 +32,7 @@ int main(void) {
                diff, rep, r.race_t, finished, r.nk, CHARACTERS[r.character[winner]].name, r.k[winner].total_time, CHARACTERS[r.character[r.player]].name, r.k[r.player].place, r.stat_pickups, r.stat_uses, r.stat_blessings, r.stat_trails, r.stat_hits, r.stat_blocks);
         CHECK(!nan, "NaN");
         CHECK(r.state == RACE_FINISHED, "race did not end");
-        CHECK(r.race_t <= RACE_TIME_LIMIT + 0.1f, "race ran past the 2 minute limit");
+        CHECK(r.race_t <= RACE_TIME_LIMIT + 0.1f, "race ran past the time limit");
         CHECK(r.k[r.player].lap > t.laps, "the player did not finish");
         CHECK(diff != 2 || finished >= 2, "fewer than 2 karts crossed the line on hard");
         CHECK(r.stat_pickups >= 8, "too few item pickups (%d)", r.stat_pickups);

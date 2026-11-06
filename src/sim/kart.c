@@ -152,10 +152,17 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
         const TrackSample *s = &t->s[k->hit.idx];
         float over = fabsf(k->hit.lateral) - edge, sign = k->hit.lateral > 0 ? 1.0f : -1.0f;
         k->x -= s->nx * sign * (over + 0.05f); k->z -= s->nz * sign * (over + 0.05f);
-        /* reflect the heading off the wall a bit and lose speed */
-        float wall_dot = (sx * s->nx + sz * s->nz) * sign;           /* how straight into the wall we were going */
-        if (wall_dot > 0.1f && !k->on_wall_prev) { k->speed *= 1.0f - 0.6f * wall_dot; k->yaw -= sign * wall_dot * 0.35f; }
-        else if (wall_dot > 0.1f) k->speed *= 1.0f - 2.0f * dt;
+        /* scrape along the wall: the kart is turned to run along it (never into it, never round), and loses speed by how
+           straight it hit; a glancing touch costs little, a head-on hit a lot */
+        float wall_dot = (sx * s->nx + sz * s->nz) * sign;           /* how straight into the wall we were going (0 = along it, 1 = head on) */
+        if (wall_dot > 0.02f) {
+            float road = atan2f(s->tx, s->tz), rel = wrap_pi(k->yaw - road);
+            float along = fabsf(rel) < 1.5708f ? road : road + 3.14159265f;     /* the way along the wall closest to where we were heading */
+            float off = wrap_pi(k->yaw - along), keep = 1.0f - clampf1(wall_dot * 2.2f, 0.0f, 0.85f);
+            k->yaw = along + off * keep;                                        /* swing the nose round toward running along the wall */
+            if (!k->on_wall_prev) k->speed *= 1.0f - 0.55f * wall_dot * wall_dot - 0.05f;
+            else k->speed *= 1.0f - 0.8f * dt;
+        }
         k->on_wall = 1;
         track_locate(t, k->x, k->z, k->hit.idx, &k->hit);
         k->drifting = 0;

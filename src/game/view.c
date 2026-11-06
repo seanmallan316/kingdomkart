@@ -131,13 +131,13 @@ static float g_slowmo = 0;      /* finish-line slow motion (single player): seco
 typedef struct { int16_t x, z, yaw; } GhostSample;        /* position in 1/16 m, yaw in 1/10000 rad */
 static GhostSample g_ghost[GHOST_MAX], g_rec[GHOST_MAX]; static int g_ghost_n = 0, g_rec_n = 0, g_ghost_char = 0; static float g_rec_t = 0; static Mesh *m_ghost;
 static void ghost_load(int road) {
-    g_ghost_n = 0; char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost2_%d.bin", road);
+    g_ghost_n = 0; char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost3_%d.bin", road);
     FILE *f = fopen(save_dir_path(path, sizeof path, name), "rb"); if (!f) return;
     int hdr[2]; if (fread(hdr, sizeof hdr, 1, f) == 1 && hdr[0] > 0 && hdr[0] <= GHOST_MAX) { g_ghost_char = hdr[1]; g_ghost_n = (int)fread(g_ghost, sizeof(GhostSample), (size_t)hdr[0], f); }
     fclose(f); gfx_log("ghost: %d samples for road %d", g_ghost_n, road);
 }
 static void ghost_save(int road) {
-    char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost2_%d.bin", road);
+    char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost3_%d.bin", road);
     FILE *f = fopen(save_dir_path(path, sizeof path, name), "wb"); if (!f) return;
     int hdr[2] = {g_rec_n, g_player_char}; fwrite(hdr, sizeof hdr, 1, f); fwrite(g_rec, sizeof(GhostSample), (size_t)g_rec_n, f); fclose(f);
     memcpy(g_ghost, g_rec, sizeof(GhostSample) * (size_t)g_rec_n); g_ghost_n = g_rec_n; g_ghost_char = g_player_char; gfx_log("ghost: saved %d samples", g_rec_n);
@@ -384,13 +384,14 @@ static void build_track_meshes(void) {
     /* boost arrows and bounce pads painted on the road */
     batch_clear(&g_b);
     for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p]; if (pd->kind != PAD_BOOST) continue;
-        /* a chevron pointing down the road, made of two slanted bars */
+        /* chevrons pointing the way the racers drive (tip ahead, wings behind), two in a row */
+        for (int row = 0; row < 2; row++) { int i0 = pd->idx + row * 3;
         for (int bar = -1; bar <= 1; bar += 2) {
-            Vec3 a = road_point(t, pd->idx, pd->lateral), b = road_point(t, (pd->idx + 2) % t->n, pd->lateral + bar * pd->halfw);
-            Vec3 c = road_point(t, (pd->idx + 3) % t->n, pd->lateral + bar * pd->halfw), d = road_point(t, (pd->idx + 1) % t->n, pd->lateral);
+            Vec3 a = road_point(t, (i0 + 2) % t->n, pd->lateral), b = road_point(t, i0 % t->n, pd->lateral + bar * pd->halfw);
+            Vec3 c = road_point(t, (i0 + 1) % t->n, pd->lateral + bar * pd->halfw), d = road_point(t, (i0 + 3) % t->n, pd->lateral);
             a.y += 0.04f; b.y += 0.04f; c.y += 0.04f; d.y += 0.04f;
-            if (bar < 0) batch_quad4(&g_b, a, b, c, d, v3(0, 1, 0), 0, 0, 1, 1, 1, 0.85f, 0.2f, 1); else batch_quad4(&g_b, a, d, c, b, v3(0, 1, 0), 0, 0, 1, 1, 1, 0.85f, 0.2f, 1);
-        } }
+            if (bar < 0) batch_quad4(&g_b, a, d, c, b, v3(0, 1, 0), 0, 0, 1, 1, 1, 0.85f, 0.2f, 1); else batch_quad4(&g_b, a, b, c, d, v3(0, 1, 0), 0, 0, 1, 1, 1, 0.85f, 0.2f, 1);
+        } } }
     m_boostpads = gfx_mesh_static(g_b.v, g_b.n);
     batch_clear(&g_b);
     for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p]; if (pd->kind != PAD_BOUNCE) continue;
@@ -1494,7 +1495,7 @@ static void hud_battle(void) {
     snprintf(buf, sizeof buf, "STONES x%d", b->stones_held); batch_text(&g_b, buf, 40, 95, 18, 0.9f, 0.9f, 0.85f, 1);
     batch_text(&g_b, "GOLIATH", 1240 - text_width("GOLIATH", 22), 30, 22, 1, 1, 1, 1);
     for (int i = 0; i < BATTLE_WIN_HITS; i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < BATTLE_WIN_HITS - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
-    { char tb[32]; fmt_time(tb, sizeof tb, RACE_TIME_LIMIT - b->race.race_t > 0 ? RACE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
+    { char tb[32]; fmt_time(tb, sizeof tb, BATTLE_TIME_LIMIT - b->race.race_t > 0 ? BATTLE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
     if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); text_c("HIS SHIELD-BEARER GUARDS HIS FRONT AS HE WALKS: SLING FROM THE SIDE, OR WHEN HE STOPS", 204, 15, 1, 0.9f, 0.5f, 1); }
     if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
     if (b->quote >= 0 && b->quote < BATTLE_NQUOTES) {      /* the words of 1 Samuel 17, wrapped into a panel at the bottom */

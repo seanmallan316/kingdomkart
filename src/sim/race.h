@@ -12,7 +12,8 @@
 #define MAX_BOX 24
 #define MAX_PROJ 24
 #define RACE_READY_T 3.0f          /* a calm moment on the grid before 3-2-1 (like Mario Kart) */
-#define RACE_TIME_LIMIT 120.0f      /* every race ends within two minutes */
+#define BATTLE_TIME_LIMIT 120.0f    /* David has two minutes to beat Goliath */
+#define RACE_TIME_LIMIT 240.0f      /* a safety net: no race runs past four minutes (a normal race takes the winner about 2:15) */
 
 enum { RACE_COUNTDOWN, RACE_RUNNING, RACE_FINISHED };
 enum { DIFF_EASY, DIFF_NORMAL, DIFF_HARD };
