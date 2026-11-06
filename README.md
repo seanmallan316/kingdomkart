@@ -11,16 +11,22 @@ Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
   (into the city), Sunrise at the Empty Tomb — and the unlockable **Road to Heaven**, one run from the earth up through the
   clouds to the gates.
 - Drifting with mini-turbos, rocket starts, tricks off jumps, boost arrows, bounce pads, hidden shortcuts, tunnels with
-  crystals, coins, obstacles crossing the road (sheep, nets, carts, rolling stones), GamePad rumble, slow-motion finish.
+  crystals, coins (each one adds a little top speed, up to ten), obstacles crossing the road (sheep, nets, carts, rolling
+  stones), GamePad rumble, slow-motion finish.
+- **Open land beside the roads**: drive off the road onto the grass (or wade the shallows on the Sea of Galilee) out to a
+  low wall, with hidden gems (three coins and a burst of speed), boost arrows and bounce ramps out there. The Road to
+  Heaven keeps its edges.
 - **Eight blessings instead of weapons** (every item does something for you *and* for another racer): Manna (Exodus 16),
   Loaves and Fishes (Matthew 14), the Good Samaritan (Luke 10), the Shield of Faith (Ephesians 6), the Parting of the Sea
   (Exodus 14), the Jubilee Trumpet (Leviticus 25), the Chariot of Fire (2 Kings 2), Living Water (John 4). Bumping another
-  kart gives *them* a boost (turn the other cheek). Boxes float, glow and burst into a rainbow when taken.
+  kart gives *them* a boost (turn the other cheek). Boxes float, glow and burst into a rainbow when taken; a window then
+  spins through the blessings and stops on the one you got, with its picture, name and verse.
 - Modes: Grand Prix with two cups (the **Gospel Cup**, four story roads; **Genesis to Glory**, all six roads in Bible
   order, earned with the Road to Heaven), Single Race, Time Trial (records saved), **Multiplayer for 2 to 4 people on a
   split screen** (computer drivers fill the other seats), **The Walls of Jericho** (seven laps round the city, shofars,
-  the great shout, the walls come down) and the David vs Goliath fight, with Easy / Normal / Hard computer drivers that
-  never cheat. Every race is under two minutes.
+  the great shout, and every wall falls flat) and the David vs Goliath fight in the open Valley of Elah (five smooth
+  stones in the brook, ZL slings), with Easy / Normal / Hard computer drivers that never cheat. A race takes about two and
+  a quarter minutes.
 - Achievements that unlock the bonus characters, karts and road; progress, records and volume settings saved on the SD card.
 - Options and records screen, credits screen.
 - Sound effects for everything, and a soundtrack: a track per road, the menus, the results screen, the final lap and
@@ -59,8 +65,8 @@ green run and download **KingdomKart-SD-card** at the bottom: unzip it and copy 
 card (merge it with the one already there). It holds the game and the shader compiler, each in its folder.
 **KingdomKart** is the game file on its own.
 
-The same run also plays the game in a Wii U emulator and photographs every screen (the `ci-screenshots-road0` … `road4`
-branches). That is how the game is checked without a console; it has not yet been run on a real Wii U.
+The same run also plays the game in a Wii U emulator and photographs every screen (the `ci-screenshots-road0` … `road12`
+branches). That is how the game is checked without a console; it also runs on Sean's Wii U.
 
 ## Adding pictures
 Drop pictures into `assets/` (see `assets/README.txt` and the Art List for the exact file names), run
@@ -83,14 +89,11 @@ engine uses `kart_engine_idle`, `kart_engine_acceleration`, `kart_engine_top_spe
 unlocked. Any synthesized effect can be replaced by a recording named `sfx_<effect>.wav` (`sfx_coin`, `sfx_lap`, ...).
 Without the files, the game synthesizes everything itself.
 
-**Driver voices:** the shouts in `assets/voices/` (`male_start.wav` "let's do this", `female_win.wav`, ...) become one set
-per character with `python3 tools/prep_voices.py`: `content/sfx/voice_<name>_<event>.wav`, each character pitched a
-little differently (Samson deepest, Joseph brightest). Events: `start` (at GO), `boost` (rocket start, super turbo,
-boost pad), `trick` (a trick landing), `win` (first across the line), `bless` (a big blessing), `fire` (the Chariot of
-Fire), `ouch` (hit). A file named `voice_<event>.wav` serves every character that has none of their own.
+**Driver voices:** Sean's own recordings in `assets/voices/` (`male_start.wav` "let's do this", `female_win.wav`, ...) are
+used as they are, never pitched: `python3 tools/prep_voices.py` writes `content/sfx/voice_<event>.wav`, shared by every
+character without lines of their own. Events: `start` (at GO), `boost`, `trick`, `win`, `bless`, `fire`, `ouch`.
 Spoken lines made with ElevenLabs (one line per file, `assets/voices/lines/<name>_<event>.mp3`, each character in a voice
-of their own) go through `python3 tools/prep_lines.py`, run after prep_voices.py: a line replaces the pitched shout for
-that character and event. The sound effects in `assets/sfx/` were made the same way (`sfx_<effect>`).
+of their own; the script is in `assets/voices/lines/LINES.txt`) go through `python3 tools/prep_lines.py`.
 
 ## Project layout
 `src/sim` kart physics and the race (no graphics, runs in tests on a PC) · `src/world` roads and themes · `src/render`
