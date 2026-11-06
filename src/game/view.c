@@ -1359,8 +1359,8 @@ static void draw_title_button(const Mat4 *id, float fade) {
         float a = g_time * 0.3f + i * 6.2831853f / 16, len = 230 + 50 * sinf(g_time * 1.3f + i * 1.7f) + 160 * flash, wid = 13;
         float dx = cosf(a), dy = sinf(a) * 0.5f, dl = sqrtf(dx * dx + dy * dy); dx /= dl; dy /= dl;
         Vec3 c = v3(cx + dx * len * 0.5f, cy + dy * len * 0.5f, 0);
-        q2d(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.78f, 0.25f, (0.35f + 0.2f * beat + 0.4f * flash) * fade); }
-    q2d(&tb, v3(cx, cy, 0), v3(290 + 25 * beat, 0, 0), v3(0, 58 + 6 * beat, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.82f, 0.3f, (0.45f + 0.2f * beat + 0.5f * flash) * fade);
+        q2d(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.78f, 0.25f, (0.55f + 0.25f * beat + 0.4f * flash) * fade); }
+    q2d(&tb, v3(cx, cy, 0), v3(290 + 25 * beat, 0, 0), v3(0, 58 + 6 * beat, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.82f, 0.3f, (0.6f + 0.25f * beat + 0.5f * flash) * fade);
     gfx_mesh_update(m_rays, tb.v, tb.n); gfx_state(ST_HUD); gfx_bind(tx_blob); gfx_draw(m_rays, id, 1, 1, 1, 1);
     /* the words themselves, cut from the picture and drawn again on top: they breathe in and out, and sink in when pressed */
     float sc = (1.0f + 0.03f * beat) * (1.0f - 0.12f * push), w = (u1 - u0) * 1280 * sc, h = (v1 - v0) * 720 * sc, y = cy + 6 * push;
