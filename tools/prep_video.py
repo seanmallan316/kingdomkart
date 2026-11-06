@@ -5,14 +5,14 @@ prep_music.py packs it. The Wii U has no video player we can use, so the game sh
 import os, subprocess, glob, shutil
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC, DST = os.path.join(ROOT, "assets", "video"), os.path.join(ROOT, "content", "video")
-FPS, W = 15, 960   # sharper on a big TV; each frame is still small enough to decode between frames on the Wii U
+FPS, W = 24, 1280   # the full picture at the source frame rate; the game decodes frames ahead on two spare CPU cores
 os.makedirs(DST, exist_ok=True)
 for f in sorted(glob.glob(os.path.join(SRC, "*.mp4"))):
     name = os.path.splitext(os.path.basename(f))[0]
     info = os.path.join(DST, name + ".txt")
     if os.path.exists(info) and os.path.getmtime(info) >= os.path.getmtime(f): print(f"  {name}: up to date"); continue
     for old in glob.glob(os.path.join(DST, name + "_*.jpg")): os.remove(old)
-    subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", f, "-vf", f"fps={FPS},scale={W}:-2", "-q:v", "3",
+    subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", f, "-vf", f"fps={FPS},scale={W}:-2", "-q:v", "2",
                     os.path.join(DST, name + "_%03d.jpg")], check=True)
     frames = sorted(glob.glob(os.path.join(DST, name + "_*.jpg")))
     for i, fr in enumerate(frames):   # ffmpeg counts from 1; the game from 0

@@ -260,6 +260,30 @@ Texture *gfx_texture_rgba_ex(const uint32_t *pixels, int w, int h, int repeat, i
     }
     return t;
 }
+/* a picture the CPU rewrites every frame (the opener video): stored untiled so new pixels can be written straight in,
+   with no GPU copy and no wait for the GPU. Keep two and alternate, so the GPU never reads one while it is being written. */
+Texture *gfx_texture_stream(int w, int h) {
+    Texture *t = calloc(1, sizeof *t); if (!t) return NULL;
+    GX2Texture *tx = &t->tex;
+    tx->surface.use = GX2_SURFACE_USE_TEXTURE; tx->surface.width = w; tx->surface.height = h; tx->surface.depth = 1;
+    tx->surface.dim = GX2_SURFACE_DIM_TEXTURE_2D; tx->surface.format = GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8;
+    tx->surface.tileMode = GX2_TILE_MODE_LINEAR_ALIGNED; tx->surface.aa = GX2_AA_MODE1X; tx->surface.mipLevels = 1;
+    tx->viewNumSlices = 1; tx->viewNumMips = 1; tx->compMap = 0x00010203;
+    GX2CalcSurfaceSizeAndAlignment(&tx->surface);
+    GX2InitTextureRegs(tx);
+    tx->surface.image = memalign(tx->surface.alignment, tx->surface.imageSize);
+    if (!tx->surface.image) { free(t); return NULL; }
+    memset(tx->surface.image, 0, tx->surface.imageSize);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tx->surface.image, tx->surface.imageSize);   /* writes the black back to memory, refreshes the GPU's copy */
+    GX2InitSampler(&t->smp, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_LINEAR);
+    return t;
+}
+void gfx_texture_stream_put(Texture *t, const uint32_t *pixels, int w, int h) {
+    if (!t || !pixels) return;
+    GX2Surface *sf = &t->tex.surface; if ((int)sf->width < w) w = (int)sf->width; if ((int)sf->height < h) h = (int)sf->height;
+    for (int y = 0; y < h; y++) memcpy((uint8_t *)sf->image + (size_t)y * sf->pitch * 4, pixels + (size_t)y * w, (size_t)w * 4);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, sf->image, sf->imageSize);
+}
 void gfx_texture_free(Texture *t) { if (!t) return; free(t->tex.surface.mipmaps); free(t->tex.surface.image); free(t); }
 
 // ------------------------------------------------------------------ frames and state

@@ -39,7 +39,7 @@ static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* 
 /* game flow */
 enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
-static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1; static Texture *tx_op; static Mesh *m_op;
+static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1, g_op_w = 0, g_op_h = 0, g_op_vid = 0; static float g_op_buf = 0; static Texture *tx_op; static Mesh *m_op;   /* g_op_vid: the background decoder is running; g_op_buf: seconds spent filling it before the clock starts */
 static int g_opt_sel = 0; static char g_pause_reason[48]; static float g_erase_hold = 0;
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO };   /* VS: two to four people on a split screen; JERICHO: seven laps round the walls */
@@ -1075,7 +1075,7 @@ int game_init(int status) {
 #if !defined(KK_TOUR) || KK_TOUR_ROAD == 7   /* the CI tour has a fixed timetable; only tour 7 watches the opener */
     if (status == GFX_OK && asset_exists("video/opener.txt")) {
         char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "video/opener.txt"); FILE *f = fopen(path, "r");
-        if (f) { int w = 0, h = 0; if (fscanf(f, "%d %d %d %d", &g_op_frames, &g_op_fps, &w, &h) == 4 && g_op_frames > 0) {
+        if (f) { int w = 0, h = 0; if (fscanf(f, "%d %d %d %d", &g_op_frames, &g_op_fps, &w, &h) == 4 && g_op_frames > 0) { g_op_w = w; g_op_h = h;
             batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b); batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_op = gfx_mesh_static(g_b.v, g_b.n);
             g_screen = SCR_OPENER; g_screen_t = 0; gfx_log("opener: %d frames at %d fps", g_op_frames, g_op_fps); } fclose(f); } }
 #endif
@@ -1840,7 +1840,7 @@ static const char *pick_music(void) {
     }
     if ((g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP) && music_available("music_select")) return "music_select";
     if (g_screen == SCR_CREDITS && music_available("music_credits")) return "music_credits";
-    if (g_screen == SCR_OPENER) return music_available("music_opener") ? "music_opener" : NULL;
+    if (g_screen == SCR_OPENER) return g_op_vid && g_op_buf < 2.0f ? NULL : (music_available("music_opener") ? "music_opener" : NULL);   /* silent while the video fills up */
     return "music_menu";
 }
 
@@ -2233,8 +2233,12 @@ void game_frame(const Pad *pads, int npads, float dt) {
 #endif
         break;
     case SCR_OPENER: {
+        if (g_op_cur == -1 && !g_op_vid && g_op_buf == 0) { g_op_vid = vid_open("video/opener_", g_op_frames, g_op_w, g_op_h); g_op_buf = 0.0001f; }
+        if (g_op_vid && g_op_buf < 2.0f) {   /* fill the decoder a little before the clock (and the music) starts */
+            int ready = vid_update(0); g_op_buf += dt; g_screen_t = 0; if (ready >= 6 || g_op_buf >= 2.0f) g_op_buf = 2.0f; }
         int want = (int)(g_screen_t * g_op_fps);
-        if (pa || pb || pplus || pad->x || pad->y || want >= g_op_frames) { g_screen = SCR_TITLE; g_screen_t = 0; gfx_texture_free(tx_op); tx_op = NULL; g_op_cur = -1; break; }
+        if (pa || pb || pplus || pad->x || pad->y || want >= g_op_frames) { g_screen = SCR_TITLE; g_screen_t = 0; gfx_texture_free(tx_op); tx_op = NULL; g_op_cur = -1; if (g_op_vid) vid_close(); g_op_vid = 0; g_op_buf = 0; break; }
+        if (g_op_vid) { vid_update(want); g_op_cur = want; break; }
         if (want != g_op_cur) { char rel[64]; snprintf(rel, sizeof rel, "video/opener_%03d.jpg", want); Texture *nt = asset_texture_file(rel, 0, NULL, NULL);
             if (nt) { gfx_texture_free(tx_op); tx_op = nt; } g_op_cur = want; }
         break; }
@@ -2549,7 +2553,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (gamepad_map) { gfx_view_begin(drc, 0.04f, 0.07f, 0.18f); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
             batch_clear(&g_b); hud_gamepad(); if (g_screen == SCR_PAUSE) hud_pause(); gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
         if (g_screen == SCR_OPENER) { gfx_view_begin(drc, 0, 0, 0); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
-            if (tx_op && m_op) { gfx_bind(tx_op); gfx_draw(m_op, &id2, 1, 1, 1, 1); }
+            { Texture *vt = g_op_vid ? vid_texture() : tx_op; if (vt && m_op) { gfx_bind(vt); gfx_draw(m_op, &id2, 1, 1, 1, 1); } }
             gfx_view_end(drc); continue; }
         if (split) {   /* the TV in pieces: one view per player, each with its own HUD; the whole-screen pause menu on top */
             gfx_view_begin(drc, 0.02f, 0.03f, 0.08f); Mat4 id = m4_identity();
