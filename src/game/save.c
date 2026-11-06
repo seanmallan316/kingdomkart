@@ -6,7 +6,7 @@
 
 Save g_save;
 static char g_path[256] = "kingdomkart_save.txt";
-static const float PAR_TIME[SAVE_MAX_ROADS] = {78.0f, 84.0f, 70.0f, 78.0f, 50.0f, 80.0f, 0, 0};   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
+static const float PAR_TIME[SAVE_MAX_ROADS] = {102.0f, 104.0f, 107.0f, 103.0f, 62.0f, 102.0f, 0, 0};   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
 
 void save_set_path(const char *path) { snprintf(g_path, sizeof g_path, "%s", path); }
 const char *save_dir_path(char *buf, int n, const char *file) {
@@ -15,17 +15,19 @@ const char *save_dir_path(char *buf, int n, const char *file) {
 }
 
 void save_load(void) {
-    memset(&g_save, 0, sizeof g_save); g_save.music_vol = 8; g_save.sfx_vol = 10; g_save.rumble = 1;
+    memset(&g_save, 0, sizeof g_save); g_save.music_vol = 8; g_save.sfx_vol = 10; g_save.rumble = 1; g_save.unlocks = UNLOCK_GOLIATH;   /* David vs Goliath is open from the start */
     FILE *f = fopen(g_path, "r");
     if (!f) { gfx_log("no save file at %s (first run)", g_path); return; }
-    char key[32]; long val;
-    while (fscanf(f, "%31s %ld", key, &val) == 2) {
+    char key[32], line[128]; long val; int layout = 1;
+    while (fgets(line, sizeof line, f)) {   /* one "key value" per line; the comment line at the top (and anything else) is skipped */
+        if (sscanf(line, "%31s %ld", key, &val) != 2) continue;
+        if (!strcmp(key, "layout")) { layout = (int)val; continue; }
         if (!strncmp(key, "best", 4)) { int i = key[4] - '0'; if (i >= 0 && i < SAVE_MAX_ROADS) g_save.best_ms[i] = (int)val; }
         else if (!strcmp(key, "races")) g_save.races = (int)val;
         else if (!strcmp(key, "wins")) g_save.wins = (int)val;
         else if (!strncmp(key, "gpwins", 6)) { int i = key[6] - '0'; if (i >= 0 && i < 3) g_save.gp_wins[i] = (int)val; }
         else if (!strcmp(key, "winchars")) g_save.win_chars = (unsigned)val;
-        else if (!strcmp(key, "unlocks")) g_save.unlocks = (unsigned)val;
+        else if (!strcmp(key, "unlocks")) g_save.unlocks = (unsigned)val | UNLOCK_GOLIATH;
         else if (!strcmp(key, "battles")) g_save.battles = (int)val;
         else if (!strcmp(key, "battlewins")) g_save.battle_wins = (int)val;
         else if (!strcmp(key, "musicvol")) g_save.music_vol = (int)val;
@@ -36,6 +38,7 @@ void save_load(void) {
         else if (!strcmp(key, "glorywins")) g_save.glory_wins = (int)val;
     }
     fclose(f);
+    if (layout < 2) { memset(g_save.best_ms, 0, sizeof g_save.best_ms); g_save.dirty = 1; gfx_log("roads were lengthened: old best times cleared"); }   /* times from the shorter roads no longer compare */
     gfx_log("save loaded: %d races, %d wins, unlocks %u", g_save.races, g_save.wins, g_save.unlocks);
 }
 
@@ -44,6 +47,7 @@ void save_store(void) {
     FILE *f = fopen(g_path, "w");
     if (!f) { gfx_log("could not write %s", g_path); return; }
     fprintf(f, "# Kingdom Kart: Road to Glory - progress. Delete this file to start over.\n");
+    fprintf(f, "layout 2\n");
     for (int i = 0; i < SAVE_MAX_ROADS; i++) if (g_save.best_ms[i]) fprintf(f, "best%d %d\n", i, g_save.best_ms[i]);
     fprintf(f, "races %d\nwins %d\n", g_save.races, g_save.wins);
     for (int i = 0; i < 3; i++) fprintf(f, "gpwins%d %d\n", i, g_save.gp_wins[i]);

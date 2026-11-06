@@ -85,7 +85,7 @@ static void race_setup(Race *r, const Track *t, const int *chars_in, const int *
             b->active = 1; b->respawn = 0; b->idx = idx;
         }
     }
-    r->state = RACE_COUNTDOWN; r->cd = 3.5f; r->time_limit = RACE_TIME_LIMIT;
+    r->state = RACE_COUNTDOWN; r->cd = 3.5f + RACE_READY_T; r->time_limit = RACE_TIME_LIMIT;
     race_rank(r);
 }
 void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk) {

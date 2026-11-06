@@ -473,8 +473,23 @@ const TrackDef TRACK_DEFS[] = {
 };
 const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 
+/* How much each road's layout is stretched (x and z; heights, widths and scenery spacing from the road stay as they are).
+   Chosen so the winner of a 3-lap race takes about 1:40 - longer, Mario Kart-like laps that still finish inside 2:00.
+   Order = TRACK_DEFS. Battle arena and test loop stay as built. */
+static const float TRACK_SCALE[] = {1.3f, 1.26f, 1.5f, 1.32f, 1.2f, 1.3f, 1.15f, 1.0f, 1.0f};
+
 void track_from_def(Track *t, const TrackDef *d) {
-    track_build(t, d->name, d->laps, d->points, d->npoints, 20);
+    int di = (int)(d - TRACK_DEFS); float sc = (di >= 0 && di < (int)(sizeof TRACK_SCALE / sizeof TRACK_SCALE[0])) ? TRACK_SCALE[di] : 1.0f;
+    static TrackPoint pts[256]; int np = d->npoints < 256 ? d->npoints : 256;
+    /* every stretch between two points grows by sc, except a jump's gap, which keeps its length so the jump can still be cleared;
+       the small amount the loop then fails to close by is spread over the other stretches */
+    float ex = 0, ez = 0; int nfree = 0;
+    for (int i = 0; i < np; i++) { const TrackPoint *a = &d->points[i], *b = &d->points[(i + 1) % np]; if (a->jump) { ex += (b->x - a->x) * (1.0f - sc); ez += (b->z - a->z) * (1.0f - sc); } else nfree++; }
+    pts[0] = d->points[0]; pts[0].x *= sc; pts[0].z *= sc;
+    for (int i = 0; i + 1 < np; i++) { const TrackPoint *a = &d->points[i], *b = &d->points[i + 1]; float f = a->jump ? 1.0f : sc;
+        pts[i + 1] = *b; pts[i + 1].x = pts[i].x + (b->x - a->x) * f; pts[i + 1].z = pts[i].z + (b->z - a->z) * f;
+        if (!a->jump && nfree) { pts[i + 1].x += ex / nfree; pts[i + 1].z += ez / nfree; } }
+    track_build(t, d->name, d->laps, pts, np, 20);
     t->shortcut_from = d->shortcut_from; t->shortcut_to = d->shortcut_to; t->shortcut_side = d->shortcut_side;
     t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx %= t->n; t->npad++; }
     t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx %= t->n; t->nmover++; }

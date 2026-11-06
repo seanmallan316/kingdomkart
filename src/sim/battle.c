@@ -20,7 +20,7 @@ static float wrap_pi(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (
 void battle_init(Battle *b, const Track *arena, int difficulty) {
     memset(b, 0, sizeof *b);
     race_init(&b->race, arena, DAVID, 0, difficulty, 1);
-    b->race.cd = 3.5f;
+    b->race.cd = 3.5f + RACE_READY_T;
     /* Goliath starts at the far side of the arena */
     const TrackSample *s = &arena->s[arena->n / 2];
     b->gx = s->x; b->gz = s->z; b->gyaw = atan2f(-s->tx, -s->tz); b->sb_yaw = b->gyaw; b->gstate = GOL_STALK; b->gtimer = 2.0f;

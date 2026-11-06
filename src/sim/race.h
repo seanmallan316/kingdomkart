@@ -11,6 +11,7 @@
 #define NSTYLES 5                   /* kart bodies: standard + 4 unlockable */
 #define MAX_BOX 24
 #define MAX_PROJ 24
+#define RACE_READY_T 3.0f          /* a calm moment on the grid before 3-2-1 (like Mario Kart) */
 #define RACE_TIME_LIMIT 120.0f      /* every race ends within two minutes */
 
 enum { RACE_COUNTDOWN, RACE_RUNNING, RACE_FINISHED };
