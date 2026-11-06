@@ -51,6 +51,7 @@ typedef struct {
        Laps one to six a blow is a small boost (the priests blew as they marched); on the seventh every shofar held goes at once in the great shout.
        wall_fall runs 0..1 as the walls come down: every blow helps, and on the seventh lap they fall on their own too. */
     int jericho; int shofars[NKARTS], shofar_held[NKARTS]; float wall_fall; int walls_down; float time_limit;
+    float collapse_t;   /* Jericho: seconds since the walls began to fall (0 = still standing); they all go at once, at the great shout */
     int order[NKARTS];                       /* order[0] is the leader */
     RaceEvent ev[32]; int nev;               /* events raised this step, for sounds and messages */
     uint32_t rng;

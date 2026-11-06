@@ -476,7 +476,7 @@ const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 /* How much each road's layout is stretched (x and z; heights, widths and scenery spacing from the road stay as they are).
    Chosen so the winner of a race takes about 2:15 (Sean: at least two minutes).
    Order = TRACK_DEFS. Battle arena and test loop stay as built. */
-static const float TRACK_SCALE[] = {1.81f, 1.7f, 2.0f, 1.78f, 2.5f, 1.84f, 1.65f, 1.0f, 1.0f};
+static const float TRACK_SCALE[] = {1.81f, 1.7f, 2.0f, 1.78f, 2.5f, 1.84f, 1.2f, 1.0f, 1.0f};   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
 
 void track_from_def(Track *t, const TrackDef *d) {
     int di = (int)(d - TRACK_DEFS); float sc = (di >= 0 && di < (int)(sizeof TRACK_SCALE / sizeof TRACK_SCALE[0])) ? TRACK_SCALE[di] : 1.0f;

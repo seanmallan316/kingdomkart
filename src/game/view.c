@@ -1915,9 +1915,14 @@ static void build_dynamic(void) {
                 float v0 = scroll ? g_time * 1.5f : 0.0f, v1 = v0 + (scroll ? pl->h / 3.0f : 1.0f);
                 float sw = g_kind[kd].sway == 1 ? sinf(g_time * 0.9f + i * 1.3f) * 0.025f * pl->h : (g_kind[kd].sway == 2 ? sinf(g_time * 3.0f + i * 2.1f) * 0.03f * pl->h : 0);   /* the top of trees and cloth moves in the wind */
                 float hh = pl->h;
-                if (pl->wall && pl->fall_t > 0) { float f = clampf(pl->fall_t / 1.2f, 0, 1); f = f * f; hh = pl->h * (1.0f - 0.78f * f); sw += sinf(pl->fall_t * 30.0f) * (1 - f) * 0.04f * pl->h;   /* it shudders, sinks into its own rubble, a quarter of it left standing */
-                    v0 = 1.0f - hh / pl->h; v1 = 1.0f; }   /* the bottom of the picture stays on the ground */
                 Vec3 c = v3(pl->p.x, pl->p.y + hh * 0.5f, pl->p.z), r_ = v3(ax.x * w, 0, ax.z * w), u_ = v3(ax.x * sw, hh * 0.5f, ax.z * sw);
+                if (pl->wall && pl->fall_t > 0) {   /* "the wall fell down flat": it shudders, then topples over away from the road, faster and faster, and lies there */
+                    float f = clampf((pl->fall_t - 0.15f) / 0.95f, 0, 1), ang = 1.5f * f * f, shud = pl->fall_t < 0.3f ? sinf(pl->fall_t * 60.0f) * 0.05f * pl->h : 0;
+                    TrackHit wh; track_locate(&g_track, pl->p.x, pl->p.z, -1, &wh); const TrackSample *ws = &g_track.s[wh.idx]; float sgn = wh.lateral > 0 ? 1.0f : -1.0f;
+                    Vec3 out = v3(ws->nx * sgn, 0, ws->nz * sgn);   /* away from the road */
+                    float ca = cosf(ang), sa = sinf(ang); hh = pl->h * 0.5f; r_ = v3(ws->tx * w, 0, ws->tz * w);   /* lying along the road, not facing the camera, so it never shrinks to a sliver */
+                    u_ = v3(out.x * sa * hh + ax.x * shud, ca * hh, out.z * sa * hh + ax.z * shud);
+                    c = v3(pl->p.x + u_.x, pl->p.y + 0.15f + u_.y, pl->p.z + u_.z); }
                 batch_quad4(&g_b, v3(c.x - r_.x - u_.x, c.y - u_.y, c.z - r_.z - u_.z), v3(c.x + r_.x - u_.x, c.y - u_.y, c.z + r_.z - u_.z), v3(c.x + r_.x + u_.x, c.y + u_.y, c.z + r_.z + u_.z), v3(c.x - r_.x + u_.x, c.y + u_.y, c.z - r_.z + u_.z), v3(0, 1, 0), 0, v0, 1, v1, 1, 1, 1, 1); }
             for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd) continue; const Mover *mv = &g_track.mover[m];
                 if (r->jericho && mv->img[1] == 'r' && mv->img[2] == 'u' && r->wall_fall < 0.3f) continue;   /* the rubble appears once the walls start to fall */
@@ -2559,14 +2564,19 @@ void game_frame(const Pad *pads, int npads, float dt) {
     if (steps == 8) acc = 0;
     Kart *k = &r->k[r->player];
     if (sim_running) for (int i = 0; i < MAX_RING; i++) if (g_ring[i].t > 0) g_ring[i].t -= dt;
-    if (r->jericho && sim_running) {   /* the walls of Jericho come down one stretch after another as wall_fall climbs */
+    if (r->jericho && sim_running && r->collapse_t > 0) {   /* the walls of Jericho fall: starting by your own kart and running away round the city */
+        int first = 1;
         for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (!pl->wall) continue;
-            float due = (float)(pl->wall - 1) / (float)(g_nwalls > 0 ? g_nwalls : 1);
-            if (pl->fall_t <= 0 && r->wall_fall > due && r->wall_fall > 0.001f) { pl->fall_t = 0.001f;
-                for (int n = 0; n < 10; n++) add_dust(v3(pl->p.x + (frand01() - 0.5f) * pl->w, pl->p.y + frand01() * pl->h * 0.5f, pl->p.z), 3.0f, 2.5f);
-                float dx = pl->p.x - k->x, dz = pl->p.z - k->z, d = sqrtf(dx * dx + dz * dz); float near = clampf(1.3f - d / 90.0f, 0.15f, 1.0f);
-                sfx_play(SFX_CRUMBLE, near, 0); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.35f * near); if (near > 0.6f) prumble(0, near * 0.6f, 0.4f); }
-            else if (pl->fall_t > 0 && pl->fall_t < 2.0f) { pl->fall_t += dt; if (pl->fall_t < 1.2f && frand01() < 0.5f) add_dust(v3(pl->p.x + (frand01() - 0.5f) * pl->w, pl->p.y + 0.3f, pl->p.z), 3.0f, 2.0f); } }
+            float dx = pl->p.x - k->x, dz = pl->p.z - k->z, d = sqrtf(dx * dx + dz * dz);
+            float due = fminf(d / 90.0f, 2.6f);   /* the ripple travels 90 m a second, so the far side has fallen within three seconds */
+            if (pl->fall_t <= 0 && r->collapse_t >= due) { pl->fall_t = 0.001f;
+                for (int n = 0; n < 6; n++) add_dust(v3(pl->p.x + (frand01() - 0.5f) * pl->w, pl->p.y + frand01() * pl->h * 0.6f, pl->p.z), 3.0f, 2.5f);
+                if (first && d < 120.0f) { first = 0; sfx_play(SFX_CRUMBLE, clampf(1.3f - d / 120.0f, 0.4f, 1.0f), 0); } }   /* one crash per frame at most, only for walls you can see */
+            else if (pl->fall_t > 0 && pl->fall_t < 3.0f) { float before = pl->fall_t; pl->fall_t += dt;
+                if (before < 1.1f && pl->fall_t >= 1.1f) {   /* it hits the ground: a cloud of dust along its length, and the ground shakes */
+                    for (int n = 0; n < 14; n++) add_dust(v3(pl->p.x + (frand01() - 0.5f) * pl->w * 1.4f, pl->p.y + 0.4f, pl->p.z + (frand01() - 0.5f) * pl->w * 0.8f), 4.0f, 3.0f);
+                    float near = clampf(1.2f - d / 100.0f, 0.0f, 1.0f); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.6f * near); if (near > 0.5f) prumble(0, near * 0.7f, 0.35f); }
+                else if (pl->fall_t < 1.1f && frand01() < 0.4f) add_dust(v3(pl->p.x + (frand01() - 0.5f) * pl->w, pl->p.y + 0.3f, pl->p.z), 3.0f, 2.0f); } }
     }
 
     /* effects */

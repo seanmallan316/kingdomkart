@@ -110,7 +110,7 @@ void race_init_multi(Race *r, const Track *t, const int *chars_in, const int *st
         for (int p = 0; p < nhuman; p++) { int slot = nk - nhuman + p; human[slot] = 1; chars[slot] = chars_in[p]; styles[slot] = styles_in ? styles_in[p] : 0; } }
     race_setup(r, t, chars, styles, human, nk, difficulty, 0xBEEF1234u + (uint32_t)chars_in[0] * 7919u + (uint32_t)nhuman * 101u);
 }
-void race_set_jericho(Race *r) { r->jericho = 1; r->nbox = 0; r->wall_fall = 0; r->walls_down = 0; r->time_limit = 300.0f; for (int i = 0; i < NKARTS; i++) r->shofars[i] = 0; }
+void race_set_jericho(Race *r) { r->jericho = 1; r->nbox = 0; r->wall_fall = 0; r->walls_down = 0; r->collapse_t = 0; r->time_limit = 300.0f; for (int i = 0; i < NKARTS; i++) r->shofars[i] = 0; }
 int race_human_index(const Race *r, int kart) { if (kart < 0 || kart >= r->nk || !r->human[kart]) return -1; int n = 0; for (int i = 0; i < kart; i++) if (r->human[i]) n++; return n; }
 
 void race_rank(Race *r) {
@@ -278,8 +278,8 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
         } else in = hin[i];
         if (r->jericho) {   /* the shofar: one blow per press; on the last lap every shofar held sounds together */
             if (in.item && !r->shofar_held[i] && r->shofars[i] > 0 && k->stun <= 0) {
-                if (k->lap >= t->laps) { int n = r->shofars[i]; r->shofars[i] = 0; give_boost(k, 1.0f + 0.4f * n, 1.3f + 0.04f * n); r->wall_fall += 0.06f * n; push_event(r, EV_SHOUT, i); }
-                else { r->shofars[i]--; give_boost(k, 0.8f, 1.2f); r->wall_fall += 0.02f; push_event(r, EV_SHOFAR, i); }
+                if (k->lap >= t->laps) { int n = r->shofars[i]; r->shofars[i] = 0; give_boost(k, 1.0f + 0.4f * n, 1.3f + 0.04f * n); if (r->collapse_t <= 0) r->collapse_t = 0.001f; push_event(r, EV_SHOUT, i); }
+                else { r->shofars[i]--; give_boost(k, 0.8f, 1.2f); r->wall_fall = fminf(r->wall_fall + 0.02f, 0.5f); push_event(r, EV_SHOFAR, i); }
             }
             r->shofar_held[i] = in.item;
         }
@@ -289,11 +289,11 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
         /* lap events */
         if (k->lap >= 2 && k->lap_time < dt * 1.5f && !k->finished) { push_event(r, k->lap == t->laps ? EV_FINAL_LAP : EV_LAP, i); if (r->jericho && r->shofars[i] < 6) r->shofars[i]++; }
     }
-    if (r->jericho) {   /* on the seventh lap the walls come down whatever anyone does (Joshua 6:20) */
-        int last = 0; for (int i = 0; i < r->nk; i++) if (r->k[i].lap >= t->laps) last = 1;
-        if (last) r->wall_fall += dt / 25.0f;
+    if (r->jericho) {   /* the seventh time round, at the great shout, "the wall fell down flat" (Joshua 6:20): all of it, in a few
+                           seconds. Someone's shout starts it; if nobody shouts, it comes anyway when the leader is half way round */
+        if (r->collapse_t <= 0) for (int i = 0; i < r->nk; i++) { const Kart *k = &r->k[i]; if (k->lap >= t->laps && !k->finished && t->s[k->hit.idx].dist > t->length * 0.5f) { r->collapse_t = 0.001f; push_event(r, EV_SHOUT, i); break; } }
+        if (r->collapse_t > 0) { r->collapse_t += dt; r->wall_fall = fminf(1.0f, fmaxf(r->wall_fall, r->collapse_t / 3.0f)); }
         if (r->wall_fall >= 1.0f && !r->walls_down) { r->wall_fall = 1.0f; r->walls_down = 1; push_event(r, EV_WALLS_DOWN, -1); }
-        if (r->wall_fall > 1.0f) r->wall_fall = 1.0f;
     }
 
     /* item boxes */
