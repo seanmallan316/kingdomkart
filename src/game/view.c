@@ -2023,6 +2023,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
 #endif
     Pad merged = merge_pads(pads, npads); const Pad *pad = &merged;     /* menus listen to every controller; a lone player can use any of them */
     g_frame_ms = dt * 1000.0f;
+    { /* speed report for the log file (the real Wii U's frame rate is only visible here): every 10 seconds */
+      static float acc = 0, worst = 0; static int nf = 0, slow = 0; acc += dt; nf++; if (g_frame_ms > worst) worst = g_frame_ms; if (g_frame_ms > 17.5f) slow++;
+      if (acc >= 10.0f) { gfx_log("speed: %.1f fps average, slowest frame %.1f ms, %d of %d frames over 1/60 s (screen %d)", nf / acc, worst, slow, nf, (int)g_screen); acc = 0; worst = 0; nf = 0; slow = 0; } }
     g_time += dt; g_screen_t += dt;
     Race *r = &g_race;
     cv = &g_view[0];
@@ -2376,7 +2379,6 @@ void game_frame(const Pad *pads, int npads, float dt) {
             batch_rect(&g_b, 0, 358, 1280, 4, 0.02f, 0.03f, 0.08f, 1); if (g_nplayers >= 3) batch_rect(&g_b, 638, 0, 4, 720, 0.02f, 0.03f, 0.08f, 1);   /* the bars between the views */
             if (g_screen == SCR_PAUSE) hud_pause();
             if (g_screen_t < 0.3f && g_screen == SCR_RACE) batch_rect(&g_b, 0, 0, 1280, 720, 0, 0, 0, 1.0f - g_screen_t / 0.3f);
-            { float frac = clampf(g_frame_ms / 33.3f, 0.02f, 1.0f); int good = g_frame_ms <= 16.8f; batch_rect(&g_b, 20, 708, 300 * frac, 6, good ? 0.2f : 1.0f, good ? 1.0f : 0.2f, 0.2f, 0.8f); }
             gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id, 1, 1, 1, 1);
             cv = &g_view[0]; gfx_view_end(drc); continue; }
         cv = &g_view[0];
@@ -2408,10 +2410,6 @@ void game_frame(const Pad *pads, int npads, float dt) {
             case SCR_RESULTS: if (g_mode == MODE_BATTLE) hud_battle_results(); else hud_results(); break;
             case SCR_GP: hud_gp(); break;
         }
-        { float frac = clampf(g_frame_ms / 33.3f, 0.02f, 1.0f); int good = g_frame_ms <= 16.8f;
-          batch_rect(&g_b, 20, 708, 300 * frac, 6, good ? 0.2f : 1.0f, good ? 1.0f : 0.2f, 0.2f, 0.8f);
-          batch_rect(&g_b, 20 + 300 * (16.7f / 33.3f), 704, 2, 14, 1, 1, 1, 0.8f); }
-        batch_rect(&g_b, 1220, 690, 20, 20, pad->source & 2 ? 1.0f : (pad->source & 1 ? 0.2f : 0.5f), pad->source & 2 ? 0.8f : (pad->source & 1 ? 0.5f : 0.5f), pad->source ? 0.2f : 0.5f, 0.9f);
         if (g_screen == SCR_TITLE && tx_title_bg && m_title_bg) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; gfx_bind(tx_title_bg); gfx_draw(m_title_bg, &id, 1, 1, 1, u); }
         else if (g_screen == SCR_TITLE && tx_title && m_title) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);
             gfx_bind(tx_title); gfx_draw(m_title, &id, 1, 1, 1, ease); }

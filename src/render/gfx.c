@@ -1,5 +1,6 @@
 // gfx.c - GX2 renderer for the Wii U: one lit-textured shader compiled at startup by CafeGLSL.
 #include "gfx.h"
+#include <coreinit/cache.h>
 #include <coreinit/time.h>
 #include <gx2/clear.h>
 #include <gx2/draw.h>
@@ -83,7 +84,7 @@ static float g_sun[3] = {1, 1, 1}, g_sky[3] = {1, 1, 1}, g_ground[3] = {1, 1, 1}
 typedef struct { float color[4]; float spec[4]; } FogBlock;
 
 #define UB_ALIGN 256
-#define UB_SLOTS 1024
+#define UB_SLOTS 4096   /* per frame, both screens; running out would overwrite matrices the GPU has not used yet */
 typedef struct { uint8_t *mem; int next; } UniformPool;
 static UniformPool g_pool[2]; static int g_pool_cur = 0;
 static WHBGfxShaderGroup g_shader; static Texture *g_white; static Texture *g_bound;
@@ -101,7 +102,7 @@ void gfx_set_logfile(FILE *f) { g_logfile = f; }
 
 static void *pool_upload(const void *src, uint32_t bytes) {
     UniformPool *p = &g_pool[g_pool_cur];
-    if (p->next >= UB_SLOTS) p->next = 0;
+    if (p->next >= UB_SLOTS) { static int warned = 0; if (!warned) { warned = 1; gfx_log("uniform pool ran out (%d draws in one frame)", UB_SLOTS); } p->next = 0; }
     uint8_t *dst = p->mem + p->next++ * UB_ALIGN;
     const uint32_t *s = src; uint32_t *d = (uint32_t *)dst;
     for (uint32_t i = 0; i < bytes / 4; i++) { uint32_t v = s[i]; d[i] = (v >> 24) | ((v >> 8) & 0xff00) | ((v << 8) & 0xff0000) | (v << 24); }
@@ -231,6 +232,12 @@ Texture *gfx_texture_rgba_ex(const uint32_t *pixels, int w, int h, int repeat, i
     tx->surface.image = memalign(tx->surface.alignment, tx->surface.imageSize);
     if (!tx->surface.image) { free(t); return NULL; }
     if (levels > 1 && tx->surface.mipmapSize) { tx->surface.mipmaps = memalign(tx->surface.alignment, tx->surface.mipmapSize); if (!tx->surface.mipmaps) { free(tx->surface.image); free(t); return NULL; } }
+    /* The GPU writes the picture into this memory, but the CPU cache may still hold dirty lines for it left over from
+       whatever used the memory before (the heap reuses freed blocks). If such a line is written back after the GPU copy,
+       it overwrites part of the picture with garbage - the scrambled portraits seen on the real Wii U (the emulator has
+       no CPU cache, so it never showed). Write those lines back now, before the GPU touches the memory. */
+    DCFlushRange(tx->surface.image, tx->surface.imageSize);
+    if (tx->surface.mipmaps) DCFlushRange(tx->surface.mipmaps, tx->surface.mipmapSize);
     void *staging[13] = {0}; int nst = 0;
     staging[nst++] = upload_level(tx, 0, pixels, w, h);
     if (!staging[0]) { free(tx->surface.mipmaps); free(tx->surface.image); free(t); return NULL; }
@@ -242,8 +249,9 @@ Texture *gfx_texture_rgba_ex(const uint32_t *pixels, int w, int h, int repeat, i
     }
     GX2DrawDone();
     for (int i = 0; i < nst; i++) free(staging[i]);
-    if (tx->surface.mipmaps) GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tx->surface.mipmaps, tx->surface.mipmapSize);
-    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tx->surface.image, tx->surface.imageSize);
+    /* the GPU wrote it: only the GPU's own texture cache needs refreshing (a CPU flush here could write stale lines over it) */
+    if (tx->surface.mipmaps) GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tx->surface.mipmaps, tx->surface.mipmapSize);
+    GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tx->surface.image, tx->surface.imageSize);
     GX2InitSampler(&t->smp, repeat ? GX2_TEX_CLAMP_MODE_WRAP : GX2_TEX_CLAMP_MODE_CLAMP, nearest ? GX2_TEX_XY_FILTER_MODE_POINT : GX2_TEX_XY_FILTER_MODE_LINEAR);
     if (levels > 1) {
         GX2InitSamplerXYFilter(&t->smp, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_4_TO_1);
