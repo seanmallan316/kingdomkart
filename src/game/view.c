@@ -37,7 +37,7 @@ static Battle g_battle;            /* the battle holds the race; in the racing m
 #define ARENA_TRACK (NUM_TRACK_DEFS - 2)   /* the Valley of Elah sits just before the Test Loop */
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* demo_char: who drives the title-screen demo */
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1; static Texture *tx_op; static Mesh *m_op;
 static int g_opt_sel = 0; static char g_pause_reason[48]; static float g_erase_hold = 0;
@@ -64,7 +64,7 @@ static Texture *tx_ride[NCHARS][5]; static float g_ride_aspect[NCHARS][5];
 /* spinning wheels: the wheel discs cut from each picture (content/img/wheels_<picture>.png) and where they sit */
 static const WheelDef *g_ride_wd[NCHARS][5], *g_view_wd[NCHARS][5]; static Texture *g_ride_wtex[NCHARS][5], *g_view_wtex[NCHARS][5];
 static float g_wheel_ang[NKARTS], g_tread_ph[NKARTS]; static Mesh *m_wheel_spr[NKARTS];
-static const TreadDef *g_ride_td[NCHARS][5]; static Texture *tx_tread; static Mesh *m_tread_spr[NKARTS];
+static const TreadDef *g_ride_td[NCHARS][5]; static Texture *tx_tread, *tx_trophy; static void px_trophy(int x, int y, uint32_t *o); static Mesh *m_tread_spr[NKARTS];
 static const TreadDef *tread_def(const char *picture) { for (int i = 0; i < NUM_TREAD_DEFS; i++) if (!strcmp(TREAD_DEFS[i].picture, picture)) return &TREAD_DEFS[i]; return NULL; }
 static const WheelDef *wheel_def(const char *picture) { for (int i = 0; i < NUM_WHEEL_DEFS; i++) if (!strcmp(WHEEL_DEFS[i].picture, picture)) return &WHEEL_DEFS[i]; return NULL; }
 static Texture *wheel_tex(const char *picture) { char n[80]; snprintf(n, sizeof n, "wheels_%s", picture); return asset_texture(n, 0, NULL, NULL); }   /* ride_<name>_<b|bl|l|fl|f>: the character sitting in the kart, one picture; used instead of kart + driver when present */
@@ -975,6 +975,7 @@ int game_init(int status) {
                 if (tx_ride[i][v]) g_ride_td[i][v] = tread_def(cn); } }
         for (int i = 0; i < NKARTS; i++) { m_kart_spr[i] = gfx_mesh_dynamic(6); m_wheel_spr[i] = gfx_mesh_dynamic(18); m_tread_spr[i] = gfx_mesh_dynamic(18); }
         tx_tread = make_tex(16, 64, 1, 0, px_tread);
+        tx_trophy = make_tex(128, 128, 0, 0, px_trophy);
         m_kartpic = gfx_mesh_dynamic(6);
         static const char *in[ITEM_COUNT] = {"", "icon_manna", "icon_loaves", "icon_samaritan", "icon_shield", "icon_parting", "shofar", "icon_fire", "icon_water"};
         for (int i = 1; i < ITEM_COUNT; i++) { int w = 1, h = 1; tx_item[i] = asset_texture(in[i], 0, &w, &h); g_item_sq[i] = w == h;
@@ -1586,6 +1587,72 @@ static void hud_gp(void) {
     else { snprintf(buf, sizeof buf, "A: ROAD %d OF %d", g_gp_round + 1, NUM_GP_TRACKS); text_c(buf, 600, 20, 0.9f, 0.95f, 1, 1); }
 }
 
+// ------------------------------------------------------------------ the trophy ceremony at the end of a cup
+static void px_trophy(int x, int y, uint32_t *o) {   /* a gold cup with two handles, a stem, a base, and a cross on the bowl (128 x 128) */
+    float fx = x + 0.5f, fy = y + 0.5f, hw = -1; int part = 0;
+    if (fy >= 14 && fy < 74) { float u = (fy - 14) / 60.0f; hw = 40.0f * sqrtf(fmaxf(0, 1 - u * u)); if (hw < 9) hw = 9; part = 1; }   /* bowl */
+    else if (fy >= 74 && fy < 94) { hw = 6 + (fy > 88 ? (fy - 88) * 1.5f : 0); part = 2; }                                       /* stem */
+    else if (fy >= 94 && fy < 104) { hw = 24; part = 3; } else if (fy >= 104 && fy < 120) { hw = 32; part = 4; }                   /* base and plinth */
+    int in = hw > 0 && fabsf(fx - 64) <= hw;
+    if (!in) { for (int sd = -1; sd <= 1; sd += 2) { float cx = 64 + sd * 40, cy = 36, d = sqrtf((fx - cx) * (fx - cx) + (fy - cy) * (fy - cy));   /* handles */
+                   if (d > 10 && d < 17 && (fx - cx) * sd > -2) { in = 1; hw = 17; part = 5; } } }
+    if (!in) { *o = 0; return; }
+    if (fy >= 14 && fy < 18 && part == 1) { *o = rgba(255, 236, 150, 255); return; }                                                /* bright rim */
+    float t = part == 5 ? 0 : (fx - 64) / hw;                                                                                         /* -1 left edge .. 1 right edge */
+    float shade = 0.62f + 0.38f * cosf(t * 1.4f) + (fabsf(t + 0.45f) < 0.12f ? 0.35f : 0);                                          /* round shading + a highlight */
+    if (part == 4) shade *= 0.55f;                                                                                                   /* darker plinth */
+    if (part == 1 && fabsf(fx - 64) < 3 && fy > 26 && fy < 58) shade = 1.25f;                                                        /* the cross on the bowl */
+    if (part == 1 && fabsf(fy - 36) < 3 && fabsf(fx - 64) < 11) shade = 1.25f;
+    float r = 236 * shade, g = 178 * shade, b = 52 * shade; if (r > 255) r = 255; if (g > 255) g = 255; if (b > 255) b = 255;
+    *o = rgba((int)r, (int)g, (int)b, 255);
+}
+static int cer_order(int *ord) {   /* the field of the cup, best first */
+    int nk = g_race.nk; for (int i = 0; i < nk; i++) ord[i] = g_race.character[i];
+    for (int a2 = 1; a2 < nk; a2++) { int v = ord[a2], j = a2 - 1; while (j >= 0 && g_gp_points[ord[j]] < g_gp_points[v]) { ord[j + 1] = ord[j]; j--; } ord[j + 1] = v; }
+    return nk;
+}
+static const float CER_X[3] = {640, 400, 880}, CER_H[3] = {150, 104, 70}, CER_T[3] = {2.4f, 1.4f, 0.6f};   /* 1st, 2nd, 3rd: where, how tall, when they arrive */
+static float cer_drop(int p) { float u = clampf((g_screen_t - CER_T[p]) / 0.55f, 0, 1); float e = 1 - (1 - u) * (1 - u); return u >= 1 ? 0 : (1 - e) * -620; }
+static void hud_trophy(void) {
+    float t = g_screen_t; char buf[96]; int ord[NKARTS]; cer_order(ord);
+    batch_rect(&g_b, 0, 0, 1280, 720, 0.03f, 0.04f, 0.12f, 0.82f);
+    for (int k = 0; k < 9; k++) { float w = 120 + k * 60; batch_rect(&g_b, 640 - w / 2, 120 + k * 50, w, 520 - k * 50, 1, 0.85f, 0.4f, 0.035f * clampf(t - 2.2f, 0, 1)); }   /* the light on the winner */
+    static const float col[3][3] = {{1, 0.82f, 0.25f}, {0.82f, 0.84f, 0.9f}, {0.82f, 0.52f, 0.28f}};
+    for (int p = 0; p < 3; p++) { float x = CER_X[p], h = CER_H[p], top = 640 - h;
+        batch_rect(&g_b, x - 110, top, 220, h, col[p][0] * 0.45f, col[p][1] * 0.45f, col[p][2] * 0.45f, 1);
+        batch_rect(&g_b, x - 110, top, 220, 10, col[p][0], col[p][1], col[p][2], 1);
+        snprintf(buf, sizeof buf, "%d", p + 1); batch_text(&g_b, buf, x - text_width(buf, 54) / 2, top + 26, 54, col[p][0], col[p][1], col[p][2], 1);
+        if (t >= CER_T[p] + 0.4f) { const char *nm = CHARACTERS[ord[p]].short_name; batch_text(&g_b, nm, x - text_width(nm, 20) / 2, 652, 20, 1, 1, 1, clampf((t - CER_T[p] - 0.4f) * 3, 0, 1)); } }
+    batch_rect(&g_b, 0, 640, 1280, 4, 1, 0.85f, 0.4f, 0.6f);
+    const char *cup = g_cup == 0 ? "GOSPEL CUP" : "GENESIS TO GLORY CUP"; text_c(cup, 22, 40, 1, 0.85f, 0.3f, 1);
+    if (t >= 3.4f) { snprintf(buf, sizeof buf, "CHAMPION: %s", CHARACTERS[ord[0]].name); text_c(buf, 72, 26, 1, 1, 1, clampf((t - 3.4f) * 2, 0, 1)); }
+}
+static void hud_trophy_top(void) {   /* drawn over the pictures: confetti, the player's place, the verse */
+    float t = g_screen_t; char buf[96]; int ord[NKARTS]; int nk = cer_order(ord);
+    if (t >= 3.4f) { static const float pal[6][3] = {{1, 0.85f, 0.3f}, {0.95f, 0.3f, 0.3f}, {0.3f, 0.6f, 1}, {0.4f, 0.9f, 0.4f}, {1, 1, 1}, {0.85f, 0.5f, 1}};
+        for (int i = 0; i < 140; i++) { uint32_t hsh = (uint32_t)i * 2654435761u; float fx = (hsh & 1023) / 1023.0f, sp = 70 + ((hsh >> 10) & 127), ph = ((hsh >> 17) & 1023) / 1023.0f;
+            float y = fmodf((t - 3.4f) * sp + ph * 760, 760) - 30, x = fx * 1280 + sinf(t * 2.2f + i) * 14; const float *c = pal[i % 6];
+            batch_rect(&g_b, x, y, 7, (i & 1) ? 11 : 6, c[0], c[1], c[2], 0.95f); } }
+    int me = -1; for (int i = 0; i < nk; i++) if (ord[i] == g_player_char) me = i;
+    if (t >= 4.0f && me >= 0) { float a = clampf((t - 4.0f) * 2, 0, 1);
+        if (me == 0) text_c("YOU WON THE CUP!", 520, 34, 1, 0.9f, 0.3f, a);
+        else { snprintf(buf, sizeof buf, "YOU FINISHED %s", place_name(me + 1)); text_c(buf, 520, 30, 1, 1, 1, a); } }
+    if (t >= 4.6f) { float a = clampf((t - 4.6f) * 2, 0, 1); text_c("I HAVE FOUGHT A GOOD FIGHT, I HAVE FINISHED MY COURSE, I HAVE KEPT THE FAITH", 684, 14, 1, 1, 1, a); text_c("2 TIMOTHY 4:7", 702, 12, 1, 0.85f, 0.4f, a); }
+    if (t >= 5.5f && ((int)(g_time * 2) & 1)) text_c("A: CONTINUE", 560, 18, 0.9f, 0.95f, 1, 1);
+}
+static void draw_trophy_pictures(void) {   /* the three characters stand on the podium; the cup appears over the winner */
+    int ord[NKARTS]; cer_order(ord); Mat4 id = m4_identity(); static Mesh *pm[4] = {0}; float t = g_screen_t;
+    for (int p = 2; p >= 0; p--) { int ch = ord[p]; if (!tx_char[ch] || t < CER_T[p]) continue; if (!pm[p]) pm[p] = gfx_mesh_dynamic(6);
+        float h = p == 0 ? 250 : 210, w = h * g_char_aspect[ch], x = CER_X[p], bot = 640 - CER_H[p] + 4 + cer_drop(p);
+        if (w > 230) { w = 230; h = w / g_char_aspect[ch]; }
+        float bounce = (p == 0 && t > CER_T[0] + 0.55f) ? sinf((t - CER_T[0]) * 3.0f) * 4 * expf(-(t - CER_T[0] - 0.55f) * 1.5f) : 0;
+        batch_clear(&g_b); batch_rect_uv(&g_b, x - w / 2, bot - h + bounce, w, h, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(pm[p], g_b.v, g_b.n); gfx_bind(tx_char[ch]); gfx_draw(pm[p], &id, 1, 1, 1, 1); }
+    if (t >= 3.4f && tx_trophy) { if (!pm[3]) pm[3] = gfx_mesh_dynamic(6);
+        float u = clampf((t - 3.4f) / 0.5f, 0, 1), sz = 130 * (u < 1 ? (1.25f * u - 0.25f * u * u) : 1.0f) * (1 + 0.04f * sinf(t * 3)), top = 640 - CER_H[0] - 250 - sz - 6;
+        if (top < 100) top = 100;
+        batch_clear(&g_b); batch_rect_uv(&g_b, 640 - sz / 2 - (1 - u) * 0, top, sz, sz, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(pm[3], g_b.v, g_b.n); gfx_bind(tx_trophy); gfx_draw(pm[3], &id, 1, 1, 1, 1); }
+}
+
 // ------------------------------------------------------------------ per-frame update
 #ifdef KK_TOUR
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
@@ -1593,7 +1660,9 @@ static void tour_pads(Pad *pads, float t) {
     static const struct { float t; char key; int slot; } script[] = {
 #if KK_TOUR_ROAD == 11
         /* the Grand Prix: title, GRAND PRIX, the second cup (Genesis to Glory), character, kart, the first road (Eden), then the standings */
-        {8, 'A'}, {11, 'A'}, {14, 'R'}, {16, 'A'}, {19, 'A'}, {22, 'A'}, {70, 'P'}, {84, 'P'}, {121, 'A'}, {124, 'A'},
+        {8, 'A'}, {11, 'A'}, {14, 'R'}, {16, 'A'}, {19, 'A'}, {22, 'A'}, {70, 'P'}, {84, 'P'}, {130, 'A'}, {133, 'A'},
+#elif KK_TOUR_ROAD == 12
+        {60, 'A'}, {70, 'A'},                    /* the trophy ceremony plays out, then A, A: back to the main menu */
 #elif KK_TOUR_ROAD == 10
         /* the Walls of Jericho: title, menu (down five times), character, kart, race */
         {8, 'A'}, {11, 'D'}, {13, 'D'}, {15, 'D'}, {17, 'D'}, {19, 'D'}, {21, 'A'}, {24, 'A'}, {27, 'A'},
@@ -1672,6 +1741,7 @@ static const char *pick_music(void) {
         if (lost && music_available("music_lose")) return "music_lose";
         return music_available("music_results") ? "music_results" : "music_menu";
     }
+    if (g_screen == SCR_TROPHY) return music_available("music_trophy") ? "music_trophy" : (music_available("music_results") ? "music_results" : "music_menu");
     if (g_screen == SCR_GP) {
         if (g_gp_round >= NUM_GP_TRACKS) { int rank = gp_player_rank();
             if (rank == 1 && music_available("music_trophy")) return "music_trophy";
@@ -2033,6 +2103,12 @@ void game_frame(const Pad *pads, int npads, float dt) {
 #endif
     Pad merged = merge_pads(pads, npads); const Pad *pad = &merged;     /* menus listen to every controller; a lone player can use any of them */
     g_frame_ms = dt * 1000.0f;
+#if defined(KK_TOUR) && KK_TOUR_ROAD == 12
+    { static int done = 0; if (!done && g_time > 2.0f) { done = 1;   /* CI: straight to a trophy ceremony, the field behind it is the demo race */
+        g_mode = MODE_GP; g_cup = 0; g_gp_round = NUM_GP_TRACKS; memset(g_gp_points, 0, sizeof g_gp_points);
+        for (int i = 0; i < g_race.nk; i++) g_gp_points[g_race.character[i]] = 60 - 7 * i;
+        g_player_char = g_race.character[1]; g_screen = SCR_TROPHY; g_screen_t = 0; } }
+#endif
     if (g_sting_due && g_race.state == RACE_COUNTDOWN && g_race.cd <= 4.85f) { g_sting_due = 0; sfx_play(SFX_COUNTDOWN, 1, 0); }   /* the sting's closing hit is 4.85 s in */
     if (g_race.state != RACE_COUNTDOWN) g_sting_due = 0;
     /* tire treads seen edge-on: at racing speed the real roll (dozens of grooves a second) would jump a whole groove or more
@@ -2187,7 +2263,15 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pb && g_mode != MODE_GP) { set_track(0); if (g_mode == MODE_VS || g_mode == MODE_JERICHO) g_mode = MODE_SINGLE; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
         break;
     case SCR_GP:
-        if (pa) { if (g_gp_round >= NUM_GP_TRACKS) { start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
+        if (pa) { if (g_gp_round >= NUM_GP_TRACKS) { g_screen = SCR_TROPHY; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
+        break;
+    case SCR_TROPHY: {
+        static float last_t = 99; float t0 = last_t; last_t = g_screen_t; int ord[NKARTS]; cer_order(ord);
+        if (t0 < CER_T[0] + 0.5f && g_screen_t >= CER_T[0] + 0.5f) { sfx_play(SFX_WIN, 1, 0); int hv = g_voice[ord[0]][VO_WIN]; if (hv >= 0) sfx_voice_play(hv, 1.0f, 0); }
+        if (t0 < 3.4f && g_screen_t >= 3.4f) sfx_play(SFX_UNLOCK, 1, 0);
+        for (int p = 1; p < 3; p++) if (t0 < CER_T[p] + 0.5f && g_screen_t >= CER_T[p] + 0.5f) sfx_play(SFX_LAND, 0.8f, 0);
+        if (pa && g_screen_t > 5.5f) { start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
+        else if (pa && g_screen_t < 5.5f) g_screen_t = 5.5f; }   /* A skips ahead to the end of the show */
         break;
     }
     /* the attract-mode race restarts itself when it ends */
@@ -2426,17 +2510,19 @@ void game_frame(const Pad *pads, int npads, float dt) {
             case SCR_PAUSE: if (g_mode == MODE_BATTLE) hud_battle(); else hud_race(pad); hud_pause(); break;
             case SCR_RESULTS: if (g_mode == MODE_BATTLE) hud_battle_results(); else hud_results(); break;
             case SCR_GP: hud_gp(); break;
+            case SCR_TROPHY: hud_trophy(); break;
         }
         if (g_screen == SCR_TITLE && tx_title_bg && m_title_bg) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; gfx_bind(tx_title_bg); gfx_draw(m_title_bg, &id, 1, 1, 1, u); }
         else if (g_screen == SCR_TITLE && tx_title && m_title) { float u = g_screen_t < 0.7f ? g_screen_t / 0.7f : 1.0f; float ease = 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);
             gfx_bind(tx_title); gfx_draw(m_title, &id, 1, 1, 1, ease); }
         /* a quick fade from black when a new screen opens */
-        if (g_screen_t < 0.3f && (g_screen == SCR_RACE || g_screen == SCR_RESULTS || g_screen == SCR_TITLE || g_screen == SCR_CREDITS || g_screen == SCR_GP)) batch_rect(&g_b, 0, 0, 1280, 720, 0, 0, 0, 1.0f - g_screen_t / 0.3f);
+        if (g_screen_t < 0.3f && (g_screen == SCR_RACE || g_screen == SCR_RESULTS || g_screen == SCR_TITLE || g_screen == SCR_CREDITS || g_screen == SCR_GP || g_screen == SCR_TROPHY)) batch_rect(&g_b, 0, 0, 1280, 720, 0, 0, 0, 1.0f - g_screen_t / 0.3f);
         gfx_mesh_update(m_hud, g_b.v, g_b.n);
         gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
         if (g_screen == SCR_MAIN && tx_title && m_logo_small) { gfx_bind(tx_title); gfx_draw(m_logo_small, &id, 1, 1, 1, 1); }
         if (g_screen == SCR_CHAR || g_screen == SCR_MCHAR) draw_portraits();
         if (g_screen == SCR_RESULTS && g_mode != MODE_TT && g_mode != MODE_BATTLE) draw_podium_karts();
+        if (g_screen == SCR_TROPHY) { draw_trophy_pictures(); static Mesh *m_top = NULL; if (!m_top) m_top = gfx_mesh_dynamic(8192); batch_clear(&g_b); hud_trophy_top(); gfx_mesh_update(m_top, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_top, &id, 1, 1, 1, 1); }
         if (g_screen == SCR_TRACK) for (int c2 = 0; c2 < ncards() && c2 < 8; c2++) { int d = card_track(c2); if (d >= 8 || !tx_card[d] || !track_unlocked(d)) continue;
             if (!m_card[c2]) m_card[c2] = gfx_mesh_dynamic(6);
             { float x = 40 + c2 * CARD_STEP + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, CARD_IN, CARD_IN * 0.54f, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m_card[c2], g_b.v, g_b.n); }
