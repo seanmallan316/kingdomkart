@@ -342,15 +342,15 @@ static const Mover JERICHO_MOVERS[] = {
     {"#rubble", 196, -2.5f, 0.0f, 0.0f, 0.0f, 1.1f, 2.2f}, {"#rubble", 256, 3.5f, 0.0f, 0.0f, 0.0f, 1.1f, 2.2f},
 };
 // ------------------------------------------------------------------ Valley of Elah: the battle arena (a wide, flat ring between the two camps)
-static const TrackPoint ELAH_PTS[] = {      /* a ring 80 m wide: the whole valley floor is drivable, with a great rock in the middle */
-    {    0.0, 0.0f,    0.0, 64, 0.00f },
-    {   35.4, 0.0f,   14.6, 64, 0.00f },
-    {   50.0, 0.0f,   50.0, 64, 0.00f },
-    {   35.4, 0.0f,   85.4, 64, 0.00f },
-    {    0.0, 0.0f,  100.0, 64, 0.00f },
-    {  -35.4, 0.0f,   85.4, 64, 0.00f },
-    {  -50.0, 0.0f,   50.0, 64, 0.00f },
-    {  -35.4, 0.0f,   14.6, 64, 0.00f },
+static const TrackPoint ELAH_PTS[] = {      /* the open valley floor: a loop so wide (100 m) that it fills the whole circle, 104 m across to the camps */
+    {    0.0, 0.0f,    0.0, 100, 0.00f },
+    {   35.4, 0.0f,   14.6, 100, 0.00f },
+    {   50.0, 0.0f,   50.0, 100, 0.00f },
+    {   35.4, 0.0f,   85.4, 100, 0.00f },
+    {    0.0, 0.0f,  100.0, 100, 0.00f },
+    {  -35.4, 0.0f,   85.4, 100, 0.00f },
+    {  -50.0, 0.0f,   50.0, 100, 0.00f },
+    {  -35.4, 0.0f,   14.6, 100, 0.00f },
 };
 static const Scenery ELAH_SCENERY[] = {
     /* Israel's camp along one side of the valley, the Philistines along the other, all watching */
@@ -358,7 +358,6 @@ static const Scenery ELAH_SCENERY[] = {
     {"#israelite", 38, 37, 5, 0}, {"#tent", 44, 42, 6, 0}, {"#israelite", 50, 37, 5, 0}, {"#israelite", 56, 37, 5, 0}, {"#banner_israel", 62, 39, 8, 0}, {"#israelite", 68, 37, 5, 0}, {"#tent", 74, 42, 6, 0},
     {"#philistine", 82, 37, 5, 0}, {"#philistine", 88, 37, 5, 0}, {"#tent", 94, 42, 6, 0}, {"#camp", 97, 44, 5, 0}, {"#philistine", 100, 37, 5, 0}, {"#banner_philistine", 106, 39, 8, 0}, {"#philistine", 112, 37, 5, 0},
     {"#philistine", 118, 37, 5, 0}, {"#tent", 124, 42, 6, 0}, {"#philistine", 130, 37, 5, 0}, {"#banner_philistine", 136, 39, 8, 0}, {"#philistine", 142, 37, 5, 0}, {"#philistine", 148, 37, 5, 0}, {"#tent", 154, 42, 6, 0},
-    {"#rock", 0, -37, 14, 0}, {"#rock", 40, -37, 14, 0}, {"#rock", 80, -37, 14, 0}, {"#rock", 120, -37, 14, 0},   /* the great rock in the middle */
 };
 
 const TrackDef TRACK_DEFS[] = {

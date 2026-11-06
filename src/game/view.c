@@ -119,7 +119,7 @@ static float g_results_t;
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
 /* meshes */
-static Mesh *m_field, *m_gem; static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_field, *m_gem, *m_pebble; static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
 
@@ -332,7 +332,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
-    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -354,14 +354,27 @@ static void build_track_meshes(void) {
     batch_init(&g_b, g_vtmp, 16384);
     /* road */
     batch_clear(&g_b);
+    if (g_def->bonus == 2) {   /* the battle valley: one flat disc of grass out to the edge, from the middle (a road strip that wide would fold over itself there) */
+        float cx = 0, cz = 0; for (int i = 0; i < t->n; i++) { cx += t->s[i].x; cz += t->s[i].z; } cx /= t->n; cz /= t->n;
+        for (int i = 0; i < t->n; i++) { int j = (i + 1) % t->n; float h = t->s[i].width * 0.5f, hj = t->s[j].width * 0.5f;
+            Vec3 a = road_point(t, i, h), b = road_point(t, j, hj), a2 = road_point(t, i, -h);
+            if ((a2.x - cx) * (a2.x - cx) + (a2.z - cz) * (a2.z - cz) > (a.x - cx) * (a.x - cx) + (a.z - cz) * (a.z - cz)) { a = a2; b = road_point(t, j, -hj); }
+            Vec3 c = v3(cx, a.y, cz), p0 = a, p1 = b;
+            if ((p0.x - c.x) * (p1.z - c.z) - (p0.z - c.z) * (p1.x - c.x) > 0) { Vec3 q = p0; p0 = p1; p1 = q; }   /* counter-clockwise seen from above */
+            Vertex v[3] = { {c.x, c.y, c.z, 0, 1, 0, c.x / 10.0f, c.z / 10.0f, 1, 1, 1, 1}, {p1.x, p1.y, p1.z, 0, 1, 0, p1.x / 10.0f, p1.z / 10.0f, 1, 1, 1, 1}, {p0.x, p0.y, p0.z, 0, 1, 0, p0.x / 10.0f, p0.z / 10.0f, 1, 1, 1, 1} };
+            if (g_b.n + 3 <= g_b.cap) for (int k = 0; k < 3; k++) g_b.v[g_b.n++] = v[k]; }
+    } else
     for (int i = 0; i < t->n; i++) strip_quad(&g_b, t, i, -t->s[i].width * 0.5f, t->s[i].width * 0.5f, 1.0f / 8.0f, 1, 1, 1);
     m_road = gfx_mesh_static(g_b.v, g_b.n);
-    /* shoulders (dirt) */
+    /* shoulders (dirt); the battle valley has only an outside edge (its inside edge is the middle of the disc) */
+    int skip_side = 0;
+    if (g_def->bonus == 2) { float cx = 0, cz = 0; for (int i = 0; i < t->n; i++) { cx += t->s[i].x; cz += t->s[i].z; } cx /= t->n; cz /= t->n;
+        Vec3 r = road_point(t, 0, 1.0f); skip_side = (r.x - cx) * (r.x - cx) + (r.z - cz) * (r.z - cz) < (t->s[0].x - cx) * (t->s[0].x - cx) + (t->s[0].z - cz) * (t->s[0].z - cz) ? 1 : -1; }
     batch_clear(&g_b);
     for (int i = 0; i < t->n; i++) {
         float h = t->s[i].width * 0.5f;
-        strip_quad(&g_b, t, i, -h - SHOULDER_W, -h, 1.0f / 6.0f, 1, 1, 1);
-        strip_quad(&g_b, t, i, h, h + SHOULDER_W, 1.0f / 6.0f, 1, 1, 1);
+        if (skip_side != -1) strip_quad(&g_b, t, i, -h - SHOULDER_W, -h, 1.0f / 6.0f, 1, 1, 1);
+        if (skip_side != 1) strip_quad(&g_b, t, i, h, h + SHOULDER_W, 1.0f / 6.0f, 1, 1, 1);
     }
     m_shoulder = gfx_mesh_static(g_b.v, g_b.n);
     /* the ground level everything stands on (the sea on a water road) */
@@ -371,7 +384,7 @@ static void build_track_meshes(void) {
     batch_clear(&g_b);
     for (int i = 0; i < t->n; i++) {
         int j = (i + 1) % t->n;
-        for (int side = -1; side <= 1; side += 2) {
+        for (int side = -1; side <= 1; side += 2) { if (side == skip_side) continue;
             float e = track_bound(t, i, side), ej = track_bound(t, j, side);
             Vec3 a = road_point(t, i, side * e), b = road_point(t, j, side * ej);
             Vec3 at = v3(a.x, a.y + 0.9f, a.z), bt = v3(b.x, b.y + 0.9f, b.z);
@@ -407,6 +420,15 @@ static void build_track_meshes(void) {
                           {bot.x, bot.y, bot.z, nb.x, nb.y, nb.z, 0, 0, 0.6f, 0.6f, 0.6f, 1}, {r0.x, r0.y, r0.z, nb.x, nb.y, nb.z, 0, 0, 0.9f, 0.9f, 0.9f, 1}, {r1.x, r1.y, r1.z, nb.x, nb.y, nb.z, 0, 0, 0.9f, 0.9f, 0.9f, 1} };
           for (int k = 0; k < 6; k++) g_b.v[g_b.n++] = v[k]; } }
     m_gem = gfx_mesh_static(g_b.v, g_b.n);
+    /* a smooth stone from the brook: a squashed ball */
+    batch_clear(&g_b);
+    for (int ri = 0; ri < 6; ri++) for (int si = 0; si < 10; si++) {
+        float t0 = 3.14159265f * ri / 6, t1 = 3.14159265f * (ri + 1) / 6, p0 = 6.2831853f * si / 10, p1 = 6.2831853f * (si + 1) / 10;
+        Vec3 n00 = v3(sinf(t0) * cosf(p0), cosf(t0), sinf(t0) * sinf(p0)), n01 = v3(sinf(t0) * cosf(p1), cosf(t0), sinf(t0) * sinf(p1)), n10 = v3(sinf(t1) * cosf(p0), cosf(t1), sinf(t1) * sinf(p0)), n11 = v3(sinf(t1) * cosf(p1), cosf(t1), sinf(t1) * sinf(p1));
+        Vec3 q[4] = {n00, n10, n11, n01}; static const int ix[6] = {0, 1, 2, 0, 2, 3};
+        if (g_b.n + 6 > g_b.cap) break;
+        for (int k = 0; k < 6; k++) { Vec3 n = q[ix[k]]; float sh = 0.85f + 0.15f * n.y; Vertex v = {n.x * 0.5f, n.y * 0.32f, n.z * 0.42f, n.x, n.y, n.z, 0, 0, sh, sh, sh, 1}; g_b.v[g_b.n++] = v; } }
+    m_pebble = gfx_mesh_static(g_b.v, g_b.n);
     /* start line across the road */
     batch_clear(&g_b);
     { Vec3 p0 = road_point(t, 0, -t->s[0].width * 0.5f), p1 = road_point(t, 0, t->s[0].width * 0.5f), p2 = road_point(t, 2, t->s[2].width * 0.5f), p3 = road_point(t, 2, -t->s[2].width * 0.5f);
@@ -967,7 +989,7 @@ static void free_theme(void) {
 static void load_theme(void) {
     const TrackDef *d = g_def;
     int heaven = d->grid_idx > 0, eden = !strcmp(d->prefix, "eden"), desert = d->bonus == 3;
-    tx_road = theme_tex(d->tex_road, 256, 256, heaven ? px_gold : (eden ? px_path : px_road));
+    tx_road = d->bonus == 2 ? theme_tex(d->tex_grass, 128, 128, px_grass) : theme_tex(d->tex_road, 256, 256, heaven ? px_gold : (eden ? px_path : px_road));   /* the valley floor is grass, not a paved road */
     tx_dirt = theme_tex(d->tex_dirt, 128, 128, d->water ? px_sand : (heaven ? px_cloud : (eden ? px_lush : (desert ? px_sand : px_dirt))));
     tx_grass = theme_tex(d->tex_grass, 128, 128, d->water ? px_water : (eden ? px_lush : (desert ? px_desert : px_grass)));
     tx_wall = theme_tex(d->tex_wall, 64, 64, heaven ? px_cloud : (eden ? px_hedge : px_wall));
@@ -1225,6 +1247,7 @@ static void hud_gamepad(void) {     /* the GamePad shows the big map and the sta
     for (int p = r->nk - 1; p >= 0; p--) { int i = r->order[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]]; float sz = i == r->player ? 26 : 18;
         batch_rect(&g_b, mx + (q->x - map_x0) * sc - sz / 2, mz - (q->z - map_z0) * sc - sz / 2, sz, sz, c->r, c->g, c->b, 1);
         if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * sc - 6, mz - (q->z - map_z0) * sc - 6, 12, 12, 1, 1, 1, 1); }
+    if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; for (int i = 0; i < BATTLE_STONES; i++) if (b->stone_respawn[i] <= 0) batch_rect(&g_b, mx + (b->stone_x[i] - map_x0) * sc - 8, mz - (b->stone_z[i] - map_z0) * sc - 8, 16, 16, 1, 0.9f, 0.5f, 1); }
     if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; batch_rect(&g_b, mx + (b->gx - map_x0) * sc - 20, mz - (b->gz - map_z0) * sc - 20, 40, 40, 0.9f, 0.2f, 0.15f, 1); batch_text(&g_b, "G", mx + (b->gx - map_x0) * sc - 8, mz - (b->gz - map_z0) * sc - 10, 20, 1, 1, 1, 1); }
     /* standings down the right side */
     batch_text(&g_b, g_mode == MODE_BATTLE ? "THE FIGHT" : "STANDINGS", 800, 80, 24, 1, 0.85f, 0.3f, 1);
@@ -1592,7 +1615,9 @@ static void hud_battle(void) {
     text_c("THE VALLEY OF ELAH", 60, 16, 1, 0.85f, 0.3f, 1);
     batch_text(&g_b, "DAVID", 40, 30, 22, 1, 1, 1, 1);
     for (int i = 0; i < BATTLE_LIVES; i++) batch_rect(&g_b, 40 + i * 34, 60, 28, 24, i < BATTLE_LIVES - b->hits_on_david ? 0.95f : 0.25f, 0.2f, 0.25f, 1);
-    snprintf(buf, sizeof buf, "STONES x%d", b->stones_held); batch_text(&g_b, buf, 40, 95, 18, 0.9f, 0.9f, 0.85f, 1);
+    snprintf(buf, sizeof buf, "STONES x%d", b->stones_held); batch_text(&g_b, buf, 40, 95, 22, 0.95f, 0.95f, 0.85f, 1);
+    if (b->stones_held == 0 && b->race.state == RACE_RUNNING && fmodf(g_time, 1.0f) < 0.7f) batch_text(&g_b, "GET A STONE FROM THE BROOK!", 40, 124, 18, 1, 0.85f, 0.3f, 1);
+    else if (b->stones_held > 0 && b->race.state == RACE_RUNNING) batch_text(&g_b, "ZL: SLING", 40, 124, 18, 0.8f, 0.9f, 1, 1);
     batch_text(&g_b, "GOLIATH", 1240 - text_width("GOLIATH", 22), 30, 22, 1, 1, 1, 1);
     for (int i = 0; i < BATTLE_WIN_HITS; i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < BATTLE_WIN_HITS - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
     { char tb[32]; fmt_time(tb, sizeof tb, BATTLE_TIME_LIMIT - b->race.race_t > 0 ? BATTLE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
@@ -2140,8 +2165,15 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             Battle *b = &g_battle;
             /* stones on the ground and in the air, spears */
             for (int i = 0; i < BATTLE_STONES; i++) { if (b->stone_respawn[i] > 0) continue; TrackHit h; track_locate(&g_track, b->stone_x[i], b->stone_z[i], -1, &h);
-                Mat4 m = m4_mul(m4_translate(b->stone_x[i], h.height + 0.4f + 0.1f * sinf(g_time * 3 + i), b->stone_z[i]), m4_rotate_y(g_time + i)); Mat4 m2 = m4_mul(m, m4_scale(0.5f, 0.5f, 0.5f)); gfx_draw(m_cube, &m2, 0.55f, 0.52f, 0.5f, 1); }
-            for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *ms = &b->stone[i]; if (!ms->alive) continue; Mat4 m = m4_mul(m4_translate(ms->x, ms->y, ms->z), m4_scale(0.35f, 0.35f, 0.35f)); gfx_draw(m_cube, &m, 0.55f, 0.52f, 0.5f, 1); }
+                Mat4 m = m4_mul(m4_translate(b->stone_x[i], h.height + 0.55f + 0.12f * sinf(g_time * 3 + i), b->stone_z[i]), m4_mul(m4_rotate_y(g_time * 0.8f + i), m4_scale(1.6f, 1.6f, 1.6f)));
+                gfx_draw_ex(m_pebble, &m, 0.92f, 0.9f, 0.85f, 1, 0.9f, 0, 0, 0); }
+            { batch_clear(&g_b);   /* a golden ring on the ground and a soft beam of light over each stone, so they can be found from across the valley */
+              for (int i = 0; i < BATTLE_STONES; i++) { if (b->stone_respawn[i] > 0) continue; float pul = 1.0f + 0.15f * sinf(g_time * 4 + i);
+                  batch_quad(&g_b, v3(b->stone_x[i], 0.08f, b->stone_z[i]), v3(2.4f * pul, 0, 0), v3(0, 0, -2.4f * pul), v3(0, 1, 0), 0, 0, 1, 1, 1, 0.85f, 0.35f, 0.9f);
+                  batch_quad(&g_b, v3(b->stone_x[i], 6.0f, b->stone_z[i]), v3(ax.x * 1.1f, 0, ax.z * 1.1f), v3(0, 6.0f, 0), v3(0, 1, 0), 0.3f, 0, 0.7f, 1, 1, 0.9f, 0.6f, 0.35f); }
+              static Mesh *m_stoneglow = NULL; if (!m_stoneglow) m_stoneglow = gfx_mesh_dynamic(BATTLE_STONES * 12);
+              gfx_mesh_update(m_stoneglow, g_b.v, g_b.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_stoneglow, &id, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); }
+            for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *ms = &b->stone[i]; if (!ms->alive) continue; Mat4 m = m4_mul(m4_translate(ms->x, ms->y, ms->z), m4_scale(0.9f, 0.9f, 0.9f)); gfx_draw(m_pebble, &m, 0.55f, 0.52f, 0.5f, 1); }
             for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *ms = &b->spear[i]; if (!ms->alive) continue;
                 Mat4 m = m4_mul(m4_translate(ms->x, ms->y, ms->z), m4_mul(m4_rotate_y(atan2f(ms->vx, ms->vz)), m4_scale(0.12f, 0.12f, 2.2f))); gfx_draw(m_cube, &m, 0.55f, 0.35f, 0.2f, 1);
                 Mat4 m2 = m4_mul(m4_translate(ms->x + ms->vx / 30.0f * 1.5f, ms->y, ms->z + ms->vz / 30.0f * 1.5f), m4_scale(0.25f, 0.25f, 0.25f)); gfx_draw(m_cube, &m2, 0.8f, 0.8f, 0.85f, 1); }
@@ -2451,7 +2483,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (g_mode == MODE_BATTLE) {
             battle_step(&g_battle, &in, g_demo || g_attract, SIM_DT);
             for (int e = 0; e < g_battle.nev; e++) switch (g_battle.ev[e]) {
-                case BEV_STONE_PICKED: sfx_play(SFX_COIN, 0.8f, 0); break;
+                case BEV_STONE_PICKED: sfx_play(SFX_PICKUP, 0.9f, 0); snprintf(g_msg, sizeof g_msg, "A SMOOTH STONE!"); snprintf(g_msg2, sizeof g_msg2, "PRESS ZL TO SLING IT - 1 SAMUEL 17:40"); g_msg_t = 1.2f; break;
+                case BEV_EMPTY: snprintf(g_msg, sizeof g_msg, "NO STONES!"); snprintf(g_msg2, sizeof g_msg2, "DRIVE TO THE GLOWING STONES IN THE BROOK"); g_msg_t = 1.4f; sfx_play(SFX_WRONG_WAY, 0.6f, 0); break;
                 case BEV_STONE_THROWN: sfx_play(SFX_THROW, 1, 0); break;
                 case BEV_SHIELD: snprintf(g_msg, sizeof g_msg, "THE SHIELD-BEARER!"); snprintf(g_msg2, sizeof g_msg2, "HIT HIM FROM THE SIDE - 1 SAMUEL 17:41"); g_msg_t = 1.2f; sfx_play(SFX_BLOCK, 1, 0); break;
                 case BEV_GOLIATH_HIT: snprintf(g_msg, sizeof g_msg, "HIT!"); g_msg_t = 0.8f; sfx_play(SFX_HIT, 1, 0); add_dust(v3(g_battle.gx, 2, g_battle.gz), 3, 3); break;

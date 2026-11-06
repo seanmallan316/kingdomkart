@@ -29,7 +29,7 @@ void battle_init(Battle *b, const Track *arena, int difficulty) {
         b->stone_x[i] = arena->s[idx].x + arena->s[idx].nx * lat; b->stone_z[i] = arena->s[idx].z + arena->s[idx].nz * lat; }
     b->stones_held = 1; b->quote = -1;
     /* the stones lie in the brook that runs across the valley */
-    for (int i = 0; i < BATTLE_STONES; i++) { static const float bx[BATTLE_STONES] = {-70, -45, -20, 20, 45, 70}; b->stone_x[i] = bx[i]; b->stone_z[i] = BROOK_Z + ((i & 1) ? 1.5f : -1.5f); }
+    for (int i = 0; i < BATTLE_STONES; i++) { static const float bx[BATTLE_STONES] = {-64, -32, 0, 32, 64}; b->stone_x[i] = bx[i]; b->stone_z[i] = BROOK_Z + ((i & 1) ? 1.5f : -1.5f); }
 }
 
 static void throw_stone(Battle *b) {
@@ -83,9 +83,10 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     for (int i = 0; i < BATTLE_STONES; i++) {
         if (b->stone_respawn[i] > 0) { b->stone_respawn[i] -= dt; continue; }
         float dx = k->x - b->stone_x[i], dz = k->z - b->stone_z[i];
-        if (dx * dx + dz * dz < 3.5f * 3.5f && b->stones_held < 3) { b->stones_held++; b->stone_respawn[i] = 6.0f; bev(b, BEV_STONE_PICKED); }
+        if (dx * dx + dz * dz < 4.0f * 4.0f && b->stones_held < 5) { b->stones_held++; b->stone_respawn[i] = 6.0f; bev(b, BEV_STONE_PICKED); }
     }
     if (want_throw && !b->was_throw && b->stones_held > 0 && k->stun <= 0) throw_stone(b);
+    else if (want_throw && !b->was_throw && b->stones_held == 0) bev(b, BEV_EMPTY);
     b->was_throw = want_throw;
 
     /* Goliath */
