@@ -44,8 +44,14 @@ static void read_pads(Pad *pads) {
     }
     /* the Wii controllers, one slot each: a Pro Controller, a Classic Controller, a Wii Remote held sideways, or a Remote with a Nunchuk */
     for (int ch = 0; ch < 4; ch++) {
-        Pad *w = &pads[1 + ch]; KPADStatus ks; KPADError ke = KPAD_ERROR_OK;
-        if (KPADReadEx((WPADChan)ch, &ks, 1, &ke) <= 0 || ke != KPAD_ERROR_OK) continue;
+        Pad *w = &pads[1 + ch]; KPADStatus ks; KPADError ke = KPAD_ERROR_OK; static Pad held[4];
+        int got = KPADReadEx((WPADChan)ch, &ks, 1, &ke);
+        if (got <= 0 || ke != KPAD_ERROR_OK) {
+            /* no new reading this frame is not the same as switched off: keep it as it was (buttons held, nothing newly pressed),
+               otherwise the race thought the controller had gone and paused */
+            if (ke == KPAD_ERROR_NO_SAMPLES || ke == KPAD_ERROR_BUSY || (got <= 0 && ke == KPAD_ERROR_OK)) { if (held[ch].source) { *w = held[ch]; w->plus = 0; } }
+            else held[ch].source = 0;
+            continue; }
         if (ks.extensionType == WPAD_EXT_PRO_CONTROLLER) {
             w->sx = ks.pro.leftStick.x; w->sy = ks.pro.leftStick.y;
             if (ks.pro.hold & WPAD_PRO_BUTTON_LEFT) w->sx = -1;
@@ -90,6 +96,7 @@ static void read_pads(Pad *pads) {
         w->sx = clampf(w->sx, -1, 1); w->sy = clampf(w->sy, -1, 1);
         if (fabsf(w->sx) < 0.12f) w->sx = 0;
         if (fabsf(w->sy) < 0.12f) w->sy = 0;
+        held[ch] = *w;
     }
     p->sx = clampf(p->sx, -1, 1); p->sy = clampf(p->sy, -1, 1);
     if (fabsf(p->sx) < 0.12f) p->sx = 0;

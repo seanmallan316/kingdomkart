@@ -26,7 +26,10 @@ typedef struct {
     float gx, gz, gyaw, gspeed;      /* Goliath */
     int gstate; float gtimer, gstun;
     float charge_tx, charge_tz;      /* where the charge is aimed */
-    int hits_on_goliath, hits_on_david, stones_held;
+    int hits_on_goliath, hits_on_david, stones_held;   /* hits_on_david / stones_held: the first David's (kept for the single-player screens) */
+    int nd;                          /* how many Davids (1 to 4 people together, each their own kart) */
+    int dhits[MAX_HUMANS], dstones[MAX_HUMANS], dthrow[MAX_HUMANS]; float dinv[MAX_HUMANS];   /* each David's hits taken, stones held, sling button last step, seconds safe after a hit */
+    int target;                      /* which David Goliath is after */
     float stone_respawn[BATTLE_STONES]; float stone_x[BATTLE_STONES], stone_z[BATTLE_STONES];
     Missile stone[BATTLE_SPEARS];    /* stones in the air */
     Missile spear[BATTLE_SPEARS];
@@ -41,5 +44,7 @@ typedef struct {
 } Battle;
 
 void battle_init(Battle *b, const Track *arena, int difficulty);
-void battle_step(Battle *b, const KartInput *in, int autopilot, float dt);
+void battle_init_multi(Battle *b, const Track *arena, int difficulty, int ndavids, const int *chars);   /* 2..4 people, each a David (any character) */
+void battle_step(Battle *b, const KartInput *in, int autopilot, float dt);                /* in: one input per David */
+int battle_out(const Battle *b, int d);                                                   /* this David has been hit three times */
 #endif

@@ -110,6 +110,14 @@ void race_init_multi(Race *r, const Track *t, const int *chars_in, const int *st
         for (int p = 0; p < nhuman; p++) { int slot = nk - nhuman + p; human[slot] = 1; chars[slot] = chars_in[p]; styles[slot] = styles_in ? styles_in[p] : 0; } }
     race_setup(r, t, chars, styles, human, nk, difficulty, 0xBEEF1234u + (uint32_t)chars_in[0] * 7919u + (uint32_t)nhuman * 101u);
 }
+void race_init_tt_multi(Race *r, const Track *t, const int *chars_in, int nhuman, int difficulty) {   /* a time trial together: only the people, side by side, no boxes */
+    if (nhuman < 1) nhuman = 1;
+    if (nhuman > MAX_HUMANS) nhuman = MAX_HUMANS;
+    int chars[NKARTS], styles[NKARTS], human[NKARTS]; for (int i = 0; i < NKARTS; i++) { chars[i] = chars_in[0]; styles[i] = 0; human[i] = 0; }
+    for (int p = 0; p < nhuman; p++) { human[p] = 1; chars[p] = chars_in[p]; }
+    race_setup(r, t, chars, styles, human, nhuman, difficulty, 0xABCD1234u + (uint32_t)nhuman);
+    r->nbox = 0;
+}
 void race_set_jericho(Race *r) { r->jericho = 1; r->nbox = 0; r->wall_fall = 0; r->walls_down = 0; r->collapse_t = 0; r->time_limit = 300.0f; for (int i = 0; i < NKARTS; i++) r->shofars[i] = 0; }
 int race_human_index(const Race *r, int kart) { if (kart < 0 || kart >= r->nk || !r->human[kart]) return -1; int n = 0; for (int i = 0; i < kart; i++) if (r->human[i]) n++; return n; }
 
@@ -284,6 +292,11 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
             r->shofar_held[i] = in.item;
         }
         else if (in.item && k->item) use_item(r, i);
+        if (r->swallow_t[i] > 0) {   /* inside the great fish: nothing to steer; then out onto dry land (Jonah 2:10) */
+            r->swallow_t[i] -= dt;
+            if (r->swallow_t[i] <= 0) { r->swallow_t[i] = 0; const TrackSample *s = &t->s[k->hit.idx];
+                k->x = s->x; k->z = s->z; k->y = s->y + 2.5f; k->yaw = atan2f(s->tx, s->tz); k->speed = 6.0f; k->stun = 0.6f; r->wade_t[i] = 0; push_event(r, EV_SPAT_OUT, i); }
+            continue; }
         kart_step(k, t, &in, dt);
         if (k->finished && k->place == 0) { k->place = ++r->nfin; push_event(r, EV_FINISH, i); }
         /* lap events */
@@ -318,6 +331,39 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
             float dx = k->x - cx, dz = k->z - cz;
             if (dx * dx + dz * dz < 2.0f * 2.0f && k->y < s->y + 3.0f) { if (k->coins < 10) k->coins++; r->coin_respawn[c] = 10.0f; r->stat_coins++; push_event(r, EV_COIN, i); break; } }
     }
+    /* the great fish: anyone wading out in the water for a moment is noticed; its shadow and bubbles show where it will
+       come up, a little ahead of them; a second later it leaps out and comes down there with its mouth open. Out of the
+       water (or out of the way) in time and it misses; the shield of faith saves you; otherwise you are swallowed */
+    if (t->water && t->water_y > -1e8f) {
+        if (r->whale.cool > 0) r->whale.cool -= dt;
+        for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; int wet = k->hit.on_field && !k->air && r->swallow_t[i] <= 0 && !k->finished; r->wade_t[i] = wet ? r->wade_t[i] + dt : 0; }
+        if (!r->whale.active && r->whale.cool <= 0) {
+            int best = -1; for (int i = 0; i < r->nk; i++) if (r->wade_t[i] > 0.7f && (best < 0 || r->human[i] > r->human[best])) best = i;
+            if (best >= 0) { Kart *k = &r->k[best]; float sp = fmaxf(k->speed, 4.0f), lead = 2.25f;
+                float px = k->x + sinf(k->yaw) * sp * lead, pz = k->z + cosf(k->yaw) * sp * lead;
+                TrackHit h; track_locate(t, px, pz, k->hit.idx, &h);
+                float side = h.lateral >= 0 ? 1.0f : -1.0f, lat = fabsf(h.lateral), lo = track_edge(t, h.idx) + 3.0f, hi = track_bound(t, h.idx, (int)side) - 2.5f;
+                if (hi > lo) { if (lat < lo) lat = lo; if (lat > hi) lat = hi; const TrackSample *s = &t->s[h.idx];
+                    r->whale.active = 1; r->whale.target = best; r->whale.t = 0; r->whale.x = s->x + s->nx * side * lat; r->whale.z = s->z + s->nz * side * lat;
+                    r->whale.dx = s->tx; r->whale.dz = s->tz; push_event(r, EV_WHALE_WARN, best); } } }
+        if (r->whale.active) { float before = r->whale.t; r->whale.t += dt;
+            if (r->whale.t < 1.3f) {   /* until it leaps, its shadow keeps under where the racer will be when its jaws close */
+                const Kart *k = &r->k[r->whale.target]; float lead = 2.25f - r->whale.t, sp = fmaxf(k->speed, 2.0f);
+                float px = k->x + sinf(k->yaw) * sp * lead, pz = k->z + cosf(k->yaw) * sp * lead;
+                TrackHit h; track_locate(t, px, pz, k->hit.idx, &h);
+                float side = h.lateral >= 0 ? 1.0f : -1.0f, lat = fabsf(h.lateral), lo = track_edge(t, h.idx) + 2.0f, hi = track_bound(t, h.idx, (int)side) - 2.0f;
+                if (hi > lo) { if (lat < lo) lat = lo; if (lat > hi) lat = hi; const TrackSample *s = &t->s[h.idx];
+                    float f = fminf(1.0f, dt * 4.0f); r->whale.x += (s->x + s->nx * side * lat - r->whale.x) * f; r->whale.z += (s->z + s->nz * side * lat - r->whale.z) * f;
+                    r->whale.dx = s->tx; r->whale.dz = s->tz; } }
+            if (before < 1.3f && r->whale.t >= 1.3f) push_event(r, EV_WHALE_UP, r->whale.target);
+            if (before < 2.25f && r->whale.t >= 2.25f)   /* the jaws close as it comes down */
+                for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; float dx = k->x - r->whale.x, dz = k->z - r->whale.z;
+                    if (dx * dx + dz * dz < 4.5f * 4.5f && k->hit.on_field && r->swallow_t[i] <= 0 && !k->finished) {
+                        if (k->shield > 0 || k->carried_t > 0) { k->shield = 0; k->blocked_flag = 1; continue; }
+                        r->swallow_t[i] = 2.2f; k->speed = 0; push_event(r, EV_SWALLOWED, i); } }
+            if (r->whale.t > 3.4f) { r->whale.active = 0; r->whale.cool = 6.0f; } }
+    }
+
     /* hidden gems out in the open land: three coins and a burst of speed */
     for (int g = 0; g < t->ngem; g++) {
         if (r->gem_respawn[g] > 0) { r->gem_respawn[g] -= dt; continue; }
@@ -367,9 +413,10 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
     /* kart-to-kart bumping: push apart, heavier kart wins */
     for (int i = 0; i < r->nk; i++) for (int j = i + 1; j < r->nk; j++) {
         Kart *a = &r->k[i], *b = &r->k[j];
+        if (r->swallow_t[i] > 0 || r->swallow_t[j] > 0) continue;   /* inside the fish */
         float dx = b->x - a->x, dz = b->z - a->z, d = sqrtf(dx * dx + dz * dz);
-        if (d < 2.2f && d > 0.01f && fabsf(a->y - b->y) < 2.0f) {
-            float push = (2.2f - d), wa = a->st.weight, wb = b->st.weight, fa = wb / (wa + wb), fb = wa / (wa + wb);
+        if (d < 1.9f && d > 0.01f && fabsf(a->y - b->y) < 2.0f) {   /* smaller karts (Sean) */
+            float push = (1.9f - d), wa = a->st.weight, wb = b->st.weight, fa = wb / (wa + wb), fb = wa / (wa + wb);
             a->x -= dx / d * push * fa; a->z -= dz / d * push * fa; b->x += dx / d * push * fb; b->z += dz / d * push * fb;
             float rel = fabsf(a->speed - b->speed);
             if (rel > 4.0f) { a->speed *= 0.97f; b->speed *= 0.97f; push_event(r, EV_BUMP, i);

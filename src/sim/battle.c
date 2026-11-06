@@ -17,9 +17,21 @@ static void say(Battle *b, int q) { if (b->quotes_said & (1 << q)) return; b->qu
 static float brand(Battle *b) { uint32_t *x = &b->race.rng; *x ^= *x << 13; *x ^= *x >> 17; *x ^= *x << 5; return (*x & 0xFFFF) / 65536.0f; }
 static float wrap_pi(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (a < -3.14159265f) a += 6.2831853f; return a; }
 
+int battle_out(const Battle *b, int d) { return b->dhits[d] >= BATTLE_LIVES; }
+static void battle_common(Battle *b, const Track *arena);
 void battle_init(Battle *b, const Track *arena, int difficulty) {
     memset(b, 0, sizeof *b);
-    race_init(&b->race, arena, DAVID, 0, difficulty, 1);
+    race_init(&b->race, arena, DAVID, 0, difficulty, 1); b->nd = 1;
+    battle_common(b, arena);
+}
+void battle_init_multi(Battle *b, const Track *arena, int difficulty, int ndavids, const int *chars) {
+    memset(b, 0, sizeof *b);
+    if (ndavids < 1) ndavids = 1;
+    if (ndavids > MAX_HUMANS) ndavids = MAX_HUMANS;
+    race_init_tt_multi(&b->race, arena, chars, ndavids, difficulty); b->nd = ndavids;   /* only the people's karts, no boxes */
+    battle_common(b, arena);
+}
+static void battle_common(Battle *b, const Track *arena) {
     b->race.cd = 3.5f + RACE_READY_T;
     /* Goliath starts at the far side of the arena */
     const TrackSample *s = &arena->s[arena->n / 2];
@@ -27,13 +39,14 @@ void battle_init(Battle *b, const Track *arena, int difficulty) {
     /* stones lie along the road, spaced around the arena */
     for (int i = 0; i < BATTLE_STONES; i++) { int idx = (arena->n * (i + 1)) / (BATTLE_STONES + 1); float lat = (i & 1) ? arena->s[idx].width * 0.3f : -arena->s[idx].width * 0.3f;
         b->stone_x[i] = arena->s[idx].x + arena->s[idx].nx * lat; b->stone_z[i] = arena->s[idx].z + arena->s[idx].nz * lat; }
+    for (int d = 0; d < MAX_HUMANS; d++) b->dstones[d] = 1;
     b->stones_held = 1; b->quote = -1;
     /* the stones lie in the brook that runs across the valley */
     for (int i = 0; i < BATTLE_STONES; i++) { static const float bx[BATTLE_STONES] = {-64, -32, 0, 32, 64}; b->stone_x[i] = bx[i]; b->stone_z[i] = BROOK_Z + ((i & 1) ? 1.5f : -1.5f); }
 }
 
-static void throw_stone(Battle *b) {
-    Kart *k = &b->race.k[0];
+static void throw_stone(Battle *b, int who) {
+    Kart *k = &b->race.k[who];
     for (int i = 0; i < BATTLE_SPEARS; i++) if (!b->stone[i].alive) { Missile *m = &b->stone[i];
         float hx = sinf(k->yaw), hz = cosf(k->yaw);
         /* aim a little toward Goliath when he is roughly ahead */
@@ -41,15 +54,15 @@ static void throw_stone(Battle *b) {
         float ax = hx, az = hz; float dot = (dx * hx + dz * hz) / d;
         if (dot > 0.3f) { float lead = d / 38.0f; float tx = b->gx + sinf(b->gyaw) * b->gspeed * lead, tz = b->gz + cosf(b->gyaw) * b->gspeed * lead; ax = tx - k->x; az = tz - k->z; float l = sqrtf(ax * ax + az * az) + 1e-3f; ax /= l; az /= l; }   /* the sling finds its mark when he is roughly ahead */
         m->alive = 1; m->x = k->x + ax * 1.5f; m->z = k->z + az * 1.5f; m->y = k->y + 1.0f; m->vx = ax * 38.0f + hx * fmaxf(k->speed, 0) * 0.3f; m->vz = az * 38.0f + hz * fmaxf(k->speed, 0) * 0.3f; m->life = 2.0f;
-        b->stones_held--; bev(b, BEV_STONE_THROWN); return; }
+        b->dstones[who]--; bev(b, BEV_STONE_THROWN); return; }
 }
 
 void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     Race *r = &b->race; Kart *k = &r->k[0]; const Track *t = r->track;
     b->nev = 0;
     if (b->over) { r->after_t += dt; return; }
-    KartInput in = *in_real;
-    if (autopilot) {    /* the demo David: fetch a stone, then drive at Goliath and sling it */
+    KartInput in = *in_real; b->stones_held = b->dstones[0];
+    if (autopilot && b->nd == 1) {    /* the demo David: fetch a stone, then drive at Goliath and sling it */
         kart_autopilot(k, t, &in, 0.8f);
         float tx, tz; int have = 0;
         if (b->stones_held < 2) { float best = 1e9f; for (int i = 0; i < BATTLE_STONES; i++) { if (b->stone_respawn[i] > 0) continue; float ddx = b->stone_x[i] - k->x, ddz = b->stone_z[i] - k->z, d2 = ddx * ddx + ddz * ddz; if (d2 < best) { best = d2; tx = b->stone_x[i]; tz = b->stone_z[i]; have = 1; } } }
@@ -68,10 +81,12 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
             for (int i = 0; i < BATTLE_SPEARS; i++) { const Missile *m = &b->spear[i]; if (!m->alive) continue; float sx = k->x - m->x, sz = k->z - m->z, sd = sqrtf(sx * sx + sz * sz) + 1e-3f;
                 float closing = (sx * m->vx + sz * m->vz) / sd; if (closing > 10.0f && sd < 18.0f) { float side = m->vx * sz - m->vz * sx; in.steer = side > 0 ? -1.0f : 1.0f; in.gas = 1; } } }
     }
-    int want_throw = in.item; in.item = 0;
-    race_step(r, &in, 0, dt);
+    KartInput all[NKARTS]; memset(all, 0, sizeof all); int want[MAX_HUMANS];
+    for (int d = 0; d < b->nd; d++) { all[d] = d == 0 ? in : in_real[d]; want[d] = all[d].item; all[d].item = 0;
+        if (battle_out(b, d)) { all[d].gas = 0; all[d].brake = 1; want[d] = 0; } }   /* a David who is out sits it out */
+    if (b->nd == 1) race_step(r, &all[0], 0, dt); else race_step_multi(r, all, 0, dt);
     if (r->state != RACE_RUNNING) return;
-    b->t += dt; if (b->invuln > 0) b->invuln -= dt;
+    b->t += dt; for (int d = 0; d < b->nd; d++) if (b->dinv[d] > 0) b->dinv[d] -= dt;
     if (b->quote_t > 0) { b->quote_t -= dt; if (b->quote_t <= 0) b->quote = -1; }
     if (b->t > 0.5f) say(b, 0);
     if (b->t > 6.0f) say(b, 1);
@@ -82,13 +97,18 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     /* stones on the ground */
     for (int i = 0; i < BATTLE_STONES; i++) {
         if (b->stone_respawn[i] > 0) { b->stone_respawn[i] -= dt; continue; }
-        float dx = k->x - b->stone_x[i], dz = k->z - b->stone_z[i];
-        if (dx * dx + dz * dz < 4.0f * 4.0f && b->stones_held < 5) { b->stones_held++; b->stone_respawn[i] = 6.0f; bev(b, BEV_STONE_PICKED); }
+        for (int d = 0; d < b->nd; d++) { const Kart *kd = &r->k[d]; if (battle_out(b, d)) continue;
+            float dx = kd->x - b->stone_x[i], dz = kd->z - b->stone_z[i];
+            if (dx * dx + dz * dz < 4.0f * 4.0f && b->dstones[d] < 5) { b->dstones[d]++; b->stone_respawn[i] = 6.0f; bev(b, BEV_STONE_PICKED); break; } }
     }
-    if (want_throw && !b->was_throw && b->stones_held > 0 && k->stun <= 0) throw_stone(b);
-    else if (want_throw && !b->was_throw && b->stones_held == 0) bev(b, BEV_EMPTY);
-    b->was_throw = want_throw;
+    for (int d = 0; d < b->nd; d++) {
+        if (want[d] && !b->dthrow[d] && b->dstones[d] > 0 && r->k[d].stun <= 0) throw_stone(b, d);
+        else if (want[d] && !b->dthrow[d] && b->dstones[d] == 0) bev(b, BEV_EMPTY);
+        b->dthrow[d] = want[d]; }
 
+    /* Goliath goes after the nearest David still in the fight */
+    { float bd = 1e30f; for (int d = 0; d < b->nd; d++) { if (battle_out(b, d)) continue; float ex = r->k[d].x - b->gx, ez = r->k[d].z - b->gz; if (ex * ex + ez * ez < bd) { bd = ex * ex + ez * ez; b->target = d; } }
+      k = &r->k[b->target]; }
     /* Goliath */
     float dx = k->x - b->gx, dz = k->z - b->gz, dist = sqrtf(dx * dx + dz * dz) + 1e-3f;
     float to_david = atan2f(dx, dz);
@@ -132,11 +152,11 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     { TrackHit h; track_locate(t, b->gx, b->gz, -1, &h); float e = track_edge(t, h.idx) - 1.5f;
       if (fabsf(h.lateral) > e) { const TrackSample *s = &t->s[h.idx]; float over = fabsf(h.lateral) - e, sign = h.lateral > 0 ? 1 : -1; b->gx -= s->nx * sign * over; b->gz -= s->nz * sign * over; if (b->gstate == GOL_CHARGE) { b->gstate = GOL_STALK; b->gtimer = 2.0f; } } }
     /* Goliath runs into David */
-    dx = k->x - b->gx; dz = k->z - b->gz; dist = sqrtf(dx * dx + dz * dz) + 1e-3f;
-    if (dist < 3.2f && b->invuln <= 0 && b->gstate != GOL_STUNNED && b->gstate != GOL_DOWN) {
-        k->x += dx / dist * 3.0f; k->z += dz / dist * 3.0f; k->speed *= 0.3f;
-        if (kart_hit(k, 1.2f)) { b->hits_on_david++; b->invuln = 2.5f; bev(b, BEV_DAVID_HIT); }
-    }
+    for (int d = 0; d < b->nd; d++) { Kart *kd = &r->k[d]; if (battle_out(b, d)) continue;
+        dx = kd->x - b->gx; dz = kd->z - b->gz; dist = sqrtf(dx * dx + dz * dz) + 1e-3f;
+        if (dist < 3.2f && b->dinv[d] <= 0 && b->gstate != GOL_STUNNED && b->gstate != GOL_DOWN) {
+            kd->x += dx / dist * 3.0f; kd->z += dz / dist * 3.0f; kd->speed *= 0.3f;
+            if (kart_hit(kd, 1.2f)) { b->dhits[d]++; b->dinv[d] = 2.5f; bev(b, BEV_DAVID_HIT); } } }
     /* stones in the air */
     for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *m = &b->stone[i]; if (!m->alive) continue;
         m->x += m->vx * dt; m->z += m->vz * dt; m->life -= dt; if (m->life <= 0) m->alive = 0;
@@ -146,13 +166,16 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
             float cone = r->difficulty == DIFF_EASY ? 0.88f : (r->difficulty == DIFF_HARD ? 0.6f : 0.75f);
             if (head_on > cone) { m->alive = 0; b->blocks++; bev(b, BEV_SHIELD); continue; } }
         if (sx * sx + sz * sz < 2.6f * 2.6f && b->gstate != GOL_DOWN) { m->alive = 0; b->hits_on_goliath++; b->gstate = GOL_STUNNED; b->gstun = r->difficulty == DIFF_EASY ? 1.8f : (r->difficulty == DIFF_HARD ? 0.8f : 1.3f); bev(b, BEV_GOLIATH_HIT);
-            if (b->hits_on_goliath >= BATTLE_WIN_HITS) { b->gstate = GOL_DOWN; b->over = 1; b->won = 1; r->state = RACE_FINISHED; k->finished = 1; k->place = 1; bev(b, BEV_WIN); b->quotes_said &= ~(1 << 5); say(b, 5); b->quote_t = 30.0f; } }
+            if (b->hits_on_goliath >= BATTLE_WIN_HITS) { b->gstate = GOL_DOWN; b->over = 1; b->won = 1; r->state = RACE_FINISHED; for (int d = 0; d < b->nd; d++) { r->k[d].finished = 1; r->k[d].place = 1; } bev(b, BEV_WIN); b->quotes_said &= ~(1 << 5); say(b, 5); b->quote_t = 30.0f; } }
     }
     /* spears */
     for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *m = &b->spear[i]; if (!m->alive) continue;
         m->x += m->vx * dt; m->z += m->vz * dt; m->life -= dt; m->y -= 0.8f * dt; if (m->life <= 0) m->alive = 0;
-        float sx = m->x - k->x, sz = m->z - k->z;
-        if (sx * sx + sz * sz < 1.6f * 1.6f && b->invuln <= 0 && !k->air) { m->alive = 0; if (kart_hit(k, 1.2f)) { b->hits_on_david++; b->invuln = 2.5f; bev(b, BEV_DAVID_HIT); } }
+        for (int d = 0; d < b->nd; d++) { Kart *kd = &r->k[d]; if (battle_out(b, d)) continue;
+            float sx = m->x - kd->x, sz = m->z - kd->z;
+            if (sx * sx + sz * sz < 1.6f * 1.6f && b->dinv[d] <= 0 && !kd->air) { m->alive = 0; if (kart_hit(kd, 1.2f)) { b->dhits[d]++; b->dinv[d] = 2.5f; bev(b, BEV_DAVID_HIT); } break; } }
     }
-    if (b->hits_on_david >= BATTLE_LIVES || r->race_t >= BATTLE_TIME_LIMIT - 0.5f) { b->over = 1; b->won = 0; r->state = RACE_FINISHED; bev(b, BEV_LOSE); }
+    int all_out = 1; for (int d = 0; d < b->nd; d++) if (!battle_out(b, d)) all_out = 0;
+    b->hits_on_david = b->dhits[0]; b->stones_held = b->dstones[0]; b->invuln = b->dinv[0];
+    if (all_out || r->race_t >= BATTLE_TIME_LIMIT - 0.5f) { b->over = 1; b->won = 0; r->state = RACE_FINISHED; bev(b, BEV_LOSE); }
 }

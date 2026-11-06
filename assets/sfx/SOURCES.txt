@@ -4,7 +4,8 @@ BigSoundBank.com - recordings by Joseph Sardin, CC0 (public domain)
   sfx_shofar        Horn #3 (2522)                 sfx_lap           Bell #3 (2115)
   sfx_final_lap     Bell #2 (2114)                 sfx_welcome_home  1 church bell (0830)
   sfx_pickup        Cluster chimes #1 (2686)       sfx_unlock        Cluster chimes #3 (2688)
-  sfx_finish, sfx_win, sfx_shout   Applause, 300 people (0020)
+  sfx_finish, sfx_win, sfx_shout   Crowd cheering (Strong cheering I and II) by Gregor Quendel, CC-BY 4.0,
+                                  https://opengameart.org/content/free-crowd-cheering-sounds
   sfx_mini_turbo    Gasoline fire #1 (1340)        sfx_super_turbo   Gasoline fire #5 (1344)
   sfx_fire          Gasoline fire #4 (1343)        sfx_splash        Splash, big #2 (1520)
   sfx_locusts       Many flies (0822)              sfx_dove          Flight of a pigeon (0476)

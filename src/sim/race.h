@@ -19,7 +19,7 @@ enum { RACE_COUNTDOWN, RACE_RUNNING, RACE_FINISHED };
 enum { DIFF_EASY, DIFF_NORMAL, DIFF_HARD };
 enum { EV_NONE, EV_PICKUP, EV_USE_MANNA, EV_USE_LOAVES, EV_USE_SAMARITAN, EV_USE_SHIELD, EV_HIT, EV_BLOCK, EV_BUMP, EV_LAP, EV_FINAL_LAP, EV_FINISH, EV_GO, EV_COUNT_TICK, EV_USE_PARTING, EV_USE_FIRE, EV_USE_JUBILEE, EV_USE_WATER, EV_PAD_BOOST, EV_PAD_BOUNCE, EV_SLOWED, EV_COIN, EV_TRICK, EV_TRICK_LAND, EV_ROCKET_START, EV_WHEELSPIN,
        EV_BLESSED, EV_CARRIED, EV_TRAIL_BOOST, EV_CHEEK,
-       EV_SHOFAR, EV_SHOUT, EV_WALLS_DOWN, EV_GEM };   /* Jericho: one trumpet blown; the great shout on the seventh lap; the walls are all down */   /* blessed: this kart received something from another; carried: by the Samaritan; trail: ate a manna/fire trail; cheek: a bumped kart got its boost */
+       EV_SHOFAR, EV_SHOUT, EV_WALLS_DOWN, EV_GEM, EV_WHALE_WARN, EV_WHALE_UP, EV_SWALLOWED, EV_SPAT_OUT };   /* Jericho: one trumpet blown; the great shout on the seventh lap; the walls are all down */   /* blessed: this kart received something from another; carried: by the Samaritan; trail: ate a manna/fire trail; cheek: a bumped kart got its boost */
 
 typedef struct { const char *name; const char *short_name; KartStats st; float r, g, b; int bonus; } Character;
 extern const Character CHARACTERS[NCHARS];
@@ -40,6 +40,9 @@ typedef struct {
     ItemBox box[MAX_BOX]; int nbox;
     float coin_respawn[MAX_COINS];           /* 0 = the coin is there, else seconds until it comes back */
     float gem_respawn[MAX_GEMS];             /* the same for the hidden gems out in the open land */
+    /* the great fish (Jonah 1:17): drive out into the water and it comes up after you */
+    float wade_t[NKARTS], swallow_t[NKARTS];  /* seconds in the water; seconds left inside the fish (0 = not swallowed) */
+    struct { int active, target; float t, x, z, dx, dz, cool; } whale;   /* t: time since it was set off; x,z: where it comes up; dx,dz: which way it leaps */
     Proj proj[MAX_PROJ];
     int state; float cd, race_t, after_t; int nfin;
     float gas_since[NKARTS];   /* countdown value when a human began holding gas (-1 = not holding); decides the rocket start */
@@ -66,6 +69,7 @@ void race_set_styles(int player_style, unsigned unlocked_styles);   /* the playe
 void race_step(Race *r, const KartInput *player_in, int player_auto, float dt);
 void race_step_multi(Race *r, const KartInput *in /* [NKARTS], read for human karts */, int all_auto, float dt);
 int  race_human_index(const Race *r, int kart);
+void race_init_tt_multi(Race *r, const Track *t, const int *chars, int nhuman, int difficulty);   /* time trial for 2..4 people, no computer drivers */
 void race_set_jericho(Race *r);                   /* call right after race_init: the Walls of Jericho rules (no blessing boxes, shofars instead) */   /* 0..nhuman-1 for a human kart (in grid order), -1 for a computer driver */
 void race_rank(Race *r);
 const char *item_name(int item);

@@ -478,8 +478,11 @@ const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
    Order = TRACK_DEFS. Battle arena and test loop stay as built. */
 static const float TRACK_SCALE[] = {1.81f, 1.7f, 2.0f, 1.78f, 2.5f, 1.84f, 1.2f, 1.0f, 1.0f};   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
 
+/* every racing road is this much wider than first drawn (Sean: room between the racers); arena and test loop stay */
+#define ROAD_WIDEN 1.45f
 void track_from_def(Track *t, const TrackDef *d) {
     int di = (int)(d - TRACK_DEFS); float sc = (di >= 0 && di < (int)(sizeof TRACK_SCALE / sizeof TRACK_SCALE[0])) ? TRACK_SCALE[di] : 1.0f;
+    float wd = (sc != 1.0f || d->laps == 7) ? ROAD_WIDEN : 1.0f;   /* the stretched roads and Jericho */
     static TrackPoint pts[256]; int np = d->npoints < 256 ? d->npoints : 256;
     /* every stretch between two points grows by sc, except a jump's gap, which keeps its length so the jump can still be cleared;
        the small amount the loop then fails to close by is spread over the other stretches */
@@ -489,13 +492,14 @@ void track_from_def(Track *t, const TrackDef *d) {
     for (int i = 0; i + 1 < np; i++) { const TrackPoint *a = &d->points[i], *b = &d->points[i + 1]; float f = a->jump ? 1.0f : sc;
         pts[i + 1] = *b; pts[i + 1].x = pts[i].x + (b->x - a->x) * f; pts[i + 1].z = pts[i].z + (b->z - a->z) * f;
         if (!a->jump && nfree) { pts[i + 1].x += ex / nfree; pts[i + 1].z += ez / nfree; } }
+    for (int i = 0; i < np; i++) pts[i].width *= wd;
     track_build(t, d->name, d->laps, pts, np, 20);
     t->shortcut_from = d->shortcut_from; t->shortcut_to = d->shortcut_to; t->shortcut_side = d->shortcut_side;
-    t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx %= t->n; t->npad++; }
-    t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx %= t->n; t->nmover++; }
+    t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx %= t->n; t->pad[i].lateral *= wd; t->pad[i].halfw *= wd; t->npad++; }
+    t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx %= t->n; t->mover[i].lateral *= wd; t->mover[i].amp *= wd; t->nmover++; }
     t->water = d->water; t->grid_idx = d->grid_idx % t->n;
     t->ncoin = 0;
-    for (int i = 0; i < d->ncoinrows; i++) for (int c = 0; c < d->coins[i].n && t->ncoin < MAX_COINS; c++) { t->coin[t->ncoin].idx = (d->coins[i].idx + c * d->coins[i].step) % t->n; t->coin[t->ncoin].lateral = d->coins[i].lateral; t->ncoin++; }
+    for (int i = 0; i < d->ncoinrows; i++) for (int c = 0; c < d->coins[i].n && t->ncoin < MAX_COINS; c++) { t->coin[t->ncoin].idx = (d->coins[i].idx + c * d->coins[i].step) % t->n; t->coin[t->ncoin].lateral = d->coins[i].lateral * wd; t->ncoin++; }
     t->ntunnel = 0; for (int i = 0; i < d->ntunnels && i < MAX_TUNNELS; i++) { t->tunnel[i] = d->tunnels[i]; t->tunnel[i].from %= t->n; t->tunnel[i].to %= t->n; t->ntunnel++; }
     /* open land beside the road (Sean: a semi-open world), except on the road through the sky to Heaven, round the walls
        of Jericho, and in the battle arena */

@@ -48,7 +48,7 @@ def write(path, x):
         w.writeframes((x * 32767).astype("<i2").tobytes())
 
 def main():
-    files = sorted(glob.glob(os.path.join(SRC, "*.*")))
+    files = sorted(f for f in glob.glob(os.path.join(SRC, "*.*")) if not f.lower().endswith(".txt"))   # SOURCES.txt is notes, not a sound
     if not files: print("nothing in assets/sfx/"); return
     for f in files:
         name = os.path.splitext(os.path.basename(f))[0]
