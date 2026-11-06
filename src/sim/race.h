@@ -19,7 +19,7 @@ enum { RACE_COUNTDOWN, RACE_RUNNING, RACE_FINISHED };
 enum { DIFF_EASY, DIFF_NORMAL, DIFF_HARD };
 enum { EV_NONE, EV_PICKUP, EV_USE_MANNA, EV_USE_LOAVES, EV_USE_SAMARITAN, EV_USE_SHIELD, EV_HIT, EV_BLOCK, EV_BUMP, EV_LAP, EV_FINAL_LAP, EV_FINISH, EV_GO, EV_COUNT_TICK, EV_USE_PARTING, EV_USE_FIRE, EV_USE_JUBILEE, EV_USE_WATER, EV_PAD_BOOST, EV_PAD_BOUNCE, EV_SLOWED, EV_COIN, EV_TRICK, EV_TRICK_LAND, EV_ROCKET_START, EV_WHEELSPIN,
        EV_BLESSED, EV_CARRIED, EV_TRAIL_BOOST, EV_CHEEK,
-       EV_SHOFAR, EV_SHOUT, EV_WALLS_DOWN };   /* Jericho: one trumpet blown; the great shout on the seventh lap; the walls are all down */   /* blessed: this kart received something from another; carried: by the Samaritan; trail: ate a manna/fire trail; cheek: a bumped kart got its boost */
+       EV_SHOFAR, EV_SHOUT, EV_WALLS_DOWN, EV_GEM };   /* Jericho: one trumpet blown; the great shout on the seventh lap; the walls are all down */   /* blessed: this kart received something from another; carried: by the Samaritan; trail: ate a manna/fire trail; cheek: a bumped kart got its boost */
 
 typedef struct { const char *name; const char *short_name; KartStats st; float r, g, b; int bonus; } Character;
 extern const Character CHARACTERS[NCHARS];
@@ -39,6 +39,7 @@ typedef struct {
     float ai_skill[NKARTS], ai_wobble[NKARTS];
     ItemBox box[MAX_BOX]; int nbox;
     float coin_respawn[MAX_COINS];           /* 0 = the coin is there, else seconds until it comes back */
+    float gem_respawn[MAX_GEMS];             /* the same for the hidden gems out in the open land */
     Proj proj[MAX_PROJ];
     int state; float cd, race_t, after_t; int nfin;
     float gas_since[NKARTS];   /* countdown value when a human began holding gas (-1 = not holding); decides the rocket start */
@@ -54,7 +55,7 @@ typedef struct {
     RaceEvent ev[32]; int nev;               /* events raised this step, for sounds and messages */
     uint32_t rng;
     /* statistics for tests */
-    int stat_coins, stat_pickups, stat_hits, stat_blocks, stat_uses, stat_blessings, stat_trails, stat_pads, stat_mover_hits, stat_item_used[ITEM_COUNT];
+    int stat_gems, stat_coins, stat_pickups, stat_hits, stat_blocks, stat_uses, stat_blessings, stat_trails, stat_pads, stat_mover_hits, stat_item_used[ITEM_COUNT];
 } Race;
 
 void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk);   /* nk = 1 for a time trial */

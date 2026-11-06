@@ -1,3 +1,4 @@
+#include <string.h>
 // tracks.c - the roads: control points, lighting, textures and scenery for each one.
 #include "theme.h"
 
@@ -497,5 +498,9 @@ void track_from_def(Track *t, const TrackDef *d) {
     t->ncoin = 0;
     for (int i = 0; i < d->ncoinrows; i++) for (int c = 0; c < d->coins[i].n && t->ncoin < MAX_COINS; c++) { t->coin[t->ncoin].idx = (d->coins[i].idx + c * d->coins[i].step) % t->n; t->coin[t->ncoin].lateral = d->coins[i].lateral; t->ncoin++; }
     t->ntunnel = 0; for (int i = 0; i < d->ntunnels && i < MAX_TUNNELS; i++) { t->tunnel[i] = d->tunnels[i]; t->tunnel[i].from %= t->n; t->tunnel[i].to %= t->n; t->ntunnel++; }
+    /* open land beside the road (Sean: a semi-open world), except on the road through the sky to Heaven, round the walls
+       of Jericho, and in the battle arena */
+    memset(t->field, 0, sizeof t->field); t->ngem = 0; t->water_y = -1e9f;
+    if (!d->finale_img && d->bonus != 2 && d->bonus != 3) track_make_field(t, d->water);
 }
 void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[NUM_TRACK_DEFS - 1]); }

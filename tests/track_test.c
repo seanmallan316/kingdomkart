@@ -29,9 +29,15 @@ int main(void) {
         printf(", coins %d\n", r.stat_coins);
         for (int c = 0; c < t.ncoin; c++) CHECK(fabsf(t.coin[c].lateral) <= t.s[t.coin[c].idx].width * 0.5f - 0.5f, "coin %d is off the road", c);
         if (t.ncoin && r.stat_coins < 10) printf("  note: the computer drivers picked up only %d coins on %s\n", r.stat_coins, t.name);   /* the AI keeps to its racing line; coins are for players */
-        for (int p = 0; p < t.npad; p++) CHECK(fabsf(t.pad[p].lateral) + t.pad[p].halfw <= t.s[t.pad[p].idx].width * 0.5f + 0.1f, "pad %d is off the road", p);
+        for (int p = 0; p < t.npad; p++) { const RoadPad *pd = &t.pad[p];   /* on the road, or wholly out in the open land within its wall */
+            int in_field = fabsf(pd->lateral) - pd->halfw > track_edge(&t, pd->idx);
+            if (in_field) CHECK(fabsf(pd->lateral) + pd->halfw <= track_bound(&t, pd->idx, pd->lateral > 0 ? 1 : -1) - 0.5f, "open-land pad %d reaches the wall", p);
+            else CHECK(fabsf(pd->lateral) + pd->halfw <= t.s[pd->idx].width * 0.5f + 0.1f, "pad %d is off the road", p); }
+        for (int g = 0; g < t.ngem; g++) CHECK(fabsf(t.gem[g].lateral) < track_bound(&t, t.gem[g].idx, t.gem[g].lateral > 0 ? 1 : -1) - 1.0f, "gem %d is in the wall", g);
+        printf("  open land: %d gems, stats gems %d\n", t.ngem, r.stat_gems);
         for (int m = 0; m < t.nmover; m++) CHECK(fabsf(t.mover[m].lateral) + t.mover[m].amp <= track_edge(&t, t.mover[m].idx) + 0.1f, "obstacle %d (%s) swings outside the walls", m, t.mover[m].img);
-        CHECK(t.npad == 0 || r.stat_pads > 0, "nobody touched a pad on %s", t.name);
+        { int road_pads = 0; for (int p = 0; p < t.npad; p++) if (fabsf(t.pad[p].lateral) <= t.s[t.pad[p].idx].width * 0.5f) road_pads++;   /* the computer drivers keep to the road */
+          CHECK(road_pads == 0 || r.stat_pads > 0, "nobody touched a pad on %s", t.name); }
         CHECK(r.state == RACE_FINISHED && r.race_t < RACE_TIME_LIMIT, "race on %s did not end in time", t.name);
         CHECK(finished >= 1, "nobody finished on %s", t.name);   /* the race ends 7 s after the (autopilot) player; the field behind may still be racing */
     }

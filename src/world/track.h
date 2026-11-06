@@ -30,6 +30,9 @@ typedef struct { const char *img; int idx; float lateral, amp, speed, phase, rad
 typedef struct { int idx, n, step; float lateral; } CoinRow;                  /* n coins from sample idx, every step samples, at a lateral offset */
 typedef struct { int idx; float lateral; } Coin;
 typedef struct { int from, to; float height; } Tunnel;                        /* the road runs under a roof between these samples */
+#define MAX_GEMS 16
+#define FIELD_MAX 16.0f          /* the most open land beside the road, past the shoulder, in meters */
+typedef struct { int idx; float lateral; int color; } Gem;                    /* a hidden gem out in the open land: coins and a burst of speed */
 
 typedef struct {
     const char *name;
@@ -45,6 +48,9 @@ typedef struct {
     int grid_idx;                           /* sample the grid lines up at; > 0 means the race starts partway (finish at sample 0) */
     Coin coin[MAX_COINS]; int ncoin;
     Tunnel tunnel[MAX_TUNNELS]; int ntunnel;
+    float field[TRACK_MAX_SAMPLES][2];      /* open land past the shoulder on the left [0] and right [1] side, in meters (0 = the wall is at the shoulder) */
+    float water_y;                          /* water roads: the open land is shallow water at this height */
+    Gem gem[MAX_GEMS]; int ngem;
 } Track;
 
 typedef struct {
@@ -54,12 +60,16 @@ typedef struct {
     float slope;        /* dy per meter along the road (uphill positive) */
     int on_road;        /* within the paved width */
     int on_shoulder;    /* within the shoulder */
+    int on_field;       /* out in the open land past the shoulder */
+    float bound;        /* distance from the center line to the outer wall on this side */
 } TrackHit;
 
 void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, int npts, int samples_per_segment);
 void track_locate(const Track *t, float x, float z, int hint, TrackHit *out);   /* hint = last known index, -1 for a full search */
 float track_surface_height(const Track *t, int idx, float lateral);
-float track_edge(const Track *t, int idx);                                      /* distance from center to the wall */
+float track_edge(const Track *t, int idx);                                      /* distance from center to the outer edge of the shoulder */
+float track_bound(const Track *t, int idx, int side);                           /* distance from center to the outer wall on a side (-1 left, +1 right) */
+void  track_make_field(Track *t, int water);                                    /* works out how much open land each stretch can have without reaching another part of the road */
 void  track_mover_pos(const Track *t, const Mover *m, float time, float *x, float *y, float *z);
 
 /* built-in tracks (see tracks.c) */

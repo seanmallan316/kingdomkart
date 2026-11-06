@@ -1,5 +1,7 @@
 #include "track.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static float catmull(float p0, float p1, float p2, float p3, float t) {
     float t2 = t * t, t3 = t2 * t;
@@ -8,6 +10,7 @@ static float catmull(float p0, float p1, float p2, float p3, float t) {
 
 void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, int npts, int per) {
     t->name = name; t->laps = laps; t->n = 0; t->shortcut_from = t->shortcut_to = -1; t->shortcut_side = 0;
+    memset(t->field, 0, sizeof t->field); t->ngem = 0; t->water_y = -1e9f;
     int total = npts * per; if (total > TRACK_MAX_SAMPLES) { per = TRACK_MAX_SAMPLES / npts; total = npts * per; }
     for (int i = 0; i < npts; i++) {
         const TrackPoint *p0 = &pts[(i + npts - 1) % npts], *p1 = &pts[i], *p2 = &pts[(i + 1) % npts], *p3 = &pts[(i + 2) % npts];
@@ -37,12 +40,69 @@ void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, in
 
 float track_edge(const Track *t, int idx) { return t->s[idx].width * 0.5f + SHOULDER_W; }
 
+float track_bound(const Track *t, int idx, int side) { return track_edge(t, idx) + t->field[idx][side > 0]; }
+
+/* the height of the ground at a distance from the center line: the banked road, the shoulder sloping down, then the
+   open land, level at the height the shoulder ends (or the water's surface on a water road) */
+static float surface_y(const Track *t, float y, float half, float bank, float lateral) {
+    float a = fabsf(lateral), edge = half + SHOULDER_W;
+    float bl = lateral; if (bl > edge) bl = edge; if (bl < -edge) bl = -edge;   /* the bank does not carry on tilting the land */
+    float h = y + bl * tanf(bank);
+    if (a > half) { float u = (a - half) / SHOULDER_W; if (u > 1) u = 1; h -= WALL_DROP * u * u; }   /* shoulder slopes down */
+    if (t->water && t->water_y > -1e8f && a > edge + 0.5f) h = t->water_y;                           /* wading */
+    return h;
+}
 float track_surface_height(const Track *t, int idx, float lateral) {
     const TrackSample *s = &t->s[idx];
-    float half = s->width * 0.5f, a = fabsf(lateral);
-    float y = s->y + lateral * tanf(s->bank);
-    if (a > half) { float u = (a - half) / SHOULDER_W; if (u > 1) u = 1; y -= WALL_DROP * u * u; }   /* shoulder slopes down */
-    return y;
+    return surface_y(t, s->y, s->width * 0.5f, s->bank, lateral);
+}
+
+void track_make_field(Track *t, int water) {
+    /* walk outward from each stretch of road a meter at a time; stop where the nearest bit of road would be some other
+       part of the course (half way to it, less a margin), so open land never joins two parts of the road together */
+    const int near_idx = 6;
+    for (int i = 0; i < t->n; i++) for (int sd = 0; sd < 2; sd++) {
+        const TrackSample *s = &t->s[i]; float side = sd ? 1.0f : -1.0f, edge = track_edge(t, i), got = 0;
+        for (float L = edge + 1.0f; L <= edge + FIELD_MAX + 3.0f; L += 1.0f) {
+            float px = s->x + s->nx * side * L, pz = s->z + s->nz * side * L; int best = i; float bd = 1e30f;
+            for (int j = 0; j < t->n; j++) { float dx = px - t->s[j].x, dz = pz - t->s[j].z, d = dx * dx + dz * dz - t->s[j].width * t->s[j].width * 0.25f; if (d < bd) { bd = d; best = j; } }
+            int di = abs(best - i); if (di > t->n / 2) di = t->n - di;
+            if (di > near_idx) break;
+            got = L - edge;
+        }
+        got -= 3.0f; if (got < 0) got = 0; if (got > FIELD_MAX) got = FIELD_MAX;
+        t->field[i][sd] = got;
+    }
+    /* no open land in tunnels, and none where it would be only a sliver */
+    for (int k = 0; k < t->ntunnel; k++) { int len = (t->tunnel[k].to - t->tunnel[k].from + t->n) % t->n; for (int q = -2; q <= len + 2; q++) { int i = ((t->tunnel[k].from + q) % t->n + t->n) % t->n; t->field[i][0] = t->field[i][1] = 0; } }
+    for (int i = 0; i < t->n; i++) for (int sd = 0; sd < 2; sd++) if (t->field[i][sd] < 4.0f) t->field[i][sd] = 0;
+    /* smooth: the wall never swings in or out by more than a meter per stretch, so it is a gentle slant, never a step across */
+    float step = 1.0f;
+    for (int pass = 0; pass < 3; pass++) for (int sd = 0; sd < 2; sd++) {
+        for (int k = 0; k < 2 * t->n; k++) { int i = k % t->n, p = (i + t->n - 1) % t->n; if (t->field[i][sd] > t->field[p][sd] + step) t->field[i][sd] = t->field[p][sd] + step; }
+        for (int k = 2 * t->n - 1; k >= 0; k--) { int i = k % t->n, q = (i + 1) % t->n; if (t->field[i][sd] > t->field[q][sd] + step) t->field[i][sd] = t->field[q][sd] + step; }
+    }
+    /* water roads: the open land is shallow water just under the road's level */
+    if (water) { float lo = 1e9f; for (int i = 0; i < t->n; i++) { float y = t->s[i].y - WALL_DROP; if (y < lo) lo = y; } t->water_y = lo - 0.3f; }
+    /* out in the open land: a few boost arrows and bounce ramps, each in a wide stretch, away from each other */
+    int added = 0;
+    for (int i = 20; i < t->n && added < 4 && t->npad < MAX_PADS; i += 3) {
+        int sd = ((i / 11) & 1); float f = t->field[i][sd];
+        if (f < 11.0f || t->field[(i + 6) % t->n][sd] < 11.0f) continue;
+        int ok = 1; for (int p = 0; p < t->npad; p++) { int di = abs(t->pad[p].idx - i); if (di > t->n / 2) di = t->n - di; if (di < (fabsf(t->pad[p].lateral) > track_edge(t, t->pad[p].idx) ? t->n / 6 : 3)) ok = 0; }
+        if (!ok) continue;
+        RoadPad *pd = &t->pad[t->npad++]; pd->idx = i; pd->lateral = (sd ? 1.0f : -1.0f) * (track_edge(t, i) + f * 0.45f); pd->halfw = 2.0f; pd->kind = (added & 1) ? PAD_BOUNCE : PAD_BOOST; added++;
+    }
+    /* hidden gems: in the widest stretches of open land, out of sight of the racing line */
+    t->ngem = 0;
+    for (int i = 0; i < t->n && t->ngem < MAX_GEMS; i++) {
+        int sd = (i / 7) & 1; float f = t->field[i][sd];
+        if (f < 9.0f || i < 12) continue;
+        int ok = 1; for (int g = 0; g < t->ngem; g++) { int di = abs(t->gem[g].idx - i); if (di > t->n / 2) di = t->n - di; if (di < t->n / 9) ok = 0; }
+        for (int p = 0; p < t->npad; p++) { int di = abs(t->pad[p].idx - i); if (di > t->n / 2) di = t->n - di; if (di < 4 && fabsf(t->pad[p].lateral) > track_edge(t, i)) ok = 0; }
+        if (!ok) continue;
+        t->gem[t->ngem].idx = i; t->gem[t->ngem].lateral = (sd ? 1.0f : -1.0f) * (track_edge(t, i) + f * 0.7f); t->gem[t->ngem].color = t->ngem % 3; t->ngem++;
+    }
 }
 
 void track_locate(const Track *t, float x, float z, int hint, TrackHit *out) {
@@ -69,16 +129,16 @@ void track_locate(const Track *t, float x, float z, int hint, TrackHit *out) {
     float nx = -tz, nz = tx;
     out->idx = best;
     out->lateral = (x - cx) * nx + (z - cz) * nz;
-    {   float half = width * 0.5f, a = fabsf(out->lateral);
-        float y = cy + out->lateral * tanf(bank);
-        if (a > half) { float w = (a - half) / SHOULDER_W; if (w > 1) w = 1; y -= WALL_DROP * w * w; }
-        out->height = y; }
+    out->height = surface_y(t, cy, width * 0.5f, bank, out->lateral);
+    {   int sd = out->lateral > 0; float f = t->field[best][sd] + (t->field[j][sd] - t->field[best][sd]) * u;
+        out->bound = width * 0.5f + SHOULDER_W + f; }
     const TrackSample *nx1 = &t->s[(best + 1) % t->n], *pv = &t->s[(best + t->n - 1) % t->n];
     float ddist = 2.0f * t->length / (float)t->n;
     out->slope = (nx1->y - pv->y) / ddist;
     float a = fabsf(out->lateral);
     out->on_road = a <= width * 0.5f;
     out->on_shoulder = !out->on_road && a <= width * 0.5f + SHOULDER_W;
+    out->on_field = a > width * 0.5f + SHOULDER_W;
     /* a shortcut: the shoulder on one side of a corner is packed dirt, as fast as the road */
     if (out->on_shoulder && t->shortcut_from >= 0 && best >= t->shortcut_from && best <= t->shortcut_to && (out->lateral < 0 ? -1 : 1) == t->shortcut_side) out->on_road = 1;
 }

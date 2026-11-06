@@ -318,6 +318,17 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
             float dx = k->x - cx, dz = k->z - cz;
             if (dx * dx + dz * dz < 2.0f * 2.0f && k->y < s->y + 3.0f) { if (k->coins < 10) k->coins++; r->coin_respawn[c] = 10.0f; r->stat_coins++; push_event(r, EV_COIN, i); break; } }
     }
+    /* hidden gems out in the open land: three coins and a burst of speed */
+    for (int g = 0; g < t->ngem; g++) {
+        if (r->gem_respawn[g] > 0) { r->gem_respawn[g] -= dt; continue; }
+        const Gem *gm = &t->gem[g]; const TrackSample *s = &t->s[gm->idx];
+        float gx = s->x + s->nx * gm->lateral, gz = s->z + s->nz * gm->lateral, gy = track_surface_height(t, gm->idx, gm->lateral);
+        for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; if (k->finished) continue;
+            float dx = k->x - gx, dz = k->z - gz;
+            if (dx * dx + dz * dz < 2.4f * 2.4f && k->y < gy + 3.5f) { k->coins = k->coins + 3 > 10 ? 10 : k->coins + 3;
+                k->boost_t = fmaxf(k->boost_t, 1.5f); k->boost_mul = fmaxf(k->boost_mul, 1.35f);
+                r->gem_respawn[g] = 25.0f; r->stat_gems++; push_event(r, EV_GEM, i); break; } }
+    }
     /* the parted sea: karts inside the window drive the shoulders as if they were road */
     if (r->parting_t > 0) { r->parting_t -= dt;
         for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; int rel = (k->hit.idx - r->parting_idx + t->n) % t->n; if (rel < r->parting_len) k->grace_t = 0.3f; } }

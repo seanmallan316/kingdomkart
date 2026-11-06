@@ -82,7 +82,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     if (!k->finished) { k->total_time += dt; if (k->lap >= 1) k->lap_time += dt; }
     float top = BASE_TOP * st->top_speed * k->boost_mul * (1.0f + 0.01f * (float)k->coins);
     int on_road = k->hit.on_road;
-    if (!on_road && !k->air && k->grace_t <= 0) top *= OFFROAD_MUL;
+    if (!on_road && !k->air && k->grace_t <= 0) top *= k->hit.on_field ? (t->water ? 0.6f : 0.75f) : OFFROAD_MUL;   /* the open land is firmer than the loose dirt shoulder; wading is slow */
     if (k->carried_t > 0) { k->carried_t -= dt; k->boost_t = fmaxf(k->boost_t, 0.2f); k->boost_mul = fmaxf(k->boost_mul, 1.7f); k->shield = fmaxf(k->shield, 0.2f); top = BASE_TOP * st->top_speed * 1.7f; }
     if (k->grace_t > 0) { k->grace_t -= dt; top *= 1.12f; }
     if (k->slow_t > 0) top *= 0.62f;
@@ -146,7 +146,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     /* ---- track position, walls */
     int prev_idx = k->hit.idx; float prev_slope = k->hit.slope;
     track_locate(t, k->x, k->z, prev_idx, &k->hit);
-    float edge = track_edge(t, k->hit.idx);
+    float edge = k->hit.bound;
     k->on_wall_prev = k->on_wall; k->on_wall = 0;
     if (fabsf(k->hit.lateral) > edge) {
         const TrackSample *s = &t->s[k->hit.idx];

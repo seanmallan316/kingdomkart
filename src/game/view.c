@@ -119,8 +119,8 @@ static float g_results_t;
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
 /* meshes */
-static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
-static Vertex g_vtmp[8192];
+static Mesh *m_field, *m_gem; static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
 
 /* camera state lives in the views (cam_x and friends are the view being handled) */
@@ -332,7 +332,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
-    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -345,9 +345,13 @@ static void batch_quad4_shade(Batch *b, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, Vec3
     static const int idx[6] = {0, 1, 2, 0, 2, 3};
     for (int i = 0; i < 6; i++) { int k = idx[i]; Vertex q = {p[k].x, p[k].y, p[k].z, n.x, n.y, n.z, uv[k][0], uv[k][1], sh[k], sh[k], sh[k], 1}; b->v[b->n++] = q; }
 }
+static float ground_level(const Track *t) {   /* the height of the ground plane (the sea on a water road) */
+    float lowest = 1e9f; for (int i = 0; i < t->n; i++) for (int sd = -1; sd <= 1; sd += 2) { float y = track_surface_height(t, i, sd * track_bound(t, i, sd)); if (y < lowest) lowest = y; }
+    return t->water && t->water_y > -1e8f ? t->water_y + 0.35f : lowest - 0.6f;   /* on the sea the karts sit a little way into the water: wading */
+}
 static void build_track_meshes(void) {
     const Track *t = &g_track;
-    batch_init(&g_b, g_vtmp, 8192);
+    batch_init(&g_b, g_vtmp, 16384);
     /* road */
     batch_clear(&g_b);
     for (int i = 0; i < t->n; i++) strip_quad(&g_b, t, i, -t->s[i].width * 0.5f, t->s[i].width * 0.5f, 1.0f / 8.0f, 1, 1, 1);
@@ -360,11 +364,15 @@ static void build_track_meshes(void) {
         strip_quad(&g_b, t, i, h, h + SHOULDER_W, 1.0f / 6.0f, 1, 1, 1);
     }
     m_shoulder = gfx_mesh_static(g_b.v, g_b.n);
-    /* low stone walls at the shoulder edge */
+    /* the ground level everything stands on (the sea on a water road) */
+    g_ground_y = ground_level(t);
+    /* low stone walls at the outer edge of the open land (at the shoulder where there is none), with a bank of earth
+       below them down to the ground so a raised road never floats */
     batch_clear(&g_b);
     for (int i = 0; i < t->n; i++) {
-        int j = (i + 1) % t->n; float e = track_edge(t, i), ej = track_edge(t, j);
+        int j = (i + 1) % t->n;
         for (int side = -1; side <= 1; side += 2) {
+            float e = track_bound(t, i, side), ej = track_bound(t, j, side);
             Vec3 a = road_point(t, i, side * e), b = road_point(t, j, side * ej);
             Vec3 at = v3(a.x, a.y + 0.9f, a.z), bt = v3(b.x, b.y + 0.9f, b.z);
             Vec3 n = v3(-t->s[i].nx * side, 0, -t->s[i].nz * side);
@@ -372,9 +380,33 @@ static void build_track_meshes(void) {
             /* darker where the wall meets the ground (a baked contact shadow) */
             if (side < 0) batch_quad4_shade(&g_b, a, b, bt, at, n, v0, 0, v1, 1, 0.55f, 1.0f);
             else batch_quad4_shade(&g_b, b, a, at, bt, n, v0, 0, v1, 1, 0.55f, 1.0f);
+            /* the outside face, down to the ground */
+            Vec3 ag = v3(a.x, g_ground_y - 0.2f, a.z), bg = v3(b.x, g_ground_y - 0.2f, b.z), no = v3(-n.x, 0, -n.z);
+            if (a.y + 0.9f > g_ground_y) { if (side < 0) batch_quad4_shade(&g_b, bg, ag, at, bt, no, v0, 0, v1, 1, 0.5f, 0.9f); else batch_quad4_shade(&g_b, ag, bg, bt, at, no, v0, 0, v1, 1, 0.5f, 0.9f); }
         }
     }
     m_wall = gfx_mesh_static(g_b.v, g_b.n);
+    /* the open land: grass from the shoulder out to the wall, textured in world space so it matches the ground plane */
+    batch_clear(&g_b);
+    if (!t->water) for (int i = 0; i < t->n; i++) { int j = (i + 1) % t->n;
+        for (int side = -1; side <= 1; side += 2) { int sd = side > 0;
+            if (t->field[i][sd] <= 0 && t->field[j][sd] <= 0) continue;
+            float e0 = track_edge(t, i), e1 = track_edge(t, j), b0 = track_bound(t, i, side), b1 = track_bound(t, j, side);
+            Vec3 p[4] = { road_point(t, i, side * e0), road_point(t, i, side * b0), road_point(t, j, side * b1), road_point(t, j, side * e1) };
+            if (side < 0) { Vec3 q = p[1]; p[1] = p[3]; p[3] = q; }   /* counter-clockwise seen from above */
+            if (g_b.n + 6 > g_b.cap) break;
+            static const int ix[6] = {0, 1, 2, 0, 2, 3};
+            for (int k = 0; k < 6; k++) { Vec3 v = p[ix[k]]; Vertex q = {v.x, v.y + 0.01f, v.z, 0, 1, 0, v.x / 10.0f, v.z / 10.0f, 1, 1, 1, 1}; g_b.v[g_b.n++] = q; } } }
+    m_field = gfx_mesh_static(g_b.v, g_b.n);
+    /* a hidden gem: an eight-faced crystal */
+    batch_clear(&g_b);
+    { Vec3 top = v3(0, 0.75f, 0), bot = v3(0, -0.75f, 0);
+      for (int q = 0; q < 4; q++) { float a0 = q * 1.5707963f, a1 = (q + 1) * 1.5707963f; Vec3 r0 = v3(cosf(a0) * 0.55f, 0, sinf(a0) * 0.55f), r1 = v3(cosf(a1) * 0.55f, 0, sinf(a1) * 0.55f);
+          Vec3 nt = face_normal(top, r1, r0), nb = face_normal(bot, r0, r1);
+          Vertex v[6] = { {top.x, top.y, top.z, nt.x, nt.y, nt.z, 0, 0, 1, 1, 1, 1}, {r1.x, r1.y, r1.z, nt.x, nt.y, nt.z, 0, 0, 0.8f, 0.8f, 0.8f, 1}, {r0.x, r0.y, r0.z, nt.x, nt.y, nt.z, 0, 0, 0.8f, 0.8f, 0.8f, 1},
+                          {bot.x, bot.y, bot.z, nb.x, nb.y, nb.z, 0, 0, 0.6f, 0.6f, 0.6f, 1}, {r0.x, r0.y, r0.z, nb.x, nb.y, nb.z, 0, 0, 0.9f, 0.9f, 0.9f, 1}, {r1.x, r1.y, r1.z, nb.x, nb.y, nb.z, 0, 0, 0.9f, 0.9f, 0.9f, 1} };
+          for (int k = 0; k < 6; k++) g_b.v[g_b.n++] = v[k]; } }
+    m_gem = gfx_mesh_static(g_b.v, g_b.n);
     /* start line across the road */
     batch_clear(&g_b);
     { Vec3 p0 = road_point(t, 0, -t->s[0].width * 0.5f), p1 = road_point(t, 0, t->s[0].width * 0.5f), p2 = road_point(t, 2, t->s[2].width * 0.5f), p3 = road_point(t, 2, -t->s[2].width * 0.5f);
@@ -456,13 +488,13 @@ static void build_track_meshes(void) {
     m_coins = gfx_mesh_dynamic(MAX_COINS * 6);
     /* ground: a big grass plane under everything */
     batch_clear(&g_b);
-    { float lowest = 1e9f; for (int i = 0; i < t->n; i++) { float y = track_surface_height(t, i, track_edge(t, i)); if (y < lowest) lowest = y; y = track_surface_height(t, i, -track_edge(t, i)); if (y < lowest) lowest = y; }
-      batch_quad(&g_b, v3(0, lowest - 0.6f, 0), v3(600, 0, 0), v3(0, 0, -600), v3(0, 1, 0), 0, 0, 120, 120, 1, 1, 1, 1); }
+    { batch_quad(&g_b, v3(0, g_ground_y, 0), v3(600, 0, 0), v3(0, 0, -600), v3(0, 1, 0), 0, 0, 120, 120, 1, 1, 1, 1); }
     m_ground = gfx_mesh_static(g_b.v, g_b.n);
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
     m_spark = gfx_mesh_dynamic(MAX_SPARK * 6);
     m_hud = gfx_mesh_dynamic(8192);
+    batch_init(&g_b, g_vtmp, 8192);   /* back to the size every per-frame mesh is made for */
     /* placeholder kart: boxes until the character art arrives. The body is white and tinted with the character's color. */
     batch_clear(&g_b);
     batch_box(&g_b, v3(0, 0.42f, 0), v3(0.75f, 0.17f, 1.05f), 1, 1, 1);                    /* body (tinted) */
@@ -957,15 +989,16 @@ static void load_theme(void) {
     gfx_texture_free(tx_finale); tx_finale = d->finale_img ? asset_texture(d->finale_img, 0, NULL, NULL) : NULL;
     tx_star = NULL;
     if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star && g_sky_wrap > 1.5f) tx_star = make_tex(64, 64, 0, 0, px_star); }
-    g_nkind = 0; g_nplaced = 0; g_nwalls = 0;
+    g_nkind = 0; g_nplaced = 0; g_nwalls = 0; g_ground_y = ground_level(&g_track);
     for (int i = 0; i < g_track.nmover; i++) g_mover_kind[i] = sprite_kind(g_track.mover[i].img);
     for (int i = 0; i < d->nscenery && g_nplaced < MAX_SCENERY; i++) {
         const Scenery *sc = &d->scenery[i]; int idx = sc->idx % g_track.n;
         Placed *p = &g_placed[g_nplaced++];
         p->kind = sprite_kind(sc->img);
-        float edge = track_edge(&g_track, idx);
-        p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * sc->side, 0, g_track.s[idx].z + g_track.s[idx].nz * sc->side);
-        p->p.y = track_surface_height(&g_track, idx, (sc->side < 0 ? -1.0f : 1.0f) * edge) - 0.2f;   /* stands on the ground just outside the wall */
+        float edge = track_edge(&g_track, idx), sgn = sc->side < 0 ? -1.0f : 1.0f, bound = track_bound(&g_track, idx, (int)sgn);
+        float lat = sgn * (bound + fmaxf(fabsf(sc->side) - edge, 0.0f));   /* as far outside the wall as it was meant to stand outside the shoulder */
+        p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * lat, 0, g_track.s[idx].z + g_track.s[idx].nz * lat);
+        p->p.y = fmaxf(track_surface_height(&g_track, idx, sgn * bound), g_ground_y) - 0.2f;   /* stands on the ground just outside the wall */
         p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
         p->wall = (!strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab")) ? ++g_nwalls : 0; p->fall_t = 0;
     }
@@ -1957,6 +1990,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         float sr = 1, sg = 1, sb = 1;    /* the sun's color is applied by the shader now */
         /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
         gfx_bind(tx_grass); if (g_def->water) gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); else gfx_draw(m_ground, &id, sr, sg, sb, 1);
+        if (m_field) gfx_draw(m_field, &id, sr, sg, sb, 1);   /* the open land, same grass as the ground */
         gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
         gfx_bind(tx_road); gfx_draw_ex(m_road, &id, 1, 1, 1, 1, g_def->night ? 0.35f : 0.18f, 0, 0, 0);   /* a faint sheen on the road, wetter at night */
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1); }
@@ -2010,6 +2044,12 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             float cx = cs->x + cs->nx * cn->lateral, cz = cs->z + cs->nz * cn->lateral; float ddx = cx - cam_x, ddz = cz - cam_z; if (ddx * ddx + ddz * ddz > 160.0f * 160.0f) continue;
             Mat4 m = m4_mul(m4_translate(cx, track_surface_height(&g_track, cn->idx, cn->lateral) + 1.0f + 0.1f * sinf(g_time * 3.0f + c), cz), m4_rotate_y(g_time * 3.0f + c * 0.7f));
             gfx_draw_ex(m_coin, &m, 1, 1, 1, 1, 1.2f, 0, 0, 0); }
+        /* hidden gems out in the open land: spinning crystals */
+        for (int g = 0; g < g_track.ngem; g++) { if (r->gem_respawn[g] > 0) continue; const Gem *gm = &g_track.gem[g]; const TrackSample *gs = &g_track.s[gm->idx];
+            float gx = gs->x + gs->nx * gm->lateral, gz = gs->z + gs->nz * gm->lateral; float ddx = gx - cam_x, ddz = gz - cam_z; if (ddx * ddx + ddz * ddz > 170.0f * 170.0f) continue;
+            static const float GC[3][3] = {{1.0f, 0.25f, 0.4f}, {0.25f, 1.0f, 0.5f}, {0.35f, 0.6f, 1.0f}};   /* ruby, emerald, sapphire */
+            Mat4 m = m4_mul(m4_translate(gx, track_surface_height(&g_track, gm->idx, gm->lateral) + 1.3f + 0.2f * sinf(g_time * 2.5f + g), gz), m4_rotate_y(g_time * 2.0f + g));
+            gfx_draw_ex(m_gem, &m, GC[gm->color][0], GC[gm->color][1], GC[gm->color][2], 1, 1.5f, 0, 0, 0); }
         /* the karts */
         gfx_state(ST_SOLID); gfx_bind(NULL);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]];
@@ -2462,6 +2502,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case EV_CHEEK: if (who >= 0) pmsg(who, 1.0f, "THE OTHER CHEEK!"); break;
                 case EV_PAD_BOOST: if (frand01() < 0.5f) voice_at(ev->kart, VO_BOOST); if (who >= 0) { pmsg(who, 0.7f, "BOOST!"); prumble(who, 0.35f, 0.2f); } add_dust(v3(ek->x, ek->y, ek->z), 1.0f, 2.0f); sfx_at(SFX_BOOST_PAD, ek, 0.9f); break;
                 case EV_PAD_BOUNCE: if (who >= 0) pmsg(who, 0.7f, "BOING!"); sfx_at(SFX_BOUNCE, ek, 0.9f); break;
+                case EV_GEM: if (!ek) break; bless_sparkle(ek, 0.6f, 1.0f, 0.9f); bless_sparkle(ek, 1, 0.85f, 0.3f); sfx_at(SFX_UNLOCK, ek, 0.9f); sfx_at(SFX_BOOST_PAD, ek, 0.6f);
+                    if (who >= 0) { g_coin_pop[who] = 0.6f; pmsg(who, 1.4f, "HIDDEN GEM!"); pside(who, 1.4f, "+3 COINS AND A BOOST"); prumble(who, 0.4f, 0.25f); } break;
                 case EV_COIN: if (!ek) break; bless_sparkle(ek, 1, 0.85f, 0.25f); if (who >= 0) { sfx_play(SFX_COIN, 1.0f, 0); g_coin_pop[who] = 0.5f; char cl[32]; if (ek->coins >= 10) snprintf(cl, sizeof cl, "COINS FULL - TOP SPEED +10%%"); else snprintf(cl, sizeof cl, "+1 COIN  (%d/10)", ek->coins); pside(who, 0.9f, cl); } break;
                 case EV_SLOWED: if (who >= 0) pmsg(who, 1.0f, "SLOWED!"); break;
                 case EV_SHOFAR: sfx_at(SFX_SHOFAR, ek, 0.9f); if (who >= 0) { pmsg(who, 0.9f, "SHOFAR!"); prumble(who, 0.3f, 0.2f); } break;
