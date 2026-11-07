@@ -6,11 +6,11 @@
 
 #define BATTLE_STONES 5          /* "five smooth stones out of the brook" - 1 Samuel 17:40 */
 #define BATTLE_SPEARS 6
-#define BATTLE_WIN_HITS 5
+#define BATTLE_WIN_HITS 5        /* head hits that leave him dazed on normal (easy 4, hard 6); then one stone to the forehead brings him down */
 #define BATTLE_LIVES 3
 
-enum { GOL_STALK, GOL_WINDUP, GOL_CHARGE, GOL_THROW, GOL_STUNNED, GOL_DOWN };
-enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE, BEV_STEP, BEV_QUOTE, BEV_SHIELD, BEV_EMPTY };   /* EMPTY: tried to sling with no stone */   /* SHIELD: the shield-bearer caught a stone */
+enum { GOL_STALK, GOL_WINDUP, GOL_CHARGE, GOL_THROW, GOL_STUNNED, GOL_DOWN, GOL_DAZED };   /* DAZED: reeling, head in his hands - the moment for the last stone */
+enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE, BEV_STEP, BEV_QUOTE, BEV_SHIELD, BEV_EMPTY, BEV_ARMOUR, BEV_DAZED, BEV_RECOVER, BEV_FOREHEAD };   /* ARMOUR: a stone glanced off his armour; DAZED: he reels; RECOVER: he shook it off; FOREHEAD: the last stone */   /* EMPTY: tried to sling with no stone */   /* SHIELD: the shield-bearer caught a stone */
 /* words from 1 Samuel 17 (King James Version), spoken during the fight */
 typedef struct { const char *who; const char *line; const char *ref; } BattleQuote;
 extern const BattleQuote BATTLE_QUOTES[];
@@ -20,7 +20,7 @@ extern const BattleQuote BATTLE_QUOTES[];
 #define BROOK_X1  95.0f
 #define BROOK_Z   78.0f
 
-typedef struct { float x, z, vx, vz, y, life; int alive; } Missile;
+typedef struct { float x, z, vx, vz, y, life; int alive; float vy; } Missile;   /* vy: up and down - stones and spears fly in an arc */
 typedef struct {
     Race race;                       /* David's kart runs on the arena road with the normal physics (one kart, no boxes) */
     float gx, gz, gyaw, gspeed;      /* Goliath */
@@ -40,11 +40,15 @@ typedef struct {
     int quote; float quote_t;        /* the quote on screen (-1 none) and how long it has left */
     int quotes_said;                 /* bit per quote */
     int blocks;                      /* stones the shield-bearer caught (1 Samuel 17:41: he walks before Goliath; hit him from the side or behind) */
+    float gy;                        /* the ground under Goliath */
+    float gstate_t; int gprev;       /* seconds in the current state (for his animation), the state last step */
     float sb_yaw;                    /* which way the shield-bearer stands from Goliath: he follows Goliath's turn, but slowly, so a quick kart can get round him */
 } Battle;
 
 void battle_init(Battle *b, const Track *arena, int difficulty);
 void battle_init_multi(Battle *b, const Track *arena, int difficulty, int ndavids, const int *chars);   /* 2..4 people, each a David (any character) */
 void battle_step(Battle *b, const KartInput *in, int autopilot, float dt);                /* in: one input per David */
-int battle_out(const Battle *b, int d);                                                   /* this David has been hit three times */
+int battle_out(const Battle *b, int d);
+int battle_need(const Battle *b);                                                         /* head hits to daze him at this difficulty */
+float battle_head_y(const Battle *b);                                                     /* how high his head is (stones aim there) */                                                   /* this David has been hit three times */
 #endif

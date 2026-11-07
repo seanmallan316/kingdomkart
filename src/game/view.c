@@ -2,6 +2,7 @@
 #include "game.h"
 #include "models.h"
 #include "kart3d.h"
+#include "anim3d.h"
 #include "save.h"
 #include "../audio/sfx.h"
 #include "../audio/music.h"
@@ -103,6 +104,7 @@ static View *cv = &g_view[0];                   /* the view being updated or dra
 #define g_shake (cv->shake)
 #define g_orbit (cv->orbit)
 static const float PLAYER_COL[MAX_HUMANS][3] = {{1.0f, 0.85f, 0.3f}, {0.35f, 0.65f, 1.0f}, {1.0f, 0.4f, 0.35f}, {0.4f, 0.9f, 0.45f}};   /* P1 gold, P2 blue, P3 red, P4 green */
+static Anim3D g_gol3d; static Mesh *m_spear3d;
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Kart3D g_k3d[NCHARS];   /* racers with a real 3D kart (content/models/<name>.kkm) */
 static Texture *tx_flame; static Texture *tx_emblem[NSTYLES]; static int g_emb_kind; static void px_emblem(int x, int y, uint32_t *o); static Texture *tx_bearer; static float g_bearer_aspect = 0.67f; static Mesh *m_bearer;   /* Goliath's shield-bearer (char_shieldbearer.png, or a drawn one) */
@@ -1101,9 +1103,98 @@ static Texture *make_icon(int kind) {
 static int human_kart(int p);
 /* the item window: after a box it spins through the blessings like a rolodex, slows, and stops on the one you got */
 #define ROU_N 14
+/* ---- the 3D menus (Sean: the menus were plain and retro) ----
+   Menu pieces are thick bevelled plaques - a deep blue or gold face with a gloss on top, a lit gold rim, sides you see
+   when they tilt, and a soft shadow - that can lift toward you, tilt and turn. Everything in the menu batch is laid out
+   in the usual 1280 x 720 screen, with z (in pixels, toward the viewer) kept in the vertex; ui_end() turns a run of
+   vertices by a matrix in screen pixels, and the whole batch is drawn through gfx_camera_ui3d(). Only the main TV and
+   GamePad passes do this (g_ui3d); anywhere else the same calls draw flat. */
+#define UI_EYE 1100.0f
+static int g_ui3d = 0; static uint32_t g_ui_conv = 0; static Mat4 g_ui_screen; static int g_mi = 0;
+static float ui_ease(float t) { t = clampf(t, 0, 1); return 1 - (1 - t) * (1 - t) * (1 - t); }
+static void ui_flush(void) {   /* everything not yet moved into screen pixels goes there now, flat */
+    if (!g_ui3d) return; for (uint32_t i = g_ui_conv; i < g_b.n; i++) { Vertex *v = &g_b.v[i]; v->px = (v->px + 1.0f) * 640.0f; v->py = (1.0f - v->py) * 360.0f; } g_ui_conv = g_b.n; }
+static uint32_t ui_begin(void) { ui_flush(); return g_b.n; }
+static void ui_end(uint32_t mark, const Mat4 *m) {
+    if (!g_ui3d) return; ui_flush();
+    for (uint32_t i = mark; i < g_b.n; i++) { Vertex *v = &g_b.v[i]; float x = v->px, y = v->py, z = v->pz;
+        v->px = m->m[0] * x + m->m[4] * y + m->m[8] * z + m->m[12]; v->py = m->m[1] * x + m->m[5] * y + m->m[9] * z + m->m[13]; v->pz = m->m[2] * x + m->m[6] * y + m->m[10] * z + m->m[14]; } }
+static Mat4 ui_xf(float cx, float cy, float lift, float rx, float ry, float rz, float s) {   /* about the point (cx, cy) on the screen: scale, turn, then lift toward the viewer */
+    Mat4 m = m4_translate(-cx, -cy, 0); m = m4_mul(m4_scale(s, s, s), m); m = m4_mul(m4_rotate_z(rz), m); m = m4_mul(m4_rotate_x(rx), m); m = m4_mul(m4_rotate_y(ry), m);
+    return m4_mul(m4_translate(cx, cy, lift), m); }
+static void ui_v(float x, float y, float z, float r, float g, float b, float a) {   /* one corner, in screen pixels */
+    if (g_b.n >= g_b.cap) return; Vertex v = {x / 640.0f - 1.0f, 1.0f - y / 360.0f, g_ui3d ? z : 0, 0, 0, 1, WHITE_U, WHITE_V, r, g, b, a}; g_b.v[g_b.n++] = v; }
+static void ui_tri(const float *p0, const float *p1, const float *p2) {   /* x, y, z, r, g, b, a each */
+    if (g_b.n + 3 > g_b.cap) return; ui_v(p0[0], p0[1], p0[2], p0[3], p0[4], p0[5], p0[6]); ui_v(p1[0], p1[1], p1[2], p1[3], p1[4], p1[5], p1[6]); ui_v(p2[0], p2[1], p2[2], p2[3], p2[4], p2[5], p2[6]); }
+static int ui_round(float x, float y, float w, float h, float r, float *ox, float *oy, float *nx, float *ny) {   /* a rounded rectangle's outline, clockwise from the top left; with each point's outward direction */
+    int n = 0; static const float cxs[4] = {0, 1, 1, 0}, cys[4] = {0, 0, 1, 1}; r = fminf(r, fminf(w, h) * 0.5f);
+    for (int c = 0; c < 4; c++) { float ccx = x + (cxs[c] ? w - r : r), ccy = y + (cys[c] ? h - r : r), a0 = 3.14159265f + c * 1.5707963f;
+        for (int k = 0; k <= 4; k++) { float a = a0 + k * 1.5707963f / 4; ox[n] = ccx + cosf(a) * r; oy[n] = ccy + sinf(a) * r; nx[n] = cosf(a); ny[n] = sinf(a); n++; } }
+    return n; }
+typedef struct { float top[3], bot[3], rim[3], side[3]; } UiLook;
+static const UiLook UI_BLUE = {{0.16f, 0.27f, 0.62f}, {0.05f, 0.09f, 0.27f}, {0.95f, 0.76f, 0.32f}, {0.42f, 0.3f, 0.1f}};
+static const UiLook UI_GOLD = {{1.0f, 0.93f, 0.6f}, {0.92f, 0.6f, 0.16f}, {1.0f, 0.97f, 0.82f}, {0.55f, 0.36f, 0.08f}};
+static const UiLook UI_DIM  = {{0.18f, 0.2f, 0.3f}, {0.07f, 0.08f, 0.14f}, {0.55f, 0.58f, 0.66f}, {0.22f, 0.23f, 0.28f}};
+/* a plaque: shadow, glow (0..1), sides going back 'depth', a lit bevelled rim, a graded face, a gloss, and a shine that
+   sweeps across when 'shine' >= 0 (its place, 0..1) */
+static void ui_plaque(float x, float y, float w, float h, float rad, float depth, const UiLook *L, float alpha, float glow, float shine) {
+    float ox[20], oy[20], nx[20], ny[20], ix[20], iy[20]; int n = ui_round(x, y, w, h, rad, ox, oy, nx, ny); float bev = fminf(7.0f, fminf(w, h) * 0.12f);
+    { float tx[20], ty[20], tnx[20], tny[20]; ui_round(x + bev, y + bev, w - 2 * bev, h - 2 * bev, fmaxf(rad - bev, 2.0f), tx, ty, tnx, tny); for (int i = 0; i < n; i++) { ix[i] = tx[i]; iy[i] = ty[i]; } }
+    const float Lx = -0.55f, Ly = -0.8f;   /* the light comes from the top left */
+    for (int i = 0; i < n; i++) { int j = (i + 1) % n;   /* soft shadow below and to the right */
+        float a0[7] = {ox[i] + 7, oy[i] + 11, -depth - 1, 0, 0, 0.1f, 0.42f * alpha}, a1[7] = {ox[j] + 7, oy[j] + 11, -depth - 1, 0, 0, 0.1f, 0.42f * alpha};
+        float b0[7] = {ox[i] + 7 + nx[i] * 16, oy[i] + 11 + ny[i] * 16, -depth - 1, 0, 0, 0.1f, 0}, b1[7] = {ox[j] + 7 + nx[j] * 16, oy[j] + 11 + ny[j] * 16, -depth - 1, 0, 0, 0.1f, 0};
+        float c0[7] = {x + w / 2 + 7, y + h / 2 + 11, -depth - 1, 0, 0, 0.1f, 0.42f * alpha};
+        ui_tri(c0, a0, a1); ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
+    if (glow > 0.01f) for (int i = 0; i < n; i++) { int j = (i + 1) % n; float gr = 1.0f, gg = 0.85f, gb = 0.4f, ga = 0.6f * glow * alpha, R = 26 + 6 * glow;
+        float a0[7] = {ox[i], oy[i], -depth, gr, gg, gb, ga}, a1[7] = {ox[j], oy[j], -depth, gr, gg, gb, ga}, b0[7] = {ox[i] + nx[i] * R, oy[i] + ny[i] * R, -depth, gr, gg, gb, 0}, b1[7] = {ox[j] + nx[j] * R, oy[j] + ny[j] * R, -depth, gr, gg, gb, 0};
+        ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
+    for (int i = 0; i < n; i++) { int j = (i + 1) % n; float sh = 0.55f + 0.35f * (nx[i] * Lx + ny[i] * Ly) * -1.0f; sh = clampf(0.35f + 0.3f * (1 - (nx[i] * Lx + ny[i] * Ly)), 0.3f, 0.95f);   /* the sides */
+        float a0[7] = {ox[i], oy[i], -depth, L->side[0] * sh, L->side[1] * sh, L->side[2] * sh, alpha}, a1[7] = {ox[j], oy[j], -depth, L->side[0] * sh, L->side[1] * sh, L->side[2] * sh, alpha};
+        float b0[7] = {ox[i], oy[i], 0, L->side[0] * sh * 1.2f, L->side[1] * sh * 1.2f, L->side[2] * sh * 1.2f, alpha}, b1[7] = {ox[j], oy[j], 0, L->side[0] * sh * 1.2f, L->side[1] * sh * 1.2f, L->side[2] * sh * 1.2f, alpha};
+        ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
+    for (int i = 0; i < n; i++) { int j = (i + 1) % n;   /* the bevelled rim: bright where it faces the light, darker away from it */
+        float si = clampf(0.78f + 0.42f * (nx[i] * Lx + ny[i] * Ly), 0.45f, 1.25f), sj = clampf(0.78f + 0.42f * (nx[j] * Lx + ny[j] * Ly), 0.45f, 1.25f);
+        float a0[7] = {ox[i], oy[i], 0, L->rim[0] * si, L->rim[1] * si, L->rim[2] * si, alpha}, a1[7] = {ox[j], oy[j], 0, L->rim[0] * sj, L->rim[1] * sj, L->rim[2] * sj, alpha};
+        float b0[7] = {ix[i], iy[i], 5, L->rim[0] * si * 0.85f, L->rim[1] * si * 0.85f, L->rim[2] * si * 0.85f, alpha}, b1[7] = {ix[j], iy[j], 5, L->rim[0] * sj * 0.85f, L->rim[1] * sj * 0.85f, L->rim[2] * sj * 0.85f, alpha};
+        ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
+    { float fy0 = y + bev, fh = h - 2 * bev; if (fh < 1) fh = 1;   /* the face: lighter at the top */
+      float cy = y + h / 2, t = (cy - fy0) / fh; float c0[7] = {x + w / 2, cy, 5, L->top[0] + (L->bot[0] - L->top[0]) * t, L->top[1] + (L->bot[1] - L->top[1]) * t, L->top[2] + (L->bot[2] - L->top[2]) * t, alpha};
+      for (int i = 0; i < n; i++) { int j = (i + 1) % n; float ti = clampf((iy[i] - fy0) / fh, 0, 1), tj = clampf((iy[j] - fy0) / fh, 0, 1);
+          float a0[7] = {ix[i], iy[i], 5, L->top[0] + (L->bot[0] - L->top[0]) * ti, L->top[1] + (L->bot[1] - L->top[1]) * ti, L->top[2] + (L->bot[2] - L->top[2]) * ti, alpha};
+          float a1[7] = {ix[j], iy[j], 5, L->top[0] + (L->bot[0] - L->top[0]) * tj, L->top[1] + (L->bot[1] - L->top[1]) * tj, L->top[2] + (L->bot[2] - L->top[2]) * tj, alpha};
+          ui_tri(c0, a0, a1); }
+      /* the gloss over the top half */
+      float gx0 = x + bev + 6, gx1 = x + w - bev - 6, gy0 = fy0 + 2, gy1 = fy0 + fh * 0.48f, ga = 0.2f * alpha;
+      if (gx1 > gx0) { float p0[7] = {gx0, gy0, 5.2f, 1, 1, 1, ga}, p1[7] = {gx1, gy0, 5.2f, 1, 1, 1, ga}, p2[7] = {gx1, gy1, 5.2f, 1, 1, 1, 0}, p3[7] = {gx0, gy1, 5.2f, 1, 1, 1, 0}; ui_tri(p0, p1, p2); ui_tri(p0, p2, p3); }
+      if (shine >= 0 && gx1 > gx0) {   /* a bright streak sliding across */
+          float bw = fminf(w * 0.18f, 70), sx = gx0 - bw * 2 + (gx1 - gx0 + bw * 3) * shine, k = 0.45f, fy1 = fy0 + fh;
+          float xs[4] = {sx, sx + bw, sx + bw + k * fh, sx + k * fh}, ys[4] = {fy0, fy0, fy1, fy1};
+          for (int q = 0; q < 4; q++) xs[q] = clampf(xs[q], gx0 - 4, gx1 + 4);
+          if (xs[1] > xs[0] + 1 || xs[2] > xs[3] + 1) { float m0 = (xs[0] + xs[1]) / 2, m1 = (xs[3] + xs[2]) / 2, sa = 0.38f * alpha;
+              float A[7] = {xs[0], ys[0], 5.4f, 1, 1, 1, 0}, B[7] = {m0, ys[0], 5.4f, 1, 1, 1, sa}, C[7] = {xs[1], ys[1], 5.4f, 1, 1, 1, 0}, D[7] = {xs[2], ys[2], 5.4f, 1, 1, 1, 0}, E[7] = {m1, ys[2], 5.4f, 1, 1, 1, sa}, F[7] = {xs[3], ys[3], 5.4f, 1, 1, 1, 0};
+              ui_tri(A, B, E); ui_tri(A, E, F); ui_tri(B, C, D); ui_tri(B, D, E); } } }
+}
+static void ui_zrun(uint32_t from, float z) { if (!g_ui3d) return; for (uint32_t i = from; i < g_b.n; i++) g_b.v[i].pz = z; }   /* lift a run of flat pieces (words) onto a plaque's face */
+static const UiLook UI_SEL  = {{0.24f, 0.4f, 0.82f}, {0.07f, 0.13f, 0.38f}, {1.0f, 0.93f, 0.6f}, {0.55f, 0.4f, 0.12f}};
+static Mat4 g_cardm[16]; static uint32_t g_card_face;
+/* a card on the character, kart or road screens: they flip in one after another; the chosen one lifts toward you,
+   grows a little and sways */
+static Mat4 card_xf(int i, float x, float y, float w, float h, int sel) {
+    float t = ui_ease((g_screen_t - 0.08f - i * 0.045f) / 0.45f), s2 = sel ? 1.0f : 0.0f, wob = g_time * 1.9f + i * 0.7f;
+    float lift = 55 * s2 - (1 - t) * 220, cx = x + w / 2, cy = y + h / 2;
+    Mat4 m = ui_xf(cx, cy, lift, 0.05f * s2 * sinf(wob) + 0.012f * (1 - s2) * sinf(wob * 0.7f), 0.08f * s2 * sinf(wob * 0.8f) + (1 - t) * 1.4f, 0, 1 + 0.045f * s2);
+    if (lift > 0) m = m4_mul(m4_translate((640 - cx) * lift / UI_EYE, (360 - cy) * lift / UI_EYE, 0), m);   /* lifting toward you also spreads a card out from the middle: keep it where it was */
+    return m; }
+static void card_face(float x, float y, float w, float h, int sel, int open) {   /* the card itself; what is drawn on it after this sits on its face */
+    ui_plaque(x, y, w, h, 16, 12, open ? (sel ? &UI_SEL : &UI_BLUE) : &UI_DIM, 0.98f, sel ? 0.75f + 0.25f * sinf(g_time * 4) : 0, sel ? fmodf(g_time * 0.45f, 1.5f) : -1); g_card_face = g_b.n; }
+static void ui_px(Vertex *v, uint32_t n, float z) { for (uint32_t i = 0; i < n; i++) { v[i].px = (v[i].px + 1.0f) * 640.0f; v[i].py = (1.0f - v[i].py) * 360.0f; v[i].pz = z; } }   /* a picture laid out flat, moved into screen pixels to ride on a card */
+static Mat4 ui_card_model(int i) { return m4_mul(g_ui_screen, g_cardm[i & 15]); }
+static void card_done(uint32_t mk, int i, float x, float y, float w, float h, int sel) { ui_zrun(g_card_face, 6); Mat4 m = card_xf(i, x, y, w, h, sel); ui_end(mk, &m); if (i < 16) g_cardm[i] = m; }
+static void panel(float x, float y, float w, float h) { ui_plaque(x, y, w, h, 18, 14, &UI_BLUE, 0.96f, 0, -1); }
 #define ROU_T 1.4f
 static uint8_t g_rou_seq[MAX_HUMANS][ROU_N + 1]; static float g_rou_land[MAX_HUMANS]; static int g_rou_last[MAX_HUMANS];
-static Mesh *m_rou[MAX_HUMANS][3];
+static Mesh *m_rou[MAX_HUMANS][8];
 static void rou_start(int p, int item) {
     static uint32_t seed = 12345; int prev = 0;
     for (int i = 0; i < ROU_N; i++) { int v; do { seed = seed * 1664525u + 1013904223u; v = 1 + (int)((seed >> 16) % (ITEM_COUNT - 1)); } while (v == prev || (i == ROU_N - 1 && v == item)); g_rou_seq[p][i] = (uint8_t)v; prev = v; }
@@ -1117,9 +1208,60 @@ static void icon_rect_3d(Batch *b, int item, float cx, float cy, float size, flo
     float y0 = iy > clip0 ? iy : clip0, y1 = iy + ih < clip1 ? iy + ih : clip1; if (y1 <= y0) return;
     batch_rect_uv(b, ix, y0, iw, y1 - y0, 0, (y0 - iy) / ih, 1, (y1 - iy) / ih, shade, shade, shade, 1);
 }
+/* (Sean: the item roulette was flat) a real 3D slot-machine drum: eight faces round a turning drum, seen in perspective
+   and tipped a little toward you, with gold bands at both ends; it spins up, slows and clicks onto your item, which then
+   flips out of the drum like a gold coin and keeps turning gently. Single-player screen; the split screens keep the
+   flat version. Corners are in screen pixels with z toward the viewer (gfx_camera_ui3d). */
+static void rv(Batch *b, Vec3 p, Vec3 n, float u, float v, float sh, float r, float g, float bl) { if (b->n >= b->cap) return; Vertex q = {p.x, p.y, p.z, n.x, n.y, n.z, u, v, r * sh, g * sh, bl * sh, 1}; b->v[b->n++] = q; }
+static Vec3 rot_y_about(Vec3 p, Vec3 c, float a) { float dx = p.x - c.x, dz = p.z - c.z, ca = cosf(a), sa = sinf(a); return v3(c.x + dx * ca + dz * sa, p.y, c.z - dx * sa + dz * ca); }
+static void draw_item_drum(int p, float x, float y, float size) {
+    Kart *k = &g_race.k[human_kart(p)]; Mat4 id = m4_identity(); if (!k->item) return;
+    float cx = x + size / 2, cy = y + size / 2, R = size * 0.62f, W = size * 0.86f; const int NF = 8; const float step = 6.2831853f / NF;
+    float tilt = 0.32f + 0.06f * sinf(g_time * 1.3f); Vec3 ctr = v3(cx, cy, -R);
+    gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); int mi = 0; Vertex vb[64]; Batch b;
+    if (g_proulette[p] > 0) {
+        float f = rou_phase(p); int i0 = (int)floorf(f);
+        /* the drum's body: dark wood-and-gold faces behind the pictures, and the gold end bands */
+        batch_init(&b, vb, 64);
+        for (int s2 = -1; s2 <= 1; s2 += 2) for (int q = 0; q < NF; q++) { float a0 = (q - fmodf(f, 1.0f)) * step - 0.5f * step, a1 = a0 + step; if (cosf(a0 + step * 0.5f) < -0.1f) continue;
+            Vec3 e0 = v3(cx + s2 * W * 0.5f, cy + sinf(a0) * R, -R + cosf(a0) * R), e1 = v3(cx + s2 * W * 0.5f, cy + sinf(a1) * R, -R + cosf(a1) * R);
+            Vec3 o0 = v3(e0.x + s2 * 6, cy + sinf(a0) * (R + 4), -R + cosf(a0) * (R + 4)), o1 = v3(e1.x + s2 * 6, cy + sinf(a1) * (R + 4), -R + cosf(a1) * (R + 4));
+            e0 = rot_y_about(e0, ctr, tilt); e1 = rot_y_about(e1, ctr, tilt); o0 = rot_y_about(o0, ctr, tilt); o1 = rot_y_about(o1, ctr, tilt);
+            float sh = 0.55f + 0.45f * fmaxf(cosf(a0 + step * 0.5f), 0); Vec3 n = v3(0, 0, 1);
+            rv(&b, e0, n, WHITE_U, WHITE_V, sh, 1, 0.8f, 0.3f); rv(&b, e1, n, WHITE_U, WHITE_V, sh, 1, 0.8f, 0.3f); rv(&b, o1, n, WHITE_U, WHITE_V, sh * 1.2f, 1, 0.88f, 0.45f);
+            rv(&b, e0, n, WHITE_U, WHITE_V, sh, 1, 0.8f, 0.3f); rv(&b, o1, n, WHITE_U, WHITE_V, sh * 1.2f, 1, 0.88f, 0.45f); rv(&b, o0, n, WHITE_U, WHITE_V, sh * 1.2f, 1, 0.88f, 0.45f); }
+        gfx_mesh_update(m_rou[p][mi], b.v, b.n); gfx_bind(tx_font); gfx_draw(m_rou[p][mi], &id, 1, 1, 1, 1); mi++;
+        /* the faces, back ones first */
+        int order[6], no = 0; for (int j = -2; j <= 3; j++) order[no++] = j;
+        for (int a = 0; a < no; a++) for (int c = a + 1; c < no; c++) { float ta = fabsf((i0 + order[a] - f) * step), tc = fabsf((i0 + order[c] - f) * step); if (tc > ta) { int t2 = order[a]; order[a] = order[c]; order[c] = t2; } }
+        for (int oi = 0; oi < no && mi < 8; oi++) { int idx = i0 + order[oi]; if (idx < 0 || idx > ROU_N) continue; int it = g_rou_seq[p][idx]; if (!tx_item[it]) continue;
+            float th = (idx - f) * step; if (cosf(th) < 0.05f) continue;
+            float a0 = th - step * 0.46f, a1 = th + step * 0.46f, asp = g_item_asp[it] > 0 ? g_item_asp[it] : 1, fw = W * 0.92f * (asp < 1 ? asp : 1);
+            Vec3 c[4] = {v3(cx - fw / 2, cy + sinf(a0) * R, -R + cosf(a0) * R), v3(cx + fw / 2, cy + sinf(a0) * R, -R + cosf(a0) * R), v3(cx + fw / 2, cy + sinf(a1) * R, -R + cosf(a1) * R), v3(cx - fw / 2, cy + sinf(a1) * R, -R + cosf(a1) * R)};
+            for (int q = 0; q < 4; q++) c[q] = rot_y_about(c[q], ctr, tilt);
+            float sh = 0.35f + 0.65f * cosf(th); batch_init(&b, vb, 64); Vec3 n = v3(0, 0, 1);
+            rv(&b, c[0], n, 0, 0, sh, 1, 1, 1); rv(&b, c[1], n, 1, 0, sh, 1, 1, 1); rv(&b, c[2], n, 1, 1, sh, 1, 1, 1); rv(&b, c[0], n, 0, 0, sh, 1, 1, 1); rv(&b, c[2], n, 1, 1, sh, 1, 1, 1); rv(&b, c[3], n, 0, 1, sh, 1, 1, 1);
+            gfx_mesh_update(m_rou[p][mi], b.v, b.n); gfx_bind(tx_item[it]); gfx_draw(m_rou[p][mi], &id, 1, 1, 1, 1); mi++; } }
+    else if (tx_item[k->item]) {   /* landed: a gold coin with the picture on it flips out and keeps turning */
+        float t = g_rou_land[p] < 99 ? g_rou_land[p] : 1, spin = t < 0.7f ? (1.0f - (1.0f - t / 0.7f) * (1.0f - t / 0.7f)) * 12.566f : 0.45f * sinf(g_time * 2.2f);
+        float pop = 1.0f + 0.22f * expf(-t * 6.0f) * cosf(t * 18.0f), bob = 2.5f * sinf(g_time * 3.0f) * (t > 0.7f), rr = size * 0.5f * pop, lift = 30 * expf(-t * 4.0f);
+        Vec3 cc = v3(cx, cy + bob, lift); batch_init(&b, vb, 64); Vec3 n = v3(0, 0, 1);
+        for (int q = 0; q < 16; q++) { float a0 = q * 6.2831853f / 16, a1 = (q + 1) * 6.2831853f / 16;   /* the gold coin behind the picture */
+            Vec3 p0 = rot_y_about(v3(cx + cosf(a0) * rr, cc.y + sinf(a0) * rr, -3 + lift), cc, spin), p1 = rot_y_about(v3(cx + cosf(a1) * rr, cc.y + sinf(a1) * rr, -3 + lift), cc, spin);
+            float sh = 0.75f + 0.25f * sinf(a0 - 2.4f); rv(&b, rot_y_about(v3(cx, cc.y, -3 + lift), cc, spin), n, WHITE_U, WHITE_V, 1.05f, 1, 0.82f, 0.32f); rv(&b, p0, n, WHITE_U, WHITE_V, sh, 1, 0.78f, 0.28f); rv(&b, p1, n, WHITE_U, WHITE_V, sh, 1, 0.78f, 0.28f); }
+        gfx_mesh_update(m_rou[p][mi], b.v, b.n); gfx_bind(tx_font); gfx_draw(m_rou[p][mi], &id, 1, 1, 1, 1); mi++;
+        float asp = g_item_asp[k->item] > 0 ? g_item_asp[k->item] : 1, iw = size * 0.72f * pop * (asp >= 1 ? 1 : asp), ih = size * 0.72f * pop / (asp >= 1 ? asp : 1);
+        Vec3 c[4] = {v3(cx - iw / 2, cc.y - ih / 2, lift), v3(cx + iw / 2, cc.y - ih / 2, lift), v3(cx + iw / 2, cc.y + ih / 2, lift), v3(cx - iw / 2, cc.y + ih / 2, lift)};
+        for (int q = 0; q < 4; q++) c[q] = rot_y_about(c[q], cc, spin);
+        float sh = 0.55f + 0.45f * fabsf(cosf(spin)); batch_init(&b, vb, 64);
+        rv(&b, c[0], n, 0, 0, sh, 1, 1, 1); rv(&b, c[1], n, 1, 0, sh, 1, 1, 1); rv(&b, c[2], n, 1, 1, sh, 1, 1, 1); rv(&b, c[0], n, 0, 0, sh, 1, 1, 1); rv(&b, c[2], n, 1, 1, sh, 1, 1, 1); rv(&b, c[3], n, 0, 1, sh, 1, 1, 1);
+        gfx_mesh_update(m_rou[p][mi], b.v, b.n); gfx_bind(tx_item[k->item]); gfx_draw(m_rou[p][mi], &id, 1, 1, 1, 1); }
+    gfx_camera_2d();
+}
 static void draw_item_window(int p, float x, float y, float size) {   /* the pictures in the window (the frame is in the HUD batch) */
     Kart *k = &g_race.k[human_kart(p)]; Mat4 id = m4_identity(); if (!k->item) return;
-    for (int j = 0; j < 3; j++) if (!m_rou[p][j]) m_rou[p][j] = gfx_mesh_dynamic(6);
+    for (int j = 0; j < 8; j++) if (!m_rou[p][j]) m_rou[p][j] = gfx_mesh_dynamic(64);
+    if (g_nplayers <= 1) { draw_item_drum(p, x, y, size); return; }
     float cx = x + size / 2, cy = y + size / 2;
     if (g_proulette[p] > 0) {   /* a drum turning toward you: each picture rolls in from the top, full size facing you, and away under the bottom */
         float f = rou_phase(p); int i0 = (int)f; float fr = f - i0; const float step = 0.75f, R = size * 0.62f;
@@ -1136,13 +1278,13 @@ static void draw_item_window(int p, float x, float y, float size) {   /* the pic
 }
 static void hud_item_window(int p, float x, float y, float size, int text_below) {   /* the frame and the name */
     Kart *k = &g_race.k[human_kart(p)];
-    batch_rect(&g_b, x - 4, y - 4, size + 8, size + 8, 1, 0.82f, 0.35f, 0.95f);
-    batch_rect(&g_b, x, y, size, size, 0.05f, 0.08f, 0.22f, 0.88f);
-    batch_rect(&g_b, x, y, size, size * 0.12f, 1, 1, 1, 0.08f);
+    if (g_ui3d) ui_plaque(x - 8, y - 8, size + 16, size + 16, 16, 12, &UI_BLUE, 0.95f, g_proulette[p] > 0 ? 0.6f + 0.4f * sinf(g_time * 14) : 0.25f, g_proulette[p] > 0 ? fmodf(g_time * 1.6f, 1.4f) : -1);
+    else { batch_rect(&g_b, x - 4, y - 4, size + 8, size + 8, 1, 0.82f, 0.35f, 0.95f); batch_rect(&g_b, x, y, size, size, 0.05f, 0.08f, 0.22f, 0.88f); batch_rect(&g_b, x, y, size, size * 0.12f, 1, 1, 1, 0.08f); }
     if (!k->item) { const char *h = "ZL"; batch_text(&g_b, h, x + size / 2 - text_width(h, size * 0.22f) / 2, y + size / 2 - size * 0.11f, size * 0.22f, 0.6f, 0.7f, 0.9f, 0.6f); return; }
-    if (g_proulette[p] > 0) {   /* the curve of the drum: darker toward the top and bottom edges, a glint across the middle */
+    if (g_proulette[p] > 0 && !g_ui3d) {   /* the curve of the drum: darker toward the top and bottom edges, a glint across the middle */
         for (int i = 0; i < 6; i++) { float a = 0.5f * (1.0f - i / 6.0f), hh = size * 0.06f; batch_rect(&g_b, x, y + i * hh, size, hh, 0, 0, 0, a); batch_rect(&g_b, x, y + size - (i + 1) * hh, size, hh, 0, 0, 0, a); }
         batch_rect(&g_b, x, y + size * 0.47f, size, size * 0.06f, 1, 1, 1, 0.07f); return; }
+    if (g_proulette[p] > 0) return;
     const char *nm = item_name(k->item); float fs = size * 0.15f; if (fs < 11) fs = 11;
     if (text_below) { if (text_width(nm, fs) > size * 1.9f) fs *= 0.8f; batch_text(&g_b, nm, x + size / 2 - text_width(nm, fs) / 2, y + size + 10, fs, 1, 0.9f, 0.4f, 1);
         if (g_rou_land[p] < 3.0f) { const char *v = item_verse(k->item); batch_text(&g_b, v, x + size / 2 - text_width(v, fs * 0.72f) / 2, y + size + 14 + fs, fs * 0.72f, 0.8f, 0.85f, 1, clampf(3.0f - g_rou_land[p], 0, 1)); } }
@@ -1431,7 +1573,8 @@ int game_init(int status) {
             if (!tx_item[i]) { tx_item[i] = make_icon(i); g_item_sq[i] = 1; g_item_asp[i] = 1.0f; } }
         for (int c = 0; c < NCHARS; c++) for (int e = 0; e < VO_COUNT; e++) { char vn[64]; snprintf(vn, sizeof vn, "voice_%s_%s", pn[c] + 9, VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn);
             if (g_voice[c][e] < 0) { snprintf(vn, sizeof vn, "voice_%s", VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn); } }
-        { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(16384);
+        { if (!g_gol3d.ok) anim3d_load(&g_gol3d, "goliath");
+          int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(16384);
           w = 2; h = 3; tx_bearer = asset_texture("char_shieldbearer", 0, &w, &h); if (tx_bearer) g_bearer_aspect = (float)w / (float)h; else { tx_bearer = make_tex(PW, PH, 0, 0, px_shieldbearer); g_bearer_aspect = (float)PW / (float)PH; } m_bearer = gfx_mesh_dynamic(6); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
         for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
@@ -1519,95 +1662,6 @@ static const char *place_name(int p) { static const char *n[] = {"", "1ST", "2ND
 static void fmt_time(char *buf, size_t n, float t) { snprintf(buf, n, "%d:%02d.%02d", (int)(t / 60), (int)t % 60, (int)(t * 100) % 100); }
 
 // ------------------------------------------------------------------ menu drawing helpers (blue panels, gold frames)
-/* ---- the 3D menus (Sean: the menus were plain and retro) ----
-   Menu pieces are thick bevelled plaques - a deep blue or gold face with a gloss on top, a lit gold rim, sides you see
-   when they tilt, and a soft shadow - that can lift toward you, tilt and turn. Everything in the menu batch is laid out
-   in the usual 1280 x 720 screen, with z (in pixels, toward the viewer) kept in the vertex; ui_end() turns a run of
-   vertices by a matrix in screen pixels, and the whole batch is drawn through gfx_camera_ui3d(). Only the main TV and
-   GamePad passes do this (g_ui3d); anywhere else the same calls draw flat. */
-#define UI_EYE 1100.0f
-static int g_ui3d = 0; static uint32_t g_ui_conv = 0; static Mat4 g_ui_screen; static int g_mi = 0;
-static float ui_ease(float t) { t = clampf(t, 0, 1); return 1 - (1 - t) * (1 - t) * (1 - t); }
-static void ui_flush(void) {   /* everything not yet moved into screen pixels goes there now, flat */
-    if (!g_ui3d) return; for (uint32_t i = g_ui_conv; i < g_b.n; i++) { Vertex *v = &g_b.v[i]; v->px = (v->px + 1.0f) * 640.0f; v->py = (1.0f - v->py) * 360.0f; } g_ui_conv = g_b.n; }
-static uint32_t ui_begin(void) { ui_flush(); return g_b.n; }
-static void ui_end(uint32_t mark, const Mat4 *m) {
-    if (!g_ui3d) return; ui_flush();
-    for (uint32_t i = mark; i < g_b.n; i++) { Vertex *v = &g_b.v[i]; float x = v->px, y = v->py, z = v->pz;
-        v->px = m->m[0] * x + m->m[4] * y + m->m[8] * z + m->m[12]; v->py = m->m[1] * x + m->m[5] * y + m->m[9] * z + m->m[13]; v->pz = m->m[2] * x + m->m[6] * y + m->m[10] * z + m->m[14]; } }
-static Mat4 ui_xf(float cx, float cy, float lift, float rx, float ry, float rz, float s) {   /* about the point (cx, cy) on the screen: scale, turn, then lift toward the viewer */
-    Mat4 m = m4_translate(-cx, -cy, 0); m = m4_mul(m4_scale(s, s, s), m); m = m4_mul(m4_rotate_z(rz), m); m = m4_mul(m4_rotate_x(rx), m); m = m4_mul(m4_rotate_y(ry), m);
-    return m4_mul(m4_translate(cx, cy, lift), m); }
-static void ui_v(float x, float y, float z, float r, float g, float b, float a) {   /* one corner, in screen pixels */
-    if (g_b.n >= g_b.cap) return; Vertex v = {x / 640.0f - 1.0f, 1.0f - y / 360.0f, g_ui3d ? z : 0, 0, 0, 1, WHITE_U, WHITE_V, r, g, b, a}; g_b.v[g_b.n++] = v; }
-static void ui_tri(const float *p0, const float *p1, const float *p2) {   /* x, y, z, r, g, b, a each */
-    if (g_b.n + 3 > g_b.cap) return; ui_v(p0[0], p0[1], p0[2], p0[3], p0[4], p0[5], p0[6]); ui_v(p1[0], p1[1], p1[2], p1[3], p1[4], p1[5], p1[6]); ui_v(p2[0], p2[1], p2[2], p2[3], p2[4], p2[5], p2[6]); }
-static int ui_round(float x, float y, float w, float h, float r, float *ox, float *oy, float *nx, float *ny) {   /* a rounded rectangle's outline, clockwise from the top left; with each point's outward direction */
-    int n = 0; static const float cxs[4] = {0, 1, 1, 0}, cys[4] = {0, 0, 1, 1}; r = fminf(r, fminf(w, h) * 0.5f);
-    for (int c = 0; c < 4; c++) { float ccx = x + (cxs[c] ? w - r : r), ccy = y + (cys[c] ? h - r : r), a0 = 3.14159265f + c * 1.5707963f;
-        for (int k = 0; k <= 4; k++) { float a = a0 + k * 1.5707963f / 4; ox[n] = ccx + cosf(a) * r; oy[n] = ccy + sinf(a) * r; nx[n] = cosf(a); ny[n] = sinf(a); n++; } }
-    return n; }
-typedef struct { float top[3], bot[3], rim[3], side[3]; } UiLook;
-static const UiLook UI_BLUE = {{0.16f, 0.27f, 0.62f}, {0.05f, 0.09f, 0.27f}, {0.95f, 0.76f, 0.32f}, {0.42f, 0.3f, 0.1f}};
-static const UiLook UI_GOLD = {{1.0f, 0.93f, 0.6f}, {0.92f, 0.6f, 0.16f}, {1.0f, 0.97f, 0.82f}, {0.55f, 0.36f, 0.08f}};
-static const UiLook UI_DIM  = {{0.18f, 0.2f, 0.3f}, {0.07f, 0.08f, 0.14f}, {0.55f, 0.58f, 0.66f}, {0.22f, 0.23f, 0.28f}};
-/* a plaque: shadow, glow (0..1), sides going back 'depth', a lit bevelled rim, a graded face, a gloss, and a shine that
-   sweeps across when 'shine' >= 0 (its place, 0..1) */
-static void ui_plaque(float x, float y, float w, float h, float rad, float depth, const UiLook *L, float alpha, float glow, float shine) {
-    float ox[20], oy[20], nx[20], ny[20], ix[20], iy[20]; int n = ui_round(x, y, w, h, rad, ox, oy, nx, ny); float bev = fminf(7.0f, fminf(w, h) * 0.12f);
-    { float tx[20], ty[20], tnx[20], tny[20]; ui_round(x + bev, y + bev, w - 2 * bev, h - 2 * bev, fmaxf(rad - bev, 2.0f), tx, ty, tnx, tny); for (int i = 0; i < n; i++) { ix[i] = tx[i]; iy[i] = ty[i]; } }
-    const float Lx = -0.55f, Ly = -0.8f;   /* the light comes from the top left */
-    for (int i = 0; i < n; i++) { int j = (i + 1) % n;   /* soft shadow below and to the right */
-        float a0[7] = {ox[i] + 7, oy[i] + 11, -depth - 1, 0, 0, 0.1f, 0.42f * alpha}, a1[7] = {ox[j] + 7, oy[j] + 11, -depth - 1, 0, 0, 0.1f, 0.42f * alpha};
-        float b0[7] = {ox[i] + 7 + nx[i] * 16, oy[i] + 11 + ny[i] * 16, -depth - 1, 0, 0, 0.1f, 0}, b1[7] = {ox[j] + 7 + nx[j] * 16, oy[j] + 11 + ny[j] * 16, -depth - 1, 0, 0, 0.1f, 0};
-        float c0[7] = {x + w / 2 + 7, y + h / 2 + 11, -depth - 1, 0, 0, 0.1f, 0.42f * alpha};
-        ui_tri(c0, a0, a1); ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
-    if (glow > 0.01f) for (int i = 0; i < n; i++) { int j = (i + 1) % n; float gr = 1.0f, gg = 0.85f, gb = 0.4f, ga = 0.6f * glow * alpha, R = 26 + 6 * glow;
-        float a0[7] = {ox[i], oy[i], -depth, gr, gg, gb, ga}, a1[7] = {ox[j], oy[j], -depth, gr, gg, gb, ga}, b0[7] = {ox[i] + nx[i] * R, oy[i] + ny[i] * R, -depth, gr, gg, gb, 0}, b1[7] = {ox[j] + nx[j] * R, oy[j] + ny[j] * R, -depth, gr, gg, gb, 0};
-        ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
-    for (int i = 0; i < n; i++) { int j = (i + 1) % n; float sh = 0.55f + 0.35f * (nx[i] * Lx + ny[i] * Ly) * -1.0f; sh = clampf(0.35f + 0.3f * (1 - (nx[i] * Lx + ny[i] * Ly)), 0.3f, 0.95f);   /* the sides */
-        float a0[7] = {ox[i], oy[i], -depth, L->side[0] * sh, L->side[1] * sh, L->side[2] * sh, alpha}, a1[7] = {ox[j], oy[j], -depth, L->side[0] * sh, L->side[1] * sh, L->side[2] * sh, alpha};
-        float b0[7] = {ox[i], oy[i], 0, L->side[0] * sh * 1.2f, L->side[1] * sh * 1.2f, L->side[2] * sh * 1.2f, alpha}, b1[7] = {ox[j], oy[j], 0, L->side[0] * sh * 1.2f, L->side[1] * sh * 1.2f, L->side[2] * sh * 1.2f, alpha};
-        ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
-    for (int i = 0; i < n; i++) { int j = (i + 1) % n;   /* the bevelled rim: bright where it faces the light, darker away from it */
-        float si = clampf(0.78f + 0.42f * (nx[i] * Lx + ny[i] * Ly), 0.45f, 1.25f), sj = clampf(0.78f + 0.42f * (nx[j] * Lx + ny[j] * Ly), 0.45f, 1.25f);
-        float a0[7] = {ox[i], oy[i], 0, L->rim[0] * si, L->rim[1] * si, L->rim[2] * si, alpha}, a1[7] = {ox[j], oy[j], 0, L->rim[0] * sj, L->rim[1] * sj, L->rim[2] * sj, alpha};
-        float b0[7] = {ix[i], iy[i], 5, L->rim[0] * si * 0.85f, L->rim[1] * si * 0.85f, L->rim[2] * si * 0.85f, alpha}, b1[7] = {ix[j], iy[j], 5, L->rim[0] * sj * 0.85f, L->rim[1] * sj * 0.85f, L->rim[2] * sj * 0.85f, alpha};
-        ui_tri(a0, b0, b1); ui_tri(a0, b1, a1); }
-    { float fy0 = y + bev, fh = h - 2 * bev; if (fh < 1) fh = 1;   /* the face: lighter at the top */
-      float cy = y + h / 2, t = (cy - fy0) / fh; float c0[7] = {x + w / 2, cy, 5, L->top[0] + (L->bot[0] - L->top[0]) * t, L->top[1] + (L->bot[1] - L->top[1]) * t, L->top[2] + (L->bot[2] - L->top[2]) * t, alpha};
-      for (int i = 0; i < n; i++) { int j = (i + 1) % n; float ti = clampf((iy[i] - fy0) / fh, 0, 1), tj = clampf((iy[j] - fy0) / fh, 0, 1);
-          float a0[7] = {ix[i], iy[i], 5, L->top[0] + (L->bot[0] - L->top[0]) * ti, L->top[1] + (L->bot[1] - L->top[1]) * ti, L->top[2] + (L->bot[2] - L->top[2]) * ti, alpha};
-          float a1[7] = {ix[j], iy[j], 5, L->top[0] + (L->bot[0] - L->top[0]) * tj, L->top[1] + (L->bot[1] - L->top[1]) * tj, L->top[2] + (L->bot[2] - L->top[2]) * tj, alpha};
-          ui_tri(c0, a0, a1); }
-      /* the gloss over the top half */
-      float gx0 = x + bev + 6, gx1 = x + w - bev - 6, gy0 = fy0 + 2, gy1 = fy0 + fh * 0.48f, ga = 0.2f * alpha;
-      if (gx1 > gx0) { float p0[7] = {gx0, gy0, 5.2f, 1, 1, 1, ga}, p1[7] = {gx1, gy0, 5.2f, 1, 1, 1, ga}, p2[7] = {gx1, gy1, 5.2f, 1, 1, 1, 0}, p3[7] = {gx0, gy1, 5.2f, 1, 1, 1, 0}; ui_tri(p0, p1, p2); ui_tri(p0, p2, p3); }
-      if (shine >= 0 && gx1 > gx0) {   /* a bright streak sliding across */
-          float bw = fminf(w * 0.18f, 70), sx = gx0 - bw * 2 + (gx1 - gx0 + bw * 3) * shine, k = 0.45f, fy1 = fy0 + fh;
-          float xs[4] = {sx, sx + bw, sx + bw + k * fh, sx + k * fh}, ys[4] = {fy0, fy0, fy1, fy1};
-          for (int q = 0; q < 4; q++) xs[q] = clampf(xs[q], gx0 - 4, gx1 + 4);
-          if (xs[1] > xs[0] + 1 || xs[2] > xs[3] + 1) { float m0 = (xs[0] + xs[1]) / 2, m1 = (xs[3] + xs[2]) / 2, sa = 0.38f * alpha;
-              float A[7] = {xs[0], ys[0], 5.4f, 1, 1, 1, 0}, B[7] = {m0, ys[0], 5.4f, 1, 1, 1, sa}, C[7] = {xs[1], ys[1], 5.4f, 1, 1, 1, 0}, D[7] = {xs[2], ys[2], 5.4f, 1, 1, 1, 0}, E[7] = {m1, ys[2], 5.4f, 1, 1, 1, sa}, F[7] = {xs[3], ys[3], 5.4f, 1, 1, 1, 0};
-              ui_tri(A, B, E); ui_tri(A, E, F); ui_tri(B, C, D); ui_tri(B, D, E); } } }
-}
-static void ui_zrun(uint32_t from, float z) { if (!g_ui3d) return; for (uint32_t i = from; i < g_b.n; i++) g_b.v[i].pz = z; }   /* lift a run of flat pieces (words) onto a plaque's face */
-static const UiLook UI_SEL  = {{0.24f, 0.4f, 0.82f}, {0.07f, 0.13f, 0.38f}, {1.0f, 0.93f, 0.6f}, {0.55f, 0.4f, 0.12f}};
-static Mat4 g_cardm[16]; static uint32_t g_card_face;
-/* a card on the character, kart or road screens: they flip in one after another; the chosen one lifts toward you,
-   grows a little and sways */
-static Mat4 card_xf(int i, float x, float y, float w, float h, int sel) {
-    float t = ui_ease((g_screen_t - 0.08f - i * 0.045f) / 0.45f), s2 = sel ? 1.0f : 0.0f, wob = g_time * 1.9f + i * 0.7f;
-    float lift = 55 * s2 - (1 - t) * 220, cx = x + w / 2, cy = y + h / 2;
-    Mat4 m = ui_xf(cx, cy, lift, 0.05f * s2 * sinf(wob) + 0.012f * (1 - s2) * sinf(wob * 0.7f), 0.08f * s2 * sinf(wob * 0.8f) + (1 - t) * 1.4f, 0, 1 + 0.045f * s2);
-    if (lift > 0) m = m4_mul(m4_translate((640 - cx) * lift / UI_EYE, (360 - cy) * lift / UI_EYE, 0), m);   /* lifting toward you also spreads a card out from the middle: keep it where it was */
-    return m; }
-static void card_face(float x, float y, float w, float h, int sel, int open) {   /* the card itself; what is drawn on it after this sits on its face */
-    ui_plaque(x, y, w, h, 16, 12, open ? (sel ? &UI_SEL : &UI_BLUE) : &UI_DIM, 0.98f, sel ? 0.75f + 0.25f * sinf(g_time * 4) : 0, sel ? fmodf(g_time * 0.45f, 1.5f) : -1); g_card_face = g_b.n; }
-static void ui_px(Vertex *v, uint32_t n, float z) { for (uint32_t i = 0; i < n; i++) { v[i].px = (v[i].px + 1.0f) * 640.0f; v[i].py = (1.0f - v[i].py) * 360.0f; v[i].pz = z; } }   /* a picture laid out flat, moved into screen pixels to ride on a card */
-static Mat4 ui_card_model(int i) { return m4_mul(g_ui_screen, g_cardm[i & 15]); }
-static void card_done(uint32_t mk, int i, float x, float y, float w, float h, int sel) { ui_zrun(g_card_face, 6); Mat4 m = card_xf(i, x, y, w, h, sel); ui_end(mk, &m); if (i < 16) g_cardm[i] = m; }
-static void panel(float x, float y, float w, float h) { ui_plaque(x, y, w, h, 18, 14, &UI_BLUE, 0.96f, 0, -1); }
 static void checker_band(float y, float h) {
     for (float x = 0; x < 1280; x += h) { int c = ((int)(x / h)) & 1; batch_rect(&g_b, x, y, h, h, c ? 0.95f : 0.1f, c ? 0.95f : 0.1f, c ? 0.95f : 0.1f, 0.9f); }
 }
@@ -1672,7 +1726,7 @@ static void hud_gamepad(void) {     /* the GamePad shows the big map and the sta
     if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; batch_rect(&g_b, mx + (b->gx - map_x0) * sc - 20, mz - (b->gz - map_z0) * sc - 20, 40, 40, 0.9f, 0.2f, 0.15f, 1); batch_text(&g_b, "G", mx + (b->gx - map_x0) * sc - 8, mz - (b->gz - map_z0) * sc - 10, 20, 1, 1, 1, 1); }
     /* standings down the right side */
     batch_text(&g_b, g_mode == MODE_BATTLE ? "THE FIGHT" : "STANDINGS", 800, 80, 24, 1, 0.85f, 0.3f, 1);
-    if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; snprintf(buf, sizeof buf, "GOLIATH HIT %d OF %d", b->hits_on_goliath, BATTLE_WIN_HITS); batch_text(&g_b, buf, 800, 130, 20, 1, 1, 1, 1);
+    if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; snprintf(buf, sizeof buf, b->gstate == GOL_DAZED ? "FINAL SHOT - HIS FOREHEAD!" : "HEAD HITS %d OF %d", b->hits_on_goliath, battle_need(b)); batch_text(&g_b, buf, 800, 130, 20, 1, 1, 1, 1);
         snprintf(buf, sizeof buf, "DAVID HIT %d OF %d", b->hits_on_david, BATTLE_LIVES); batch_text(&g_b, buf, 800, 165, 20, 1, 1, 1, 1); snprintf(buf, sizeof buf, "STONES x%d", b->stones_held); batch_text(&g_b, buf, 800, 200, 20, 1, 0.9f, 0.5f, 1); }
     else for (int p = 0; p < r->nk; p++) { int i = r->order[p]; const Character *c = &CHARACTERS[r->character[i]]; float y = 125 + p * 42; int hp = race_human_index(r, i), me = hp >= 0;
         if (me) batch_rect(&g_b, 790, y - 5, 460, 36, PLAYER_COL[hp][0], PLAYER_COL[hp][1], PLAYER_COL[hp][2], 0.25f);
@@ -2158,7 +2212,8 @@ static void hud_battle(void) {
     if (b->stones_held == 0 && b->race.state == RACE_RUNNING && fmodf(g_time, 1.0f) < 0.7f) batch_text(&g_b, "GET A STONE FROM THE BROOK!", 40, 124, 18, 1, 0.85f, 0.3f, 1);
     else if (b->stones_held > 0 && b->race.state == RACE_RUNNING) batch_text(&g_b, "ZL: SLING", 40, 124, 18, 0.8f, 0.9f, 1, 1);
     batch_text(&g_b, "GOLIATH", 1240 - text_width("GOLIATH", 22), 30, 22, 1, 1, 1, 1);
-    for (int i = 0; i < BATTLE_WIN_HITS; i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < BATTLE_WIN_HITS - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
+    for (int i = 0; i < battle_need(b); i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < battle_need(b) - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
+    if (b->gstate == GOL_DAZED) text_c("HE IS REELING - SLING AT HIS FOREHEAD!", 96, 22, 1, 0.9f, 0.3f, 0.6f + 0.4f * sinf(g_time * 8));
     { char tb[32]; fmt_time(tb, sizeof tb, BATTLE_TIME_LIMIT - b->race.race_t > 0 ? BATTLE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
     if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); text_c("HIS SHIELD-BEARER GUARDS HIS FRONT AS HE WALKS: SLING FROM THE SIDE, OR WHEN HE STOPS", 204, 15, 1, 0.9f, 0.5f, 1); }
     if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
@@ -2177,7 +2232,7 @@ static void hud_battle_results(void) {
     Battle *b = &g_battle; char buf[64];
     panel(290, 150, 700, 400);
     text_c(b->won ? "GIANT SLAYER!" : "GOLIATH WINS", 175, 44, 1, 0.85f, 0.3f, 1);
-    snprintf(buf, sizeof buf, "HITS ON GOLIATH: %d OF %d", b->hits_on_goliath, BATTLE_WIN_HITS); text_c(buf, 260, 24, 1, 1, 1, 1);
+    snprintf(buf, sizeof buf, "HEAD HITS ON GOLIATH: %d OF %d", b->hits_on_goliath, battle_need(b)); text_c(buf, 260, 24, 1, 1, 1, 1);
     snprintf(buf, sizeof buf, "HITS ON DAVID: %d OF %d", b->hits_on_david, BATTLE_LIVES); text_c(buf, 300, 24, 1, 1, 1, 1);
     if (b->blocks) { snprintf(buf, sizeof buf, "STONES THE SHIELD-BEARER CAUGHT: %d", b->blocks); text_c(buf, 370, 18, 0.8f, 0.9f, 1, 1); }
     { char tb[32]; fmt_time(tb, sizeof tb, b->race.race_t); snprintf(buf, sizeof buf, "TIME %s", tb); text_c(buf, 340, 24, 1, 1, 1, 1); }
@@ -2916,11 +2971,40 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
               static Mesh *m_stoneglow = NULL; if (!m_stoneglow) m_stoneglow = gfx_mesh_dynamic(BATTLE_STONES * 12);
               gfx_mesh_update(m_stoneglow, g_b.v, g_b.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_stoneglow, &id, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); }
             for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *ms = &b->stone[i]; if (!ms->alive) continue; Mat4 m = m4_mul(m4_translate(ms->x, ms->y, ms->z), m4_scale(0.9f, 0.9f, 0.9f)); gfx_draw(m_pebble, &m, 0.55f, 0.52f, 0.5f, 1); }
-            for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *ms = &b->spear[i]; if (!ms->alive) continue;
-                Mat4 m = m4_mul(m4_translate(ms->x, ms->y, ms->z), m4_mul(m4_rotate_y(atan2f(ms->vx, ms->vz)), m4_scale(0.12f, 0.12f, 2.2f))); gfx_draw(m_cube, &m, 0.55f, 0.35f, 0.2f, 1);
-                Mat4 m2 = m4_mul(m4_translate(ms->x + ms->vx / 30.0f * 1.5f, ms->y, ms->z + ms->vz / 30.0f * 1.5f), m4_scale(0.25f, 0.25f, 0.25f)); gfx_draw(m_cube, &m2, 0.8f, 0.8f, 0.85f, 1); }
+            if (!m_spear3d) {   /* a real spear: a long wooden shaft, a leather grip, a broad bronze head and a bronze butt-spike, pointing down +z */
+                batch_clear(&g_b); const int NS = 8;
+                for (int q = 0; q < NS; q++) { float a0 = q * 6.2831853f / NS, a1 = (q + 1) * 6.2831853f / NS, am = (a0 + a1) / 2; float rr = 0.07f;
+                    for (int seg = 0; seg < 3; seg++) { float z0 = seg == 0 ? -2.3f : (seg == 1 ? -0.6f : 0.0f), z1 = seg == 0 ? -0.6f : (seg == 1 ? 0.0f : 1.9f), cr = seg == 1 ? 0.35f : 0.55f, cg = seg == 1 ? 0.22f : 0.38f, cb = seg == 1 ? 0.15f : 0.22f;
+                        batch_quad4(&g_b, v3(cosf(a0) * rr, sinf(a0) * rr, z0), v3(cosf(a1) * rr, sinf(a1) * rr, z0), v3(cosf(a1) * rr, sinf(a1) * rr, z1), v3(cosf(a0) * rr, sinf(a0) * rr, z1), v3(cosf(am), sinf(am), 0), 0, 0, 1, 1, cr, cg, cb, 1); }
+                    float hr = 0.24f; Vec3 tip = v3(0, 0, 2.9f), b0 = v3(cosf(a0) * hr * (q & 1 ? 0.35f : 1.0f), sinf(a0) * hr * 0.25f, 1.9f), b1 = v3(cosf(a1) * hr * (q & 1 ? 1.0f : 0.35f), sinf(a1) * hr * 0.25f, 1.9f);
+                    Vertex tv[3] = {{tip.x, tip.y, tip.z, cosf(am), sinf(am), 0.3f, 0, 0, 0.95f, 0.72f, 0.35f, 1}, {b1.x, b1.y, b1.z, cosf(am), sinf(am), 0.3f, 0, 0, 0.85f, 0.6f, 0.28f, 1}, {b0.x, b0.y, b0.z, cosf(am), sinf(am), 0.3f, 0, 0, 0.85f, 0.6f, 0.28f, 1}};
+                    for (int k2 = 0; k2 < 3; k2++) if (g_b.n < g_b.cap) g_b.v[g_b.n++] = tv[k2];
+                    Vertex sv2[3] = {{0, 0, -2.6f, cosf(am), sinf(am), -0.3f, 0, 0, 0.8f, 0.58f, 0.28f, 1}, {cosf(a0) * 0.09f, sinf(a0) * 0.09f, -2.3f, cosf(am), sinf(am), 0, 0, 0, 0.8f, 0.58f, 0.28f, 1}, {cosf(a1) * 0.09f, sinf(a1) * 0.09f, -2.3f, cosf(am), sinf(am), 0, 0, 0, 0.8f, 0.58f, 0.28f, 1}};
+                    for (int k2 = 0; k2 < 3; k2++) if (g_b.n < g_b.cap) g_b.v[g_b.n++] = sv2[k2]; }
+                m_spear3d = gfx_mesh_static(g_b.v, g_b.n); }
+            for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *ms = &b->spear[i]; if (!ms->alive) continue;   /* flying point first along its arc, turning a little as it goes */
+                float hv = sqrtf(ms->vx * ms->vx + ms->vz * ms->vz) + 1e-3f, pitch = -atan2f(ms->vy, hv);
+                Mat4 m = m4_mul(m4_translate(ms->x, ms->y, ms->z), m4_mul(m4_rotate_y(atan2f(ms->vx, ms->vz)), m4_mul(m4_rotate_x(pitch), m4_rotate_z(g_time * 6 + i))));
+                gfx_bind(NULL); gfx_draw_ex(m_spear3d, &m, 1, 1, 1, 1, 0.6f, 0, 0, 0); }
+            if (g_gol3d.ok) {   /* Goliath in 3D, really moving: walking, charging head down, roaring, the over-the-shoulder spear throw,
+                                   reeling when struck, holding his head when dazed, and falling on his face (1 Samuel 17:49) */
+                const char *cn = "walk"; float ct = b->gstate_t;
+                switch (b->gstate) { case GOL_STALK: cn = "walk"; ct = b->gstate_t * 1.6f; break; case GOL_CHARGE: cn = "run"; ct = b->gstate_t * 1.2f; break; case GOL_WINDUP: cn = "roar"; ct = 0.6f + b->gstate_t * 2.5f; break;
+                    case GOL_THROW: { int ci = anim3d_clip(&g_gol3d, "throw"); float d = ci >= 0 ? g_gol3d.clip[ci].dur : 4.3f; cn = "throw"; ct = b->gstate_t / 0.9f * d * 0.6f; } break;
+                    case GOL_STUNNED: cn = "hit"; ct = b->gstate_t * 1.8f; break; case GOL_DAZED: cn = "daze"; break; case GOL_DOWN: cn = "fall"; ct = b->gstate_t * 1.1f; break; }
+                Mat4 gm = m4_mul(m4_translate(b->gx, b->gy - 0.05f, b->gz), m4_rotate_y(b->gyaw));
+                float tint = b->gstate == GOL_STUNNED ? 0.75f + 0.25f * sinf(g_time * 40) : 1.0f;
+                gfx_state(ST_DEPTH | ST_DEPTH_WRITE); anim3d_draw(&g_gol3d, anim3d_clip(&g_gol3d, cn), ct, &gm, tint, tint, tint, 1); gfx_bind(NULL);
+                if (b->gstate == GOL_DAZED) {   /* stars circling his head */
+                    batch_clear(&g_b); for (int k = 0; k < 5; k++) { float a2 = g_time * 3 + k * 1.2566f; Vec3 sp = v3(b->gx + cosf(a2) * 1.1f, b->gy + battle_head_y(b) + 0.8f + 0.15f * sinf(g_time * 5 + k), b->gz + sinf(a2) * 1.1f);
+                        batch_quad(&g_b, sp, v3(ax.x * 0.28f, 0, ax.z * 0.28f), v3(0, 0.28f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 0.9f, 0.3f, 1); }
+                    static Mesh *m_stars = NULL; if (!m_stars) m_stars = gfx_mesh_dynamic(30); gfx_mesh_update(m_stars, g_b.v, g_b.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_stars, &id, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); }
+                if (tx_bearer && b->gstate != GOL_DOWN) {   /* the shield-bearer walks before him */
+                    gfx_state(ST_CUTOUT); float bx = b->gx + sinf(b->sb_yaw) * 3.2f, bz = b->gz + cosf(b->sb_yaw) * 3.2f; TrackHit bh; track_locate(&g_track, bx, bz, -1, &bh); float bhg = 4.2f, bhw = bhg * 0.5f * g_bearer_aspect;
+                    batch_clear(&g_b); batch_quad(&g_b, v3(bx, bh.height + bhg * 0.5f, bz), v3(ax.x * bhw, 0, ax.z * bhw), v3(0, bhg * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
+                    gfx_mesh_update(m_bearer, g_b.v, g_b.n); gfx_bind(tx_bearer); gfx_draw(m_bearer, &id, sr, sg, sb, 1); gfx_state(ST_SOLID); gfx_bind(NULL); } }
             /* Goliath himself: a giant standing picture, leaning into his charge, shaking when stunned */
-            if (tx_goliath) { gfx_state(ST_CUTOUT); TrackHit h; track_locate(&g_track, b->gx, b->gz, -1, &h);
+            else if (tx_goliath) { gfx_state(ST_CUTOUT); TrackHit h; track_locate(&g_track, b->gx, b->gz, -1, &h);
                 float hgt = 7.5f, hw = hgt * 0.5f * g_goliath_aspect; float shake = b->gstate == GOL_STUNNED ? sinf(g_time * 40) * 0.3f : 0.0f;
                 float lean = b->gstate == GOL_CHARGE ? 0.25f : (b->gstate == GOL_WINDUP ? -0.15f : 0.0f); float fx = sinf(b->gyaw), fz = cosf(b->gyaw);
                 Vec3 c = v3(b->gx + shake + fx * lean * hgt * 0.3f, h.height + hgt * 0.5f * (b->gstate == GOL_DOWN ? 0.3f : 1.0f), b->gz + fz * lean * hgt * 0.3f);
@@ -2976,7 +3060,7 @@ static void hud_battle_split(int p, float vw, float vh) {   /* one David's corne
     { char tag[8]; snprintf(tag, sizeof tag, "P%d", p + 1); float tw = text_width(tag, 18 * sc) + 12; batch_rect(&g_b, vw / 2 - tw / 2, 8, tw, 24 * sc, PLAYER_COL[p][0], PLAYER_COL[p][1], PLAYER_COL[p][2], 0.9f); batch_text(&g_b, tag, vw / 2 - text_width(tag, 18 * sc) / 2, 11, 18 * sc, 1, 1, 1, 1); }
     for (int i = 0; i < BATTLE_LIVES; i++) batch_rect(&g_b, 16 + i * 26 * sc, 14, 20 * sc, 18 * sc, i < BATTLE_LIVES - b->dhits[d] ? 0.95f : 0.25f, 0.2f, 0.25f, 1);
     snprintf(buf, sizeof buf, "STONES x%d", b->dstones[d]); batch_text(&g_b, buf, 16, 40 * sc, 18 * sc, 0.95f, 0.95f, 0.85f, 1);
-    snprintf(buf, sizeof buf, "GOLIATH %d/%d", b->hits_on_goliath, BATTLE_WIN_HITS); batch_text(&g_b, buf, vw - 16 - text_width(buf, 18 * sc), 14, 18 * sc, 1, 0.85f, 0.4f, 1);
+    snprintf(buf, sizeof buf, b->gstate == GOL_DAZED ? "FINAL SHOT!" : "GOLIATH %d/%d", b->hits_on_goliath, battle_need(b)); batch_text(&g_b, buf, vw - 16 - text_width(buf, 18 * sc), 14, 18 * sc, 1, 0.85f, 0.4f, 1);
     { int left = (int)fmaxf(0.0f, BATTLE_TIME_LIMIT - b->race.race_t); snprintf(buf, sizeof buf, "%d:%02d", left / 60, left % 60); batch_text(&g_b, buf, vw - 16 - text_width(buf, 16 * sc), 40 * sc, 16 * sc, 1, 1, 1, 1); }
     if (battle_out(b, d)) text_c_in("OUT - CHEER THEM ON!", vw, vh * 0.45f, 24 * sc, 1, 0.5f, 0.4f, 1);
     else if (b->race.state == RACE_RUNNING) { const char *h = b->dstones[d] ? "ZL: SLING" : "GET A STONE FROM THE BROOK!"; batch_text(&g_b, h, 16, vh - 30 * sc, 15 * sc, 1, 0.9f, 0.5f, (b->dstones[d] || fmodf(g_time, 1.0f) < 0.7f) ? 1.0f : 0.0f); }
@@ -3353,10 +3437,14 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case BEV_EMPTY: snprintf(g_msg, sizeof g_msg, "NO STONES!"); snprintf(g_msg2, sizeof g_msg2, "DRIVE TO THE GLOWING STONES IN THE BROOK"); g_msg_t = 1.4f; sfx_play(SFX_WRONG_WAY, 0.6f, 0); break;
                 case BEV_STONE_THROWN: sfx_play(SFX_THROW, 1, 0); break;
                 case BEV_SHIELD: snprintf(g_msg, sizeof g_msg, "THE SHIELD-BEARER!"); snprintf(g_msg2, sizeof g_msg2, "HIT HIM FROM THE SIDE - 1 SAMUEL 17:41"); g_msg_t = 1.2f; sfx_play(SFX_BLOCK, 1, 0); break;
-                case BEV_GOLIATH_HIT: snprintf(g_msg, sizeof g_msg, "HIT!"); g_msg_t = 0.8f; sfx_play(SFX_HIT, 1, 0); add_dust(v3(g_battle.gx, 2, g_battle.gz), 3, 3); break;
+                case BEV_GOLIATH_HIT: snprintf(g_msg, sizeof g_msg, "RIGHT ON HIS HEAD!"); snprintf(g_msg2, sizeof g_msg2, "%d OF %d", g_battle.hits_on_goliath, battle_need(&g_battle)); g_msg_t = 0.9f; sfx_play(SFX_HIT, 1, 0); sfx_play(SFX_BUMP, 0.8f, 0); add_dust(v3(g_battle.gx, g_battle.gy + battle_head_y(&g_battle), g_battle.gz), 2, 2); break;
+                case BEV_ARMOUR: snprintf(g_msg, sizeof g_msg, "CLANG!"); snprintf(g_msg2, sizeof g_msg2, "HIS ARMOUR - AIM FOR HIS HEAD"); g_msg_t = 0.9f; sfx_play(SFX_BLOCK, 0.9f, 0); break;
+                case BEV_DAZED: snprintf(g_msg, sizeof g_msg, "HE IS REELING!"); snprintf(g_msg2, sizeof g_msg2, "ONE STONE TO HIS FOREHEAD - NOW!"); g_msg_t = 2.5f; sfx_play(SFX_SHOUT, 0.8f, 0); platform_rumble(0.6f, 0.3f); break;
+                case BEV_RECOVER: snprintf(g_msg, sizeof g_msg, "HE SHOOK IT OFF!"); g_msg_t = 1.5f; break;
+                case BEV_FOREHEAD: snprintf(g_msg2, sizeof g_msg2, "THE STONE SUNK INTO HIS FOREHEAD - 1 SAMUEL 17:49"); g_slowmo = 1.6f; g_shake = fmaxf(g_shake, 1.0f); platform_rumble(1.0f, 0.6f); sfx_play(SFX_CRUMBLE, 1, 0); break;
                 case BEV_DAVID_HIT: snprintf(g_msg, sizeof g_msg, "OUCH!"); g_msg_t = 0.8f; sfx_play(SFX_HIT, 1, 0); platform_rumble(1.0f, 0.45f); break;
                 case BEV_SPEAR: sfx_play(SFX_THROW, 0.7f, 0); break;
-                case BEV_ROAR: sfx_play(SFX_SHOFAR, 0.6f, 0); break;
+                case BEV_ROAR: sfx_play(SFX_WHALE_ROAR, 0.7f, 0); break;   /* a giant's roar */
                 case BEV_CHARGE: snprintf(g_msg, sizeof g_msg, "HE CHARGES!"); g_msg_t = 1.0f; sfx_play(SFX_FIRE, 0.7f, 0); break;
                 case BEV_WIN: snprintf(g_msg, sizeof g_msg, "GIANT SLAYER!"); g_msg_t = 3.0f; sfx_play(SFX_WIN, 1, 0); break;
                 case BEV_STEP: { float ddx = g_battle.gx - r->k[0].x, ddz = g_battle.gz - r->k[0].z, dd = sqrtf(ddx * ddx + ddz * ddz); g_shake = fmaxf(g_shake, clampf(1.2f - dd / 50.0f, 0.1f, 1.0f) * (g_battle.gstate == GOL_CHARGE ? 0.5f : 0.3f)); sfx_play(SFX_BUMP, clampf(1.5f - dd / 60.0f, 0.2f, 1.0f), 0); platform_rumble(clampf(1.2f - dd / 50.0f, 0.1f, 0.8f), 0.15f); } break;

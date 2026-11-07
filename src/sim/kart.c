@@ -5,7 +5,7 @@
 #define BASE_ACCEL 13.0f
 #define BRAKE 28.0f
 #define COAST 3.0f
-#define OFFROAD_MUL 0.55f
+#define OFFROAD_MUL 0.5f
 #define GRAVITY 22.0f           /* a little stronger than earth; arcade jumps feel better */
 
 static float wrap_pi(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (a < -3.14159265f) a += 6.2831853f; return a; }
@@ -82,7 +82,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     if (!k->finished) { k->total_time += dt; if (k->lap >= 1) k->lap_time += dt; }
     float top = BASE_TOP * st->top_speed * k->boost_mul * (1.0f + 0.01f * (float)k->coins);
     int on_road = k->hit.on_road;
-    if (!on_road && !k->air && k->grace_t <= 0) top *= k->hit.on_field ? (t->water ? 0.6f : 0.75f) : OFFROAD_MUL;   /* the open land is firmer than the loose dirt shoulder; wading is slow */
+    if (!on_road && !k->air && k->grace_t <= 0) top *= k->hit.on_field ? (t->water ? 0.42f : 0.5f) : OFFROAD_MUL;   /* (Sean) off the road you really slow down: dirt, grass, sand; wading is slowest */
     if (k->carried_t > 0) { k->carried_t -= dt; k->boost_t = fmaxf(k->boost_t, 0.2f); k->boost_mul = fmaxf(k->boost_mul, 1.7f); k->shield = fmaxf(k->shield, 0.2f); top = BASE_TOP * st->top_speed * 1.7f; }
     if (k->grace_t > 0) { k->grace_t -= dt; top *= 1.12f; }
     if (k->slow_t > 0) top *= 0.62f;
@@ -132,7 +132,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     else if (in->brake) { if (k->speed > 0) k->speed -= BRAKE * dt; else k->speed -= accel * 0.5f * dt; }
     else { if (k->speed > 0) k->speed = fmaxf(0, k->speed - COAST * dt); else k->speed = fminf(0, k->speed + COAST * dt); }
     if (!k->air) k->speed -= GRAVITY * k->hit.slope * 0.35f * dt;                 /* hills slow you down and speed you up */
-    if (k->speed > top) k->speed = fmaxf(top, k->speed - (k->boost_t > 0 ? 4.0f : 18.0f) * dt);
+    if (k->speed > top) k->speed = fmaxf(top, k->speed - (k->boost_t > 0 ? (on_road ? 4.0f : 14.0f) : (on_road ? 18.0f : 30.0f)) * dt);   /* off the road the ground drags you down fast, even on a boost */
     if (k->speed < -8.0f * st->top_speed) k->speed = -8.0f * st->top_speed;
     if (k->drifting) k->speed = fmaxf(k->speed - 1.5f * dt, 0);
 
