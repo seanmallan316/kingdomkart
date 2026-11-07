@@ -33,7 +33,7 @@ void model_texture(int mat, uint32_t *o, int S) {
     for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) { float u = (float)x / S, v = (float)y / S, l = 1; uint32_t c = px(1, 1, 1, 1, 1);
         switch (mat) {
             case MAT_PLASTER: { l = 0.98f + 0.12f * (fbm(u, v, 3, 4, 1) - 0.5f) + 0.06f * (fbm(u, v, 32, 2, 2) - 0.5f); float blot = fbm(u, v, 5, 3, 3); if (blot > 0.64f) l -= (blot - 0.64f) * 0.4f;
-                float cr = fabsf(fbm(u, v, 6, 3, 4) - 0.5f); if (cr < 0.01f) l -= 0.12f; c = px(l, 1, 0.98f, 0.94f, 1); break; }
+                float cr = fabsf(fbm(u, v, 6, 3, 4) - 0.5f); if (cr < 0.008f) l -= 0.05f; c = px(l * 1.04f, 1, 0.98f, 0.94f, 1); break; }
             case MAT_STONE: { int row = y / (S / 4), cnt = (row & 1) ? 2 : 4, bw = S / cnt, off = (row * 37) % bw, xx = (x + off) % S, bi = xx / bw;
                 int mx = xx % bw, my = y % (S / 4); float edge = fminf(fminf(mx, bw - 1 - mx), fminf(my, S / 4 - 1 - my));
                 if (edge < 3) l = 0.55f + 0.1f * fbm(u, v, 16, 2, 5);   /* mortar */
@@ -414,6 +414,177 @@ static void m_well(float h, float w, float r, float g, float bl) { float R = w *
 static void m_wallseg(float h, float w, float r, float g, float bl) { mat(MAT_STONE); rbox(v3(0, h / 2, 0), w / 2, h / 2, 0.6f, 0.12f, r, g, bl);
     for (int k = -2; k <= 2; k++) rbox(v3(k * w / 5, h + 0.32f, 0), w / 14, 0.32f, 0.62f, 0.06f, r * 0.97f, g * 0.97f, bl * 0.97f); }
 
+
+/* ------------------------------------------------------------------ buildings, second pass (Sean: the houses looked like boxes) ------------------------------------------------------------------
+   Village houses of Judea: thick limestone or whitewashed walls on a stone footing, flat roofs of packed clay behind a low
+   parapet, roof beams poking through, arched doorways in a stone surround with painted doors, small arched windows with
+   wooden grilles and open shutters, an outside stair to the roof, sometimes an upper room, a vine arbor, cloth awnings,
+   clay jars and potted plants. Each feature is built flat against a wall (x along it, y up, z out of it) and then turned
+   into place, and the whole house is darkened toward the ground where light reaches less. */
+static uint32_t FB[MAT_N];
+static void feat_begin(void) { for (int m = 0; m < MAT_N; m++) FB[m] = O->b[m]->n; }
+static void feat_end(Vec3 at, float yaw) { float c = cosf(yaw), s = sinf(yaw);
+    for (int m = 0; m < MAT_N; m++) for (uint32_t i = FB[m]; i < O->b[m]->n; i++) { Vertex *v = &O->b[m]->v[i]; float x = v->px, z = v->pz, nx = v->nx, nz = v->nz;
+        v->px = at.x + x * c + z * s; v->pz = at.z - x * s + z * c; v->py += at.y; v->nx = nx * c + nz * s; v->nz = -nx * s + nz * c; } }
+static void arch_fill(float hw, float hh, float z, float r, float g, float b) {   /* an arch-topped shape facing +z, bottom at y = 0 */
+    float sy = fmaxf(hh - hw, 0.05f);
+    fquad(v3(-hw, 0, z), v3(hw, 0, z), v3(hw, sy, z), v3(-hw, sy, z), r, g, b);
+    for (int k = 0; k < 8; k++) { float a0 = 3.14159265f * k / 8, a1 = 3.14159265f * (k + 1) / 8;
+        ftri(v3(0, sy, z), v3(cosf(a0) * hw, sy + sinf(a0) * hw, z), v3(cosf(a1) * hw, sy + sinf(a1) * hw, z), r, g, b); } }
+static void arch_frame(float hw, float hh, float th, float r, float g, float b) {   /* a stone surround: jambs, a rounded arch moulding and a keystone */
+    float sy = fmaxf(hh - hw, 0.05f); Vec3 p[9]; float rr[9];
+    for (int k = 0; k <= 8; k++) { float a = 3.14159265f * k / 8; p[k] = v3(cosf(a) * (hw + th * 0.8f), sy + sinf(a) * (hw + th * 0.8f), th * 0.4f); rr[k] = th; }
+    tube(p, rr, 9, 4, r, g, b, 0);
+    for (int sd = -1; sd <= 1; sd += 2) cbox(v3(sd * (hw + th * 0.8f), sy * 0.5f, th * 0.3f), v3(th, sy * 0.5f, th * 0.75f), r, g, b);
+    cbox(v3(0, hh + th * 0.9f, th * 0.6f), v3(th * 1.1f, th * 1.4f, th), r * 1.05f, g * 1.05f, b * 1.05f); }
+static void f_door(float hw, float hh, const float *dc, const float *sc) {
+    mat(MAT_PLAIN); arch_fill(hw + 0.03f, hh + 0.03f, 0.012f, 0.05f, 0.04f, 0.035f);
+    mat(MAT_WOOD); US = 1.0f; arch_fill(hw - 0.03f, hh - 0.03f, 0.04f, dc[0], dc[1], dc[2]);
+    cbox(v3(0, (hh - hw) * 0.5f, 0.05f), v3(0.035f, (hh - hw) * 0.5f, 0.02f), dc[0] * 0.7f, dc[1] * 0.7f, dc[2] * 0.7f);   /* the two leaves meet */
+    mat(MAT_PLAIN); for (int sd = -1; sd <= 1; sd += 2) { for (int j = 0; j < 3; j++) cbox(v3(sd * hw * 0.5f, 0.35f + j * (hh - hw) * 0.38f, 0.06f), v3(0.035f, 0.035f, 0.025f), 0.16f, 0.14f, 0.12f);
+        cbox(v3(sd * 0.14f, (hh - hw) * 0.55f, 0.07f), v3(0.05f, 0.05f, 0.03f), 0.8f, 0.62f, 0.3f); }   /* iron studs and brass rings */
+    mat(MAT_STONE); arch_frame(hw, hh, 0.13f, sc[0], sc[1], sc[2]);
+    cbox(v3(0, 0.09f, 0.32f), v3(hw + 0.4f, 0.09f, 0.32f), sc[0] * 0.92f, sc[1] * 0.92f, sc[2] * 0.92f); }   /* the doorstep */
+static void f_window(float hw, float hh, const float *shc, const float *sc, int flowers) {
+    mat(MAT_PLAIN); arch_fill(hw, hh, 0.012f, 0.045f, 0.04f, 0.035f);
+    mat(MAT_WOOD); for (int k = -1; k <= 1; k++) cbox(v3(k * hw * 0.5f, hh * 0.45f, 0.035f), v3(0.022f, hh * 0.45f, 0.018f), 0.4f, 0.29f, 0.19f);   /* the wooden grille */
+    for (int j = 1; j <= 2; j++) cbox(v3(0, (hh - hw) * j / 2.5f, 0.04f), v3(hw, 0.022f, 0.018f), 0.4f, 0.29f, 0.19f);
+    for (int sd = -1; sd <= 1; sd += 2) cbox(v3(sd * (hw * 2.0f + 0.08f), (hh - hw * 0.4f) * 0.5f, 0.06f), v3(hw * 0.95f, (hh - hw * 0.4f) * 0.5f, 0.035f), shc[0], shc[1], shc[2]);   /* shutters folded open */
+    mat(MAT_STONE); cbox(v3(0, -0.05f, 0.1f), v3(hw + 0.2f, 0.07f, 0.15f), sc[0], sc[1], sc[2]);   /* the sill */
+    arch_frame(hw, hh, 0.08f, sc[0], sc[1], sc[2]);
+    if (flowers) { mat(MAT_WOOD); cbox(v3(0, -0.28f, 0.28f), v3(hw + 0.15f, 0.15f, 0.16f), 0.5f, 0.36f, 0.22f);
+        mat(MAT_LEAF); for (int k = 0; k < 4; k++) { float x = -hw + (k + 0.5f) * (hw * 2) / 4; blob(v3(x, -0.08f, 0.3f), 0.2f, 0.16f, 0.16f, 0.2f, 3, 5, 0.45f, 0.7f, 0.3f);
+            mat(MAT_PLAIN); blob(v3(x + 0.05f, 0.02f, 0.38f), 0.07f, 0.06f, 0.06f, 0.1f, 2, 4, k & 1 ? 0.95f : 0.9f, k & 1 ? 0.35f : 0.3f, k & 1 ? 0.45f : 0.25f); mat(MAT_LEAF); } } }
+static void f_awning(float hw, float y, float out, const float *c1, const float *c2) {   /* a striped cloth awning sagging between its poles */
+    enum { NS = 8, NO = 4 }; mat(MAT_CLOTH); Vec3 p[NS + 1][NO + 1];
+    for (int i = 0; i <= NS; i++) for (int j = 0; j <= NO; j++) { float tx = (float)i / NS, to = (float)j / NO, sag = sinf(tx * 3.14159265f) * 0.18f * to + sinf(to * 3.14159265f) * 0.08f;
+        p[i][j] = v3(-hw + tx * hw * 2, y - to * 0.55f - sag, 0.05f + to * out); }
+    for (int i = 0; i < NS; i++) { const float *c = (i & 1) ? c2 : c1;
+        for (int j = 0; j < NO; j++) { fquad(p[i][j], p[i + 1][j], p[i + 1][j + 1], p[i][j + 1], c[0], c[1], c[2]); { Vec3 o = v3(0, -0.03f, 0); fquad(vadd(p[i][j + 1], o), vadd(p[i + 1][j + 1], o), vadd(p[i + 1][j], o), vadd(p[i][j], o), c[0] * 0.75f, c[1] * 0.75f, c[2] * 0.75f); } }
+        Vec3 a = p[i][NO], b = p[i + 1][NO]; fquad(a, b, v3(b.x, b.y - 0.22f, b.z), v3(a.x, a.y - 0.22f, a.z), c[0] * 0.9f, c[1] * 0.9f, c[2] * 0.9f);   /* the hanging valance */
+        fquad(v3(a.x, a.y - 0.22f, a.z), v3(b.x, b.y - 0.22f, b.z), b, a, c[0] * 0.7f, c[1] * 0.7f, c[2] * 0.7f); }
+    mat(MAT_WOOD); for (int sd = -1; sd <= 1; sd += 2) tube2(v3(sd * hw, 0, out + 0.05f), v3(sd * hw, y - 0.5f, out + 0.05f), 0.06f, 0.05f, 6, 0.48f, 0.35f, 0.22f);
+    tube2(v3(-hw, y - 0.55f, out + 0.05f), v3(hw, y - 0.55f, out + 0.05f), 0.045f, 0.045f, 5, 0.48f, 0.35f, 0.22f); }
+static void jar2(float x, float z, float s, float r, float g, float b) { mat(MAT_PLAIN); Vec3 p[7] = {v3(x, 0, z), v3(x, s * 0.2f, z), v3(x, s * 0.55f, z), v3(x, s * 0.8f, z), v3(x, s * 0.9f, z), v3(x, s * 0.97f, z), v3(x, s, z)};
+    float rr[7] = {s * 0.16f, s * 0.3f, s * 0.36f, s * 0.24f, s * 0.13f, s * 0.15f, s * 0.13f}; tube(p, rr, 7, 10, r, g, b, 1); }
+static void potplant(float x, float z, float s) { jar2(x, z, s * 0.5f, 0.75f, 0.42f, 0.26f); mat(MAT_LEAF); blob(v3(x, s * 0.75f, z), s * 0.38f, s * 0.35f, s * 0.38f, 0.22f, 5, 8, 0.4f, 0.68f, 0.3f); }
+static void parapet(float x0, float x1, float z0, float z1, float y, float r, float g, float b, int merlons) {   /* a low wall round a flat roof */
+    float t = 0.16f, hgt = 0.5f, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, hx = (x1 - x0) / 2, hz = (z1 - z0) / 2;
+    mat(MAT_PLASTER); rbox(v3(cx, y + hgt / 2, z1 - t), hx, hgt / 2, t, 0.08f, r, g, b); rbox(v3(cx, y + hgt / 2, z0 + t), hx, hgt / 2, t, 0.08f, r, g, b);
+    rbox(v3(x0 + t, y + hgt / 2, cz), t, hgt / 2, hz - 2 * t, 0.08f, r, g, b); rbox(v3(x1 - t, y + hgt / 2, cz), t, hgt / 2, hz - 2 * t, 0.08f, r, g, b);
+    if (merlons) { int nx = (int)(hx / 0.7f); for (int k = 0; k <= nx; k++) { float x = x0 + 0.25f + (x1 - x0 - 0.5f) * k / nx; for (int sd = 0; sd < 2; sd++) rbox(v3(x, y + hgt + 0.18f, sd ? z1 - t : z0 + t), 0.2f, 0.18f, t, 0.07f, r, g, b); } }
+    mat(MAT_PLASTER); rbox(v3(cx, y + 0.03f, cz), hx - 0.1f, 0.04f, hz - 0.1f, 0.02f, 0.78f, 0.64f, 0.48f); }   /* the packed-clay roof */
+static void vigas(float x0, float x1, float zf, float y, int n) { mat(MAT_WOOD); for (int k = 0; k < n; k++) { float x = x0 + (x1 - x0) * (k + 0.5f) / n; tube2(v3(x, y, zf - 0.3f), v3(x, y - 0.02f, zf + 0.42f), 0.1f, 0.09f, 6, 0.46f, 0.33f, 0.21f); } }
+static void quoins(float x0, float x1, float z0, float z1, float y0, float y1, const float *sc) {   /* dressed stones up every corner, long and short in turn, and a moulded band under the roof */
+    mat(MAT_STONE); int n = (int)((y1 - y0) / 0.42f); if (n < 2) n = 2; float bh = (y1 - y0) / n;
+    for (int c = 0; c < 4; c++) { float x = c & 1 ? x1 : x0, z = c & 2 ? z1 : z0, sx = c & 1 ? -1.0f : 1.0f, sz = c & 2 ? -1.0f : 1.0f;
+        for (int k = 0; k < n; k++) { float y = y0 + bh * (k + 0.5f), sh = 0.94f + 0.08f * hsh(c, k, 5);   /* one stone a course, long on one face then the other */
+            if (k & 1) cbox(v3(x + sx * 0.24f, y, z - sz * 0.13f), v3(0.3f, bh / 2 - 0.02f, 0.2f), sc[0] * sh, sc[1] * sh, sc[2] * sh);
+            else cbox(v3(x - sx * 0.13f, y, z + sz * 0.24f), v3(0.2f, bh / 2 - 0.02f, 0.3f), sc[0] * sh, sc[1] * sh, sc[2] * sh); } }
+    float cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, hx = (x1 - x0) / 2, hz = (z1 - z0) / 2;
+    cbox(v3(cx, y1 - 0.06f, z1 + 0.02f), v3(hx + 0.1f, 0.09f, 0.08f), sc[0], sc[1], sc[2]); cbox(v3(cx, y1 - 0.06f, z0 - 0.02f), v3(hx + 0.1f, 0.09f, 0.08f), sc[0], sc[1], sc[2]);
+    cbox(v3(x1 + 0.02f, y1 - 0.06f, cz), v3(0.08f, 0.09f, hz + 0.1f), sc[0], sc[1], sc[2]); cbox(v3(x0 - 0.02f, y1 - 0.06f, cz), v3(0.08f, 0.09f, hz + 0.1f), sc[0], sc[1], sc[2]); }
+static void ao_pass(const uint32_t *n0, float y0, float span) {   /* darker toward the ground, where the walls see less sky */
+    for (int m = 0; m < MAT_N; m++) for (uint32_t i = n0[m]; i < O->b[m]->n; i++) { Vertex *v = &O->b[m]->v[i]; float t = clampf((v->py - y0) / span, 0, 1); t = t * t * (3 - 2 * t); float f = 0.66f + 0.34f * t; v->r *= f; v->g *= f; v->b *= f; } }
+
+static void m_bld(float h, float w, unsigned sd, float tr, float tg, float tb, int kind) {   /* kind 0 one-storey house, 1 two-storey house, 2 the inn */
+    static const float PAL[5][3] = {{0.98f, 0.96f, 0.91f}, {0.97f, 0.89f, 0.72f}, {0.95f, 0.83f, 0.62f}, {0.97f, 0.87f, 0.79f}, {0.93f, 0.9f, 0.82f}};
+    static const float DOOR[5][3] = {{0.2f, 0.42f, 0.7f}, {0.13f, 0.5f, 0.52f}, {0.55f, 0.3f, 0.17f}, {0.32f, 0.5f, 0.28f}, {0.62f, 0.2f, 0.16f}};
+    static const float AWN[4][2][3] = {{{0.85f, 0.2f, 0.16f}, {0.96f, 0.92f, 0.82f}}, {{0.18f, 0.38f, 0.75f}, {0.96f, 0.92f, 0.82f}}, {{0.2f, 0.55f, 0.35f}, {0.95f, 0.85f, 0.45f}}, {{0.6f, 0.2f, 0.45f}, {0.96f, 0.92f, 0.82f}}};
+    unsigned hs = sd * 2654435761u; const float *pc = PAL[(hs >> 3) % 5], *dc = DOOR[(hs >> 7) % 5], (*aw)[3] = AWN[(hs >> 11) % 4];
+    float wr = pc[0] * 0.8f + tr * 0.2f, wg = pc[1] * 0.8f + tg * 0.2f, wb = pc[2] * 0.8f + tb * 0.2f;   /* the walls, a little of the road's own stone */
+    float sc[3] = {0.84f * 0.75f + tr * 0.25f, 0.76f * 0.75f + tg * 0.25f, 0.6f * 0.75f + tb * 0.25f}, shc[3] = {dc[0] * 0.9f + 0.05f, dc[1] * 0.9f + 0.05f, dc[2] * 0.9f + 0.05f};
+    uint32_t n0[MAT_N]; for (int m = 0; m < MAT_N; m++) n0[m] = O->b[m]->n;
+    float d = w * (kind == 2 ? 0.75f : 0.82f), wh = kind == 0 ? fminf(h * 0.62f, 4.2f) : fminf(h * 0.5f, 3.8f), fh = 0.45f;   /* storey height, stone footing */
+    /* footing and the ground floor */
+    mat(MAT_STONE); rbox(v3(0, fh / 2, 0), w / 2 + 0.15f, fh / 2, d / 2 + 0.15f, 0.08f, sc[0] * 0.95f, sc[1] * 0.95f, sc[2] * 0.95f);
+    mat(MAT_PLASTER); rbox(v3(0, fh + wh / 2, 0), w / 2, wh / 2, d / 2, 0.32f, wr, wg, wb);
+    float top = fh + wh;
+    quoins(-w / 2, w / 2, -d / 2, d / 2, fh, top, sc);
+    /* the second storey: the whole house (inn) or an upper room on the back half of the roof */
+    float uw = kind == 2 ? w : w * 0.5f, ud = kind == 2 ? d : d * 0.5f, ux = kind == 2 ? 0 : -w * 0.2f, uz = kind == 2 ? 0 : -d * 0.22f, uh = wh * (kind == 2 ? 0.9f : 0.82f);
+    if (kind >= 1) { mat(MAT_PLASTER); rbox(v3(ux, top + uh / 2, uz), uw / 2 - (kind == 2 ? 0.12f : 0), uh / 2, ud / 2 - (kind == 2 ? 0.12f : 0), 0.3f, wr * 1.01f, wg * 1.01f, wb * 1.01f);
+        if (kind == 2) { mat(MAT_STONE); rbox(v3(0, top + 0.08f, 0), w / 2 + 0.12f, 0.1f, d / 2 + 0.12f, 0.04f, sc[0], sc[1], sc[2]); }   /* a string course between the floors */
+        quoins(ux - uw / 2 + (kind == 2 ? 0.12f : 0), ux + uw / 2 - (kind == 2 ? 0.12f : 0), uz - ud / 2 + (kind == 2 ? 0.12f : 0), uz + ud / 2 - (kind == 2 ? 0.12f : 0), top + 0.2f, top + uh, sc);
+        parapet(ux - uw / 2, ux + uw / 2, uz - ud / 2, uz + ud / 2, top + uh, wr, wg, wb, kind == 2);
+        vigas(ux - uw / 2 + 0.3f, ux + uw / 2 - 0.3f, uz + ud / 2, top + uh - 0.25f, (int)(uw / 0.9f)); }
+    if (kind != 2) { parapet(-w / 2, w / 2, -d / 2, d / 2, top, wr, wg, wb, 0); vigas(-w / 2 + 0.3f, w / 2 - 0.3f, d / 2, top - 0.25f, (int)(w / 0.85f)); }
+    else vigas(-w / 2 + 0.3f, w / 2 - 0.3f, d / 2, top - 0.2f, (int)(w / 0.85f));
+    /* the front: the inn has an arcade of arches, a house a doorway and windows */
+    if (kind == 2) { int na = w > 9 ? 4 : 3; float span = w * 0.86f;
+        for (int k = 0; k < na; k++) { float x = -span / 2 + span * (k + 0.5f) / na, aw2 = span / na * 0.36f;
+            feat_begin(); if (k == 1) f_door(aw2, wh * 0.78f, dc, sc); else { mat(MAT_PLAIN); arch_fill(aw2, wh * 0.78f, 0.012f, 0.06f, 0.05f, 0.045f); mat(MAT_STONE); arch_frame(aw2, wh * 0.78f, 0.14f, sc[0], sc[1], sc[2]);
+                mat(MAT_PLAIN); jar2(aw2 * 0.55f, 0.45f, 0.8f, 0.72f, 0.42f, 0.26f); }
+            feat_end(v3(x, fh, d / 2), 0); }
+        for (int k = 0; k < na; k++) { float x = -span / 2 + span * (k + 0.5f) / na; feat_begin(); f_window(0.32f, 0.95f, shc, sc, k & 1); feat_end(v3(x, top + uh * 0.35f, d / 2 - 0.1f), 0); }
+        for (int fl = 0; fl < 2; fl++) for (int sd2 = -1; sd2 <= 1; sd2 += 2) { float y = fl ? top + uh * 0.35f : fh + wh * 0.42f;   /* windows on the back and both ends, both floors */
+            feat_begin(); f_window(0.3f, 0.9f, shc, sc, fl); feat_end(v3(sd2 * w * 0.25f, y, -d / 2 + (fl ? 0.12f : 0)), 3.14159265f);
+            feat_begin(); f_window(0.3f, 0.9f, shc, sc, 0); feat_end(v3(sd2 * (w / 2 - (fl ? 0.12f : 0)), y, 0), sd2 * 1.5707963f); }
+        /* a wooden balcony along the upper floor */
+        mat(MAT_WOOD); rbox(v3(0, top + 0.12f, d / 2 + 0.55f), w * 0.4f, 0.08f, 0.55f, 0.03f, 0.5f, 0.36f, 0.22f);
+        for (int k = 0; k <= 12; k++) { float x = -w * 0.4f + w * 0.8f * k / 12; tube2(v3(x, top + 0.2f, d / 2 + 1.05f), v3(x, top + 1.0f, d / 2 + 1.05f), 0.035f, 0.035f, 4, 0.45f, 0.32f, 0.2f); }
+        tube2(v3(-w * 0.4f, top + 1.02f, d / 2 + 1.05f), v3(w * 0.4f, top + 1.02f, d / 2 + 1.05f), 0.06f, 0.06f, 5, 0.5f, 0.36f, 0.22f);
+        for (int sd = -1; sd <= 1; sd += 2) for (int j = 0; j < 2; j++) tube2(v3(sd * w * 0.38f, top - 0.4f, d / 2 + 0.05f), v3(sd * w * 0.38f, top + 0.05f, d / 2 + 1.0f), 0.06f, 0.05f, 5, 0.45f, 0.32f, 0.2f);
+        /* a small white dome on the roof, and a striped awning over one end */
+        mat(MAT_PLASTER); rbox(v3(w * 0.22f, top + uh + 0.5f, -d * 0.1f), 1.25f, 0.5f, 1.25f, 0.2f, wr, wg, wb); blob(v3(w * 0.22f, top + uh + 1.0f, -d * 0.1f), 1.2f, 1.15f, 1.2f, 0.0f, 8, 14, 0.98f, 0.97f, 0.94f);
+        feat_begin(); f_awning(w * 0.18f, wh * 0.92f, 1.8f, aw[0], aw[1]); feat_end(v3(w * 0.3f, fh, d / 2), 0);
+        mat(MAT_WOOD); rbox(v3(-w * 0.32f, 0.3f, d / 2 + 1.0f), 0.9f, 0.3f, 0.35f, 0.05f, 0.5f, 0.36f, 0.22f);   /* a bench outside */
+    } else {
+        float dx = ((hs >> 13) & 1) ? w * 0.18f : -w * 0.12f;
+        feat_begin(); f_door(fminf(0.62f, w * 0.08f), fminf(wh * 0.72f, 2.5f), dc, sc); feat_end(v3(dx, fh, d / 2), 0);
+        feat_begin(); f_window(0.3f, 0.85f, shc, sc, (hs >> 15) & 1); feat_end(v3(dx < 0 ? w * 0.26f : -w * 0.28f, fh + wh * 0.48f, d / 2), 0);
+        if (w > 7.5f) { feat_begin(); f_window(0.3f, 0.85f, shc, sc, 0); feat_end(v3(dx < 0 ? -w * 0.36f : w * 0.4f, fh + wh * 0.48f, d / 2), 0); }
+        for (int sd2 = -1; sd2 <= 1; sd2 += 2) { feat_begin(); f_window(0.28f, 0.8f, shc, sc, 0); feat_end(v3(sd2 * w / 2, fh + wh * 0.5f, d * 0.12f), sd2 * 1.5707963f); }   /* the side walls */
+        feat_begin(); f_door(0.55f, 2.1f, dc, sc); feat_end(v3(-dx * 0.5f, fh, -d / 2), 3.14159265f);   /* the back door */
+        for (int sd2 = -1; sd2 <= 1; sd2 += 2) { feat_begin(); f_window(0.28f, 0.8f, shc, sc, sd2 > 0); feat_end(v3(-dx * 0.5f + sd2 * w * 0.3f, fh + wh * 0.5f, -d / 2), 3.14159265f); }
+        if (kind == 1) { feat_begin(); f_window(0.28f, 0.8f, shc, sc, 1); feat_end(v3(ux, top + uh * 0.3f, uz + ud / 2), 0);
+            feat_begin(); f_door(0.45f, 1.9f, dc, sc); feat_end(v3(ux + uw / 2, top, uz + ud * 0.1f), 1.5707963f); }   /* the upper room's door onto the roof */
+        /* the outside stair to the roof, up the side wall from the front */
+        int right = (hs >> 17) & 1; float sx = right ? w / 2 + 0.55f : -w / 2 - 0.55f; int ns = 9;
+        mat(MAT_STONE); for (int k = 0; k < ns; k++) { float t = (k + 1.0f) / ns, y = top * t; rbox(v3(sx, y / 2, d / 2 - 0.5f - (d - 1.2f) * k / ns), 0.5f, y / 2, (d - 1.2f) / ns * 0.55f, 0.04f, sc[0] * 0.95f, sc[1] * 0.95f, sc[2] * 0.95f); }
+        mat(MAT_PLASTER); for (int k = 0; k < ns; k++) { float t = (k + 1.0f) / ns, y = top * t; rbox(v3(sx + (right ? 0.5f : -0.5f), y / 2 + 0.3f, d / 2 - 0.5f - (d - 1.2f) * k / ns), 0.1f, y / 2 + 0.3f, (d - 1.2f) / ns * 0.55f, 0.04f, wr, wg, wb); }   /* its low side wall */
+        /* the roof terrace: a vine arbor on poles (or drying washing) */
+        if ((hs >> 19) % 3 != 0) { float px0 = kind == 1 ? w * 0.05f : -w * 0.3f, px1 = w / 2 - 0.5f, pz0 = kind == 1 ? 0.0f : -d * 0.3f, pz1 = d / 2 - 0.5f;
+            mat(MAT_WOOD); for (int k = 0; k < 4; k++) { float x = k & 1 ? px1 : px0, z = k & 2 ? pz1 : pz0; tube2(v3(x, top, z), v3(x, top + 2.1f, z), 0.07f, 0.06f, 6, 0.45f, 0.33f, 0.21f); }
+            for (int k = 0; k < 5; k++) { float z = pz0 + (pz1 - pz0) * k / 4; tube2(v3(px0 - 0.2f, top + 2.12f, z), v3(px1 + 0.2f, top + 2.12f, z), 0.045f, 0.045f, 5, 0.45f, 0.33f, 0.21f); }
+            mat(MAT_LEAF); for (int k = 0; k < 5; k++) { float x = px0 + (px1 - px0) * (k + 0.5f) / 5; blob(v3(x, top + 2.3f, (pz0 + pz1) / 2), (px1 - px0) / 5 * 0.85f, 0.32f, (pz1 - pz0) / 2 + 0.2f, 0.28f, 4, 8, 0.38f, 0.62f, 0.26f); }
+            mat(MAT_PLAIN); for (int k = 0; k < 6; k++) { float x = px0 + (px1 - px0) * (k + 0.5f) / 6; blob(v3(x, top + 1.95f, pz0 + (pz1 - pz0) * ((k * 37) % 5) / 5.0f), 0.1f, 0.14f, 0.1f, 0.1f, 3, 6, 0.42f, 0.2f, 0.42f); } }   /* bunches of grapes */
+        else { mat(MAT_WOOD); tube2(v3(-w * 0.35f, top + 1.6f, d * 0.2f), v3(w * 0.35f, top + 1.6f, d * 0.2f), 0.02f, 0.02f, 3, 0.7f, 0.65f, 0.55f);
+            for (int sd2 = -1; sd2 <= 1; sd2 += 2) tube2(v3(sd2 * w * 0.35f, top, d * 0.2f), v3(sd2 * w * 0.35f, top + 1.7f, d * 0.2f), 0.05f, 0.05f, 5, 0.45f, 0.33f, 0.21f);
+            mat(MAT_CLOTH); for (int k = 0; k < 4; k++) { float x = -w * 0.28f + k * w * 0.18f; const float *c = aw[k & 1]; fquad(v3(x - 0.35f, top + 0.75f, d * 0.2f), v3(x + 0.35f, top + 0.75f, d * 0.2f), v3(x + 0.35f, top + 1.6f, d * 0.2f), v3(x - 0.35f, top + 1.6f, d * 0.2f), c[0], c[1], c[2]);
+                fquad(v3(x - 0.35f, top + 1.6f, d * 0.2f), v3(x + 0.35f, top + 1.6f, d * 0.2f), v3(x + 0.35f, top + 0.75f, d * 0.2f), v3(x - 0.35f, top + 0.75f, d * 0.2f), c[0] * 0.8f, c[1] * 0.8f, c[2] * 0.8f); } }
+        if ((hs >> 21) & 1) { feat_begin(); f_awning(w * 0.2f, wh * 0.85f, 1.5f, aw[0], aw[1]); feat_end(v3(dx < 0 ? w * 0.26f : -w * 0.28f, fh, d / 2), 0); }
+    }
+    /* things by the door */
+    jar2(-w * 0.42f, d / 2 + 0.45f, 0.85f, 0.76f, 0.44f, 0.27f); jar2(-w * 0.35f, d / 2 + 0.7f, 0.6f, 0.7f, 0.4f, 0.25f);
+    potplant(w * 0.42f, d / 2 + 0.5f, 1.1f); if ((hs >> 23) & 1) potplant(w * 0.05f - (kind == 2 ? 0 : w * 0.3f), d / 2 + 0.55f, 0.9f);
+    ao_pass(n0, 0.0f, 2.4f); }
+
+static void m_stall2(float h, float w, unsigned sd) {   /* a market stall: a cloth canopy on poles over a counter of baskets, rugs and jars */
+    static const float CL[4][3] = {{0.86f, 0.22f, 0.16f}, {0.2f, 0.4f, 0.78f}, {0.92f, 0.7f, 0.2f}, {0.25f, 0.58f, 0.38f}};
+    unsigned hs = sd * 2654435761u; const float *c1 = CL[(hs >> 5) % 4], cw[3] = {0.97f, 0.93f, 0.84f}; uint32_t n0[MAT_N]; for (int m = 0; m < MAT_N; m++) n0[m] = O->b[m]->n;
+    float W = fmaxf(w * 0.45f, 1.8f), D = 1.4f, H = fmaxf(h * 0.55f, 2.4f);
+    mat(MAT_WOOD); for (int k = 0; k < 4; k++) { float x = k & 1 ? W : -W, z = k & 2 ? D : -D; tube2(v3(x, 0, z), v3(x, H + (k & 2 ? 0 : 0.5f), z), 0.08f, 0.07f, 6, 0.48f, 0.35f, 0.22f); }
+    for (int k = 0; k < 2; k++) tube2(v3(-W, H + (k ? 0 : 0.5f), k ? D : -D), v3(W, H + (k ? 0 : 0.5f), k ? D : -D), 0.06f, 0.06f, 5, 0.48f, 0.35f, 0.22f);
+    /* the canopy: sloping front to back, sagging in the middle, striped */
+    enum { NX = 8, NZ = 4 }; Vec3 p[NX + 1][NZ + 1]; mat(MAT_CLOTH);
+    for (int i = 0; i <= NX; i++) for (int j = 0; j <= NZ; j++) { float tx = (float)i / NX, tz = (float)j / NZ; p[i][j] = v3(-W - 0.15f + tx * (W + 0.15f) * 2, H + 0.5f - tz * 0.5f + 0.05f - sinf(tx * 3.14159f) * sinf(tz * 3.14159f) * 0.22f, -D - 0.15f + tz * (D + 0.15f) * 2); }
+    for (int i = 0; i < NX; i++) { const float *c = (i & 1) ? cw : c1; for (int j = 0; j < NZ; j++) { fquad(p[i][j], p[i][j + 1], p[i + 1][j + 1], p[i + 1][j], c[0], c[1], c[2]); { Vec3 o = v3(0, -0.03f, 0); fquad(vadd(p[i + 1][j], o), vadd(p[i + 1][j + 1], o), vadd(p[i][j + 1], o), vadd(p[i][j], o), c[0] * 0.72f, c[1] * 0.72f, c[2] * 0.72f); } }
+        Vec3 a = p[i][NZ], b = p[i + 1][NZ]; fquad(a, b, v3(b.x, b.y - 0.3f, b.z), v3(a.x, a.y - 0.3f, a.z), c[0] * 0.9f, c[1] * 0.9f, c[2] * 0.9f); fquad(v3(a.x, a.y - 0.3f, a.z), v3(b.x, b.y - 0.3f, b.z), b, a, c[0] * 0.7f, c[1] * 0.7f, c[2] * 0.7f); }
+    /* the counter and its baskets of fruit, grain, bread and olives */
+    mat(MAT_WOOD); rbox(v3(0, 0.45f, D - 0.35f), W - 0.1f, 0.45f, 0.4f, 0.05f, 0.55f, 0.4f, 0.25f);
+    static const float FR[5][3] = {{1.0f, 0.55f, 0.1f}, {0.75f, 0.12f, 0.15f}, {0.45f, 0.5f, 0.2f}, {0.9f, 0.75f, 0.4f}, {0.55f, 0.25f, 0.45f}};
+    int nb = (int)(W / 0.6f); for (int k = 0; k < nb; k++) { float x = -W + 0.45f + (2 * W - 0.9f) * k / (nb > 1 ? nb - 1 : 1); const float *f = FR[(k + hs) % 5];
+        mat(MAT_THATCH); { Vec3 q[3] = {v3(x, 0.9f, D - 0.35f), v3(x, 1.02f, D - 0.35f), v3(x, 1.1f, D - 0.35f)}; float rr[3] = {0.2f, 0.26f, 0.28f}; tube(q, rr, 3, 10, 0.85f, 0.72f, 0.48f, 0); }
+        mat(MAT_PLAIN); for (int j = 0; j < 5; j++) { float a = j * 1.26f, rr2 = j ? 0.13f : 0; blob(v3(x + cosf(a) * rr2, 1.13f + (j ? 0 : 0.05f), D - 0.35f + sinf(a) * rr2), 0.09f, 0.09f, 0.09f, 0.05f, 3, 6, f[0], f[1], f[2]); } }
+    /* a rug hanging on the side, sacks and jars */
+    mat(MAT_CLOTH); for (int k = 0; k < 6; k++) { float y0 = 0.4f + k * (H - 0.6f) / 6, y1 = y0 + (H - 0.6f) / 6; const float *c = (k & 1) ? cw : CL[(hs >> 9) % 4];
+        fquad(v3(W + 0.1f, y0, -D + 0.2f), v3(W + 0.1f, y0, D - 0.2f), v3(W + 0.1f, y1, D - 0.2f), v3(W + 0.1f, y1, -D + 0.2f), c[0] * 0.95f, c[1] * 0.95f, c[2] * 0.95f);
+        fquad(v3(W + 0.08f, y1, -D + 0.2f), v3(W + 0.08f, y1, D - 0.2f), v3(W + 0.08f, y0, D - 0.2f), v3(W + 0.08f, y0, -D + 0.2f), c[0] * 0.7f, c[1] * 0.7f, c[2] * 0.7f); }
+    mat(MAT_CLOTH); for (int k = 0; k < 3; k++) blob(v3(-W + 0.4f + k * 0.55f, 0.38f, -D + 0.5f), 0.28f, 0.4f, 0.26f, 0.12f, 5, 8, 0.82f, 0.72f, 0.52f);
+    jar2(-W - 0.5f, D - 0.2f, 0.9f, 0.74f, 0.43f, 0.27f); jar2(-W - 0.3f, D + 0.35f, 0.65f, 0.7f, 0.4f, 0.25f);
+    ao_pass(n0, 0.0f, 1.6f); }
+
 static const char *const NAMES[] = {"#tree", "#olive", "#fruittree", "#treeoflife", "#palm", "#cypress", "#flowers", "#lily", "#fern", "#lantern", "#crystal", "#sheep", "#lamb",
     "#deer", "#lion", "#boat", "#net", "#priest", "#israelite", "#philistine", "#banner_israel", "#banner_philistine", "#cloud", "#cart", "#ark", "#tomb", "#crosses",
     "#stable", "#camp", "#stone", "#rubble", "#house1", "#house2", "#inn", "#stall", "#hut", "#tower", "#pillar", "#gpillar", "#tent", "#rock", "#well", "#wallseg"};
@@ -421,7 +592,7 @@ int model_known(const char *img) { for (unsigned i = 0; i < sizeof NAMES / sizeo
 int model_build(ModelOut *o, const char *img, float h, float w, unsigned seed, Vec3 at, float yaw, float tr, float tg, float tb) {
     O = o; g_seed = seed * 2654435761u + 12345u; rnd(); nosway(); FLUTES = 0; mat(MAT_PLAIN);
     uint32_t n0[MAT_N]; for (int m = 0; m < MAT_N; m++) n0[m] = o->b[m]->n;
-    for (int m = 0; m < MAT_N; m++) if (o->b[m]->n + 9000 > o->b[m]->cap) return -1;   /* no room: the caller empties the buckets first */
+    for (int m = 0; m < MAT_N; m++) if (o->b[m]->n + 13000 > o->b[m]->cap) return -1;   /* no room: the caller empties the buckets first */
     if (w < h * 0.6f) w = h * 0.6f;
     if (!strcmp(img, "#tree")) m_tree(h, 0); else if (!strcmp(img, "#olive")) m_tree(h, 1); else if (!strcmp(img, "#fruittree")) m_tree(h, 2); else if (!strcmp(img, "#treeoflife")) m_tree(h, 3);
     else if (!strcmp(img, "#palm")) m_palm(h); else if (!strcmp(img, "#cypress")) m_cypress(h);
@@ -435,7 +606,7 @@ int model_build(ModelOut *o, const char *img, float h, float w, unsigned seed, V
     else if (!strcmp(img, "#tomb")) m_tomb(h); else if (!strcmp(img, "#crosses")) m_crosses(h); else if (!strcmp(img, "#stable")) m_stable(h); else if (!strcmp(img, "#camp")) m_camp(h);
     else if (!strcmp(img, "#stone")) { mat(MAT_ROCK); blob(v3(0, h * 0.5f, 0), h * 0.5f, h * 0.5f, h * 0.5f, 0.05f, 9, 14, 0.7f, 0.66f, 0.58f); }
     else if (!strcmp(img, "#rubble")) m_rubble(h * 0.6f);
-    else if (!strcmp(img, "#house1") || !strcmp(img, "#house2")) m_house(h, w, seed, tr, tg, tb, 0); else if (!strcmp(img, "#inn")) m_house(h, w, seed | 1u, tr, tg, tb, 1); else if (!strcmp(img, "#stall")) m_house(h, w, seed, tr, tg, tb, 2);
+    else if (!strcmp(img, "#house1")) m_bld(h, w, seed, tr, tg, tb, 0); else if (!strcmp(img, "#house2")) m_bld(h, w, seed, tr, tg, tb, 1); else if (!strcmp(img, "#inn")) m_bld(h, w, seed, tr, tg, tb, 2); else if (!strcmp(img, "#stall")) m_stall2(h, w, seed);
     else if (!strcmp(img, "#hut")) m_hut(h, w, 1, 1, 1); else if (!strcmp(img, "#tower")) m_tower(h, w, tr, tg, tb);
     else if (!strcmp(img, "#pillar")) m_pillar(h, tr, tg, tb, tr > 0.96f); else if (!strcmp(img, "#gpillar")) m_pillar(h, 1.0f, 0.85f, 0.45f, 1);
     else if (!strcmp(img, "#tent")) m_tent(h, w); else if (!strcmp(img, "#rock")) m_rocks(h, w, 0.68f, 0.64f, 0.58f); else if (!strcmp(img, "#well")) m_well(h, w, tr, tg, tb); else if (!strcmp(img, "#wallseg")) m_wallseg(h, w, tr, tg, tb);

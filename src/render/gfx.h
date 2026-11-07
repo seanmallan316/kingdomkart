@@ -50,6 +50,7 @@ void gfx_shadow_none(void);
 Texture *gfx_shadow_texture(void);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */
 void gfx_set_time(float t);                                    /* the clock the wind runs on (trees, fronds, flags sway) */
 void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
+void gfx_camera_ui3d(float eye);                             /* the menus in 3D: vertices in screen pixels (x right, y down) with z toward the viewer */
 void gfx_camera_2d_virtual(float vw, float vh);               /* the same, with the 2D helpers' 1280 x 720 layout mapped onto a view of vw x vh pixels */
 void gfx_bind(Texture *t);
 void gfx_state(int flags);

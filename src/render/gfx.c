@@ -462,6 +462,19 @@ void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye) {
     g_ground[0] = ground.x; g_ground[1] = ground.y; g_ground[2] = ground.z; g_eye[0] = eye.x; g_eye[1] = eye.y; g_eye[2] = eye.z;
 }
 void gfx_camera_2d(void) { gfx_camera_2d_virtual(1280.0f, 720.0f); }
+/* the 3D menus: the 1280 x 720 layout as a plane facing a camera 'eye' pixels away, so a menu card can lift toward you,
+   tilt and turn in real perspective; anything left on the plane (z = 0) lands exactly where the 2D layout put it */
+void gfx_camera_ui3d(float eye) {
+    gfx_camera_2d_virtual(1280.0f, 720.0f);
+    FrameBlock fb2; Mat4 m; memset(&m, 0, sizeof m);
+    m.m[0] = eye / 640.0f; m.m[12] = -eye; m.m[5] = -eye / 360.0f; m.m[13] = eye; m.m[11] = -1.0f; m.m[15] = eye;
+    memcpy(fb2.viewproj, m.m, sizeof fb2.viewproj);
+    fb2.lightdir[0] = 0; fb2.lightdir[1] = 0; fb2.lightdir[2] = 1; fb2.lightdir[3] = 1.0f;
+    fb2.fog[0] = 0; fb2.fog[1] = 1; fb2.fog[2] = 0; fb2.fog[3] = 0;
+    for (int i = 0; i < 4; i++) { fb2.sky[i] = fb2.ground[i] = fb2.sun[i] = 1; fb2.eye[i] = 0; }
+    memset(fb2.shadowvp, 0, sizeof fb2.shadowvp); memset(fb2.shadowp, 0, sizeof fb2.shadowp);
+    g_framebuf = pool_upload(&fb2, sizeof fb2);
+}
 /* the 2D helpers lay out on a 1280 x 720 screen; in a split-screen view the virtual size is the view's own size in pixels, so text keeps its shape */
 void gfx_camera_2d_virtual(float vw, float vh) {
     FrameBlock fb2; Mat4 id = m4_identity();
