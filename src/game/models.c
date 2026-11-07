@@ -491,3 +491,15 @@ int model_jwall(Batch *b, float L, float H, float T, int rahab, unsigned seed) {
         cbox(v3(L * 0.1f, H + 1.8f, 0.02f), v3(0.4f, 0.5f, 0.03f), 0.1f, 0.08f, 0.08f);
         Vec3 p[6]; float rr[6]; for (int k = 0; k < 6; k++) { float t = k / 5.0f; p[k] = v3(L * 0.1f + sinf(t * 4) * 0.08f, H + 1.4f - t * (H * 0.4f + 0.4f), 0.08f); rr[k] = 0.05f; } tube(p, rr, 6, 5, 0.9f, 0.08f, 0.08f, 1); }   /* her window and the scarlet cord (Joshua 2:18) */
     return (int)b->n - n0; }
+
+/* the champion's cup, gold, about 1 tall, standing on y = 0: a round foot, a stem with a knot, a deep bowl with a lip,
+   two looping handles and a small cross on the front */
+int model_cup(Batch *b) {
+    ModelOut o; for (int m = 0; m < MAT_N; m++) o.b[m] = b; O = &o; nosway(); FLUTES = 0; mat(MAT_PLAIN); int n0 = (int)b->n;
+    const float gr = 1.0f, gg = 0.8f, gb = 0.32f;
+    { Vec3 p[12]; float rr[12]; const float ys[12] = {0, 0.03f, 0.08f, 0.12f, 0.3f, 0.34f, 0.38f, 0.48f, 0.62f, 0.78f, 0.92f, 0.95f}, rs[12] = {0.3f, 0.3f, 0.22f, 0.07f, 0.06f, 0.1f, 0.06f, 0.2f, 0.32f, 0.38f, 0.4f, 0.43f};
+      for (int k = 0; k < 12; k++) { p[k] = v3(0, ys[k], 0); rr[k] = rs[k]; } tube(p, rr, 12, 20, gr, gg, gb, 0); }
+    { Vec3 p[3] = {v3(0, 0.95f, 0), v3(0, 0.9f, 0), v3(0, 0.6f, 0)}; float rr[3] = {0.4f, 0.37f, 0.05f}; tube(p, rr, 3, 20, gr * 0.6f, gg * 0.6f, gb * 0.6f, 0); }   /* the inside of the bowl */
+    for (int sd = -1; sd <= 1; sd += 2) { Vec3 p[9]; float rr[9]; for (int k = 0; k < 9; k++) { float a = -1.3f + k * 2.6f / 8; p[k] = v3(sd * (0.36f + cosf(a) * 0.2f), 0.72f + sinf(a) * 0.17f, 0); rr[k] = 0.035f; } tube(p, rr, 9, 8, gr, gg, gb, 1); }
+    cbox(v3(0, 0.7f, 0.37f), v3(0.025f, 0.11f, 0.02f), 1, 0.95f, 0.75f); cbox(v3(0, 0.74f, 0.37f), v3(0.08f, 0.025f, 0.02f), 1, 0.95f, 0.75f);
+    return (int)b->n - n0; }

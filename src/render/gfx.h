@@ -40,6 +40,7 @@ float gfx_aspect(int drc);
 void gfx_viewport(int drc, float fx, float fy, float fw, float fh);   /* draw into part of the screen: fractions, origin top-left (split screen); gfx_view_begin resets it */
 
 void gfx_camera(const Mat4 *viewproj, Vec3 lightdir, float ambient, float fog_r, float fog_g, float fog_b, float fog_start, float fog_end);
+void gfx_clear_depth(int drc);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */
 void gfx_set_time(float t);                                    /* the clock the wind runs on (trees, fronds, flags sway) */
 void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
 void gfx_camera_2d_virtual(float vw, float vh);               /* the same, with the 2D helpers' 1280 x 720 layout mapped onto a view of vw x vh pixels */

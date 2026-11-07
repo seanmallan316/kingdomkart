@@ -39,9 +39,9 @@ $(TARGET).elf: $(SRCS) $(HDRS)
 $(TARGET).rpx: $(TARGET).elf
 	$(DEVKITPRO)/tools/bin/elf2rpl $< $@
 
-$(TARGET).wuhb: $(TARGET).rpx content/hello.txt content/icon.png
+$(TARGET).wuhb: $(TARGET).rpx content/hello.txt content/icon.png assets/splash_tv.png assets/splash_drc.png
 	$(DEVKITPRO)/tools/bin/wuhbtool --content content --name "Kingdom Kart: Road to Glory" \
-		--short-name "Kingdom Kart" --author "Sean" --icon content/icon.png $< $@
+		--short-name "Kingdom Kart" --author "Sean" --icon content/icon.png --tv-image assets/splash_tv.png --drc-image assets/splash_drc.png $< $@
 
 clean:
 	rm -f $(TARGET).elf $(TARGET).rpx $(TARGET).wuhb $(TARGET)-tour*.elf $(TARGET)-tour*.rpx

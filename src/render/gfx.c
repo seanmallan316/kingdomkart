@@ -313,6 +313,14 @@ void gfx_view_begin(int drc, float r, float g, float b) {
     g_flags = -1; g_bound = NULL;
     gfx_bind(g_white);
 }
+void gfx_clear_depth(int drc) {   /* a fresh depth buffer partway through a screen (for a 3D scene drawn over another), keeping the picture */
+    GX2DepthBuffer *db = drc ? WHBGfxGetDRCDepthBuffer() : WHBGfxGetTVDepthBuffer();
+    GX2ClearDepthStencilEx(db, db->depthClear, db->stencilClear, GX2_CLEAR_FLAGS_DEPTH | GX2_CLEAR_FLAGS_STENCIL);
+    GX2SetContextState(drc ? WHBGfxGetDRCContextState() : WHBGfxGetTVContextState());
+    gfx_viewport(drc, 0, 0, 1, 1);
+    if (!g_initialized) return;
+    GX2SetFetchShader(&g_shader.fetchShader); GX2SetVertexShader(g_shader.vertexShader); GX2SetPixelShader(g_shader.pixelShader); GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_BLOCK);
+    g_flags = -1; Texture *b = g_bound; g_bound = NULL; gfx_bind(b ? b : g_white); }
 void gfx_view_end(int drc) { if (drc) WHBGfxFinishRenderDRC(); else WHBGfxFinishRenderTV(); }
 void gfx_frame_end(void) { WHBGfxFinishRender(); }
 float gfx_aspect(int drc) { return drc ? 854.0f / 480.0f : 1280.0f / 720.0f; }

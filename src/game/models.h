@@ -12,5 +12,6 @@ int model_build(ModelOut *o, const char *img, float h, float w, unsigned seed, V
 void model_texture(int mat, uint32_t *rgba, int size);   /* draws the surface's picture (repeats seamlessly), size x size */
 int model_mat_cutout(int mat);                     /* has see-through parts (leaves, fronds) */
 int model_tire(Batch *b);
+int model_cup(Batch *b);                           /* the gold champion's cup, about 1 tall */
 int model_jwall(Batch *b, float L, float H, float T, int rahab, unsigned seed);   /* a stretch of the walls of Jericho, for the stone picture */                          /* a kart tire: radius 1, axle along x, 1 wide */
 #endif
