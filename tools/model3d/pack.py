@@ -33,6 +33,13 @@ def side_circles(sx):
     return out
 for kind, (sx, sz) in enumerate(((1, 1), (-1, 1), (1, -1), (-1, -1)), start=1):
     cs = [c for c in side_circles(sx) if np.sign(c[0]) == sz]
+    # also measure the wheel straight from the shape: the outermost low points in this corner are the tire's side
+    q = (np.sign(P[:, 0]) == sx) & (np.sign(P[:, 2]) == sz) & (P[:, 1] < H * 0.6)
+    if q.sum() > 20:
+        ax = np.abs(P[q, 0]); side = P[q][ax > np.percentile(ax, 80)]
+        gy0, gy1 = side[:, 1].min(), side[:, 1].max(); gz0, gz1 = np.percentile(side[:, 2], 2), np.percentile(side[:, 2], 98)
+        geo = ((gz0 + gz1) / 2, (gy0 + gy1) / 2, max(gy1 - gy0, gz1 - gz0) / 2)
+        if not cs or abs(cs[0][2] - geo[2]) > 0.08 or abs(cs[0][0] - geo[0]) > 0.12 or abs(cs[0][1] - geo[1]) > 0.08: cs = [geo]; print('wheel', kind, 'measured from the shape')
     if not cs: print('no wheel found for', kind); continue
     cz, cy, R = cs[0]
     sel = (np.sign(P[:, 0]) == sx) & (np.hypot(P[:, 1] - cy, P[:, 2] - cz) < R) & (np.abs(P[:, 0]) > X * 0.5)
