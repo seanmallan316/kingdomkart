@@ -3,7 +3,7 @@
 sizes the kart to race size (2.8 m long, front toward +z, standing on y = 0) and writes content/models/<name>.kkm
 plus its picture <name>.png.
 
-.kkm layout (little-endian): 'KKM1', uint32 part count, then per part: uint32 kind (0 body, 1 wheel front-left,
+.kkm layout (big-endian, the Wii U's own byte order): 'KKM1', uint32 part count, then per part: uint32 kind (0 body, 1 wheel front-left,
 2 front-right, 3 back-left, 4 back-right), float pivot x y z, float wheel radius, uint32 corner count, then the
 corners as 12 floats each (x y z, normal x y z, u v, r g b a) - the game's own corner layout."""
 import numpy as np, struct, sys
@@ -43,10 +43,10 @@ for kind, (sx, sz) in enumerate(((1, 1), (-1, 1), (1, -1), (-1, -1)), start=1):
     print('wheel', kind, 'center (%.2f %.2f %.2f) radius %.2f, %d triangles' % (sx * (outer + inner) / 2, cy, cz, R, w.sum()))
 parts.insert(0, (0, np.zeros(3), 0.0, F[~used]))
 with open(out_base + '.kkm', 'wb') as f:
-    f.write(b'KKM1'); f.write(struct.pack('<I', len(parts)))
+    f.write(b'KKM1'); f.write(struct.pack('>I', len(parts)))
     for kind, piv, R, FF in parts:
         idx = FF.reshape(-1); V = np.zeros((len(idx), 12), np.float32)
         V[:, 0:3] = P[idx] - piv; V[:, 3:6] = N[idx]; V[:, 6:8] = UV[idx]; V[:, 8:12] = 1
-        f.write(struct.pack('<I4fI', kind, *piv, R, len(V))); f.write(V.tobytes())
+        f.write(struct.pack('>I4fI', kind, *piv, R, len(V))); f.write(V.astype('>f4').tobytes())
 Image.open(tex).convert('RGB').save(out_base + '.png')
 print('kart %.2f long, %.2f wide, %.2f tall; %d triangles' % (np.ptp(P[:, 2]), np.ptp(P[:, 0]), H, len(F)))

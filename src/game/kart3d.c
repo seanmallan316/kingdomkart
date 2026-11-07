@@ -4,22 +4,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+static int g_little = -1;
+static uint32_t be32(uint32_t v) {   /* the file is in the Wii U's byte order (big-endian): turn it round on a little-endian computer (the tests) */
+    if (g_little < 0) { uint16_t one = 1; g_little = *(uint8_t *)&one == 1; }
+    return g_little ? ((v >> 24) | ((v >> 8) & 0xFF00u) | ((v << 8) & 0xFF0000u) | (v << 24)) : v; }
+static void be_words(void *p, size_t n) { uint32_t *w = p; for (size_t i = 0; i < n; i++) w[i] = be32(w[i]); }
 int kart3d_load(Kart3D *k, const char *name) {
     memset(k, 0, sizeof *k); char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "models/%s.kkm", name);
     FILE *f = fopen(path, "rb"); if (!f) return 0;
-    char magic[4]; uint32_t np = 0; int good = fread(magic, 1, 4, f) == 4 && !memcmp(magic, "KKM1", 4) && fread(&np, 4, 1, f) == 1 && np >= 1 && np <= 16;
+    char magic[4]; uint32_t np = 0; int good = fread(magic, 1, 4, f) == 4 && !memcmp(magic, "KKM1", 4) && fread(&np, 4, 1, f) == 1 && (np = be32(np)) >= 1 && np <= 16;
     k->lo = v3(1e9f, 1e9f, 1e9f); k->hi = v3(-1e9f, -1e9f, -1e9f);
     for (uint32_t p = 0; good && p < np; p++) {
         uint32_t kind, n; float hdr[4];
-        if (fread(&kind, 4, 1, f) != 1 || fread(hdr, 4, 4, f) != 4 || fread(&n, 4, 1, f) != 1 || n > 400000 || kind >= K3_PARTS) { good = 0; break; }
+        if (fread(&kind, 4, 1, f) != 1 || fread(hdr, 4, 4, f) != 4 || fread(&n, 4, 1, f) != 1) { good = 0; break; }
+        kind = be32(kind); n = be32(n); be_words(hdr, 4); if (n > 400000 || kind >= K3_PARTS) { good = 0; break; }
         Vertex *v = malloc(sizeof(Vertex) * (n ? n : 1)); if (!v) { good = 0; break; }
         if (fread(v, sizeof(Vertex), n, f) != n) { free(v); good = 0; break; }
+        be_words(v, (size_t)n * 12);
         for (uint32_t i = 0; i < n; i++) { float x = v[i].px + hdr[0], y = v[i].py + hdr[1], z = v[i].pz + hdr[2];
             if (x < k->lo.x) k->lo.x = x; if (y < k->lo.y) k->lo.y = y; if (z < k->lo.z) k->lo.z = z; if (x > k->hi.x) k->hi.x = x; if (y > k->hi.y) k->hi.y = y; if (z > k->hi.z) k->hi.z = z; }
         k->m[kind] = n ? gfx_mesh_static(v, n) : NULL; k->piv[kind] = v3(hdr[0], hdr[1], hdr[2]); k->rad[kind] = hdr[3]; free(v); }
     fclose(f);
     if (good && k->m[K3_BODY]) { snprintf(path, sizeof path, "models/%s.png", name); int w, h; k->tex = asset_texture_file(path, 1, &w, &h); }
     k->ok = good && k->m[K3_BODY] && k->tex;
+    gfx_log("3D kart %s: %s", name, k->ok ? "loaded" : (good ? "picture missing" : "model file unreadable"));
     if (!k->ok) { for (int i = 0; i < K3_PARTS; i++) { gfx_mesh_free(k->m[i]); k->m[i] = NULL; } }
     return k->ok; }
 void kart3d_draw(const Kart3D *k, const Mat4 *base, float wheel_ang, float steer, float r, float g, float b, float a) {
