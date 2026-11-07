@@ -13,8 +13,8 @@ Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
 - Drifting with mini-turbos, rocket starts, tricks off jumps, boost arrows, bounce pads, hidden shortcuts, tunnels with
   crystals, coins (each one adds a little top speed, up to ten), obstacles crossing the road (sheep, nets, carts, rolling
   stones), GamePad rumble, slow-motion finish.
-- **Open land beside the roads**: drive off the road onto the grass (or wade the shallows on the Sea of Galilee) out to a
-  low wall, with hidden gems (three coins and a burst of speed), boost arrows and bounce ramps out there. The Road to
+- **Open land beside the roads**: drive off the road onto the grass, out to a low wall up to 40 m away, round solid trees, rocks
+  and houses (or wade the shallows on the Sea of Galilee, where the great fish of Jonah comes up after you), with hidden gems (three coins and a burst of speed), boost arrows and bounce ramps out there. The Road to
   Heaven keeps its edges.
 - **Eight blessings instead of weapons** (every item does something for you *and* for another racer): Manna (Exodus 16),
   Loaves and Fishes (Matthew 14), the Good Samaritan (Luke 10), the Shield of Faith (Ephesians 6), the Parting of the Sea
@@ -25,8 +25,8 @@ Jesus from Bethlehem to the empty tomb — and, as a bonus, all the way Home.
   order, earned with the Road to Heaven), Single Race, Time Trial (records saved), **Multiplayer for 2 to 4 people on a
   split screen** (computer drivers fill the other seats), **The Walls of Jericho** (seven laps round the city, shofars,
   the great shout, and every wall falls flat) and the David vs Goliath fight in the open Valley of Elah (five smooth
-  stones in the brook, ZL slings), with Easy / Normal / Hard computer drivers that never cheat. A race takes about two and
-  a quarter minutes.
+  stones in the brook, ZL slings), with Easy / Normal / Hard computer drivers that never cheat. A race takes about three and
+  a half minutes. Every mode can be played by 2 to 4 people together (split screen).
 - Achievements that unlock the bonus characters, karts and road; progress, records and volume settings saved on the SD card.
 - Options and records screen, credits screen.
 - Sound effects for everything, and a soundtrack: a track per road, the menus, the results screen, the final lap and

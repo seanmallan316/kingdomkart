@@ -2567,9 +2567,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
         g_player_char = g_race.character[1]; g_screen = SCR_TROPHY; g_screen_t = 0; } }
 #endif
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 1
-    if (g_screen == SCR_RACE && g_track.water && g_race.state == RACE_RUNNING && !g_race.whale.active && g_time > 55.0f) {   /* CI: the great fish leaps just ahead of the player every few seconds, for the photos */
-        Kart *k = &g_race.k[g_race.player]; const TrackSample *ws = &g_track.s[(k->hit.idx + 4) % g_track.n]; float lat = track_edge(&g_track, (k->hit.idx + 4) % g_track.n) + 5.0f;
-        g_race.whale.active = 1; g_race.whale.t = 1.31f; g_race.whale.target = g_race.player; g_race.whale.x = ws->x + ws->nx * lat; g_race.whale.z = ws->z + ws->nz * lat; g_race.whale.dx = ws->tx; g_race.whale.dz = ws->tz; }
+    if (g_screen == SCR_RACE && g_track.water && g_race.state == RACE_RUNNING && g_time > 55.0f) {   /* CI: the great fish held mid-leap just ahead of the player, for the photos */
+        Kart *k = &g_race.k[g_race.player]; const TrackSample *ws = &g_track.s[(k->hit.idx + 7) % g_track.n]; float lat = track_edge(&g_track, (k->hit.idx + 7) % g_track.n) + 6.0f;
+        g_race.whale.active = 1; g_race.whale.t = 1.75f; g_race.whale.target = g_race.player; g_race.whale.x = ws->x + ws->nx * lat; g_race.whale.z = ws->z + ws->nz * lat; g_race.whale.dx = ws->tx; g_race.whale.dz = ws->tz; }
 #endif
     if (g_sting_due && g_race.state == RACE_COUNTDOWN && g_race.cd <= 4.85f) { g_sting_due = 0; sfx_play(SFX_COUNTDOWN, 1, 0); }   /* the sting's closing hit is 4.85 s in */
     if (g_race.state != RACE_COUNTDOWN) g_sting_due = 0;
