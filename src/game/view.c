@@ -2763,7 +2763,10 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                 float pitch = -atan2f(yy2 - yy, al2 - al), yaw = atan2f(r->whale.dx, r->whale.dz);
                 float jaw = u < 0.48f ? 0.65f : (u < 0.56f ? 0.65f * (0.56f - u) / 0.08f : 0);
                 Mat4 m = m4_mul(m4_translate(r->whale.x + r->whale.dx * al, yy, r->whale.z + r->whale.dz * al), m4_mul(m4_rotate_y(yaw), m4_rotate_x(pitch)));
-                if (tx_whale[2]) {   /* Sean's pictures: the one for the angle we see it from, tipped nose-up as it rises and nose-down as it falls */
+                static Kart3D whale3d; static int whale_tried = 0; if (!whale_tried) { whale_tried = 1; kart3d_load(&whale3d, "whale"); }
+                if (whale3d.ok) {   /* the 3D great fish, made from Sean's picture: it leaps nose-up and dives nose-down */
+                    Mat4 mm = m4_mul(m, m4_translate(0, -3.5f, 0)); gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw(&whale3d, &mm, 0, 0, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); (void)jaw; }
+                else if (tx_whale[2]) {   /* Sean's pictures: the one for the angle we see it from, tipped nose-up as it rises and nose-down as it falls */
                     float wx = r->whale.x + r->whale.dx * al, wz = r->whale.z + r->whale.dz * al;
                     float rel = atan2f(cam_x - wx, cam_z - wz) - yaw; while (rel > 3.14159265f) rel -= 6.2831853f; while (rel < -3.14159265f) rel += 6.2831853f;
                     float ar = fabsf(rel); int v = ar < 0.45f ? 0 : (ar < 1.15f ? 1 : (ar < 2.3f ? 2 : 3)); if (!tx_whale[v]) v = 2;
@@ -3582,7 +3585,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                     Mat4 shift = m4_identity(); shift.m[13] = 0.36f; vp = m4_mul(shift, vp);
                     gfx_light(v3(0.85f, 0.82f, 0.78f), v3(0.75f, 0.8f, 0.9f), v3(0.45f, 0.4f, 0.38f), v3(0, 3.6f, 15.5f));   /* plain studio light, not the road's */
                     gfx_camera(&vp, v3(0.4f, 0.8f, 0.6f), 0.55f, 0, 0, 0, 1e6f, 2e6f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
-                    Mat4 m = m4_mul(m4_translate(0, -0.15f + 0.05f * sinf(g_time * 2.2f), 0), m4_rotate_y(g_time * 0.8f));
+                    Mat4 m = m4_mul(m4_translate(0, 0.35f + 0.05f * sinf(g_time * 2.2f), 0), m4_mul(m4_rotate_y(g_time * 0.8f), m4_scale(0.9f, 0.9f, 0.9f)));   /* up clear of the words under it */
                     kart3d_draw(&g_k3d[ch], &m, g_time * 6.0f, 0.3f * sinf(g_time * 0.9f), 1, 1, 1, 1);
                     gfx_camera_2d(); gfx_state(ST_HUD); rt = NULL; }
                 if (rt) { batch_clear(&g_b); if (mir) batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 1, 0, 0, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);

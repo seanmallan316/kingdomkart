@@ -11,7 +11,7 @@ from PIL import Image
 mesh, tex, out_base = sys.argv[1], sys.argv[2], sys.argv[3]
 d = np.load(mesh); P, N, UV, F = d['P'].copy(), d['N'].copy(), d['UV'], d['F']
 # race size, standing on the ground, front toward +z
-P[:, 1] -= P[:, 1].min(); s = 2.8 / (P[:, 2].max() - P[:, 2].min()); P *= s; P[:, 0] -= (P[:, 0].max() + P[:, 0].min()) / 2; P[:, 2] -= (P[:, 2].max() + P[:, 2].min()) / 2
+P[:, 1] -= P[:, 1].min(); import os; s = float(os.environ.get("KART_LEN", "2.35")) / (P[:, 2].max() - P[:, 2].min()); P *= s; P[:, 0] -= (P[:, 0].max() + P[:, 0].min()) / 2; P[:, 2] -= (P[:, 2].max() + P[:, 2].min()) / 2
 H = P[:, 1].max(); X = np.abs(P[:, 0]).max()
 # the wheels: the outermost low parts in each corner; each is a round thing, so its center is the middle of its outline
 parts = []; used = np.zeros(len(F), bool); fc = P[F].mean(1)
