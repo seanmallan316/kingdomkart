@@ -443,6 +443,32 @@ void gfx_shadow_end(void) {
     if (!g_in_shadow) return;
     g_in_shadow = 0; g_shadow_have = 1; g_bound = NULL; g_flags = -1;
     GX2Invalidate(GX2_INVALIDATE_MODE_COLOR_BUFFER | GX2_INVALIDATE_MODE_TEXTURE, g_shcb.surface.image, g_shcb.surface.imageSize); }
+/* the picture drawn so far, copied into a texture (for the boost blur: stretched copies of it laid over the edges) */
+static Texture g_grab[2]; static int g_grab_ok[2];
+Texture *gfx_grab(int drc) {
+    if (!g_initialized || g_in_shadow) return NULL;
+    GX2ColorBuffer *cb = drc ? WHBGfxGetDRCColourBuffer() : WHBGfxGetTVColourBuffer(); drc = drc ? 1 : 0;
+    Texture *t = &g_grab[drc]; GX2Texture *tx = &t->tex;
+    if (!g_grab_ok[drc]) {
+        g_grab_ok[drc] = -1;
+        tx->surface.use = GX2_SURFACE_USE_TEXTURE; tx->surface.width = cb->surface.width; tx->surface.height = cb->surface.height; tx->surface.depth = 1;
+        tx->surface.dim = GX2_SURFACE_DIM_TEXTURE_2D; tx->surface.format = cb->surface.format;
+        tx->surface.tileMode = GX2_TILE_MODE_DEFAULT; tx->surface.aa = GX2_AA_MODE1X; tx->surface.mipLevels = 1;
+        tx->viewNumSlices = 1; tx->viewNumMips = 1; tx->compMap = 0x00010205;   /* red, green, blue, and alpha always 1 */
+        GX2CalcSurfaceSizeAndAlignment(&tx->surface); GX2InitTextureRegs(tx);
+        tx->surface.image = memalign(tx->surface.alignment, tx->surface.imageSize);
+        if (!tx->surface.image) { gfx_log("boost blur: no memory for the screen copy"); return NULL; }
+        DCFlushRange(tx->surface.image, tx->surface.imageSize);
+        GX2InitSampler(&t->smp, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_LINEAR);
+        g_grab_ok[drc] = 1; gfx_log("boost blur: screen copy ready (%ux%u)", tx->surface.width, tx->surface.height); }
+    if (g_grab_ok[drc] < 0) return NULL;
+    GX2CopySurface(&cb->surface, 0, 0, &tx->surface, 0, 0);
+    GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tx->surface.image, tx->surface.imageSize);
+    /* the copy may leave the GPU's state changed: put ours back (as gfx_clear_depth does); the caller sets its viewport */
+    GX2SetContextState(drc ? WHBGfxGetDRCContextState() : WHBGfxGetTVContextState());
+    GX2SetFetchShader(&g_shader.fetchShader); GX2SetVertexShader(g_shader.vertexShader); GX2SetPixelShader(g_shader.pixelShader); GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_BLOCK);
+    g_flags = -1; g_bound = NULL; gfx_bind(g_white); bind_shadow_sampler();
+    return t; }
 void gfx_shadow_use(int on) { g_shadow_use = on; }
 Texture *gfx_shadow_texture(void) { static Texture t; if (!g_shadow_ok) return NULL; t.tex = g_shtex; t.smp = g_shsmp; return &t; }   /* for looking at the shadow map itself (tests) */
 void gfx_shadow_none(void) { g_shadow_have = 0; }
@@ -518,7 +544,12 @@ void gfx_state(int flags) {
     g_flags = flags;
     GX2SetDepthOnlyControl((flags & ST_DEPTH) ? TRUE : FALSE, (flags & ST_DEPTH_WRITE) ? TRUE : FALSE, (flags & ST_LESS) ? GX2_COMPARE_FUNC_LESS : GX2_COMPARE_FUNC_LEQUAL);
     GX2SetCullOnlyControl(GX2_FRONT_FACE_CCW, FALSE, (flags & ST_CULL) ? TRUE : FALSE);
-    if (flags & ST_BLEND) {
+    GX2SetTargetChannelMasks((flags & ST_AMASK) ? GX2_CHANNEL_MASK_A : GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA,
+                             GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA);
+    if (flags & ST_MULDA) {
+        GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
+        GX2SetBlendControl(GX2_RENDER_TARGET_0, GX2_BLEND_MODE_ZERO, GX2_BLEND_MODE_DST_ALPHA, GX2_BLEND_COMBINE_MODE_ADD, TRUE, GX2_BLEND_MODE_ONE, GX2_BLEND_MODE_ZERO, GX2_BLEND_COMBINE_MODE_ADD);
+    } else if (flags & ST_BLEND) {
         GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
         if (flags & ST_ADD)
             GX2SetBlendControl(GX2_RENDER_TARGET_0, GX2_BLEND_MODE_SRC_ALPHA, GX2_BLEND_MODE_ONE, GX2_BLEND_COMBINE_MODE_ADD, TRUE, GX2_BLEND_MODE_ONE, GX2_BLEND_MODE_ONE, GX2_BLEND_COMBINE_MODE_ADD);

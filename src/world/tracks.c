@@ -481,7 +481,7 @@ const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 static const float TRACK_SCALE[] = {2.7f, 2.55f, 3.0f, 2.65f, 3.6f, 2.75f, 1.2f, 1.0f, 1.0f};   /* (Sean, again: longer) about 3:20 a race */   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
 
 /* every racing road is this much wider than first drawn (Sean: room between the racers); arena and test loop stay */
-#define ROAD_WIDEN 1.85f   /* (Sean, again: wider) */
+#define ROAD_WIDEN 2.6f    /* (Sean, again: wider; and again - Mario Kart-wide, about 32 m) */
 static float cm_(float p0, float p1, float p2, float p3, float u) { float u2 = u * u, u3 = u2 * u; return 0.5f * ((2 * p1) + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (-p0 + 3 * p1 - 3 * p2 + p3) * u3); }
 void track_from_def(Track *t, const TrackDef *d) {
     int di = (int)(d - TRACK_DEFS); float sc = (di >= 0 && di < (int)(sizeof TRACK_SCALE / sizeof TRACK_SCALE[0])) ? TRACK_SCALE[di] : 1.0f;

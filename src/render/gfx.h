@@ -9,7 +9,9 @@ typedef struct Mesh Mesh;
 typedef struct Texture Texture;
 
 enum { GFX_OK = 0, GFX_NO_COMPILER = 1, GFX_SHADER_FAILED = 2 };
-enum { ST_DEPTH = 1, ST_DEPTH_WRITE = 2, ST_BLEND = 4, ST_CULL = 8, ST_ADD = 16, ST_LESS = 32 };   /* ST_LESS: a spot already drawn at this depth is not drawn again (shadows don't double up) */
+enum { ST_DEPTH = 1, ST_DEPTH_WRITE = 2, ST_BLEND = 4, ST_CULL = 8, ST_ADD = 16, ST_LESS = 32,
+       ST_AMASK = 64,     /* write only the picture's alpha channel (no blending): marks spots, e.g. where a shadow falls */
+       ST_MULDA = 128 };  /* darken by the alpha already there (colour x alpha), then set alpha back to 1: a shadow that never doubles up */   /* ST_LESS: a spot already drawn at this depth is not drawn again (shadows don't double up) */
 #define ST_SOLID (ST_DEPTH | ST_DEPTH_WRITE | ST_CULL)
 #define ST_CUTOUT (ST_DEPTH | ST_DEPTH_WRITE | ST_BLEND)
 #define ST_TRANSPARENT (ST_DEPTH | ST_BLEND)
@@ -45,6 +47,7 @@ void gfx_clear_depth(int drc);
    then gfx_shadow_end. gfx_shadow_use(1) before a scene's gfx_camera lets that scene receive them; gfx_shadow_none() for a frame with none */
 int gfx_shadow_begin(const Mat4 *lightvp);
 void gfx_shadow_end(void);
+Texture *gfx_grab(int drc);   /* the picture so far as a texture (NULL if it can't be done); then set the viewport again */
 void gfx_shadow_use(int on);
 void gfx_shadow_none(void);
 Texture *gfx_shadow_texture(void);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */

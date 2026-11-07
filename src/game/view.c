@@ -132,6 +132,7 @@ static float g_results_t;
 /* textures */
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
+static Mesh *m_shsquare;   /* the patch of road a kart's shadow is darkened through (see ST_MULDA) */
 static uint32_t g_px[256 * 256];
 #define PROP_CHUNKS 12
 static Mesh *m_props[MAT_N][PROP_CHUNKS], *m_curbs; static int m_nprops[MAT_N]; static Texture *tx_mat[MAT_N];
@@ -811,6 +812,9 @@ static void build_track_meshes(void) {
     batch_clear(&g_b); batch_box(&g_b, v3(0, 0.8f, 0), v3(1.4f, 1.2f, 1.6f), 1, 1, 1); m_shield = gfx_mesh_static(g_b.v, g_b.n);
     m_items = gfx_mesh_dynamic(MAX_PROJ * 12 + 80 * 12 + NKARTS * 12 + 64);
     m_shadow = gfx_mesh_dynamic((NKARTS + MAX_MOVERS + 1) * 6);
+    { Vertex q[6]; memset(q, 0, sizeof q); const float qx[6] = { -1, 1, 1, -1, 1, -1 }, qz[6] = { -1, -1, 1, -1, 1, 1 };   /* a flat square on the ground, 2 wide */
+      for (int i = 0; i < 6; i++) { q[i].px = qx[i]; q[i].pz = qz[i]; q[i].ny = 1; q[i].u = 0.5f; q[i].v = 0.5f; q[i].r = q[i].g = q[i].b = q[i].a = 1; }
+      gfx_mesh_free(m_shsquare); m_shsquare = gfx_mesh_static(q, 6); }
 }
 
 // ------------------------------------------------------------------ theme: textures and scenery pictures for the current road
@@ -2768,6 +2772,30 @@ static void drivers_update(const Race *r, float dt) {
         float bow = q->boost_t > 0 ? -0.12f : (q->speed < 3 ? 0.04f : 0); if (p->arm[0] == K3A_UP && p->arm_w[0] > 0.5f) bow -= 0.08f;
         p->lean += (lean - p->lean) * k; p->twist += (tw2 - p->twist) * k; p->bow += (bow - p->bow) * k;
         float sp = clampf(fabsf(q->speed) / 25.0f, 0, 1); p->bob = 0.012f * sp * sinf(p->t * 14.0f + i) + q->squash * -0.05f; } }
+/* ---- the boost blur (Sean: "a motion blur when the racer gets a boost"): the picture is copied, and stretched copies
+   of it are laid over the edges, more at the corners and none in the middle, so the sides streak toward you ---- */
+static float g_blur[4]; static Mesh *m_blur; static Vertex g_blurv[2400];
+static void blur_update(float dt) {
+    for (int p = 0; p < 4; p++) { float want = 0;
+        if (p < g_nplayers && (g_screen == SCR_RACE)) { const Kart *q = &g_race.k[human_kart(p)]; if (q->boost_t > 0 && q->speed > 8) want = 1; }
+        float rate = want > g_blur[p] ? 5.0f : 2.2f; g_blur[p] += clampf(want - g_blur[p], -rate * dt, rate * dt); } }
+static void draw_boost_blur(int drc, int p, float fx, float fy, float fw, float fh, float vw, float vh) {
+    float k = p >= 0 && p < 4 ? g_blur[p] : 0; if (k < 0.02f) return;
+    Texture *tx = gfx_grab(drc); gfx_viewport(drc, fx, fy, fw, fh); if (!tx) return;
+    if (!m_blur) m_blur = gfx_mesh_dynamic(2400);
+    Batch b; batch_init(&b, g_blurv, 2400);
+    const int NX = 12, NY = 8, NL = 4; float uc = fx + fw * 0.5f, vc = fy + fh * 0.5f;
+    for (int l = 1; l <= NL; l++) { float z = 1.0f + 0.022f * l * k, la = 0.34f * k;
+        for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
+            Vertex c4[4]; const int ci[4][2] = {{i, j + 1}, {i + 1, j + 1}, {i + 1, j}, {i, j}};
+            for (int n = 0; n < 4; n++) { float gx = (float)ci[n][0] / NX, gy = (float)ci[n][1] / NY, dx = gx * 2 - 1, dy = gy * 2 - 1;
+                float r = sqrtf(dx * dx * 0.8f + dy * dy * 1.2f), m = clampf((r - 0.42f) / 0.55f, 0, 1); m = m * m * (3 - 2 * m);
+                Vec3 sp = scr(gx * vw, gy * vh); float u = fx + gx * fw, v = fy + gy * fh;
+                Vertex q = { sp.x, sp.y, 0, 0, 0, 1, uc + (u - uc) / z, vc + (v - vc) / z, 1, 1, 1, la * m }; c4[n] = q; }
+            static const int idx[6] = {0, 1, 2, 0, 2, 3};
+            for (int n = 0; n < 6 && b.n < b.cap; n++) b.v[b.n++] = c4[idx[n]]; } }
+    gfx_mesh_update(m_blur, b.v, b.n); Mat4 id = m4_identity();
+    gfx_camera_2d_virtual(vw, vh); gfx_state(ST_HUD); gfx_bind(tx); gfx_draw_ex(m_blur, &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); }
 /* the shadow pass: everything that casts a sun shadow, seen from the sun, around player 1 */
 static void draw_shadow_casters(void) {
     const Race *r = &g_race; if (!g_def || g_nplayers > 1) { gfx_shadow_none(); return; }
@@ -2779,7 +2807,7 @@ static void draw_shadow_casters(void) {
     Mat4 lvp = m4_mul(proj, view), id = m4_identity();
     if (!gfx_shadow_begin(&lvp)) return;
     for (int m = 0; m < MAT_N; m++) { if (m == MAT_PLAIN && 0) continue; draw_mat_meshes(m_props[m], m_nprops[m], m, &id); }
-    for (int i = 0; i < r->nk; i++) { int ch = r->character[i]; if (!g_k3d[ch].ok || r->swallow_t[i] > 0) continue; Mat4 km = kart_mat(r, i); kart3d_draw_pose(&g_k3d[ch], &km, g_wheel_ang[i], 0, &g_drv[i].p, 1, 1, 1, 1); }
+    /* the karts are not in the sun's shadow map: each casts its own crisp shadow (a second, blocky one doubled it up) */
     gfx_shadow_end(); }
 static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
     Race *r = &g_race;
@@ -2963,8 +2991,13 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                 if (!q->air || q->hop < 2.5f) {   /* the shadow: the kart squashed flat onto the road along the sun */
                     float gy = q->hit.height + 0.04f, lx = ldir.x, ly = ldir.y < 0.25f ? 0.25f : ldir.y, lz = ldir.z;
                     Mat4 sh = m4_identity(); sh.m[4] = -lx / ly; sh.m[5] = 0.0f; sh.m[6] = -lz / ly; sh.m[12] = lx / ly * gy; sh.m[13] = gy; sh.m[14] = lz / ly * gy;
-                    Mat4 smx = m4_mul(sh, m); gfx_state(ST_DEPTH | ST_DEPTH_WRITE | ST_BLEND | ST_LESS); gfx_bind(NULL);
-                    kart3d_draw_flat(k3, &smx, 0, 0, &g_drv[i].p, 0.0f, 0.0f, 0.05f, 0.42f); }
+                    /* one even shade (Sean: the inside of the shadows was squiggly - the flattened layers fought each other):
+                       mark the patch 'no shadow' (alpha 1), mark the shadow's spots in the alpha alone (every layer writes the same
+                       0.58, so overlaps can't add up), then darken the patch once by what is marked */
+                    Mat4 smx = m4_mul(sh, m), pm = m4_mul(m4_translate(q->x - lx / ly * 1.3f, gy, q->z - lz / ly * 1.3f), m4_scale(2.0f + fabsf(lx / ly) * 1.5f, 1, 2.0f + fabsf(lz / ly) * 1.5f)); gfx_bind(NULL);
+                    gfx_state(ST_AMASK); gfx_draw_ex(m_shsquare, &pm, 0, 0, 0, 1, 0, 1, 0, 0);
+                    gfx_state(ST_AMASK | ST_DEPTH); kart3d_draw_flat(k3, &smx, 0, 0, &g_drv[i].p, 0.0f, 0.0f, 0.0f, 0.58f);
+                    gfx_state(ST_MULDA); gfx_draw_ex(m_shsquare, &pm, 1, 1, 1, 1, 0, 1, 0, 0); }
                 gfx_state(ST_SOLID); gfx_bind(NULL); continue; }
             if (tx_kartback[r->character[i]]) continue;      /* drawn as a picture below */
             gfx_draw(m_body_style[sty], &m, c->r, c->g, c->b, 1);
@@ -3227,6 +3260,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         float wr = g_race.k[i].speed / 0.42f * dt, wcap = 12.0f * dt; if (wr > wcap) wr = wcap; if (wr < -wcap) wr = -wcap;
         g_wheel_ang[i] += wr; if (g_wheel_ang[i] > 6283.0f) g_wheel_ang[i] -= 6283.1853f; }
     if (g_screen == SCR_RACE || g_screen == SCR_RESULTS) drivers_update(&g_race, dt);
+    blur_update(dt);
     { /* speed report for the log file (the real Wii U's frame rate is only visible here): every 10 seconds */
       static float acc = 0, worst = 0; static int nf = 0, slow = 0; acc += dt; nf++; if (g_frame_ms > worst) worst = g_frame_ms; if (g_frame_ms > 17.5f) slow++;
       if (acc >= 10.0f) { gfx_log("speed: %.1f fps average, slowest frame %.1f ms, %d of %d frames over 1/60 s (screen %d)", nf / acc, worst, slow, nf, (int)g_screen); acc = 0; worst = 0; nf = 0; slow = 0; } }
@@ -3690,6 +3724,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 gfx_viewport(drc, fx, fy, fw, fh); cv = &g_view[p]; build_dynamic();
                 float vw = fw * 1280.0f, vh = fh * 720.0f;
                 draw_scene(human_kart(p), vw / vh, g_nplayers == 2 ? 0.62f : 1.0f, 1);
+                if (!drc) draw_boost_blur(drc, p, fx, fy, fw, fh, vw, vh);
                 gfx_camera_2d_virtual(vw, vh); gfx_state(ST_HUD); batch_clear(&g_b);
                 if (g_mode == MODE_BATTLE) hud_battle_split(p, vw, vh); else hud_split(p, vw, vh);
                 gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
@@ -3709,6 +3744,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (plain_bg) gfx_view_begin(drc, 0.06f, 0.09f, 0.24f); else gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 id = m4_identity();
         if (!plain_bg) draw_scene(g_mode == MODE_BATTLE ? 0 : r->player, gfx_aspect(drc), 1.0f, 0);
+        if (!plain_bg && g_mode != MODE_BATTLE && g_screen == SCR_RACE) draw_boost_blur(drc, 0, 0, 0, 1, 1, 1280, 720);
         /* ---- HUD and menus */
         gfx_camera_2d(); gfx_state(ST_HUD);
         batch_init(&g_b, g_vtmp, 32768); batch_clear(&g_b);
