@@ -81,6 +81,7 @@ static Texture *wheel_tex(const char *picture) { char n[80]; snprintf(n, sizeof 
 typedef struct { float yaw, x, y, z, fov, shake, orbit, finish_t; } View;
 static View g_view[MAX_HUMANS];
 static int g_nplayers = 1;                      /* people in the race being shown (1 outside multiplayer) */
+static int g_menu_slot = -1, g_pause_slot = -1;   /* player 1's controller for the menus; who paused (-1 = anyone) */
 static int g_njoined = 0;                       /* people who joined on the join screen */
 static int g_pslot[MAX_HUMANS] = {0, 1, 2, 3};  /* controller slot of each player (0 the GamePad, 1..4 the Wii controllers) */
 static int g_pchar[MAX_HUMANS], g_plock[MAX_HUMANS];   /* multiplayer character select: each player's cursor, and whether they have locked in */
@@ -140,7 +141,7 @@ static void mat_buckets(ModelOut *mo) {   /* the buckets the models are built in
 static void mat_flush(ModelOut *mo) { for (int m = 0; m < MAT_N; m++) { if (mo->b[m]->n && m_nprops[m] < PROP_CHUNKS) m_props[m][m_nprops[m]++] = gfx_mesh_static(mo->b[m]->v, mo->b[m]->n); batch_clear(mo->b[m]); } }
 static void draw_mat_meshes(Mesh *const *ms, int n, int m, const Mat4 *mx) { if (!n) return; gfx_bind(tx_mat[m]); for (int c = 0; c < n; c++) if (ms[c]) gfx_draw(ms[c], mx, 1, 1, 1, 1); }   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
-static Mesh *m_hills, *m_mountains, *m_clouds; static Texture *tx_white; static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_hills, *m_mountains, *m_clouds, *m_boostglow; static Texture *tx_padglow; static Texture *tx_white; static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
 
@@ -361,7 +362,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
 }
 static void free_track_meshes(void) {
     gfx_mesh_free(m_hills); m_hills = NULL;
-    Mesh **ms[] = {&m_mountains, &m_clouds, &m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_whale, &m_whale_jaw, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_boostglow, &m_mountains, &m_clouds, &m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_whale, &m_whale_jaw, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -384,6 +385,8 @@ static float ground_level(const Track *t) {   /* the height of the ground plane 
    drawn, like the sky), and they stay put in the world, so they slide past each other as you drive. */
 #define FAR_CAP 40000
 static Vertex *far_buf(void) { static Vertex *b = NULL; if (!b) b = malloc(sizeof(Vertex) * FAR_CAP); return b; }
+static void px_padglow(int x, int y, uint32_t *o) { float dx = (x - 31.5f) / 32.0f, dy = (y - 31.5f) / 32.0f, d = sqrtf(dx * dx + dy * dy), a = fmaxf(0, 1 - d); a = a * a * 0.85f;
+    *o = rgba((int)(255 * a), (int)(235 * a), (int)(160 * a), (int)(255 * a)); }
 static void px_white(int x, int y, uint32_t *o) { (void)x; (void)y; *o = rgba(255, 255, 255, 255); }
 static void far_vert(Batch *b, Vec3 p, Vec3 n, float u, float v, float r, float g, float bl) {
     if (b->n >= b->cap) return; Vertex q = {p.x, p.y, p.z, n.x, n.y, n.z, u, v, r, g, bl, 1}; b->v[b->n++] = q; }
@@ -586,18 +589,50 @@ static void build_track_meshes(void) {
       p0.y += 0.03f; p1.y += 0.03f; p2.y += 0.03f; p3.y += 0.03f;
       batch_quad4(&g_b, p0, p1, p2, p3, v3(0, 1, 0), 0, 0, 4, 1, 1, 1, 1, 1); }
     m_startline = gfx_mesh_static(g_b.v, g_b.n);
-    /* boost arrows and bounce pads painted on the road */
+    /* boost pads (Sean: 3D and glowing, with a Bible symbol): a raised golden dove of the Holy Spirit in flight, its head
+       pointing the way the racers drive (the Spirit "descending like a dove", Matthew 3:16), on a pool of soft light */
+    Batch keep_b = g_b; batch_init(&g_b, far_buf(), FAR_CAP); batch_clear(&g_b);   /* a road can have 30 doves: the big buffer */
+    {
+      static const int DN = 10; static const int dn[10] = {14, 6, 6, 6, 6, 6, 6, 6, 4, 4};
+      static const float dp[10][14][2] = {{{0.00f, 1.00f}, {0.08f, 0.97f}, {0.13f, 0.88f}, {0.14f, 0.76f}, {0.19f, 0.50f}, {0.21f, 0.15f}, {0.15f, -0.30f}, {0.00f, -0.42f}, {-0.15f, -0.30f}, {-0.21f, 0.15f}, {-0.19f, 0.50f}, {-0.14f, 0.76f}, {-0.13f, 0.88f}, {-0.08f, 0.97f}},
+          {{0.17f, 0.58f}, {0.55f, 0.68f}, {0.98f, 0.58f}, {0.95f, 0.46f}, {0.50f, 0.42f}, {0.18f, 0.40f}},
+          {{0.18f, 0.44f}, {0.52f, 0.44f}, {0.88f, 0.36f}, {0.82f, 0.25f}, {0.45f, 0.22f}, {0.19f, 0.24f}},
+          {{0.19f, 0.27f}, {0.45f, 0.25f}, {0.70f, 0.14f}, {0.60f, 0.05f}, {0.35f, 0.06f}, {0.20f, 0.08f}},
+          {{-0.18f, 0.40f}, {-0.50f, 0.42f}, {-0.95f, 0.46f}, {-0.98f, 0.58f}, {-0.55f, 0.68f}, {-0.17f, 0.58f}},
+          {{-0.19f, 0.24f}, {-0.45f, 0.22f}, {-0.82f, 0.25f}, {-0.88f, 0.36f}, {-0.52f, 0.44f}, {-0.18f, 0.44f}},
+          {{-0.20f, 0.08f}, {-0.35f, 0.06f}, {-0.60f, 0.05f}, {-0.70f, 0.14f}, {-0.45f, 0.25f}, {-0.19f, 0.27f}},
+          {{0.00f, -0.30f}, {0.10f, -0.30f}, {0.16f, -0.90f}, {0.00f, -0.95f}, {-0.16f, -0.90f}, {-0.10f, -0.30f}},
+          {{0.10f, -0.28f}, {0.18f, -0.30f}, {0.40f, -0.82f}, {0.28f, -0.88f}},
+          {{-0.28f, -0.88f}, {-0.40f, -0.82f}, {-0.18f, -0.30f}, {-0.10f, -0.28f}}};
+      for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p]; if (pd->kind != PAD_BOOST) continue;
+        int ci = (pd->idx + 3) % t->n; const TrackSample *cs = &t->s[ci]; float spacing = t->length / (float)t->n, W = pd->halfw * 1.05f, F = pd->halfw * 1.25f;
+        for (int part = 0; part < DN; part++) {
+            int pn = dn[part], wingp = part >= 1 && part <= 6, tailp = part >= 7;
+            float th = part == 0 ? 0.42f : (wingp ? 0.2f + 0.03f * ((part - 1) % 3) : 0.16f + 0.02f * (part - 7));   /* feathers overlap in layers */
+            Vec3 top[16], bot[16];
+            for (int k = 0; k < pn; k++) { float lx = dp[part][k][0], lz = dp[part][k][1];
+                float lat = pd->lateral + lx * W, fwd = lz * F; int si = (ci + (int)lroundf(fwd / spacing) + t->n) % t->n; const TrackSample *ss = &t->s[si];
+                float along = fwd - (float)lroundf(fwd / spacing) * spacing;
+                Vec3 base = road_point(t, si, lat); base.x += ss->tx * along; base.z += ss->tz * along; base.y += 0.06f;
+                float lift = wingp ? fabsf(lx) * 0.25f : 0;   /* the wings sweep up a little */ (void)tailp;
+                float h = th * (part == 0 ? (0.6f + 0.4f * (1 - fabsf(lz))) : 1.0f);
+                bot[k] = v3(base.x, base.y + lift * 0.5f, base.z); top[k] = v3(base.x, base.y + lift + h, base.z); }
+            (void)cs;
+            /* the top: bright white-gold */
+            Vec3 mid = v3(0, 0, 0); for (int k = 0; k < pn; k++) { mid.x += top[k].x / pn; mid.y += top[k].y / pn; mid.z += top[k].z / pn; }
+            for (int k = 0; k < pn; k++) { Vec3 tri[3] = {mid, top[k], top[(k + 1) % pn]}; for (int q = 0; q < 3; q++) far_vert(&g_b, tri[q], v3(0, 1, 0), 0.5f, 0.5f, 1.0f, 0.97f, 0.78f); }
+            /* the edges: deeper gold, lit from one side */
+            for (int k = 0; k < pn; k++) { int k2 = (k + 1) % pn; Vec3 e = v3_sub(top[k2], top[k]); Vec3 n = v3_norm(v3(e.z, 0, -e.x));
+                float sh = 0.7f + 0.3f * (n.x * 0.5f + n.z * 0.5f + 0.5f); batch_quad4(&g_b, bot[k], bot[k2], top[k2], top[k], n, 0, 0, 1, 1, 1.0f * sh, 0.72f * sh, 0.22f * sh, 1); }
+        }
+        /* an eye and a small olive sprig would be lost at racing speed: a plain glowing shape reads best */
+      } }
+    m_boostpads = gfx_mesh_static(g_b.v, g_b.n); g_b = keep_b;
     batch_clear(&g_b);
     for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p]; if (pd->kind != PAD_BOOST) continue;
-        /* chevrons pointing the way the racers drive (tip ahead, wings behind), two in a row */
-        for (int row = 0; row < 2; row++) { int i0 = pd->idx + row * 3;
-        for (int bar = -1; bar <= 1; bar += 2) {
-            Vec3 a = road_point(t, (i0 + 2) % t->n, pd->lateral), b = road_point(t, i0 % t->n, pd->lateral + bar * pd->halfw);
-            Vec3 c = road_point(t, (i0 + 1) % t->n, pd->lateral + bar * pd->halfw), d = road_point(t, (i0 + 3) % t->n, pd->lateral);
-            a.y += 0.04f; b.y += 0.04f; c.y += 0.04f; d.y += 0.04f;
-            if (bar < 0) batch_quad4(&g_b, a, d, c, b, v3(0, 1, 0), 0, 0, 1, 1, 1, 0.85f, 0.2f, 1); else batch_quad4(&g_b, a, b, c, d, v3(0, 1, 0), 0, 0, 1, 1, 1, 0.85f, 0.2f, 1);
-        } } }
-    m_boostpads = gfx_mesh_static(g_b.v, g_b.n);
+        int ci = (pd->idx + 3) % t->n; const TrackSample *cs = &t->s[ci]; Vec3 c = road_point(t, ci, pd->lateral); c.y += 0.05f; float r = pd->halfw * 1.9f;
+        batch_quad(&g_b, c, v3(cs->nx * r, 0, cs->nz * r), v3(cs->tx * r * 1.15f, 0, cs->tz * r * 1.15f), v3(0, 1, 0), 0, 0, 1, 1, 1.0f, 0.85f, 0.4f, 1); }
+    gfx_mesh_free(m_boostglow); m_boostglow = gfx_mesh_static(g_b.v, g_b.n);
     batch_clear(&g_b);
     for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p]; if (pd->kind != PAD_BOUNCE) continue;
         Vec3 c = road_point(t, pd->idx, pd->lateral); c.y += 0.05f; const TrackSample *sm = &t->s[pd->idx];
@@ -2540,7 +2575,10 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         if (g_def->bonus == 2 && m_brook) { static Texture *tx_brook = NULL; if (!tx_brook) tx_brook = make_tex(128, 128, 1, 0, px_water); gfx_state(ST_TRANSPARENT); gfx_bind(tx_brook);
             Mat4 flow = m4_translate(sinf(g_time * 2.0f) * 0.3f, 0, 0); gfx_draw_ex(m_brook, &flow, 1, 1, 1, 0.75f, 0.8f, 0, g_time * 0.05f, 0); gfx_state(ST_SOLID); }
         { float pulse = 0.75f + 0.25f * sinf(g_time * 6.0f);
-          gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_boostpads, &id, pulse, pulse, pulse, 1);
+          if (!tx_padglow) tx_padglow = make_tex(64, 64, 0, 0, px_padglow);
+          gfx_state(ST_DEPTH | ST_BLEND | ST_ADD); gfx_bind(tx_padglow); gfx_draw_ex(m_boostglow, &id, pulse, pulse, pulse, 1, 0, 1, 0, 0);   /* the pool of light */
+          gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(tx_white); { float gl = 1.05f + 0.35f * sinf(g_time * 6.0f); gfx_draw_ex(m_boostpads, &id, gl, gl, gl, 1, 0.4f, 1, 0, 0); }   /* the dove, shining */
+          gfx_state(ST_TRANSPARENT);
           gfx_bind(tx_blob); gfx_draw(m_bouncepads, &id, 1, 1, 1, 0.9f);
           gfx_state(ST_SOLID); }
         gfx_state(ST_CUTOUT);
@@ -2864,7 +2902,14 @@ void game_frame(const Pad *pads, int npads, float dt) {
 #ifdef KK_TOUR
     static Pad tour[KK_PADS]; tour_pads(tour, g_time); pads = tour; npads = KK_PADS;
 #endif
-    Pad merged = merge_pads(pads, npads); const Pad *pad = &merged;     /* menus listen to every controller; a lone player can use any of them */
+    Pad merged = merge_pads(pads, npads); const Pad *pad = &merged;
+    /* (Sean) only player 1 works the menus: the controller that pressed a button on the title screen (or player 1 of a
+       group). In a race anyone can pause, and whoever paused works the pause menu. The title, join and group character
+       screens still listen to everyone; if player 1's controller goes away, everyone can use the menus again. */
+    { int sl = -1;
+      if (g_screen == SCR_PAUSE) sl = g_pause_slot;
+      else if (g_screen != SCR_TITLE && g_screen != SCR_RACE && g_screen != SCR_JOIN && g_screen != SCR_MCHAR && g_screen != SCR_OPENER) sl = g_menu_slot;
+      if (sl >= 0 && sl < npads && pads[sl].source) pad = &pads[sl]; }
     g_frame_ms = dt * 1000.0f;
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 12
     { static int done = 0; if (!done && g_time > 2.0f) { done = 1;   /* CI: straight to a trophy ceremony, the field behind it is the demo race */
@@ -2942,7 +2987,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
     switch (g_screen) {
     case SCR_TITLE:
         if (g_title_press > 0) { g_title_press += dt; if (g_title_press > 0.5f) { g_title_press = 0; g_screen = SCR_MAIN; g_screen_t = 0; g_menu_sel = 0; } break; }   /* the button shows being pressed, then the menu */
-        if (pa || pb || pplus || pad->x || pad->y) { g_title_press = 0.001f; sfx_play(SFX_MENU_OK, 1, 0); sfx_play(SFX_UNLOCK, 0.55f, 0); platform_rumble(0.5f, 0.12f); }
+        if (pa || pb || pplus || pad->x || pad->y) { g_menu_slot = -1; for (int sl = 0; sl < npads && sl < KK_PADS; sl++) if (pads[sl].source && (pa_s[sl] || pb_s[sl] || pplus_s[sl] || pads[sl].x || pads[sl].y)) { g_menu_slot = sl; break; }
+            g_title_press = 0.001f; sfx_play(SFX_MENU_OK, 1, 0); sfx_play(SFX_UNLOCK, 0.55f, 0); platform_rumble(0.5f, 0.12f); }
 #ifndef KK_TOUR
         else if (g_screen_t > 90.0f && g_op_frames > 0 && m_op) { g_screen = SCR_OPENER; g_screen_t = 0; g_op_cur = -1; }   /* left alone, the title screen plays the opener again */
 #endif
@@ -2997,6 +3043,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             else if (pplus_s[sl] && g_njoined <= 1 && sl == 0 && g_mode != MODE_VS) { sfx_play(SFX_MENU_OK, 1, 0); g_multi = 0; g_njoined = 0; memset(g_joined, 0, sizeof g_joined); begin_mode_alone(); break; }   /* just the GamePad: play alone */
             else if (pplus_s[sl] && g_joined[sl] && g_njoined >= 2) { sfx_play(SFX_MENU_OK, 1, 0);
                 for (int o = 0; o < KK_PADS; o++) if (g_joined[o]) g_pslot[g_joined[o] - 1] = o;
+                g_menu_slot = g_pslot[0];   /* player 1 of the group works the menus */
                 for (int p = 0; p < g_njoined; p++) { g_pchar[p] = p % NMAIN; g_plock[p] = 0; }
                 g_multi = 1; g_screen = SCR_MCHAR; g_screen_t = 0; break; } }
         break;
@@ -3048,11 +3095,12 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pb) { g_screen = SCR_KART; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_RACE:
-        if (pplus && r->state != RACE_FINISHED && g_screen_t > 0.5f) { g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; g_pause_reason[0] = 0; }
+        if (pplus && r->state != RACE_FINISHED && g_screen_t > 0.5f) { g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; g_pause_reason[0] = 0;
+            g_pause_slot = -1; for (int sl = 0; sl < npads && sl < KK_PADS; sl++) if (pads[sl].source && pads[sl].plus) { g_pause_slot = sl; break; } }
         static float gone_t[MAX_HUMANS];   /* a controller that drops out for a moment (a Wii Remote does) must not pause the race: only one gone for 2 s */
         for (int p = 0; p < MAX_HUMANS; p++) { int sl = p < g_nplayers ? g_pslot[p] : -1; if (sl >= 0 && sl < npads && !pads[sl].source) gone_t[p] += dt; else gone_t[p] = 0; }
         if (g_nplayers > 1 && r->state != RACE_FINISHED && g_screen_t > 2.0f) for (int p = 0; p < g_nplayers; p++) { if (gone_t[p] > 2.0f) { gone_t[p] = 0;
-            g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; snprintf(g_pause_reason, sizeof g_pause_reason, "PLAYER %d'S CONTROLLER DISCONNECTED", p + 1); break; } }
+            g_screen = SCR_PAUSE; g_pause_sel = 0; g_screen_t = 0; g_pause_slot = -1; snprintf(g_pause_reason, sizeof g_pause_reason, "PLAYER %d'S CONTROLLER DISCONNECTED", p + 1); break; } }
         if (r->state == RACE_FINISHED) {
             g_results_t += dt;
             if (g_results_t > 0.6f) {
