@@ -19,6 +19,8 @@ const Character CHARACTERS[NCHARS] = {
     {"Michael", "MICHAEL", {1.05f, 1.02f, 0.98f, 1.12f}, 0.90f, 0.15f, 0.15f, 1}, /* bonus: the archangel with the sword, strong and quick */
     {"Gabriel", "GABRIEL", {1.02f, 1.06f, 1.06f, 0.88f}, 0.25f, 0.35f, 0.85f, 1}, /* bonus: the archangel with the trumpet, light and nimble */
 };
+static int g_field[NKARTS], g_field_on = 0;   /* a cup keeps the same field every round: who sits in each computer seat */
+void race_set_field(const int *chars) { g_field_on = chars != NULL; if (chars) for (int i = 0; i < NKARTS; i++) g_field[i] = chars[i]; }
 static unsigned g_unlocked = 0x7F;      /* the computer drives only unlocked characters */
 void race_set_unlocked(unsigned mask) { g_unlocked = mask | 0x7F; }
 const KartStyle KART_STYLES[NSTYLES] = {
@@ -58,6 +60,7 @@ static void race_setup(Race *r, const Track *t, const int *chars_in, const int *
         if (i < nk && human[i]) { r->human[i] = 1; r->nhuman++; if (r->player < 0) r->player = i; r->character[i] = chars_in[i] >= 0 ? chars_in[i] : 0; }
         else r->character[i] = next < np ? pool[next++] : (chars_in && chars_in[0] >= 0 ? chars_in[0] : 0);
     }
+    if (g_field_on) for (int i = 0; i < NKARTS; i++) if (!r->human[i] && g_field[i] >= 0 && g_field[i] < NCHARS) r->character[i] = g_field[i];
     if (r->player < 0) r->player = 0;
     for (int i = 0; i < NKARTS; i++) r->order[i] = i;
     float base = difficulty == DIFF_EASY ? 0.52f : (difficulty == DIFF_NORMAL ? 0.68f : 0.80f);

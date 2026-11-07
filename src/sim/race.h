@@ -65,6 +65,7 @@ typedef struct {
 void race_init(Race *r, const Track *t, int player_character, int player_slot, int difficulty, int nk);   /* nk = 1 for a time trial */
 void race_init_multi(Race *r, const Track *t, const int *chars, const int *styles, int nhuman, int difficulty);   /* 2..4 people, computer drivers fill the field; humans take the last grid slots in order */
 void race_set_unlocked(unsigned mask);     /* which characters the computer may drive (bit per character) */
+void race_set_field(const int *chars);   /* NULL = a fresh field each race; a list = the same computer racers in the same seats (a cup) */
 void race_set_styles(int player_style, unsigned unlocked_styles);   /* the player's kart body, and the bodies the computer may use */
 void race_step(Race *r, const KartInput *player_in, int player_auto, float dt);
 void race_step_multi(Race *r, const KartInput *in /* [NKARTS], read for human karts */, int all_auto, float dt);

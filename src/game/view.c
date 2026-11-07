@@ -59,6 +59,8 @@ static unsigned unlocked_styles(void) { unsigned m = 0; for (int i = 0; i < NSTY
 static int g_player_style = 0;
 static int track_unlocked(int d) { return TRACK_DEFS[d].bonus != 1 || (g_save.unlocks & UNLOCK_HEAVEN); }   /* only the Road to Heaven has to be earned */
 static unsigned unlocked_mask(void) { unsigned m = 0; for (int c = 0; c < NCHARS; c++) if (char_unlocked(c)) m |= 1u << c; return m; }
+static int cer_order(int *ord);
+static int g_gp_kp[NKARTS];   /* cup points per kart seat (the field is the same every round), so two karts can never pool their points */
 static int g_gp_round = 0, g_gp_points[NCHARS], g_gp_order[NUM_GP_ROUNDS_MAX];
 static float g_best_time[8];                 /* best time trial time per road (loaded from the save file) */
 static Texture *tx_portrait[NCHARS]; static float g_portrait_aspect[NCHARS];
@@ -1221,9 +1223,12 @@ static void start_race(int attract) {
     if (g_mode == MODE_TT && !attract && !g_multi) ghost_load(g_track_idx); else g_ghost_n = 0;
     int nk = (g_mode == MODE_TT && !attract) ? 1 : NKARTS;
     g_nplayers = (g_multi && !attract && g_njoined >= 2) ? g_njoined : 1;
+    int cup = g_mode == MODE_GP && !attract;   /* a cup: the same rivals in the same seats every round, so each kart's points add up */
+    if (!cup || g_gp_round == 0) race_set_field(NULL);
     if (g_nplayers > 1 && g_mode == MODE_TT) race_init_tt_multi(&g_race, &g_track, g_pchar, g_nplayers, g_difficulty);
     else if (g_nplayers > 1) race_init_multi(&g_race, &g_track, g_pchar, NULL, g_nplayers, g_difficulty);
     else race_init(&g_race, &g_track, attract && g_screen != SCR_TRACK ? g_demo_char : g_player_char, nk == 1 ? 0 : 5, g_difficulty, nk);
+    if (cup && g_gp_round == 0) race_set_field(g_race.character);
     if (g_def->bonus == 3) race_set_jericho(&g_race);
     if (attract) g_race.cd = 3.5f;   /* the demo skips the get-ready pause */
     for (int i = 0; i < g_nplaced; i++) g_placed[i].fall_t = 0;
@@ -2003,8 +2008,7 @@ static void hud_cup(void) {
 static void hud_gp(void) {
     panel(290, 80, 700, 560); char buf[64];
     text_c(g_gp_round >= NUM_GP_TRACKS ? (g_cup == 0 ? "GOSPEL CUP CHAMPION" : "GENESIS TO GLORY CHAMPION") : "STANDINGS", 100, g_gp_round >= NUM_GP_TRACKS && g_cup == 1 ? 32 : 40, 1, 0.85f, 0.3f, 1);
-    int nk = g_race.nk; int ord[NKARTS]; for (int i = 0; i < nk; i++) ord[i] = g_race.character[i];
-    for (int a2 = 1; a2 < nk; a2++) { int v = ord[a2], j = a2 - 1; while (j >= 0 && g_gp_points[ord[j]] < g_gp_points[v]) { ord[j + 1] = ord[j]; j--; } ord[j + 1] = v; }
+    int ord[NKARTS]; int nk = cer_order(ord);
     for (int p = 0; p < nk; p++) { int c = ord[p]; float y = 160 + p * 50; int me = c == g_player_char;
         if (me) batch_rect(&g_b, 310, y - 6, 660, 44, 1, 0.85f, 0.3f, 0.25f);
         batch_text(&g_b, place_name(p + 1), 330, y, 30, 1, 1, 1, 1);
@@ -2080,7 +2084,7 @@ static void px_trophy(int x, int y, uint32_t *o) {   /* a gold cup with two hand
     *o = rgba((int)r, (int)g, (int)b, 255);
 }
 static int cer_order(int *ord) {   /* the field of the cup, best first */
-    int nk = g_race.nk; for (int i = 0; i < nk; i++) ord[i] = g_race.character[i];
+    int nk = 0; for (int i = 0; i < g_race.nk; i++) { int c = g_race.character[i], dup = 0; for (int j = 0; j < nk; j++) if (ord[j] == c) dup = 1; if (!dup) ord[nk++] = c; }   /* each character once */
     for (int a2 = 1; a2 < nk; a2++) { int v = ord[a2], j = a2 - 1; while (j >= 0 && g_gp_points[ord[j]] < g_gp_points[v]) { ord[j + 1] = ord[j]; j--; } ord[j + 1] = v; }
     return nk;
 }
@@ -2773,7 +2777,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
     g_frame_ms = dt * 1000.0f;
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 12
     { static int done = 0; if (!done && g_time > 2.0f) { done = 1;   /* CI: straight to a trophy ceremony, the field behind it is the demo race */
-        g_mode = MODE_GP; g_cup = 0; g_gp_round = NUM_GP_TRACKS; memset(g_gp_points, 0, sizeof g_gp_points);
+        g_mode = MODE_GP; g_cup = 0; g_gp_round = NUM_GP_TRACKS; memset(g_gp_points, 0, sizeof g_gp_points); memset(g_gp_kp, 0, sizeof g_gp_kp);
         for (int i = 0; i < g_race.nk; i++) g_gp_points[g_race.character[i]] = 60 - 7 * i;
         g_player_char = g_race.character[1]; g_screen = SCR_TROPHY; g_screen_t = 0; } }
 #endif
@@ -2924,7 +2928,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         int open = !CUPS[g_cup].needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
         if (mx) { g_cup = (g_cup + mx + 2) % 2; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) { if (open) { sfx_play(SFX_MENU_OK, 1, 0); g_screen_t = 0;
-                if (g_multi) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = CUPS[g_cup].roads[i]; begin_player_race(); }   /* together: everyone has picked already */
+                if (g_multi) { memset(g_gp_points, 0, sizeof g_gp_points); memset(g_gp_kp, 0, sizeof g_gp_kp); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = CUPS[g_cup].roads[i]; begin_player_race(); }   /* together: everyone has picked already */
                 else g_screen = SCR_CHAR; } else sfx_play(SFX_WRONG_WAY, 1, 0); }
         if (pb) { g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break; }
@@ -2939,7 +2943,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (mx) { g_player_style = (g_player_style + mx + NSTYLES) % NSTYLES; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) sfx_play(style_unlocked(g_player_style) ? SFX_MENU_OK : SFX_WRONG_WAY, 1, 0);
         if (pa && style_unlocked(g_player_style)) { race_set_styles(g_player_style, unlocked_styles());
-            if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = CUPS[g_cup].roads[i]; begin_player_race(); g_screen_t = 0; }
+            if (g_mode == MODE_GP) { memset(g_gp_points, 0, sizeof g_gp_points); memset(g_gp_kp, 0, sizeof g_gp_kp); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = CUPS[g_cup].roads[i]; begin_player_race(); g_screen_t = 0; }
             else if (g_mode == MODE_JERICHO) { begin_player_race(); g_screen_t = 0; } else { if (g_track_idx >= NUM_PLAY_TRACKS) { set_track(0); start_race(1); } g_screen = SCR_TRACK; g_screen_t = 0; } }
         if (pb) { g_screen = SCR_CHAR; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
@@ -2961,8 +2965,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (r->state == RACE_FINISHED) {
             g_results_t += dt;
             if (g_results_t > 0.6f) {
-                if (g_mode == MODE_GP) { race_rank(r); for (int p = 0; p < r->nk; p++) { Kart *q = &r->k[r->order[p]]; int pl = q->place ? q->place : p + 1; g_gp_points[r->character[r->order[p]]] += GP_POINTS[pl - 1]; }
-                    int best = -1, bg = 0; for (int i = 0; i < r->nk; i++) if (r->given[i] > bg) { bg = r->given[i]; best = i; } if (best >= 0) g_gp_points[r->character[best]] += 2; }
+                if (g_mode == MODE_GP) { race_rank(r); for (int p = 0; p < r->nk; p++) { Kart *q = &r->k[r->order[p]]; int pl = q->place ? q->place : p + 1; g_gp_kp[r->order[p]] += GP_POINTS[pl - 1]; }
+                    int best = -1, bg = 0; for (int i = 0; i < r->nk; i++) if (r->given[i] > bg) { bg = r->given[i]; best = i; } if (best >= 0) g_gp_kp[best] += 2;
+                    memset(g_gp_points, 0, sizeof g_gp_points); for (int i = 0; i < r->nk; i++) { int c = r->character[i]; if (g_gp_kp[i] > g_gp_points[c]) g_gp_points[c] = g_gp_kp[i]; } }   /* each character's points = their own kart's */
                 if (g_mode == MODE_TT && !g_multi) { Kart *k = &r->k[r->player]; if (k->lap > g_track.laps && (g_best_time[g_track_idx] <= 0 || k->total_time < g_best_time[g_track_idx])) { g_best_time[g_track_idx] = k->total_time; if (g_track_idx < SAVE_MAX_ROADS) { g_save.best_ms[g_track_idx] = (int)(k->total_time * 1000); g_save.dirty = 1; } if (g_rec_n > 0) ghost_save(g_track_idx); } }
                 else if (!g_demo && g_mode != MODE_BATTLE && g_mode != MODE_VS && !g_multi) { Kart *k = &r->k[r->player]; g_save.races++; if (k->place == 1) { g_save.wins++; g_save.win_chars |= 1u << g_player_char; } g_save.dirty = 1; }
                 g_fresh_unlocks = 0;
@@ -3212,10 +3217,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
     float want_yaw = k->yaw + k->slide * 0.3f + (orbiting ? g_orbit : 0);
     float dy = want_yaw - cam_yaw; while (dy > 3.14159f) dy -= 6.28318f; while (dy < -3.14159f) dy += 6.28318f;
     cam_yaw += dy * fminf(1.0f, 5.0f * dt);
-    float back = 4.6f + k->speed * 0.12f, up = 2.7f + k->speed * 0.02f;   /* close when stopped (the kart behind on the grid is 5 m back), pulls back with speed */
+    float sp = fminf(fmaxf(k->speed, 0), 26.0f);   /* past cruising speed (boosts) the camera stays put, so the racers stay big on screen (Sean) */
+    float back = 4.6f + sp * 0.07f, up = 2.7f + sp * 0.015f;   /* close when stopped (the kart behind on the grid is 5 m back), a little further back at speed */
     float tx = k->x - sinf(cam_yaw) * back, tz = k->z - cosf(cam_yaw) * back, ty = k->y + up;
-    cam_x += (tx - cam_x) * fminf(1.0f, 12.0f * dt); cam_z += (tz - cam_z) * fminf(1.0f, 12.0f * dt); cam_y += (ty - cam_y) * fminf(1.0f, 6.0f * dt);
-    float want_fov = 62.0f + (k->boost_t > 0 ? 10.0f : 0.0f) + k->speed * 0.15f;
+    cam_x += (tx - cam_x) * fminf(1.0f, 22.0f * dt); cam_z += (tz - cam_z) * fminf(1.0f, 22.0f * dt); cam_y += (ty - cam_y) * fminf(1.0f, 6.0f * dt);
+    float want_fov = 62.0f + (k->boost_t > 0 ? 3.0f : 0.0f) + sp * 0.1f;
     cam_fov += (want_fov - cam_fov) * fminf(1.0f, 4.0f * dt);
     }
     if (g_shake > 0) g_shake = fmaxf(0, g_shake - dt * 1.5f);
