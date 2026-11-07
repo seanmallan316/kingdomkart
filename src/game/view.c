@@ -1,5 +1,6 @@
 // view.c - draws the race: track, eight karts, items, effects, HUD, results. The rules live in sim/race.c.
 #include "game.h"
+#include "models.h"
 #include "save.h"
 #include "../audio/sfx.h"
 #include "../audio/music.h"
@@ -123,7 +124,8 @@ static float g_results_t;
 /* textures */
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
-static Mesh *m_props, *m_curbs;   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
+#define PROP_CHUNKS 32
+static Mesh *m_props[PROP_CHUNKS], *m_curbs; static int m_nprops;   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
 static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
@@ -163,7 +165,7 @@ static Spark g_spark[MAX_SPARK]; static Mesh *m_spark;
 /* scenery: cut-out pictures standing beside the road, grouped by picture */
 typedef struct { const char *img; Texture *tex; float aspect; Mesh *mesh; int placeholder, sway; } SpriteKind;   /* sway: 1 tree (slow), 2 cloth (quick) */
 static SpriteKind g_kind[MAX_SPRITE_KINDS]; static int g_nkind;
-typedef struct { Vec3 p; float h, w, glow; int kind; int purple, falls; int wall; float fall_t; int solid; float yaw; } Placed;   /* solid: drawn as a real 3D model instead of a picture; yaw: which way it faces */   /* wall: 0 = not a wall, else its place in the order the walls of Jericho fall (1..n); fall_t: seconds since it began to fall */
+typedef struct { Vec3 p; float h, w, glow; int kind; int purple, falls; int wall; float fall_t; int solid; float yaw; Mesh *m3; Vec3 t3, o3; } Placed;   /* m3: a wall of Jericho as its own 3D model; t3, o3: along the road and outward, for its fall */   /* solid: drawn as a real 3D model instead of a picture; yaw: which way it faces */   /* wall: 0 = not a wall, else its place in the order the walls of Jericho fall (1..n); fall_t: seconds since it began to fall */
 static int g_nwalls;
 static Placed g_placed[MAX_SCENERY]; static int g_nplaced;
 static int g_mover_kind[MAX_MOVERS];
@@ -505,11 +507,17 @@ static void build_track_meshes(void) {
     if (g_def->finale_img) { int fi = g_def->finale_idx % t->n; const TrackSample *fs = &t->s[fi];
         float hw = g_def->finale_w * 0.5f, hh = g_def->finale_h;
         Vec3 c = v3(fs->x, fs->y - 2.0f, fs->z);
-        batch_quad(&g_b, v3(c.x, c.y + hh * 0.5f, c.z), v3(fs->nx * hw, 0, fs->nz * hw), v3(0, hh * 0.5f, 0), v3(-fs->tx, 0, -fs->tz), 0, 0, 1, 1, 1, 1, 1, 1); }
+        /* nothing over the road (Sean): the two halves of the picture stand as gates flung open, one each side, swung out toward the racers */
+        float ew = track_edge(t, fi), open = 1.15f;
+        for (int sd = -1; sd <= 1; sd += 2) { Vec3 hinge = v3(c.x + fs->nx * sd * (ew + 0.5f), c.y, c.z + fs->nz * sd * (ew + 0.5f));
+            Vec3 dir = v3(fs->nx * sd * cosf(open) - fs->tx * sinf(open), 0, fs->nz * sd * cosf(open) - fs->tz * sinf(open));   /* from the hinge out along the gate */
+            Vec3 mid = v3(hinge.x + dir.x * hw * 0.5f, c.y + hh * 0.5f, hinge.z + dir.z * hw * 0.5f);
+            float u0 = sd < 0 ? 0.5f : 0.5f, u1 = sd < 0 ? 0.0f : 1.0f;   /* each half of the picture, its outer edge at the far end */
+            batch_quad(&g_b, mid, v3(dir.x * hw * 0.5f, 0, dir.z * hw * 0.5f), v3(0, hh * 0.5f, 0), v3(-fs->tx, 0, -fs->tz), u0, 0, u1, 1, 1, 1, 1, 1); } }
     m_finale = gfx_mesh_static(g_b.v, g_b.n);
     /* tunnels: a roof over the road and walls up to it, with an arch ring at each end */
     batch_clear(&g_b);
-    for (int tn = 0; tn < t->ntunnel; tn++) { const Tunnel *tu = &t->tunnel[tn]; int len = (tu->to - tu->from + t->n) % t->n;
+    for (int tn = 0; tn < 0 /* no roofs over the road any more (Sean) */ && tn < t->ntunnel; tn++) { const Tunnel *tu = &t->tunnel[tn]; int len = (tu->to - tu->from + t->n) % t->n;
         for (int q = 0; q <= len; q++) { int i = (tu->from + q) % t->n, j = (i + 1) % t->n; float e = track_edge(t, i), ej = track_edge(t, j);
             Vec3 a = road_point(t, i, -e), b = road_point(t, j, -ej), c = road_point(t, j, ej), d = road_point(t, i, e);
             Vec3 at = v3(a.x, a.y + tu->height, a.z), bt = v3(b.x, b.y + tu->height, b.z), ct = v3(c.x, c.y + tu->height, c.z), dt2 = v3(d.x, d.y + tu->height, d.z);
@@ -534,7 +542,9 @@ static void build_track_meshes(void) {
     batch_clear(&g_b);
     { int i = 0; float e = track_edge(t, i);
       for (int sd = -1; sd <= 1; sd += 2) { Vec3 base = road_point(t, i, sd * (e + 0.5f)); batch_box(&g_b, v3(base.x, base.y + 3.2f, base.z), v3(0.45f, 3.2f, 0.45f), 0.95f, 0.85f, 0.4f); }
-      Vec3 mid = road_point(t, i, 0); batch_box(&g_b, v3(mid.x, mid.y + 6.1f, mid.z), v3(e + 1.0f, 0.75f, 0.3f), 1, 1, 1); }
+      /* no banner across the road: a checkered flag flies from the top of each pillar instead, out over the shoulder */
+      for (int sd = -1; sd <= 1; sd += 2) { Vec3 top = road_point(t, i, sd * (e + 0.5f)); for (int fx = 0; fx < 4; fx++) for (int fy = 0; fy < 3; fy++) { float c = ((fx + fy) & 1) ? 0.05f : 1.0f;
+          batch_box(&g_b, v3(top.x + t->s[i].nx * sd * (0.45f + 0.35f + fx * 0.7f), top.y + 5.6f + fy * 0.5f, top.z + t->s[i].nz * sd * (0.45f + 0.35f + fx * 0.7f)), v3(0.35f, 0.25f, 0.05f), c, c, c); } } }
     m_arch = gfx_mesh_static(g_b.v, g_b.n);
     /* a coin: a thick gold medal - sixteen-sided rim, raised outer ring, and a cross standing out on both faces */
     batch_clear(&g_b);
@@ -1061,8 +1071,10 @@ static void build_props(void) {
     batch_init(&g_b, g_vtmp, 16384);   /* the kerbs of a long road need over 13000 corners */
     int heaven = g_def->finale_img != NULL; float sr = 0.86f, sg = 0.78f, sb = 0.62f;   /* sun-baked limestone */
     if (heaven) { sr = 0.97f; sg = 0.95f; sb = 0.9f; } else if (!strcmp(g_def->prefix, "tomb")) { sr = 0.7f; sg = 0.68f; sb = 0.64f; } else if (!strcmp(g_def->prefix, "eden")) { sr = 0.62f; sg = 0.5f; sb = 0.36f; }
-    batch_clear(&g_b);
+    batch_clear(&g_b); for (int c = 0; c < m_nprops; c++) { gfx_mesh_free(m_props[c]); m_props[c] = NULL; } m_nprops = 0;
     for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (!pl->solid) continue;
+        if (g_b.n + 4000 > g_b.cap && m_nprops < PROP_CHUNKS) { m_props[m_nprops++] = gfx_mesh_static(g_b.v, g_b.n); batch_clear(&g_b); }   /* the scenery goes into the GPU in pieces */
+        if (model_known(g_kind[pl->kind].img)) { int n1 = g_b.n; model_build(&g_b, g_kind[pl->kind].img, pl->h, (unsigned)i); prop_place(n1, pl->p, pl->yaw); continue; }
         int shape = prop_shape(g_kind[pl->kind].img), n0 = g_b.n; float h = pl->h, w = fmaxf(pl->w, h * 0.6f), d = w * 0.8f;
         unsigned hsh = (unsigned)i * 2654435761u; float tint = 0.92f + 0.08f * ((hsh >> 8) & 255) / 255.0f, r = sr * tint, g = sg * tint, b = sb * tint;
         switch (shape) {
@@ -1112,7 +1124,16 @@ static void build_props(void) {
         }
         prop_place(n0, pl->p, pl->yaw);
     }
-    gfx_mesh_free(m_props); m_props = g_b.n ? gfx_mesh_static(g_b.v, g_b.n) : NULL;
+    if (g_b.n && m_nprops < PROP_CHUNKS) m_props[m_nprops++] = gfx_mesh_static(g_b.v, g_b.n);
+    /* the walls of Jericho: each stretch its own 3D model (stone courses, battlements), so it can fall flat */
+    for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; gfx_mesh_free(pl->m3); pl->m3 = NULL; if (!pl->wall) continue;
+        const char *img = g_kind[pl->kind].img; int tower = !strcmp(img, "#jtower"), rahab = !strcmp(img, "#rahab"); float L = fmaxf(pl->w, 4.0f), H = pl->h, T = tower ? L * 0.8f : 2.2f;
+        batch_clear(&g_b);
+        for (int c = 0; c < 4; c++) { float y0 = H * c / 4, y1 = H * (c + 1) / 4, sh = (c & 1) ? 0.92f : 1.0f; batch_box(&g_b, v3(0, (y0 + y1) / 2, -T / 2), v3(L / 2, (y1 - y0) / 2, T / 2), 0.82f * sh, 0.7f * sh, 0.5f * sh); }
+        for (int k = 0; k < (int)(L / 1.6f); k++) batch_box(&g_b, v3(-L / 2 + 0.8f + k * 1.6f, H + 0.4f, -T / 2), v3(0.5f, 0.4f, T / 2), 0.78f, 0.66f, 0.47f);
+        if (rahab) { batch_box(&g_b, v3(0, H + 1.6f, -T / 2), v3(L * 0.3f, 1.6f, T * 0.45f), 0.8f, 0.7f, 0.55f); batch_box(&g_b, v3(L * 0.1f, H + 1.8f, 0.02f), v3(0.4f, 0.5f, 0.03f), 0.1f, 0.08f, 0.08f);
+            batch_box(&g_b, v3(L * 0.1f, H * 0.6f + 1.0f, 0.06f), v3(0.05f, H * 0.4f, 0.03f), 0.9f, 0.1f, 0.1f); }   /* her window and the scarlet cord (Joshua 2:18) */
+        pl->m3 = gfx_mesh_static(g_b.v, g_b.n); }
     /* raised kerbs along both edges of the road: red and white blocks, a hand's height, on the roads of the earth */
     batch_clear(&g_b);
     if (g_def->bonus != 2) for (int i = 0; i < g_track.n; i++) { int j = (i + 1) % g_track.n; const TrackSample *a = &g_track.s[i], *bq = &g_track.s[j];
@@ -1170,7 +1191,8 @@ static void load_theme(void) {
         p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
         p->wall = (!strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab")) ? ++g_nwalls : 0; p->fall_t = 0;
         p->yaw = atan2f(g_track.s[idx].tx, g_track.s[idx].tz) + i * 0.37f;   /* roughly along the road, each a little turned */
-        p->solid = g_kind[p->kind].placeholder && !p->wall && prop_shape(sc->img) >= 0;
+        p->solid = !p->wall && (model_known(sc->img) || prop_shape(sc->img) >= 0);   /* everything is a 3D model now (Sean), except the waterfalls */
+        { const TrackSample *ts = &g_track.s[idx]; p->t3 = v3(ts->tx, 0, ts->tz); p->o3 = v3(ts->nx * sgn, 0, ts->nz * sgn); }
     }
     m_glow = gfx_mesh_dynamic((MAX_SCENERY + NKARTS) * 6 + 6);
     /* a soft shadow blob under everything that stands by the road */
@@ -2152,7 +2174,7 @@ static void build_dynamic(void) {
     {
         for (int kd = 0; kd < g_nkind; kd++) {
             batch_clear(&g_b);
-            for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->kind != kd || pl->solid) continue;
+            for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (pl->kind != kd || pl->solid || pl->m3) continue;
                 float dx = pl->p.x - cam_x, dz = pl->p.z - cam_z; float sdd = g_nplayers >= 3 ? SPRITE_DRAW_DIST * 0.6f : (g_nplayers == 2 ? SPRITE_DRAW_DIST * 0.8f : SPRITE_DRAW_DIST); if (dx * dx + dz * dz > sdd * sdd) continue;
                 float w = pl->w * 0.5f; int scroll = pl->falls && g_kind[kd].placeholder;
                 float v0 = scroll ? g_time * 1.5f : 0.0f, v1 = v0 + (scroll ? pl->h / 3.0f : 1.0f);
@@ -2171,7 +2193,7 @@ static void build_dynamic(void) {
                         batch_quad4(&g_b, v3(c.x - rr.x - uu.x, c.y - uu.y, c.z - rr.z - uu.z), v3(c.x + rr.x - uu.x, c.y - uu.y, c.z + rr.z - uu.z), v3(c.x + rr.x + uu.x, c.y + uu.y, c.z + rr.z + uu.z), v3(c.x - rr.x + uu.x, c.y + uu.y, c.z - rr.z + uu.z), v3(0, 1, 0), 0, v1, 1, v0, 1, 1, 1, 1); }
                     continue; }
                 batch_quad4(&g_b, v3(c.x - r_.x - u_.x, c.y - u_.y, c.z - r_.z - u_.z), v3(c.x + r_.x - u_.x, c.y - u_.y, c.z + r_.z - u_.z), v3(c.x + r_.x + u_.x, c.y + u_.y, c.z + r_.z + u_.z), v3(c.x - r_.x + u_.x, c.y + u_.y, c.z - r_.z + u_.z), v3(0, 1, 0), 0, v0, 1, v1, 1, 1, 1, 1); }
-            for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd) continue; const Mover *mv = &g_track.mover[m];
+            for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd || model_known(g_track.mover[m].img)) continue; const Mover *mv = &g_track.mover[m];
                 if (r->jericho && mv->img[1] == 'r' && mv->img[2] == 'u' && r->wall_fall < 0.3f) continue;   /* the rubble appears once the walls start to fall */
                 float mx, my, mz; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); float w = mv->height * g_kind[kd].aspect * 0.5f;
                 batch_quad(&g_b, v3(mx, my + mv->height * 0.5f, mz), v3(ax.x * w, 0, ax.z * w), v3(0, mv->height * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
@@ -2298,7 +2320,25 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             gfx_mesh_update(m_sun, g_b.v, g_b.n); gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_sun, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_skid, &id, 1, 1, 1, 1);
         gfx_bind(tx_blob); gfx_draw(m_scshadow, &id, 1, 1, 1, 1); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
-        gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); if (m_props) gfx_draw(m_props, &id, 1, 1, 1, 1); if (m_curbs) gfx_draw(m_curbs, &id, 1, 1, 1, 1); gfx_state(ST_SOLID);   /* both sides drawn: no chance of a model showing inside out */
+        gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); for (int c = 0; c < m_nprops; c++) gfx_draw(m_props[c], &id, 1, 1, 1, 1); if (m_curbs) gfx_draw(m_curbs, &id, 1, 1, 1, 1);
+        for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (!pl->m3) continue;   /* the walls of Jericho, falling flat outward when their time comes */
+            float f = pl->fall_t > 0 ? clampf((pl->fall_t - 0.15f) / 0.95f, 0, 1) : 0, a = 1.5707963f * f * f, ca = cosf(a), sa = sinf(a), shud = pl->fall_t > 0 && pl->fall_t < 0.3f ? sinf(pl->fall_t * 60.0f) * 0.15f : 0;
+            Vec3 e1 = pl->t3, up = v3(pl->o3.x * sa, ca, pl->o3.z * sa), out = v3(pl->o3.x * ca, -sa, pl->o3.z * ca);
+            Mat4 m = m4_identity(); m.m[0] = e1.x; m.m[1] = e1.y; m.m[2] = e1.z; m.m[4] = up.x; m.m[5] = up.y; m.m[6] = up.z; m.m[8] = out.x; m.m[9] = out.y; m.m[10] = out.z;
+            m.m[12] = pl->p.x + e1.x * shud; m.m[13] = pl->p.y + 0.15f; m.m[14] = pl->p.z + e1.z * shud; gfx_draw(pl->m3, &m, 1, 1, 1, 1); }
+        {   /* the obstacles that cross the road, as 3D models: sheep, carts, nets, rolling stones, rubble */
+            static Mesh *m_mov[MAX_MOVERS]; static const Track *built_for = NULL; static int built_n = -1;
+            if (built_for != &g_track || built_n != g_loaded_track) { for (int m = 0; m < MAX_MOVERS; m++) { gfx_mesh_free(m_mov[m]); m_mov[m] = NULL; }
+                for (int m = 0; m < g_track.nmover; m++) if (model_known(g_track.mover[m].img)) { batch_clear(&g_b); model_build(&g_b, g_track.mover[m].img, g_track.mover[m].height, (unsigned)m * 7u); m_mov[m] = gfx_mesh_static(g_b.v, g_b.n); }
+                built_for = &g_track; built_n = g_loaded_track; }
+            for (int m = 0; m < g_track.nmover; m++) { const Mover *mv = &g_track.mover[m]; if (!m_mov[m]) continue;
+                if (r->jericho && mv->img[1] == 'r' && mv->img[2] == 'u' && r->wall_fall < 0.3f) continue;
+                float mx, my, mz, mx2, my2, mz2; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); track_mover_pos(&g_track, mv, r->race_t + 0.05f, &mx2, &my2, &mz2);
+                float dxm = mx2 - mx, dzm = mz2 - mz, face = (dxm * dxm + dzm * dzm > 1e-6f) ? atan2f(dxm, dzm) : 0;   /* it faces the way it is going */
+                Mat4 mm = m4_mul(m4_translate(mx, my, mz), m4_rotate_y(face));
+                if (!strcmp(mv->img, "#stone")) { float roll = r->race_t * mv->speed * 2.0f; mm = m4_mul(mm, m4_mul(m4_translate(0, mv->height * 0.5f, 0), m4_mul(m4_rotate_x(roll), m4_translate(0, -mv->height * 0.5f, 0)))); }
+                gfx_draw(m_mov[m], &mm, 1, 1, 1, 1); } }
+        gfx_state(ST_SOLID);   /* both sides drawn: no chance of a model showing inside out */
         /* item boxes: spinning cubes */
         /* the boxes float a metre up, turn slowly, shimmer through the rainbow and glow */
         { static Mesh *m_boxglow = NULL; if (!m_boxglow) m_boxglow = gfx_mesh_dynamic(MAX_BOX * 12);

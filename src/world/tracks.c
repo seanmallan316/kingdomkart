@@ -488,9 +488,9 @@ void track_from_def(Track *t, const TrackDef *d) {
     /* every stretch between two points grows by sc, except a jump's gap, which keeps its length so the jump can still be cleared;
        the small amount the loop then fails to close by is spread over the other stretches */
     float ex = 0, ez = 0; int nfree = 0;
-    for (int i = 0; i < np; i++) { const TrackPoint *a = &d->points[i], *b = &d->points[(i + 1) % np]; if (a->jump) { ex += (b->x - a->x) * (1.0f - sc); ez += (b->z - a->z) * (1.0f - sc); } else nfree++; }
+    for (int i = 0; i < np; i++) { const TrackPoint *a = &d->points[i], *b = &d->points[(i + 1) % np]; nfree++; (void)a; (void)b; }
     pts[0] = d->points[0]; pts[0].x *= sc; pts[0].z *= sc;
-    for (int i = 0; i + 1 < np; i++) { const TrackPoint *a = &d->points[i], *b = &d->points[i + 1]; float f = a->jump ? 1.0f : sc;
+    for (int i = 0; i + 1 < np; i++) { const TrackPoint *a = &d->points[i], *b = &d->points[i + 1]; float f = sc;   /* a jump is a drop, not a gap, so it can stretch like the rest (keeping it short bent the Eden road back on itself at the line) */
         pts[i + 1] = *b; pts[i + 1].x = pts[i].x + (b->x - a->x) * f; pts[i + 1].z = pts[i].z + (b->z - a->z) * f;
         if (!a->jump && nfree) { pts[i + 1].x += ex / nfree; pts[i + 1].z += ez / nfree; } }
     for (int i = 0; i < np; i++) pts[i].width *= wd;
