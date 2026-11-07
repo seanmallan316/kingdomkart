@@ -2649,6 +2649,14 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
           gfx_light(v3(g_def->sun_r, g_def->sun_g, g_def->sun_b), skyc, gnd, eye); }
         gfx_set_time(g_time); gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f);
         gfx_state(ST_BLEND); gfx_bind(tx_sky); { Mat4 sm = m4_translate(cam_x, -30.0f, cam_z); gfx_draw_ex(m_sky, &sm, 1, 1, 1, 1, 0, 1, 0, 0); }
+        { /* the sun's glow in the sky: a soft halo where the light comes from (a cool moon-glow at night) */
+          Vec3 L = v3_norm(ldir); if (L.y > -0.05f) { Vec3 sc = v3(eye.x + L.x * 850, eye.y + fmaxf(L.y, 0.12f) * 850, eye.z + L.z * 850);
+            Vec3 fwd = v3_norm(v3_sub(sc, eye)), rt = v3_norm(v3_cross(fwd, v3(0, 1, 0))), up = v3_cross(rt, fwd);
+            static Mesh *m_sun = NULL; if (!m_sun) m_sun = gfx_mesh_dynamic(18); Vertex sv[18]; Batch sb; batch_init(&sb, sv, 18);
+            float nr = g_def->night ? 0.55f : 1.0f, ng = g_def->night ? 0.65f : 0.9f, nb = g_def->night ? 0.95f : 0.7f;
+            for (int k = 0; k < 3; k++) { float R = k == 0 ? 330 : (k == 1 ? 130 : 45), al = k == 0 ? 0.22f : (k == 1 ? 0.35f : 0.75f);
+                batch_quad(&sb, sc, v3(rt.x * R, rt.y * R, rt.z * R), v3(up.x * R, up.y * R, up.z * R), v3(0, 0, 1), 0, 0, 1, 1, nr, ng, nb, al * (g_def->night ? 0.5f : 1.0f)); }
+            gfx_mesh_update(m_sun, sb.v, sb.n); gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_sun, &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_state(ST_BLEND); } }
         if (m_mountains || m_clouds) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(tx_white);   /* the 3D far world: lit and hazed when it was built */
             if (m_mountains) { gfx_bind(tx_grass); gfx_draw_ex(m_mountains, &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(tx_white); }
             if (m_clouds) { Mat4 cm = m4_translate(fmodf(g_time * 1.5f, 400.0f) - 200.0f, 0, 0); gfx_draw_ex(m_clouds, &cm, 1, 1, 1, 1, 0, 1, 0, 0); }

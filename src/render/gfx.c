@@ -42,9 +42,9 @@ static const char *VS_SRC =
     "layout(binding = 1) uniform Object { mat4 u_model; vec4 u_tint; vec4 u_params; };\n"
     "layout(location = 0) out vec2 v_texcoord;\n"
     "layout(location = 1) out vec4 v_color;\n"
-    "layout(location = 2) out vec4 v_light;\n"
+    "layout(location = 2) out vec4 v_n;\n"      /* the surface's direction (world), w = specular strength */
     "layout(location = 3) out float v_fog;\n"
-    "layout(location = 4) out vec4 v_sun;\n"
+    "layout(location = 4) out vec4 v_v;\n"      /* toward the camera (world, not normalized), w = unlit */
     "layout(location = 5) out vec4 v_shadow;\n"
     "void main() {\n"
     "  vec4 wp = u_model * vec4(in_position, 1.0);\n"
@@ -56,20 +56,11 @@ static const char *VS_SRC =
     "    wp.y += sw * sin(tt * 2.3 + wp.x * 0.3) * 0.15; }\n"
     "  vec3 n = normalize((u_model * vec4(in_normal, 0.0)).xyz);\n"
     "  vec3 L = normalize(u_lightdir.xyz);\n"
-    "  float amb = u_lightdir.w;\n"
-    "  float diff = max(dot(n, L), 0.0);\n"
-    "  vec3 hemi = mix(u_ground.rgb, u_sky.rgb, n.y * 0.5 + 0.5);\n"
-    "  vec3 lc = hemi * amb;\n"
-    "  vec3 sunc = u_sun.rgb * diff * (1.0 - amb);\n"
-    "  vec3 V = normalize(u_eye.xyz - wp.xyz);\n"
-    "  vec3 H = normalize(L + V);\n"
-    "  float spec = pow(max(dot(n, H), 0.0), 40.0) * u_params.x;\n"
-    "  if (u_params.y > 0.5) { lc = vec3(1.0); sunc = vec3(0.0); spec = 0.0; }\n"
-    "  v_light = vec4(lc, spec);\n"
-    "  v_sun = vec4(sunc, u_shadowp.x * (1.0 - u_params.y));\n"
+    "  v_n = vec4(n, u_params.x);\n"
+    "  v_v = vec4(u_eye.xyz - wp.xyz, u_params.y);\n"
     /* where this spot falls in the sun's view, for the shadow (pushed out a little along its normal so surfaces don't shadow themselves) */
     "  vec4 sp = u_shadowvp * vec4(wp.xyz + n * u_shadowp.w, 1.0);\n"
-    "  v_shadow = vec4(sp.xy * 0.5 + 0.5, sp.z, max(dot(n, L), 0.0));\n"
+    "  v_shadow = vec4(sp.xy * 0.5 + 0.5, sp.z, max(dot(n, L), 0.0) + 2.0 * u_shadowp.x * (1.0 - u_params.y));\n"   /* w: facing the sun, plus 2 when shadows are on */
     "  v_texcoord = in_texcoord + u_params.zw;\n"
     "  v_color = in_color * u_tint;\n"
     "  vec4 cp = u_viewproj * wp;\n"
@@ -80,25 +71,46 @@ static const char *PS_SRC =
     "#version 450\n"
     "layout(location = 0) in vec2 v_texcoord;\n"
     "layout(location = 1) in vec4 v_color;\n"
-    "layout(location = 2) in vec4 v_light;\n"
+    "layout(location = 2) in vec4 v_n;\n"
     "layout(location = 3) in float v_fog;\n"
-    "layout(location = 4) in vec4 v_sun;\n"
+    "layout(location = 4) in vec4 v_v;\n"
     "layout(location = 5) in vec4 v_shadow;\n"
-    "layout(binding = 0) uniform FogColor { vec4 u_fogcolor; vec4 u_speccolor; vec4 u_shadowpx; };\n"
+    /* u_light: the sun's direction and the ambient share; u_sky / u_ground: ambient light from above / below;
+       u_grade: x = film look (soft highlights, contrast, color), y = rim light, z = soft wrap of the sun round shapes, w = color richness */
+    "layout(binding = 0) uniform FogColor { vec4 u_fogcolor; vec4 u_speccolor; vec4 u_shadowpx; vec4 u_light; vec4 u_skyc; vec4 u_groundc; vec4 u_grade; };\n"
     "layout(binding = 0) uniform sampler2D u_tex;\n"
     "layout(binding = 1) uniform sampler2D u_shadowmap;\n"
     "layout(location = 0) out vec4 out_color;\n"
     "void main() {\n"
     "  vec4 t = texture(u_tex, v_texcoord) * v_color;\n"
     "  if (t.a < 0.03) discard;\n"
-    "  float lit = 1.0;\n"
-    "  if (v_sun.a > 0.5) {\n"   /* in the sun's view: 4 soft samples of what is nearest the sun there */
-    "    vec2 uv = vec2(v_shadow.x, 1.0 - v_shadow.y); float d = v_shadow.z - u_shadowpx.y; float o = u_shadowpx.x;\n"
-    "    if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) {\n"
-    "      lit = 0.25 * (step(d, texture(u_shadowmap, uv + vec2(-o, -o)).r) + step(d, texture(u_shadowmap, uv + vec2(o, -o)).r)\n"
-    "                  + step(d, texture(u_shadowmap, uv + vec2(-o, o)).r) + step(d, texture(u_shadowmap, uv + vec2(o, o)).r));\n"
-    "      lit = mix(1.0, lit, clamp(v_shadow.w * 4.0, 0.0, 1.0) * u_shadowpx.z); } }\n"
-    "  vec3 c = mix(t.rgb * (v_light.rgb + v_sun.rgb * lit) + u_speccolor.rgb * v_light.a * lit, u_fogcolor.rgb, v_fog);\n"
+    "  vec3 c = t.rgb;\n"
+    "  if (v_v.w < 0.5 && u_light.w < 0.999) {\n"   /* lit things (the flat screen layer has full ambient: drawn as is) */
+    "    vec3 N = normalize(v_n.xyz); float vl = length(v_v.xyz); vec3 V = vl > 0.0001 ? v_v.xyz / vl : N; vec3 L = normalize(u_light.xyz); float amb = u_light.w;\n"
+    "    float nl = dot(N, L);\n"
+    "    float lit = 1.0;\n"
+    "    if (v_shadow.w > 1.5) {\n"   /* in the sun's view: 4 soft samples of what is nearest the sun there */
+    "      vec2 uv = vec2(v_shadow.x, 1.0 - v_shadow.y); float d = v_shadow.z - u_shadowpx.y; float o = u_shadowpx.x;\n"
+    "      if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) {\n"
+    "        lit = 0.25 * (step(d, texture(u_shadowmap, uv + vec2(-o, -o)).r) + step(d, texture(u_shadowmap, uv + vec2(o, -o)).r)\n"
+    "                    + step(d, texture(u_shadowmap, uv + vec2(-o, o)).r) + step(d, texture(u_shadowmap, uv + vec2(o, o)).r));\n"
+    "        lit = mix(1.0, lit, clamp((v_shadow.w - 2.0) * 4.0, 0.0, 1.0) * u_shadowpx.z); } }\n"
+    /* the sun wraps a little round rounded shapes (soft, animated-film light), then a gentle S so the lit side reads clearly */
+    "    float w = u_grade.z; float diff = clamp((nl + w) / (1.0 + w), 0.0, 1.0); diff = diff * diff * (3.0 - 2.0 * diff);\n"
+    "    vec3 hemi = mix(u_groundc.rgb, u_skyc.rgb, N.y * 0.5 + 0.5);\n"
+    "    vec3 light = hemi * amb + u_speccolor.rgb * diff * (1.0 - amb) * lit * 1.15;\n"
+    /* the rim: the sky's light catching the edges of things, stronger on the sunny side - it lifts every shape off its background */
+    "    float fr = 1.0 - max(dot(N, V), 0.0); float rim = fr * fr * fr * u_grade.y;\n"
+    "    light += mix(u_skyc.rgb, u_speccolor.rgb, 0.5 + 0.5 * clamp(nl, 0.0, 1.0)) * rim * (0.45 + 0.55 * lit);\n"
+    "    vec3 H = normalize(L + V + vec3(0.0, 0.0001, 0.0)); float sp = pow(max(dot(N, H), 0.0), 48.0) * v_n.w + pow(max(dot(N, H), 0.0), 8.0) * 0.04 * u_grade.x;\n"
+    "    c = t.rgb * light + u_speccolor.rgb * sp * lit;\n"
+    "  }\n"
+    "  c = mix(c, u_fogcolor.rgb, v_fog);\n"
+    "  if (u_grade.x > 0.0) {\n"   /* the film look: bright parts roll off softly instead of clipping, a little contrast, richer color */
+    "    vec3 hi = max(c - 0.78, 0.0); c = min(c, 0.78) + 0.22 * (1.0 - exp(-hi / 0.22));\n"
+    "    vec3 s = c * c * (3.0 - 2.0 * c); c = mix(c, s, 0.18 * u_grade.x);\n"
+    "    float lum = dot(c, vec3(0.299, 0.587, 0.114)); c = mix(vec3(lum), c, mix(1.0, u_grade.w, u_grade.x));\n"
+    "    c = clamp(c, 0.0, 1.0); }\n"
     "  out_color = vec4(c, t.a);\n"
     "}\n";
 
@@ -138,9 +150,10 @@ static const char *PS_SHADOW_SRC =
     "}\n";
 typedef struct { float viewproj[16]; float lightdir[4]; float fog[4]; float sky[4]; float ground[4]; float sun[4]; float eye[4]; float shadowvp[16]; float shadowp[4]; } FrameBlock;
 typedef struct { float model[16]; float tint[4]; float params[4]; } ObjectBlock;
+static float g_grade[4] = {1.0f, 0.38f, 0.32f, 1.14f};   /* the film look, rim, wrap, color richness */
 static float g_sun[3] = {1, 1, 1}, g_sky[3] = {1, 1, 1}, g_ground[3] = {1, 1, 1}, g_eye[3] = {0, 0, 0}, g_wind_t = 0;
 void gfx_set_time(float t) { g_wind_t = t; }
-typedef struct { float color[4]; float spec[4]; float shadowpx[4]; } FogBlock;
+typedef struct { float color[4]; float spec[4]; float shadowpx[4]; float light[4]; float sky[4]; float ground[4]; float grade[4]; } FogBlock;
 
 #define UB_ALIGN 256
 #define UB_SLOTS 4096   /* per frame, both screens; running out would overwrite matrices the GPU has not used yet */
@@ -454,9 +467,11 @@ void gfx_camera(const Mat4 *vp, Vec3 l, float ambient, float fr, float fg, float
     int sh = g_shadow_ok && g_shadow_have && g_shadow_use && !g_in_shadow;
     memcpy(fb2.shadowvp, g_shadow_vp, sizeof fb2.shadowvp); fb2.shadowp[0] = sh ? 1.0f : 0.0f; fb2.shadowp[1] = fb2.shadowp[2] = 0; fb2.shadowp[3] = 0.08f;
     g_framebuf = pool_upload(&fb2, sizeof fb2);
-    FogBlock fg2 = {{fr, fg, fb, 1}, {g_sun[0], g_sun[1], g_sun[2], 1}, {0.7f / SHADOW_RES, 0.0015f, 0.78f, 0}};
+    FogBlock fg2 = {{fr, fg, fb, 1}, {g_sun[0], g_sun[1], g_sun[2], 1}, {0.7f / SHADOW_RES, 0.0015f, 0.78f, 0}, {l.x, l.y, l.z, ambient},
+                    {g_sky[0], g_sky[1], g_sky[2], 0}, {g_ground[0], g_ground[1], g_ground[2], 0}, {g_grade[0], g_grade[1], g_grade[2], g_grade[3]}};
     g_fogbuf = pool_upload(&fg2, sizeof fg2);
 }
+void gfx_grade(float film, float rim, float wrap, float rich) { g_grade[0] = film; g_grade[1] = rim; g_grade[2] = wrap; g_grade[3] = rich; }
 void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye) {
     g_sun[0] = sun.x; g_sun[1] = sun.y; g_sun[2] = sun.z; g_sky[0] = sky.x; g_sky[1] = sky.y; g_sky[2] = sky.z;
     g_ground[0] = ground.x; g_ground[1] = ground.y; g_ground[2] = ground.z; g_eye[0] = eye.x; g_eye[1] = eye.y; g_eye[2] = eye.z;
@@ -486,7 +501,7 @@ void gfx_camera_2d_virtual(float vw, float vh) {
     for (int i = 0; i < 4; i++) { fb2.sky[i] = fb2.ground[i] = fb2.sun[i] = 1; fb2.eye[i] = 0; }
     memset(fb2.shadowvp, 0, sizeof fb2.shadowvp); memset(fb2.shadowp, 0, sizeof fb2.shadowp);
     g_framebuf = pool_upload(&fb2, sizeof fb2);
-    FogBlock fg2 = {{0, 0, 0, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}};
+    FogBlock fg2 = {{0, 0, 0, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 1, 1}, {1, 1, 1, 0}, {1, 1, 1, 0}, {0, 0, 0, 1}};
     g_fogbuf = pool_upload(&fg2, sizeof fg2);
 }
 void gfx_bind(Texture *t) {
