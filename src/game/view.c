@@ -142,7 +142,7 @@ static void mat_flush(ModelOut *mo) { for (int m = 0; m < MAT_N; m++) { if (mo->
 static void draw_mat_meshes(Mesh *const *ms, int n, int m, const Mat4 *mx) { if (!n) return; gfx_bind(tx_mat[m]); for (int c = 0; c < n; c++) if (ms[c]) gfx_draw(ms[c], mx, 1, 1, 1, 1); }   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
 static Mesh *m_hills, *m_mountains, *m_clouds, *m_boostglow; static Texture *tx_padglow; static Texture *tx_white; static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
-static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
+static Vertex g_vtmp[32768];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
 
 /* camera state lives in the views (cam_x and friends are the view being handled) */
@@ -732,7 +732,7 @@ static void build_track_meshes(void) {
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
     m_spark = gfx_mesh_dynamic(MAX_SPARK * 6);
-    m_hud = gfx_mesh_dynamic(8192);
+    m_hud = gfx_mesh_dynamic(32768);   /* the 3D menu plaques take a lot of corners */
     batch_init(&g_b, g_vtmp, 8192);   /* back to the size every per-frame mesh is made for */
     /* placeholder kart: boxes until the character art arrives. The body is white and tinted with the character's color. */
     batch_clear(&g_b);
@@ -1410,7 +1410,7 @@ int game_init(int status) {
             if (!tx_item[i]) { tx_item[i] = make_icon(i); g_item_sq[i] = 1; g_item_asp[i] = 1.0f; } }
         for (int c = 0; c < NCHARS; c++) for (int e = 0; e < VO_COUNT; e++) { char vn[64]; snprintf(vn, sizeof vn, "voice_%s_%s", pn[c] + 9, VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn);
             if (g_voice[c][e] < 0) { snprintf(vn, sizeof vn, "voice_%s", VO_NAMES[e]); g_voice[c][e] = sfx_voice_load(vn); } }
-        { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(8192);
+        { int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(16384);
           w = 2; h = 3; tx_bearer = asset_texture("char_shieldbearer", 0, &w, &h); if (tx_bearer) g_bearer_aspect = (float)w / (float)h; else { tx_bearer = make_tex(PW, PH, 0, 0, px_shieldbearer); g_bearer_aspect = (float)PW / (float)PH; } m_bearer = gfx_mesh_dynamic(6); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
         for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
@@ -1577,7 +1577,10 @@ static Mat4 g_cardm[16]; static uint32_t g_card_face;
    grows a little and sways */
 static Mat4 card_xf(int i, float x, float y, float w, float h, int sel) {
     float t = ui_ease((g_screen_t - 0.08f - i * 0.045f) / 0.45f), s2 = sel ? 1.0f : 0.0f, wob = g_time * 1.9f + i * 0.7f;
-    return ui_xf(x + w / 2, y + h / 2, 70 * s2 - (1 - t) * 220, 0.05f * s2 * sinf(wob) + 0.012f * (1 - s2) * sinf(wob * 0.7f), 0.08f * s2 * sinf(wob * 0.8f) + (1 - t) * 1.4f, 0, 1 + 0.07f * s2); }
+    float lift = 55 * s2 - (1 - t) * 220, cx = x + w / 2, cy = y + h / 2;
+    Mat4 m = ui_xf(cx, cy, lift, 0.05f * s2 * sinf(wob) + 0.012f * (1 - s2) * sinf(wob * 0.7f), 0.08f * s2 * sinf(wob * 0.8f) + (1 - t) * 1.4f, 0, 1 + 0.045f * s2);
+    if (lift > 0) m = m4_mul(m4_translate((640 - cx) * lift / UI_EYE, (360 - cy) * lift / UI_EYE, 0), m);   /* lifting toward you also spreads a card out from the middle: keep it where it was */
+    return m; }
 static void card_face(float x, float y, float w, float h, int sel, int open) {   /* the card itself; what is drawn on it after this sits on its face */
     ui_plaque(x, y, w, h, 16, 12, open ? (sel ? &UI_SEL : &UI_BLUE) : &UI_DIM, 0.98f, sel ? 0.75f + 0.25f * sinf(g_time * 4) : 0, sel ? fmodf(g_time * 0.45f, 1.5f) : -1); g_card_face = g_b.n; }
 static void ui_px(Vertex *v, uint32_t n, float z) { for (uint32_t i = 0; i < n; i++) { v[i].px = (v[i].px + 1.0f) * 640.0f; v[i].py = (1.0f - v[i].py) * 360.0f; v[i].pz = z; } }   /* a picture laid out flat, moved into screen pixels to ride on a card */
@@ -1612,7 +1615,7 @@ static void back_button(void) {   /* a BACK button to tap, bottom left */
 /* a menu choice: its own plaque. They fly in one after another when the menu opens; the one you are on turns gold,
    lifts toward you, sways a little and has a shine running across it */
 static void menu_item(const char *s, float y, int selected, float size) {
-    int i = g_mi++; float t = ui_ease((g_screen_t - 0.05f - i * 0.05f) / 0.4f), w = 470, h = size + 14, x = 640 - w / 2, py = y - 7;
+    int i = g_mi++; float t = ui_ease((g_screen_t - 0.05f - i * 0.05f) / 0.4f), w = fmaxf(470, text_width(s, size) * 1.12f + 60), h = size + 14, x = 640 - w / 2, py = y - 7;
     uint32_t mk = ui_begin();
     ui_plaque(x, py, w, h, h * 0.35f, 10, selected ? &UI_GOLD : &UI_BLUE, 0.97f, selected ? 0.7f + 0.3f * sinf(g_time * 4) : 0, selected ? fmodf(g_time * 0.55f, 1.4f) : -1);
     uint32_t tk = g_b.n; float tw = text_width(s, size);
@@ -1815,7 +1818,7 @@ static void hud_main(void) {
 }
 static void volume_row(const char *label, int vol, float y, int selected) {
     float x = 400;
-    if (selected) batch_rect(&g_b, x - 16, y - 6, 480, 36, 1, 0.85f, 0.3f, 0.25f);
+    if (selected) ui_plaque(x - 16, y - 6, 480, 36, 12, 8, &UI_SEL, 0.95f, 0.5f, fmodf(g_time * 0.5f, 1.4f));
     batch_text(&g_b, label, x, y, 24, selected ? 1 : 0.9f, selected ? 0.85f : 0.95f, selected ? 0.3f : 1, 1);
     for (int i = 0; i < 10; i++) batch_rect(&g_b, x + 270 + i * 18, y + 2, 12, 22, i < vol ? 1 : 0.3f, i < vol ? 0.85f : 0.33f, i < vol ? 0.3f : 0.45f, 1);
 }
@@ -1826,10 +1829,10 @@ static void hud_options(void) {
     volume_row("SOUND VOLUME", g_save.sfx_vol, 164, g_opt_sel == 1);
     for (int r2 = 0; r2 < 2; r2++) { tzone(384, 122 + r2 * 36, 340, 36, TZ_LEFT, r2); tzone(724, 122 + r2 * 36, 180, 36, TZ_RIGHT, r2); }   /* tap the left of a volume bar for quieter, the right for louder */
     tzone(384, 194, 480, 36, TZ_SEL, 2);
-    { float x = 400, y = 200; if (g_opt_sel == 2) batch_rect(&g_b, x - 16, y - 6, 480, 36, 1, 0.85f, 0.3f, 0.25f);
+    { float x = 400, y = 200; if (g_opt_sel == 2) ui_plaque(x - 16, y - 6, 480, 36, 12, 8, &UI_SEL, 0.95f, 0.5f, fmodf(g_time * 0.5f, 1.4f));
       batch_text(&g_b, "CONTROLLER RUMBLE", x, y, 24, g_opt_sel == 2 ? 1 : 0.9f, g_opt_sel == 2 ? 0.85f : 0.95f, g_opt_sel == 2 ? 0.3f : 1, 1);
       batch_text(&g_b, g_save.rumble ? "ON" : "OFF", x + 270, y, 24, g_save.rumble ? 1 : 0.6f, g_save.rumble ? 0.85f : 0.65f, g_save.rumble ? 0.3f : 0.75f, 1); }
-    { float x = 400, y = 236; if (g_opt_sel == 3) batch_rect(&g_b, x - 16, y - 6, 480, 30, 1, 0.5f, 0.3f, 0.25f);
+    { float x = 400, y = 236; if (g_opt_sel == 3) ui_plaque(x - 16, y - 6, 480, 30, 10, 8, &UI_SEL, 0.95f, 0.5f, -1);
       batch_text(&g_b, "ERASE ALL PROGRESS", x, y, 18, g_opt_sel == 3 ? 1 : 0.8f, g_opt_sel == 3 ? 0.6f : 0.75f, g_opt_sel == 3 ? 0.4f : 0.8f, 1);
       if (g_opt_sel == 3) { batch_text(&g_b, "HOLD A", x + 270, y, 18, 1, 0.9f, 0.5f, 1); if (g_erase_hold > 0) batch_rect(&g_b, x + 350, y + 4, 100 * clampf(g_erase_hold / 2.0f, 0, 1), 12, 1, 0.4f, 0.3f, 1); } }
     text_c("LEFT/RIGHT: CHANGE   B: BACK", 268, 14, 0.8f, 0.85f, 1, 1);
@@ -2209,17 +2212,17 @@ static void hud_cup(void) {
     text_c("CHOOSE A CUP", 40, 40, 1, 0.85f, 0.3f, 1);
     for (int c = 0; c < 2; c++) { const Cup *cp = &CUPS[c]; int sel = c == g_cup, open = !cp->needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
         float x = 90 + c * 580, y = 120, w = 520, h = 470;
-        if (sel) batch_rect(&g_b, x - 8, y - 8, w + 16, h + 16, 1, 0.85f, 0.3f, 1);
-        batch_rect(&g_b, x, y, w, h, 0.08f, 0.14f, 0.36f, 0.95f); tzone(x, y, w, h, TZ_SEL, c);
+        uint32_t mk = ui_begin(); card_face(x, y, w, h, sel, open); tzone(x, y, w, h, TZ_SEL, c);
         batch_text(&g_b, cp->name, x + 20, y + 20, 30, 1, 0.95f, 0.5f, 1);
         batch_text(&g_b, cp->sub, x + 20, y + 62, 13, 0.8f, 0.9f, 1, 1);
         if (!open) { batch_text(&g_b, "?", x + w / 2 - text_width("?", 110) / 2, y + 140, 110, 0.5f, 0.55f, 0.7f, 1);
             batch_text(&g_b, "LOCKED", x + w / 2 - text_width("LOCKED", 24) / 2, y + 290, 24, 0.8f, 0.8f, 0.9f, 1);
-            batch_text(&g_b, "WIN THE GOSPEL CUP ON NORMAL OR HARD", x + w / 2 - text_width("WIN THE GOSPEL CUP ON NORMAL OR HARD", 14) / 2, y + 330, 14, 1, 0.9f, 0.5f, 1); continue; }
+            batch_text(&g_b, "WIN THE GOSPEL CUP ON NORMAL OR HARD", x + w / 2 - text_width("WIN THE GOSPEL CUP ON NORMAL OR HARD", 14) / 2, y + 330, 14, 1, 0.9f, 0.5f, 1); card_done(mk, c, x, y, w, h, sel); continue; }
         for (int i = 0; i < cp->n; i++) { const TrackDef *td = &TRACK_DEFS[cp->roads[i]]; float ry = y + 100 + i * 56; char nm[8]; snprintf(nm, sizeof nm, "%d.", i + 1);
             batch_rect(&g_b, x + 20, ry, 44, 44, td->sky_r, td->sky_g, td->sky_b, 1); draw_preview(&g_preview[cp->roads[i]], x + 42, ry + 22, 34, 0.95f, 0.95f, 0.95f);
             batch_text(&g_b, nm, x + 76, ry + 10, 20, 1, 0.85f, 0.3f, 1); batch_text(&g_b, td->name, x + 110, ry + 10, 20, 1, 1, 1, 1); }
         { char line[64]; snprintf(line, sizeof line, "%d ROADS   WON: EASY %d  NORMAL %d  HARD %d", cp->n, g_save.gp_wins[0], g_save.gp_wins[1], g_save.gp_wins[2]); if (c == 0) batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); else { snprintf(line, sizeof line, "%d ROADS - THE WHOLE STORY", cp->n); batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); } }
+        card_done(mk, c, x, y, w, h, sel);
     }
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 650, 16, 0.8f, 0.85f, 1, 1);
 }
@@ -2228,7 +2231,7 @@ static void hud_gp(void) {
     text_c(g_gp_round >= NUM_GP_TRACKS ? (g_cup == 0 ? "GOSPEL CUP CHAMPION" : "GENESIS TO GLORY CHAMPION") : "STANDINGS", 100, g_gp_round >= NUM_GP_TRACKS && g_cup == 1 ? 32 : 40, 1, 0.85f, 0.3f, 1);
     int ord[NKARTS]; int nk = cer_order(ord);
     for (int p = 0; p < nk; p++) { int c = ord[p]; float y = 160 + p * 50; int me = c == g_player_char;
-        if (me) batch_rect(&g_b, 310, y - 6, 660, 44, 1, 0.85f, 0.3f, 0.25f);
+        if (me) ui_plaque(310, y - 6, 660, 44, 12, 8, &UI_SEL, 0.95f, 0.45f, fmodf(g_time * 0.4f, 1.4f));
         batch_text(&g_b, place_name(p + 1), 330, y, 30, 1, 1, 1, 1);
         batch_rect(&g_b, 440, y + 2, 26, 26, CHARACTERS[c].r, CHARACTERS[c].g, CHARACTERS[c].b, 1);
         batch_text(&g_b, CHARACTERS[c].short_name, 480, y, 30, me ? 1.0f : 0.9f, me ? 0.95f : 0.9f, me ? 0.5f : 0.9f, 1);
@@ -3475,7 +3478,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (!drc && g_time > 98.0f && g_time < 103.0f && g_screen == SCR_RACE && !split) gamepad_map = 1;   /* the CI camera only sees the TV: show the GamePad layout there for one photo */
 #endif
         if (gamepad_map) { gfx_view_begin(drc, 0.04f, 0.07f, 0.18f); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
-            batch_clear(&g_b); hud_gamepad(); if (g_screen == SCR_PAUSE) hud_pause(); gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
+            batch_init(&g_b, g_vtmp, 16384); batch_clear(&g_b); hud_gamepad(); if (g_screen == SCR_PAUSE) hud_pause(); gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
         if (g_screen == SCR_OPENER) { gfx_view_begin(drc, 0, 0, 0); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
             { Texture *vt = g_op_vid ? vid_texture() : tx_op; if (vt && m_op) { gfx_bind(vt); gfx_draw(m_op, &id2, 1, 1, 1, 1); } }
             gfx_view_end(drc); continue; }
@@ -3506,7 +3509,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (!plain_bg) draw_scene(g_mode == MODE_BATTLE ? 0 : r->player, gfx_aspect(drc), 1.0f, 0);
         /* ---- HUD and menus */
         gfx_camera_2d(); gfx_state(ST_HUD);
-        batch_clear(&g_b);
+        batch_init(&g_b, g_vtmp, 32768); batch_clear(&g_b);
         { /* a touch of the road's color over the whole picture, and darker corners */
           static Mesh *m_tone = NULL; if (!m_tone) { batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_tone = gfx_mesh_static(g_b.v, g_b.n); batch_clear(&g_b); }
           gfx_bind(NULL); gfx_draw(m_tone, &id, g_def->fog_r, g_def->fog_g, g_def->fog_b, 0.07f);
