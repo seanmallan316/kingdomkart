@@ -152,3 +152,31 @@ int model_build(Batch *b, const char *img, float h, unsigned seed) {
     else if (!strcmp(img, "#stone")) ball(v3(0, h * 0.5f, 0), h * 0.5f, h * 0.5f, h * 0.5f, 0.15f, 0.62f, 0.58f, 0.52f);   /* a rolling stone: round */
     else if (!strcmp(img, "#rubble")) m_rockpile(h * 0.6f, 1.5f, 0.75f, 0.68f, 0.55f);
     return (int)b->n - n0; }
+
+/* a kart tire, 1 m across... radius 1, axle along x from -0.5 to 0.5: black rubber with raised tread blocks round the
+   outside, rounded shoulders, and a gold rim with five spokes and a hub on each side. Turned about x to roll. */
+int model_tire(Batch *b) {
+    B = b; int n0 = (int)b->n; const int N = 24; const float rr = 0.25f, gg = 0.24f, bb = 0.25f;   /* rubber: dark grey so its shape still reads */
+    for (int i = 0; i < N; i++) {
+        float a0 = i * 6.2831853f / N, a1 = (i + 1) * 6.2831853f / N, lug = (i & 1) ? 1.0f : 0.93f, sh = (i & 1) ? 1.0f : 0.7f;
+        Vec3 o0 = v3(0, sinf(a0), cosf(a0)), o1 = v3(0, sinf(a1), cosf(a1));
+        #define RP(o, rad, x) v3(x, (o).y * (rad), (o).z * (rad))
+        /* the tread face across the width, and the shoulders curving down to the sidewalls */
+        quad(RP(o0, lug, -0.4f), RP(o1, lug, -0.4f), RP(o1, lug, 0.4f), RP(o0, lug, 0.4f), rr * sh, gg * sh, bb * sh);
+        for (int s = -1; s <= 1; s += 2) {
+            quad(RP(o0, lug, s * 0.4f), RP(o1, lug, s * 0.4f), RP(o1, 0.9f, s * 0.5f), RP(o0, 0.9f, s * 0.5f), rr * 0.85f, gg * 0.85f, bb * 0.85f);
+            quad(RP(o0, 0.9f, s * 0.5f), RP(o1, 0.9f, s * 0.5f), RP(o1, 0.64f, s * 0.5f), RP(o0, 0.64f, s * 0.5f), rr * 0.75f, gg * 0.75f, bb * 0.75f);   /* sidewall */
+            /* the rim: a gold ring set in a little, then the dish */
+            quad(RP(o0, 0.64f, s * 0.5f), RP(o1, 0.64f, s * 0.5f), RP(o1, 0.56f, s * 0.46f), RP(o0, 0.56f, s * 0.46f), 0.95f, 0.78f, 0.32f);
+            quad(RP(o0, 0.56f, s * 0.46f), RP(o1, 0.56f, s * 0.46f), RP(o1, 0.18f, s * 0.4f), RP(o0, 0.18f, s * 0.4f), 0.45f, 0.32f, 0.16f);
+            tri(v3(s * 0.44f, 0, 0), RP(o0, 0.18f, s * 0.44f), RP(o1, 0.18f, s * 0.44f), 0.98f, 0.85f, 0.4f);   /* hub cap */
+        }
+        if (lug == 1.0f) for (int s = -1; s <= 1; s += 2) quad(RP(o0, 0.93f, s * 0.4f), RP(o0, 1.0f, s * 0.4f), RP(o0, 1.0f, -s * 0.4f), RP(o0, 0.93f, -s * 0.4f), rr * 0.6f, gg * 0.6f, bb * 0.6f);   /* the block's leading edge */
+        #undef RP
+    }
+    for (int s = -1; s <= 1; s += 2) for (int k = 0; k < 5; k++) {   /* five gold spokes on each side: they show the wheel turning */
+        float a = k * 6.2831853f / 5, ca = cosf(a), sa = sinf(a), w = 0.07f, x = s * 0.43f;
+        Vec3 p0 = v3(x, sa * 0.16f - ca * w, ca * 0.16f + sa * w), p1 = v3(x, sa * 0.16f + ca * w, ca * 0.16f - sa * w), p2 = v3(x, sa * 0.58f + ca * w, ca * 0.58f - sa * w), p3 = v3(x, sa * 0.58f - ca * w, ca * 0.58f + sa * w);
+        quad(p0, p1, p2, p3, 1.0f, 0.84f, 0.38f); }
+    return (int)b->n - n0;
+}

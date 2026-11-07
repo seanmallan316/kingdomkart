@@ -2487,32 +2487,21 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                 float u0 = mirror ? 1.0f : 0.0f, u1 = mirror ? 0.0f : 1.0f;
                 batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), u0, 0, u1, 1, 1, 1, 1, 1);
                 gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(ktex); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1);
-                if (wd && wtex) {   /* the wheels, cut from the same picture, turned by the distance driven */
-                    float ang = g_wheel_ang[i] * (float)wd->spin * (mirror ? -1.0f : 1.0f), ca = cosf(ang), sa = sinf(ang);
+                if (wd || td) {   /* real 3D tires over the painted ones: rubber with tread blocks and a gold spoked rim, rolling with the kart */
+                    static Mesh *m_tire = NULL; if (!m_tire) { static Vertex tv3[2048]; Batch tb3; batch_init(&tb3, tv3, 2048); model_tire(&tb3); m_tire = gfx_mesh_static(tb3.v, tb3.n); }
                     Vec3 R = v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), U = v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f);
-                    batch_clear(&g_b);
-                    for (int n = 0; n < wd->n; n++) {
-                        float cx = mirror ? 1.0f - wd->cx[n] : wd->cx[n], cy = wd->cy[n], fx = (cx - 0.5f) * 2.0f, fy = (0.5f - cy) * 2.0f;
-                        Vec3 c = v3(kc.x + R.x * fx + U.x * fy, kc.y + R.y * fx + U.y * fy + 0.01f, kc.z + R.z * fx + U.z * fy);
-                        float sx = wd->rx[n] * 2.0f / 0.84f, sy = wd->ry[n] * 2.0f / 0.84f;   /* the disc fills 84% of its cell */
-                        Vec3 pts[4]; float uu[4] = {-1, 1, 1, -1}, vv[4] = {-1, -1, 1, 1};
-                        for (int k2 = 0; k2 < 4; k2++) { float u = uu[k2] * ca - vv[k2] * sa, w2 = uu[k2] * sa + vv[k2] * ca;
-                            pts[k2] = v3(c.x + R.x * u * sx + U.x * w2 * sy, c.y + R.y * u * sx + U.y * w2 * sy, c.z + R.z * u * sx + U.z * w2 * sy); }
-                        float u0 = (float)n / wd->n, u1 = (float)(n + 1) / wd->n;
-                        Vertex *o = &g_b.v[g_b.n]; if (g_b.n + 6 <= g_b.cap) {
-                            float tu[4] = {u0, u1, u1, u0}, tv[4] = {1, 1, 0, 0}; static const int idx[6] = {0, 1, 2, 0, 2, 3};
-                            if (mirror) { tu[0] = u1; tu[1] = u0; tu[2] = u0; tu[3] = u1; }
-                            for (int k2 = 0; k2 < 6; k2++) { int kk = idx[k2]; Vertex vq = {pts[kk].x, pts[kk].y, pts[kk].z, 0, 1, 0, tu[kk], tv[kk], 1, 1, 1, 1}; o[k2] = vq; } g_b.n += 6; } }
-                    gfx_mesh_update(m_wheel_spr[i], g_b.v, g_b.n); gfx_bind(wtex); gfx_draw(m_wheel_spr[i], &id, sr * st, sg * st, sb * st, 1); }
-                if (td) {   /* edge-on tires: a tread pattern rolls over them */
-                    float roll = g_tread_ph[i];   /* tread position, moved at most part of a groove per frame (see game_frame) so it reads as rolling instead of flickering */
-                    Vec3 R = v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), U = v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f);
-                    batch_clear(&g_b);
-                    for (int n = 0; n < td->n; n++) { float cx = mirror ? 1.0f - td->cx[n] : td->cx[n], fx = (cx - 0.5f) * 2.0f, fy = (0.5f - td->cy[n]) * 2.0f, hw = td->hw[n] * 2.0f, hh = td->hh[n] * 2.0f;
-                        Vec3 c = v3(kc.x + R.x * fx + U.x * fy, kc.y + R.y * fx + U.y * fy + 0.01f, kc.z + R.z * fx + U.z * fy);
-                        float v0 = -roll * 4.0f;
-                        batch_quad(&g_b, c, v3(R.x * hw, R.y * hw, R.z * hw), v3(U.x * hh, U.y * hh, U.z * hh), v3(0, 1, 0), 0, v0, 1, v0 + 2.0f, 1, 1, 1, 0.35f); }   /* faint: a hint of the tread turning, not stripes */
-                    gfx_mesh_update(m_tread_spr[i], g_b.v, g_b.n); gfx_state(ST_TRANSPARENT); gfx_bind(tx_tread); gfx_draw_ex(m_tread_spr[i], &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_state(ST_CUTOUT); }
+                    float yk = q->yaw + q->slide + q->spin_vis + q->trick_vis, ang = g_wheel_ang[i];
+                    float tx[6], ty[6], trad[6], twid[6]; int nt = 0;
+                    if (wd) for (int n = 0; n < wd->n && nt < 6; n++) { tx[nt] = mirror ? 1.0f - wd->cx[n] : wd->cx[n]; ty[nt] = wd->cy[n]; trad[nt] = wd->ry[n] * kh * 1.06f; twid[nt] = trad[nt] * 0.8f; nt++; }
+                    if (td) for (int n = 0; n < td->n && nt < 6; n++) { tx[nt] = mirror ? 1.0f - td->cx[n] : td->cx[n]; ty[nt] = td->cy[n]; trad[nt] = td->hh[n] * kh * 1.06f; twid[nt] = fmaxf(td->hw[n] * kw * 2.1f, trad[nt] * 0.5f); nt++; }
+                    gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL);
+                    for (int n = 0; n < nt; n++) { float fx = (tx[n] - 0.5f) * 2.0f, fy = (0.5f - ty[n]) * 2.0f;
+                        Vec3 c = v3(kc.x + R.x * fx + U.x * fy, kc.y + R.y * fx + U.y * fy, kc.z + R.z * fx + U.z * fy);
+                        float ex = eye.x - c.x, ez = eye.z - c.z, el = sqrtf(ex * ex + ez * ez) + 1e-4f, push = twid[n] * 0.5f + 0.06f;   /* stands just in front of the picture */
+                        c.x += ex / el * push; c.z += ez / el * push;
+                        Mat4 tm = m4_mul(m4_translate(c.x, c.y, c.z), m4_mul(m4_rotate_y(yk), m4_mul(m4_rotate_x(ang), m4_scale(twid[n], trad[n], trad[n]))));
+                        gfx_draw(m_tire, &tm, sr * st, sg * st, sb * st, 1); }
+                    gfx_state(ST_CUTOUT); (void)wtex; }
                 if (ride) continue; }
             if (!tx_char[ch]) continue;
             /* the driver sits: only the top part of the standing picture shows (head, shoulders, chest), sunk into the seat */
@@ -3182,7 +3171,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (two) { static Mesh *m2 = NULL; if (!m2) m2 = gfx_mesh_dynamic(6); a = g_kartback_aspect[g_player_char]; ph = 220; pw = ph * a; if (pw > 330) { pw = 330; ph = pw / a; }
                     batch_clear(&g_b); batch_rect_uv(&g_b, 810 - pw / 2, 67 + (220 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m2, g_b.v, g_b.n); gfx_bind(tx_kartback[g_player_char]); gfx_draw(m2, &id, 1, 1, 1, 1); } } }
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 2
-        if (g_screen == SCR_RACE && g_time > 112) { g_unl_bits = g_time > 126 ? UNLOCK_KART_CHARIOT : UNLOCK_SAMSON; g_unl_t = fmodf(g_time - 112, 14.0f); draw_unlock(&id); }   /* the CI photos of the unlock screen */
+        if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_race.race_t > 5) { g_unl_bits = g_race.race_t > 12 ? UNLOCK_KART_CHARIOT : UNLOCK_SAMSON; g_unl_t = g_race.race_t - (g_race.race_t > 12 ? 10 : 5); draw_unlock(&id); }   /* the CI photos of the unlock screen */
 #endif
         if (g_screen == SCR_RESULTS && g_unl_bits) draw_unlock(&id);
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
