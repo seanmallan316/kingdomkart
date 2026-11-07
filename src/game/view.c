@@ -2488,12 +2488,12 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                 batch_quad(&g_b, kc, v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f), v3(0, 1, 0), u0, 0, u1, 1, 1, 1, 1, 1);
                 gfx_mesh_update(m_kart_spr[i], g_b.v, g_b.n); gfx_bind(ktex); float st = q->stun > 0 ? 0.6f : 1.0f; gfx_draw(m_kart_spr[i], &id, sr * st, sg * st, sb * st, 1);
                 if (wd || td) {   /* real 3D tires over the painted ones: rubber with tread blocks and a gold spoked rim, rolling with the kart */
-                    static Mesh *m_tire = NULL; if (!m_tire) { static Vertex tv3[2048]; Batch tb3; batch_init(&tb3, tv3, 2048); model_tire(&tb3); m_tire = gfx_mesh_static(tb3.v, tb3.n); }
+                    static Mesh *m_tire = NULL; if (!m_tire) { static Vertex tv3[3072]; Batch tb3; batch_init(&tb3, tv3, 3072); model_tire(&tb3); m_tire = gfx_mesh_static(tb3.v, tb3.n); }
                     Vec3 R = v3(ax.x * kw * 0.5f, 0, ax.z * kw * 0.5f), U = v3(ax.x * klean * kh * 0.5f, kh * 0.5f, ax.z * klean * kh * 0.5f);
                     float yk = q->yaw + q->slide + q->spin_vis + q->trick_vis, ang = g_wheel_ang[i];
                     float tx[6], ty[6], trad[6], twid[6]; int nt = 0;
                     if (wd) for (int n = 0; n < wd->n && nt < 6; n++) { tx[nt] = mirror ? 1.0f - wd->cx[n] : wd->cx[n]; ty[nt] = wd->cy[n]; trad[nt] = wd->ry[n] * kh * 1.06f; twid[nt] = trad[nt] * 0.8f; nt++; }
-                    if (td) for (int n = 0; n < td->n && nt < 6; n++) { tx[nt] = mirror ? 1.0f - td->cx[n] : td->cx[n]; ty[nt] = td->cy[n]; trad[nt] = td->hh[n] * kh * 1.06f; twid[nt] = fmaxf(td->hw[n] * kw * 2.1f, trad[nt] * 0.5f); nt++; }
+                    if (td) for (int n = 0; n < td->n && nt < 6; n++) { tx[nt] = mirror ? 1.0f - td->cx[n] : td->cx[n]; ty[nt] = td->cy[n]; trad[nt] = td->hh[n] * kh * 0.98f; twid[nt] = fmaxf(td->hw[n] * kw * 2.1f, trad[nt] * 0.5f); nt++; }
                     gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL);
                     for (int n = 0; n < nt; n++) { float fx = (tx[n] - 0.5f) * 2.0f, fy = (0.5f - ty[n]) * 2.0f;
                         Vec3 c = v3(kc.x + R.x * fx + U.x * fy, kc.y + R.y * fx + U.y * fy, kc.z + R.z * fx + U.z * fy);

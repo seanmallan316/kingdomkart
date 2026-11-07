@@ -156,13 +156,15 @@ int model_build(Batch *b, const char *img, float h, unsigned seed) {
 /* a kart tire, 1 m across... radius 1, axle along x from -0.5 to 0.5: black rubber with raised tread blocks round the
    outside, rounded shoulders, and a gold rim with five spokes and a hub on each side. Turned about x to roll. */
 int model_tire(Batch *b) {
-    B = b; int n0 = (int)b->n; const int N = 24; const float rr = 0.25f, gg = 0.24f, bb = 0.25f;   /* rubber: dark grey so its shape still reads */
+    B = b; int n0 = (int)b->n; const int N = 24; const float rr = 0.36f, gg = 0.34f, bb = 0.33f;   /* rubber: dark grey so its shape still reads */
     for (int i = 0; i < N; i++) {
-        float a0 = i * 6.2831853f / N, a1 = (i + 1) * 6.2831853f / N, lug = (i & 1) ? 1.0f : 0.93f, sh = (i & 1) ? 1.0f : 0.7f;
+        float a0 = i * 6.2831853f / N, a1 = (i + 1) * 6.2831853f / N, lug = (i & 1) ? 1.0f : 0.9f, sh = (i & 1) ? 1.15f : 0.35f;   /* raised blocks light, the grooves between them dark: the rolling shows */
         Vec3 o0 = v3(0, sinf(a0), cosf(a0)), o1 = v3(0, sinf(a1), cosf(a1));
         #define RP(o, rad, x) v3(x, (o).y * (rad), (o).z * (rad))
         /* the tread face across the width, and the shoulders curving down to the sidewalls */
-        quad(RP(o0, lug, -0.4f), RP(o1, lug, -0.4f), RP(o1, lug, 0.4f), RP(o0, lug, 0.4f), rr * sh, gg * sh, bb * sh);
+        quad(RP(o0, lug, -0.4f), RP(o1, lug, -0.4f), RP(o1, lug, -0.04f), RP(o0, lug, -0.04f), rr * sh, gg * sh, bb * sh);
+        quad(RP(o0, lug * 0.97f, -0.04f), RP(o1, lug * 0.97f, -0.04f), RP(o1, lug * 0.97f, 0.04f), RP(o0, lug * 0.97f, 0.04f), rr * 0.3f, gg * 0.3f, bb * 0.3f);   /* a groove round the middle */
+        quad(RP(o0, lug, 0.04f), RP(o1, lug, 0.04f), RP(o1, lug, 0.4f), RP(o0, lug, 0.4f), rr * sh, gg * sh, bb * sh);
         for (int s = -1; s <= 1; s += 2) {
             quad(RP(o0, lug, s * 0.4f), RP(o1, lug, s * 0.4f), RP(o1, 0.9f, s * 0.5f), RP(o0, 0.9f, s * 0.5f), rr * 0.85f, gg * 0.85f, bb * 0.85f);
             quad(RP(o0, 0.9f, s * 0.5f), RP(o1, 0.9f, s * 0.5f), RP(o1, 0.64f, s * 0.5f), RP(o0, 0.64f, s * 0.5f), rr * 0.75f, gg * 0.75f, bb * 0.75f);   /* sidewall */
