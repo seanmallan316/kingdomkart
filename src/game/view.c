@@ -2774,7 +2774,7 @@ static void drivers_update(const Race *r, float dt) {
         float sp = clampf(fabsf(q->speed) / 25.0f, 0, 1); p->bob = 0.012f * sp * sinf(p->t * 14.0f + i) + q->squash * -0.05f; } }
 /* ---- the boost blur (Sean: "a motion blur when the racer gets a boost"): the picture is copied, and stretched copies
    of it are laid over the edges, more at the corners and none in the middle, so the sides streak toward you ---- */
-static float g_blur[4]; static Mesh *m_blur; static Vertex g_blurv[2400];
+static float g_blur[4]; static Mesh *m_blur; static Vertex g_blurv[3600];
 static void blur_update(float dt) {
     for (int p = 0; p < 4; p++) { float want = 0;
         if (p < g_nplayers && (g_screen == SCR_RACE)) { const Kart *q = &g_race.k[human_kart(p)]; if (q->boost_t > 0 && q->speed > 8) want = 1; }
@@ -2782,14 +2782,14 @@ static void blur_update(float dt) {
 static void draw_boost_blur(int drc, int p, float fx, float fy, float fw, float fh, float vw, float vh) {
     float k = p >= 0 && p < 4 ? g_blur[p] : 0; if (k < 0.02f) return;
     Texture *tx = gfx_grab(drc); gfx_viewport(drc, fx, fy, fw, fh); if (!tx) return;
-    if (!m_blur) m_blur = gfx_mesh_dynamic(2400);
-    Batch b; batch_init(&b, g_blurv, 2400);
-    const int NX = 12, NY = 8, NL = 4; float uc = fx + fw * 0.5f, vc = fy + fh * 0.5f;
-    for (int l = 1; l <= NL; l++) { float z = 1.0f + 0.022f * l * k, la = 0.34f * k;
+    if (!m_blur) m_blur = gfx_mesh_dynamic(3600);
+    Batch b; batch_init(&b, g_blurv, 3600);
+    const int NX = 12, NY = 8, NL = 6; float uc = fx + fw * 0.5f, vc = fy + fh * 0.5f;
+    for (int l = 1; l <= NL; l++) { float z = 1.0f + 0.013f * l * k, la = 0.27f * k;
         for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
             Vertex c4[4]; const int ci[4][2] = {{i, j + 1}, {i + 1, j + 1}, {i + 1, j}, {i, j}};
             for (int n = 0; n < 4; n++) { float gx = (float)ci[n][0] / NX, gy = (float)ci[n][1] / NY, dx = gx * 2 - 1, dy = gy * 2 - 1;
-                float r = sqrtf(dx * dx * 0.8f + dy * dy * 1.2f), m = clampf((r - 0.42f) / 0.55f, 0, 1); m = m * m * (3 - 2 * m);
+                float r = sqrtf(dx * dx * 0.8f + dy * dy * (dy > 0 ? 0.55f : 1.2f))   /* less at the bottom, where your own kart is */, m = clampf((r - 0.42f) / 0.55f, 0, 1); m = m * m * (3 - 2 * m);
                 Vec3 sp = scr(gx * vw, gy * vh); float u = fx + gx * fw, v = fy + gy * fh;
                 Vertex q = { sp.x, sp.y, 0, 0, 0, 1, uc + (u - uc) / z, vc + (v - vc) / z, 1, 1, 1, la * m }; c4[n] = q; }
             static const int idx[6] = {0, 1, 2, 0, 2, 3};
