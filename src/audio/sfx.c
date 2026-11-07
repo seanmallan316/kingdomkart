@@ -41,7 +41,7 @@ typedef struct { int16_t *d; int n, ch; } Sample;
 enum { SMP_IDLE, SMP_ACCEL, SMP_TOP, SMP_DECEL, SMP_START, SMP_SHIFT, SMP_POP, SMP_BRAKE, SMP_HARDBRAKE, SMP_COUNTDOWN, SMP_UNLOCK, SMP_COUNT };
 static const char *SMP_NAMES[SMP_COUNT] = {"kart_engine_idle", "kart_engine_acceleration", "kart_engine_top_speed", "kart_engine_deceleration", "kart_engine_start", "kart_gear_shift", "kart_exhaust_pop", "kart_braking", "kart_hard_braking", "sting_countdown", "sting_unlock"};
 static const char *SFX_NAMES[SFX_COUNT] = {"menu_move", "menu_ok", "menu_back", "count_tick", "go", "pickup", "use_item", "throw", "hit", "block", "bump", "lap", "final_lap", "finish", "win",
-    "mini_turbo", "super_turbo", "boost_pad", "bounce", "land", "splash", "shofar", "fire", "locusts", "dove", "unlock", "welcome_home", "wrong_way", "coin", "crumble", "shout", "countdown", "engine_start"};
+    "mini_turbo", "super_turbo", "boost_pad", "bounce", "land", "splash", "shofar", "fire", "locusts", "dove", "unlock", "welcome_home", "wrong_way", "coin", "crumble", "shout", "whale_roar", "countdown", "engine_start"};
 static Sample smp[SMP_COUNT], smp_fx[SFX_COUNT];
 static void (*logf_)(const char *fmt, ...) = NULL;
 #define LOG(...) do { if (logf_) logf_(__VA_ARGS__); } while (0)
@@ -189,6 +189,7 @@ static void fire(int id, float g, float p) {
     case SFX_BOOST_PAD: N(W_SAW, 200, 1400, 0.35f, 0.002f, 0.35f, 0.3f, 0); v = N(W_NOISE, 0, 0, 0.3f, 0.002f, 0.3f, 0.25f, 0); v->lp = 5000; break;
     case SFX_BOUNCE:    v = N(W_SINE, 300, 900, 0.3f, 0.002f, 0.3f, 0.5f, 0); v->vib_rate = 12; v->vib_depth = 0.15f; break;
     case SFX_LAND:      N(W_SINE, 150, 60, 0.12f, 0.002f, 0.12f, 0.4f, 0); v = N(W_NOISE, 0, 0, 0.1f, 0.002f, 0.1f, 0.2f, 0); v->lp = 1200; break;
+    case SFX_WHALE_ROAR: v = N(W_SINE, 90, 55, 0.7f, 0.05f, 1.2f, 0.6f, 0); N(W_NOISE, 0, 0, 0.5f, 0.3f, 0.8f, 0.4f, 0); break;
     case SFX_SPLASH:    v = N(W_NOISE, 0, 0, 0.5f, 0.01f, 0.5f, 0.45f, 0); v->lp = 3000; N(W_SINE, 500, 150, 0.3f, 0.002f, 0.3f, 0.2f, 0); break;
     case SFX_SHOFAR:    v = N(W_SAW, 310, 330, 1.2f, 0.08f, 1.2f, 0.45f, 0); v->vib_rate = 5.5f; v->vib_depth = 0.03f; v->lp = 2200;
                         v = N(W_SAW, 465, 495, 1.0f, 0.08f, 1.0f, 0.3f, 0.5f); v->vib_rate = 6; v->vib_depth = 0.03f; v->lp = 2500; break;

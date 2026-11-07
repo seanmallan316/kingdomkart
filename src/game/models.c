@@ -585,9 +585,20 @@ static void m_stall2(float h, float w, unsigned sd) {   /* a market stall: a clo
     jar2(-W - 0.5f, D - 0.2f, 0.9f, 0.74f, 0.43f, 0.27f); jar2(-W - 0.3f, D + 0.35f, 0.65f, 0.7f, 0.4f, 0.25f);
     ao_pass(n0, 0.0f, 1.6f); }
 
+/* a waterfall's rock: a cliff of big rounded boulders with a notch in the middle where the water pours over, mossy on
+   top, and a ring of rocks round the pool at its foot (the falling water itself is drawn by the game, moving). Faces +z. */
+static void m_falls(float h) { float W = h * 0.9f; mat(MAT_ROCK);
+    blob(v3(-W * 0.42f, h * 0.48f, -W * 0.28f), W * 0.36f, h * 0.55f, W * 0.34f, 0.18f, 8, 12, 0.6f, 0.56f, 0.5f);
+    blob(v3(W * 0.42f, h * 0.45f, -W * 0.26f), W * 0.36f, h * 0.52f, W * 0.34f, 0.18f, 8, 12, 0.62f, 0.58f, 0.52f);
+    blob(v3(0, h * 0.42f, -W * 0.45f), W * 0.32f, h * 0.55f, W * 0.3f, 0.15f, 8, 12, 0.55f, 0.52f, 0.47f);   /* behind the water */
+    blob(v3(-W * 0.62f, h * 0.2f, -W * 0.05f), W * 0.22f, h * 0.24f, W * 0.22f, 0.22f, 6, 9, 0.58f, 0.55f, 0.48f);
+    blob(v3(W * 0.6f, h * 0.18f, -W * 0.02f), W * 0.22f, h * 0.22f, W * 0.22f, 0.22f, 6, 9, 0.6f, 0.57f, 0.5f);
+    mat(MAT_LEAF); for (int sd = -1; sd <= 1; sd += 2) blob(v3(sd * W * 0.42f, h * 0.98f, -W * 0.3f), W * 0.3f, h * 0.1f, W * 0.28f, 0.25f, 5, 9, 0.38f, 0.6f, 0.28f);   /* moss and grass on top */
+    mat(MAT_ROCK); for (int k = 0; k < 9; k++) { float a = 3.14159265f * (0.05f + 0.9f * k / 8.0f), R = W * 0.48f;
+        blob(v3(cosf(a) * R, h * 0.04f, W * 0.3f + sinf(a) * R * 0.75f), W * 0.12f, h * 0.06f, W * 0.1f, 0.25f, 4, 7, 0.55f, 0.53f, 0.48f); } }
 static const char *const NAMES[] = {"#tree", "#olive", "#fruittree", "#treeoflife", "#palm", "#cypress", "#flowers", "#lily", "#fern", "#lantern", "#crystal", "#sheep", "#lamb",
     "#deer", "#lion", "#boat", "#net", "#priest", "#israelite", "#philistine", "#banner_israel", "#banner_philistine", "#cloud", "#cart", "#ark", "#tomb", "#crosses",
-    "#stable", "#camp", "#stone", "#rubble", "#house1", "#house2", "#inn", "#stall", "#hut", "#tower", "#pillar", "#gpillar", "#tent", "#rock", "#well", "#wallseg"};
+    "#stable", "#camp", "#stone", "#rubble", "#house1", "#house2", "#inn", "#stall", "#hut", "#tower", "#pillar", "#gpillar", "#tent", "#rock", "#well", "#wallseg", "#waterfall"};
 int model_known(const char *img) { for (unsigned i = 0; i < sizeof NAMES / sizeof NAMES[0]; i++) if (!strcmp(img, NAMES[i])) return 1; return 0; }
 int model_build(ModelOut *o, const char *img, float h, float w, unsigned seed, Vec3 at, float yaw, float tr, float tg, float tb) {
     O = o; g_seed = seed * 2654435761u + 12345u; rnd(); nosway(); FLUTES = 0; mat(MAT_PLAIN);
@@ -609,7 +620,7 @@ int model_build(ModelOut *o, const char *img, float h, float w, unsigned seed, V
     else if (!strcmp(img, "#house1")) m_bld(h, w, seed, tr, tg, tb, 0); else if (!strcmp(img, "#house2")) m_bld(h, w, seed, tr, tg, tb, 1); else if (!strcmp(img, "#inn")) m_bld(h, w, seed, tr, tg, tb, 2); else if (!strcmp(img, "#stall")) m_stall2(h, w, seed);
     else if (!strcmp(img, "#hut")) m_hut(h, w, 1, 1, 1); else if (!strcmp(img, "#tower")) m_tower(h, w, tr, tg, tb);
     else if (!strcmp(img, "#pillar")) m_pillar(h, tr, tg, tb, tr > 0.96f); else if (!strcmp(img, "#gpillar")) m_pillar(h, 1.0f, 0.85f, 0.45f, 1);
-    else if (!strcmp(img, "#tent")) m_tent(h, w); else if (!strcmp(img, "#rock")) m_rocks(h, w, 0.68f, 0.64f, 0.58f); else if (!strcmp(img, "#well")) m_well(h, w, tr, tg, tb); else if (!strcmp(img, "#wallseg")) m_wallseg(h, w, tr, tg, tb);
+    else if (!strcmp(img, "#tent")) m_tent(h, w); else if (!strcmp(img, "#rock")) m_rocks(h, w, 0.68f, 0.64f, 0.58f); else if (!strcmp(img, "#well")) m_well(h, w, tr, tg, tb); else if (!strcmp(img, "#wallseg")) m_wallseg(h, w, tr, tg, tb); else if (!strcmp(img, "#waterfall")) m_falls(h);
     nosway();
     /* turn it to face 'yaw' and stand it at 'at' */
     float c = cosf(yaw), s_ = sinf(yaw); int added = 0;

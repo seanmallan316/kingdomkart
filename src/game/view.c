@@ -141,6 +141,7 @@ static void mat_buckets(ModelOut *mo) {   /* the buckets the models are built in
 static void mat_flush(ModelOut *mo) { for (int m = 0; m < MAT_N; m++) { if (mo->b[m]->n && m_nprops[m] < PROP_CHUNKS) m_props[m][m_nprops[m]++] = gfx_mesh_static(mo->b[m]->v, mo->b[m]->n); batch_clear(mo->b[m]); } }
 static void draw_mat_meshes(Mesh *const *ms, int n, int m, const Mat4 *mx) { if (!n) return; gfx_bind(tx_mat[m]); for (int c = 0; c < n; c++) if (ms[c]) gfx_draw(ms[c], mx, 1, 1, 1, 1); }   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
+static Mesh *m_fallsw, *m_foam; static Texture *tx_fallsw, *tx_poolw;
 static Mesh *m_hills, *m_mountains, *m_clouds, *m_boostglow; static Texture *tx_padglow; static Texture *tx_white; static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[32768];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
@@ -362,7 +363,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
 }
 static void free_track_meshes(void) {
     gfx_mesh_free(m_hills); m_hills = NULL;
-    Mesh **ms[] = {&m_boostglow, &m_mountains, &m_clouds, &m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_whale, &m_whale_jaw, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_fallsw, &m_foam, &m_boostglow, &m_mountains, &m_clouds, &m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_whale, &m_whale_jaw, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -589,33 +590,30 @@ static void build_track_meshes(void) {
       p0.y += 0.03f; p1.y += 0.03f; p2.y += 0.03f; p3.y += 0.03f;
       batch_quad4(&g_b, p0, p1, p2, p3, v3(0, 1, 0), 0, 0, 4, 1, 1, 1, 1, 1); }
     m_startline = gfx_mesh_static(g_b.v, g_b.n);
-    /* boost pads (Sean: 3D and glowing, with a Bible symbol): a raised golden dove of the Holy Spirit in flight, its head
-       pointing the way the racers drive (the Spirit "descending like a dove", Matthew 3:16), on a pool of soft light */
-    Batch keep_b = g_b; batch_init(&g_b, far_buf(), FAR_CAP); batch_clear(&g_b);   /* a road can have 30 doves: the big buffer */
+    /* boost pads (Sean): a raised, glowing golden Jesus fish - the ichthys, the early Christians' sign - its head pointing the
+       way the racers drive, on a pool of soft light. Three solid pieces: the body (the two arcs meeting at the tail) and the
+       two points of the tail where the arcs cross and carry on. */
+    Batch keep_b = g_b; batch_init(&g_b, far_buf(), FAR_CAP); batch_clear(&g_b);   /* a road can have 30 of them: the big buffer */
     {
-      static const int DN = 10; static const int dn[10] = {14, 6, 6, 6, 6, 6, 6, 6, 4, 4};
-      static const float dp[10][14][2] = {{{0.00f, 1.00f}, {0.08f, 0.97f}, {0.13f, 0.88f}, {0.14f, 0.76f}, {0.19f, 0.50f}, {0.21f, 0.15f}, {0.15f, -0.30f}, {0.00f, -0.42f}, {-0.15f, -0.30f}, {-0.21f, 0.15f}, {-0.19f, 0.50f}, {-0.14f, 0.76f}, {-0.13f, 0.88f}, {-0.08f, 0.97f}},
-          {{0.17f, 0.58f}, {0.55f, 0.68f}, {0.98f, 0.58f}, {0.95f, 0.46f}, {0.50f, 0.42f}, {0.18f, 0.40f}},
-          {{0.18f, 0.44f}, {0.52f, 0.44f}, {0.88f, 0.36f}, {0.82f, 0.25f}, {0.45f, 0.22f}, {0.19f, 0.24f}},
-          {{0.19f, 0.27f}, {0.45f, 0.25f}, {0.70f, 0.14f}, {0.60f, 0.05f}, {0.35f, 0.06f}, {0.20f, 0.08f}},
-          {{-0.18f, 0.40f}, {-0.50f, 0.42f}, {-0.95f, 0.46f}, {-0.98f, 0.58f}, {-0.55f, 0.68f}, {-0.17f, 0.58f}},
-          {{-0.19f, 0.24f}, {-0.45f, 0.22f}, {-0.82f, 0.25f}, {-0.88f, 0.36f}, {-0.52f, 0.44f}, {-0.18f, 0.44f}},
-          {{-0.20f, 0.08f}, {-0.35f, 0.06f}, {-0.60f, 0.05f}, {-0.70f, 0.14f}, {-0.45f, 0.25f}, {-0.19f, 0.27f}},
-          {{0.00f, -0.30f}, {0.10f, -0.30f}, {0.16f, -0.90f}, {0.00f, -0.95f}, {-0.16f, -0.90f}, {-0.10f, -0.30f}},
-          {{0.10f, -0.28f}, {0.18f, -0.30f}, {0.40f, -0.82f}, {0.28f, -0.88f}},
-          {{-0.28f, -0.88f}, {-0.40f, -0.82f}, {-0.18f, -0.30f}, {-0.10f, -0.28f}}};
+      enum { DN = 3 }; static int dn[DN]; static float dp[DN][32][2];
+      { int n = 0; for (int k = 0; k <= 13; k++) { float u = (float)k / 13; dp[0][n][0] = 0.4f * sinf(3.14159265f * u); dp[0][n][1] = 1.0f - 1.42f * u; n++; }   /* one arc, head to tail */
+        for (int k = 12; k >= 1; k--) { float u = (float)k / 13; dp[0][n][0] = -0.4f * sinf(3.14159265f * u); dp[0][n][1] = 1.0f - 1.42f * u; n++; }   /* and back along the other */
+        dn[0] = n;
+        float tl[3][2] = {{0.0f, -0.42f}, {0.44f, -0.98f}, {0.16f, -0.86f}};
+        for (int q = 0; q < 3; q++) { dp[1][q][0] = tl[q][0]; dp[1][q][1] = tl[q][1]; dp[2][2 - q][0] = -tl[q][0]; dp[2][2 - q][1] = tl[q][1]; }
+        dn[1] = dn[2] = 3; }
       for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p]; if (pd->kind != PAD_BOOST) continue;
         int ci = (pd->idx + 3) % t->n; const TrackSample *cs = &t->s[ci]; float spacing = t->length / (float)t->n, W = pd->halfw * 1.05f, F = pd->halfw * 1.25f;
         for (int part = 0; part < DN; part++) {
-            int pn = dn[part], wingp = part >= 1 && part <= 6, tailp = part >= 7;
-            float th = part == 0 ? 0.42f : (wingp ? 0.2f + 0.03f * ((part - 1) % 3) : 0.16f + 0.02f * (part - 7));   /* feathers overlap in layers */
-            Vec3 top[16], bot[16];
+            int pn = dn[part], wingp = 0, tailp = part > 0;
+            float th = part == 0 ? 0.38f : 0.26f;
+            Vec3 top[32], bot[32];
             for (int k = 0; k < pn; k++) { float lx = dp[part][k][0], lz = dp[part][k][1];
                 float lat = pd->lateral + lx * W, fwd = lz * F; int si = (ci + (int)lroundf(fwd / spacing) + t->n) % t->n; const TrackSample *ss = &t->s[si];
                 float along = fwd - (float)lroundf(fwd / spacing) * spacing;
                 Vec3 base = road_point(t, si, lat); base.x += ss->tx * along; base.z += ss->tz * along; base.y += 0.06f;
-                float lift = wingp ? fabsf(lx) * 0.25f : 0;   /* the wings sweep up a little */ (void)tailp;
-                float h = th * (part == 0 ? (0.6f + 0.4f * (1 - fabsf(lz))) : 1.0f);
+                float lift = 0; (void)wingp; (void)tailp;
+                float h = th * (part == 0 ? (0.55f + 0.45f * (1.0f - fabsf(lx) / 0.42f)) : 1.0f);   /* the body domed along its middle */
                 bot[k] = v3(base.x, base.y + lift * 0.5f, base.z); top[k] = v3(base.x, base.y + lift + h, base.z); }
             (void)cs;
             /* the top: bright white-gold */
@@ -625,7 +623,6 @@ static void build_track_meshes(void) {
             for (int k = 0; k < pn; k++) { int k2 = (k + 1) % pn; Vec3 e = v3_sub(top[k2], top[k]); Vec3 n = v3_norm(v3(e.z, 0, -e.x));
                 float sh = 0.7f + 0.3f * (n.x * 0.5f + n.z * 0.5f + 0.5f); batch_quad4(&g_b, bot[k], bot[k2], top[k2], top[k], n, 0, 0, 1, 1, 1.0f * sh, 0.72f * sh, 0.22f * sh, 1); }
         }
-        /* an eye and a small olive sprig would be lost at racing speed: a plain glowing shape reads best */
       } }
     m_boostpads = gfx_mesh_static(g_b.v, g_b.n); g_b = keep_b;
     batch_clear(&g_b);
@@ -1297,7 +1294,7 @@ static void load_theme(void) {
         Placed *p = &g_placed[g_nplaced++];
         p->kind = sprite_kind(sc->img);
         float edge = track_edge(&g_track, idx), sgn = sc->side < 0 ? -1.0f : 1.0f, bound = track_bound(&g_track, idx, (int)sgn);
-        float wide = fabsf(sc->side) * (g_def->bonus == 2 ? 1.0f : 1.45f);   /* the roads were widened by 1.45, so the scenery moves out with them */
+        float wide = fabsf(sc->side) * (g_track.widen > 0 ? g_track.widen : 1.0f);   /* the same place the race uses for its solid scenery */
         float lat = (wide > edge + 0.5f && wide < bound - 1.0f) ? sgn * wide                     /* out in the open land: it stays there (and is solid, see the race) */
                   : sgn * (bound + fmaxf(fabsf(sc->side) - edge, 0.0f));                          /* otherwise just outside the wall */
         p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * lat, 0, g_track.s[idx].z + g_track.s[idx].nz * lat);
@@ -1307,6 +1304,7 @@ static void load_theme(void) {
         p->yaw = atan2f(g_track.s[idx].tx, g_track.s[idx].tz) + i * 0.37f;   /* roughly along the road, each a little turned */
         p->solid = !p->wall && (model_known(sc->img) || prop_shape(sc->img) >= 0);   /* everything is a 3D model now (Sean), except the waterfalls */
         { const TrackSample *ts = &g_track.s[idx]; p->t3 = v3(ts->tx, 0, ts->tz); p->o3 = v3(ts->nx * sgn, 0, ts->nz * sgn); }
+        if (p->falls) p->yaw = atan2f(-p->o3.x, -p->o3.z);   /* the waterfall's front (+z) faces the road */
     }
     m_glow = gfx_mesh_dynamic((MAX_SCENERY + NKARTS) * 6 + 6);
     /* a soft shadow blob under everything that stands by the road */
@@ -1316,6 +1314,29 @@ static void load_theme(void) {
         batch_quad(&g_b, v3(pl->p.x, pl->p.y + 0.26f, pl->p.z), v3(w, 0, 0), v3(0, 0, -dz), v3(0, 1, 0), 0, 0, 1, 1, 0, 0, 0, 0.45f); }
     gfx_mesh_free(m_scshadow); m_scshadow = gfx_mesh_static(g_b.v, g_b.n);
     build_props();
+    /* the water of each waterfall (Sean: animated and 3D): a sheet pouring over the lip of its rock, curving out and down
+       into a round pool, drawn every frame with its picture sliding down; and white foam where it lands */
+    { Batch keep = g_b; batch_init(&g_b, far_buf(), FAR_CAP); batch_clear(&g_b); Batch fb; static Vertex fv[4096]; batch_init(&fb, fv, 4096);
+      for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (!pl->falls) continue;
+        float h = pl->h, W = h * 0.9f, c = cosf(pl->yaw), sn = sinf(pl->yaw);
+        #define WP(X_, Y_, Z_) v3(pl->p.x + (X_) * c + (Z_) * sn, pl->p.y + (Y_), pl->p.z - (X_) * sn + (Z_) * c)
+        enum { NT = 12, NX = 5 }; Vec3 P[NT + 1][NX + 1]; float V[NT + 1];
+        for (int t = 0; t <= NT; t++) { float u = (float)t / NT, y = h * 0.97f * (1 - u) + 0.3f * u, z = -W * 0.22f + W * 0.5f * powf(u, 0.55f), hw = W * 0.15f * (1 + 0.45f * u);
+            for (int x = 0; x <= NX; x++) { float f = (float)x / NX * 2 - 1; P[t][x] = WP(f * hw, y, z + 0.12f * (1 - f * f)); }
+            V[t] = t ? V[t - 1] + sqrtf((P[t][0].y - P[t - 1][0].y) * (P[t][0].y - P[t - 1][0].y) + 0.25f) / 3.0f : 0; }
+        Vec3 nf = v3(sn, 0.25f, c);   /* facing out, toward the road */
+        for (int t = 0; t < NT; t++) for (int x = 0; x < NX; x++) { float u0 = (float)x / NX, u1 = (float)(x + 1) / NX, sh = 0.92f + 0.08f * (x & 1);
+            batch_quad4(&g_b, P[t + 1][x], P[t + 1][x + 1], P[t][x + 1], P[t][x], nf, u0, V[t + 1], u1, V[t], sh, sh, 1.0f, 1); }
+        Vec3 pc = WP(0, 0.28f, W * 0.3f); float pr = W * 0.46f;   /* the pool */
+        for (int k = 0; k < 18; k++) { float a0 = k * 6.2831853f / 18, a1 = (k + 1) * 6.2831853f / 18;
+            Vec3 q0 = v3(pc.x + cosf(a0) * pr, pc.y, pc.z + sinf(a0) * pr * 0.8f), q1 = v3(pc.x + cosf(a1) * pr, pc.y, pc.z + sinf(a1) * pr * 0.8f);
+            Vertex tri[3] = {{pc.x, pc.y, pc.z, 0, 1, 0, pc.x / 4, pc.z / 4, 0.75f, 0.9f, 1, 1}, {q1.x, q1.y, q1.z, 0, 1, 0, q1.x / 4, q1.z / 4, 0.7f, 0.85f, 1, 1}, {q0.x, q0.y, q0.z, 0, 1, 0, q0.x / 4, q0.z / 4, 0.7f, 0.85f, 1, 1}};
+            if (g_b.n + 3 <= g_b.cap) for (int q = 0; q < 3; q++) g_b.v[g_b.n++] = tri[q]; }
+        Vec3 fc = WP(0, 0.36f, W * 0.28f);   /* foam where it lands */
+        for (int k = 0; k < 3; k++) { float R = W * (0.22f + 0.1f * k); batch_quad(&fb, v3(fc.x, fc.y + k * 0.03f, fc.z), v3(R * c, 0, -R * sn), v3(R * sn, 0, R * c), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 0.55f - 0.12f * k); }
+        #undef WP
+      }
+      gfx_mesh_free(m_fallsw); m_fallsw = g_b.n ? gfx_mesh_static(g_b.v, g_b.n) : NULL; gfx_mesh_free(m_foam); m_foam = fb.n ? gfx_mesh_static(fb.v, fb.n) : NULL; g_b = keep; }
 }
 
 // ------------------------------------------------------------------ setup
@@ -2679,6 +2700,10 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
         gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1);
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1); }
+        if (m_fallsw) { if (!tx_fallsw) tx_fallsw = make_tex(64, 128, 1, 0, px_waterfall);   /* the waterfalls: water sliding down, foam pulsing where it lands */
+            gfx_state(ST_TRANSPARENT); gfx_bind(tx_fallsw); gfx_draw_ex(m_fallsw, &id, 1, 1, 1, 0.92f, 0.7f, 0, 0, -g_time * 1.6f);
+            if (m_foam) { float fp = 0.8f + 0.2f * sinf(g_time * 7.0f); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_foam, &id, fp, fp, fp, 1, 0, 1, 0, 0); }
+            gfx_state(ST_SOLID); }
         if (g_def->bonus == 2 && m_brook) { static Texture *tx_brook = NULL; if (!tx_brook) tx_brook = make_tex(128, 128, 1, 0, px_water); gfx_state(ST_TRANSPARENT); gfx_bind(tx_brook);
             Mat4 flow = m4_translate(sinf(g_time * 2.0f) * 0.3f, 0, 0); gfx_draw_ex(m_brook, &flow, 1, 1, 1, 0.75f, 0.8f, 0, g_time * 0.05f, 0); gfx_state(ST_SOLID); }
         { float pulse = 0.75f + 0.25f * sinf(g_time * 6.0f);
@@ -2788,8 +2813,8 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                     Mat4 idm = m4_identity(); gfx_state(ST_CUTOUT); gfx_bind(tx_whale[v]); gfx_draw(m_wspr, &idm, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); (void)jaw; (void)m; }
                 else { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); gfx_draw_ex(m_whale, &m, 1, 1, 1, 1, 0.8f, 0, 0, 0);
                     Mat4 mj = m4_mul(m, m4_mul(m4_translate(0, -0.55f, -0.4f), m4_rotate_x(jaw))); gfx_draw_ex(m_whale_jaw, &mj, 1, 1, 1, 1, 0.6f, 0, 0, 0); gfx_state(ST_SOLID); }
-                static float last_u = 1; if ((last_u < 0.02f || last_u > u) && u >= 0) { for (int n = 0; n < 24; n++) add_dust(v3(r->whale.x - r->whale.dx * 10 + (frand01() - 0.5f) * 4, wy, r->whale.z - r->whale.dz * 10 + (frand01() - 0.5f) * 4), 3.0f, 6.0f); }
-                if (last_u < 0.72f && u >= 0.72f) for (int n = 0; n < 30; n++) add_dust(v3(r->whale.x + r->whale.dx * 3 + (frand01() - 0.5f) * 5, wy, r->whale.z + r->whale.dz * 3 + (frand01() - 0.5f) * 5), 4.0f, 7.0f);
+                static float last_u = 1; if ((last_u < 0.02f || last_u > u) && u >= 0) { for (int n = 0; n < 70; n++) add_dust(v3(r->whale.x - r->whale.dx * 10 + (frand01() - 0.5f) * 4, wy, r->whale.z - r->whale.dz * 10 + (frand01() - 0.5f) * 4), 3.0f, 6.0f); }
+                if (last_u < 0.72f && u >= 0.72f) for (int n = 0; n < 80; n++) add_dust(v3(r->whale.x + r->whale.dx * 3 + (frand01() - 0.5f) * 5, wy, r->whale.z + r->whale.dz * 3 + (frand01() - 0.5f) * 5), 4.0f, 7.0f);
                 last_u = u; } }
 
         /* the karts */
@@ -3378,7 +3403,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case EV_PAD_BOUNCE: if (who >= 0) pmsg(who, 0.7f, "BOING!"); sfx_at(SFX_BOUNCE, ek, 0.9f); break;
                 case EV_WHALE_WARN: if (who >= 0) { pmsg(who, 1.6f, "THE GREAT FISH!"); pmsg2(who, 1.6f, "GET OUT OF THE WATER!"); prumble(who, 0.3f, 0.6f); } sfx_play(SFX_SPLASH, who >= 0 ? 0.6f : 0.25f, 0); break;
                 case EV_WHALE_UP: { float d2 = 1e9f; for (int p = 0; p < g_nplayers; p++) { const Kart *hk = &r->k[human_kart(p)]; float dx = hk->x - r->whale.x, dz = hk->z - r->whale.z; d2 = fminf(d2, dx * dx + dz * dz); }
-                    float nearv = clampf(1.2f - sqrtf(d2) / 80.0f, 0, 1); if (nearv > 0) { sfx_play(SFX_SPLASH, nearv, 0); sfx_play(SFX_BOUNCE, nearv * 0.5f, 0); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.5f * nearv); } } break;
+                    float nearv = clampf(1.2f - sqrtf(d2) / 80.0f, 0, 1); nearv = fmaxf(nearv, 0.55f);   /* (Sean) a loud roar you hear from anywhere on the sea */
+                    if (nearv > 0) { sfx_play(SFX_WHALE_ROAR, 1.0f, 0); sfx_play(SFX_SPLASH, nearv, 0); for (int p = 0; p < g_nplayers; p++) g_view[p].shake = fmaxf(g_view[p].shake, 0.5f * nearv); } } break;
                 case EV_SWALLOWED: if (ek) for (int n = 0; n < 16; n++) add_dust(v3(ek->x + (frand01() - 0.5f) * 3, ek->y, ek->z + (frand01() - 0.5f) * 3), 3.0f, 5.0f);
                     sfx_play(SFX_HIT, who >= 0 ? 1.0f : 0.4f, 0); if (who >= 0) { pmsg(who, 2.2f, "SWALLOWED!"); pmsg2(who, 2.2f, "INSIDE THE GREAT FISH - JONAH 1:17"); prumble(who, 0.8f, 0.5f); } break;
                 case EV_SPAT_OUT: if (ek) for (int n = 0; n < 12; n++) add_dust(v3(ek->x, ek->y, ek->z), 2.5f, 4.0f);

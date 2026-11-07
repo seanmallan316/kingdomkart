@@ -53,7 +53,7 @@ typedef struct {
     Gem gem[MAX_GEMS]; int ngem;
     short def_q[257]; unsigned char def_m[256]; short def_per, def_np;   /* where each stretch of the road's definition went once its S-bends were added */
     float def_scale;                        /* sample numbers in a road's definition (drawn at 20 a stretch) times this = sample numbers here */
-    int nobst; struct { float x, z, r; } obst[96];   /* scenery standing out in the open land: trees, rocks, houses to steer round */
+    int nobst; struct { float x, z, r; } obst[200]; float widen;   /* widen: how much wider the road is than drawn (scenery moves out with it) */   /* scenery standing out in the open land: trees, rocks, houses to steer round */
 } Track;
 
 typedef struct {

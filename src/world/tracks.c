@@ -560,12 +560,23 @@ void track_from_def(Track *t, const TrackDef *d) {
     memset(t->field, 0, sizeof t->field); t->ngem = 0; t->water_y = -1e9f;
     if (!d->finale_img && d->bonus != 2 && d->bonus != 3) track_make_field(t, d->water);
     /* scenery that stands out in the open land (not past its wall) is solid: a kart has to steer round it */
-    t->nobst = 0;
-    for (int i = 0; i < d->nscenery && t->nobst < 96; i++) { const Scenery *sc = &d->scenery[i]; if (sc->img[0] != '#') continue;
+    /* scenery that stands out in the open land (not past its wall) is solid: a kart bumps into it (Sean: you could drive
+       straight through waterfalls and the like). The size it blocks follows the kind of thing it is. */
+    t->widen = wd; t->nobst = 0;
+    for (int i = 0; i < d->nscenery && t->nobst < 200; i++) { const Scenery *sc = &d->scenery[i]; if (sc->img[0] != '#') continue;
         int idx = DI(sc->idx) % t->n; float lat = sc->side * wd, sgn = lat < 0 ? -1.0f : 1.0f;
         if (fabsf(lat) < track_edge(t, idx) + 0.5f || fabsf(lat) > track_bound(t, idx, (int)sgn) - 1.0f) continue;
-        if (!strcmp(sc->img, "#cloud") || !strcmp(sc->img, "#flowers") || !strcmp(sc->img, "#lily") || !strcmp(sc->img, "#waterfall") || !strcmp(sc->img, "#sheep") || !strcmp(sc->img, "#lamb")) continue;
-        const TrackSample *s2 = &t->s[idx]; float r = sc->height * 0.16f; if (r < 0.7f) r = 0.7f; if (r > 3.0f) r = 3.0f;
+        const char *k = sc->img;
+        if (!strcmp(k, "#cloud") || !strcmp(k, "#flowers") || !strcmp(k, "#lily") || !strcmp(k, "#fern")) continue;   /* soft things you can drive through */
+        float h = sc->height, r;
+        if (!strcmp(k, "#house1") || !strcmp(k, "#house2") || !strcmp(k, "#inn") || !strcmp(k, "#stable") || !strcmp(k, "#tent") || !strcmp(k, "#ark") || !strcmp(k, "#tomb") || !strcmp(k, "#hut"))
+            r = h * 0.55f;
+        else if (!strcmp(k, "#waterfall")) r = h * 0.42f;
+        else if (!strcmp(k, "#rock") || !strcmp(k, "#stone") || !strcmp(k, "#rubble") || !strcmp(k, "#well") || !strcmp(k, "#stall") || !strcmp(k, "#tower") || !strcmp(k, "#boat") || !strcmp(k, "#cart") || !strcmp(k, "#camp")) r = h * 0.4f;
+        else if (!strcmp(k, "#sheep") || !strcmp(k, "#lamb") || !strcmp(k, "#deer") || !strcmp(k, "#lion")) r = 0.9f;
+        else r = h * 0.12f;   /* trees, palms, pillars, lanterns, banners, people: the trunk or the post */
+        if (r < 0.6f) r = 0.6f; if (r > 6.0f) r = 6.0f;
+        const TrackSample *s2 = &t->s[idx];
         t->obst[t->nobst].x = s2->x + s2->nx * lat; t->obst[t->nobst].z = s2->z + s2->nz * lat; t->obst[t->nobst].r = r; t->nobst++; }
 }
 void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[NUM_TRACK_DEFS - 1]); }
