@@ -371,7 +371,7 @@ void gfx_bind(Texture *t) {
 void gfx_state(int flags) {
     if (flags == g_flags) return;
     g_flags = flags;
-    GX2SetDepthOnlyControl((flags & ST_DEPTH) ? TRUE : FALSE, (flags & ST_DEPTH_WRITE) ? TRUE : FALSE, GX2_COMPARE_FUNC_LEQUAL);
+    GX2SetDepthOnlyControl((flags & ST_DEPTH) ? TRUE : FALSE, (flags & ST_DEPTH_WRITE) ? TRUE : FALSE, (flags & ST_LESS) ? GX2_COMPARE_FUNC_LESS : GX2_COMPARE_FUNC_LEQUAL);
     GX2SetCullOnlyControl(GX2_FRONT_FACE_CCW, FALSE, (flags & ST_CULL) ? TRUE : FALSE);
     if (flags & ST_BLEND) {
         GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);

@@ -9,7 +9,7 @@ typedef struct Mesh Mesh;
 typedef struct Texture Texture;
 
 enum { GFX_OK = 0, GFX_NO_COMPILER = 1, GFX_SHADER_FAILED = 2 };
-enum { ST_DEPTH = 1, ST_DEPTH_WRITE = 2, ST_BLEND = 4, ST_CULL = 8, ST_ADD = 16 };
+enum { ST_DEPTH = 1, ST_DEPTH_WRITE = 2, ST_BLEND = 4, ST_CULL = 8, ST_ADD = 16, ST_LESS = 32 };   /* ST_LESS: a spot already drawn at this depth is not drawn again (shadows don't double up) */
 #define ST_SOLID (ST_DEPTH | ST_DEPTH_WRITE | ST_CULL)
 #define ST_CUTOUT (ST_DEPTH | ST_DEPTH_WRITE | ST_BLEND)
 #define ST_TRANSPARENT (ST_DEPTH | ST_BLEND)

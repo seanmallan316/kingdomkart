@@ -1,6 +1,7 @@
 // view.c - draws the race: track, eight karts, items, effects, HUD, results. The rules live in sim/race.c.
 #include "game.h"
 #include "models.h"
+#include "kart3d.h"
 #include "save.h"
 #include "../audio/sfx.h"
 #include "../audio/music.h"
@@ -100,6 +101,7 @@ static View *cv = &g_view[0];                   /* the view being updated or dra
 #define g_orbit (cv->orbit)
 static const float PLAYER_COL[MAX_HUMANS][3] = {{1.0f, 0.85f, 0.3f}, {0.35f, 0.65f, 1.0f}, {1.0f, 0.4f, 0.35f}, {0.4f, 0.9f, 0.45f}};   /* P1 gold, P2 blue, P3 red, P4 green */
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
+static Kart3D g_k3d[NCHARS];   /* racers with a real 3D kart (content/models/<name>.kkm) */
 static Texture *tx_flame; static Texture *tx_emblem[NSTYLES]; static int g_emb_kind; static void px_emblem(int x, int y, uint32_t *o); static Texture *tx_bearer; static float g_bearer_aspect = 0.67f; static Mesh *m_bearer;   /* Goliath's shield-bearer (char_shieldbearer.png, or a drawn one) */
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
 static unsigned g_unl_bits; static float g_unl_t;   /* the "UNLOCKED!" screens still to show after this race, one per prize, and how long the current one has been up */
@@ -1244,6 +1246,7 @@ int game_init(int status) {
             for (int v = 0; v < 3; v++) { snprintf(cn, sizeof cn, "kartview_%s_%s", pn[i] + 9, suf[v]); w = h = 1; tx_kartview[i][v + 1] = asset_texture(cn, 0, &w, &h); g_kartview_aspect[i][v + 1] = h > 0 ? (float)w / (float)h : 1.6f;
                 if (tx_kartview[i][v + 1] && (g_view_wd[i][v + 1] = wheel_def(cn)) != NULL) g_view_wtex[i][v + 1] = wheel_tex(cn); }
             static const char *rsuf[5] = {"b", "bl", "l", "fl", "f"};
+            if (!g_k3d[i].ok) kart3d_load(&g_k3d[i], pn[i] + 9);
             for (int v = 0; v < 5; v++) { snprintf(cn, sizeof cn, "ride_%s_%s", pn[i] + 9, rsuf[v]); w = h = 1; tx_ride[i][v] = asset_texture(cn, 0, &w, &h); g_ride_aspect[i][v] = h > 0 ? (float)w / (float)h : 1.4f;
                 if (tx_ride[i][v] && (g_ride_wd[i][v] = wheel_def(cn)) != NULL) g_ride_wtex[i][v] = wheel_tex(cn);
                 if (tx_ride[i][v]) g_ride_td[i][v] = tread_def(cn); } }
@@ -2513,6 +2516,16 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             float sq = 1.0f - q->squash * 0.25f;
             Mat4 m = m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f + cele_bounce(r, i), q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.04f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f)))));
             int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
+            if (g_k3d[r->character[i]].ok) {   /* a real 3D kart: body and driver, wheels that roll and steer, and its shadow on the road */
+                const Kart3D *k3 = &g_k3d[r->character[i]]; float st = q->stun > 0 ? 0.6f : 1.0f;
+                gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw(k3, &m, g_wheel_ang[i], -q->steer_vis * 0.42f, sr * st, sg * st, sb * st, 1);
+                if (!q->air || q->hop < 2.5f) {   /* the shadow: the kart squashed flat onto the road along the sun */
+                    float gy = q->hit.height + 0.04f, lx = ldir.x, ly = ldir.y < 0.25f ? 0.25f : ldir.y, lz = ldir.z;
+                    Mat4 sh = m4_identity(); sh.m[4] = -lx / ly; sh.m[5] = 0.0f; sh.m[6] = -lz / ly; sh.m[12] = lx / ly * gy; sh.m[13] = gy; sh.m[14] = lz / ly * gy;
+                    Mat4 smx = m4_mul(sh, m); gfx_state(ST_DEPTH | ST_DEPTH_WRITE | ST_BLEND | ST_LESS); gfx_bind(NULL);
+                    gfx_draw_ex(k3->m[K3_BODY], &smx, 0.0f, 0.0f, 0.05f, 0.42f, 0, 1, 0, 0);
+                    for (int w = K3_FL; w <= K3_BR; w++) if (k3->m[w]) { Mat4 wm = m4_mul(smx, m4_translate(k3->piv[w].x, k3->piv[w].y, k3->piv[w].z)); gfx_draw_ex(k3->m[w], &wm, 0, 0, 0.05f, 0.42f, 0, 1, 0, 0); } }
+                gfx_state(ST_SOLID); gfx_bind(NULL); continue; }
             if (tx_kartback[r->character[i]]) continue;      /* drawn as a picture below */
             gfx_draw(m_body_style[sty], &m, c->r, c->g, c->b, 1);
             gfx_draw(m_rest_style[sty], &m, 1, 1, 1, 1);
@@ -2531,6 +2544,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; if (r->swallow_t[i] > 0) continue;   /* inside the great fish */ int ch = r->character[i];
             if (i != vk) { float cdx = q->x - eye.x, cdz = q->z - eye.z; if (cdx * cdx + cdz * cdz < 3.2f * 3.2f) continue; }
             float hx = sinf(q->yaw + q->slide), hz = cosf(q->yaw + q->slide);
+            if (g_k3d[ch].ok) continue;   /* the driver is part of the 3D kart */
             int pic = tx_kartback[ch] != NULL;
             if (pic) {    /* Sean's kart as a standing picture: the view that best matches the angle the camera sees it from (N64 style) */
                 float cdx = eye.x - q->x, cdz = eye.z - q->z;
