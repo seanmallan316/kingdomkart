@@ -3324,10 +3324,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 gfx_mesh_update(m_ttfx[drc], g_b.v, g_b.n); gfx_state(ST_HUD | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_ttfx[drc], &id, 1, 1, 1, 1); gfx_state(ST_HUD);
                 if (g_k3d[ch].ok) {   /* the real 3D kart turning on the stand */
                     gfx_clear_depth(drc); float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f;
-                    Mat4 vp = m4_mul(m4_perspective(0.55f, aspect, 0.5f, 80.0f), m4_look_at(v3(0, 3.2f, 9.5f), v3(0, 0.6f, 0), v3(0, 1, 0)));
-                    /* the turntable sits in the top middle of the screen: shift the picture up to it */
-                    Mat4 shift = m4_identity(); shift.m[13] = 0.42f; shift.m[0] = shift.m[5] = 1.0f; vp = m4_mul(shift, vp);
-                    gfx_camera(&vp, v3(0.4f, 0.8f, 0.6f), 0.5f, 0, 0, 0, 1e6f, 2e6f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
+                    Mat4 vp = m4_mul(m4_perspective(0.55f, aspect, 0.5f, 80.0f), m4_look_at(v3(0, 3.6f, 15.5f), v3(0, 0.9f, 0), v3(0, 1, 0)));
+                    /* the turntable sits in the window between the title and the cards: shift the picture up to it */
+                    Mat4 shift = m4_identity(); shift.m[13] = 0.36f; vp = m4_mul(shift, vp);
+                    gfx_light(v3(0.85f, 0.82f, 0.78f), v3(0.75f, 0.8f, 0.9f), v3(0.45f, 0.4f, 0.38f), v3(0, 3.6f, 15.5f));   /* plain studio light, not the road's */
+                    gfx_camera(&vp, v3(0.4f, 0.8f, 0.6f), 0.55f, 0, 0, 0, 1e6f, 2e6f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
                     Mat4 m = m4_mul(m4_translate(0, -0.15f + 0.05f * sinf(g_time * 2.2f), 0), m4_rotate_y(g_time * 0.8f));
                     kart3d_draw(&g_k3d[ch], &m, g_time * 6.0f, 0.3f * sinf(g_time * 0.9f), 1, 1, 1, 1);
                     gfx_camera_2d(); gfx_state(ST_HUD); rt = NULL; }

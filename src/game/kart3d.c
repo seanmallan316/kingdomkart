@@ -32,8 +32,8 @@ int kart3d_load(Kart3D *k, const char *name) {
     return k->ok; }
 void kart3d_draw(const Kart3D *k, const Mat4 *base, float wheel_ang, float steer, float r, float g, float b, float a) {
     if (!k->ok) return; gfx_bind(k->tex);
-    gfx_draw_ex(k->m[K3_BODY], base, r, g, b, a, 0.35f, 0, 0, 0);
+    gfx_draw_ex(k->m[K3_BODY], base, r, g, b, a, 0.08f, 0, 0, 0);
     for (int w = K3_FL; w <= K3_BR; w++) { if (!k->m[w]) continue;
         Mat4 m = m4_mul(*base, m4_translate(k->piv[w].x, k->piv[w].y, k->piv[w].z));
         if (w == K3_FL || w == K3_FR) m = m4_mul(m, m4_rotate_y(steer));
-        m = m4_mul(m, m4_rotate_x(wheel_ang)); gfx_draw_ex(k->m[w], &m, r, g, b, a, 0.25f, 0, 0, 0); } }
+        m = m4_mul(m, m4_rotate_x(wheel_ang)); gfx_draw_ex(k->m[w], &m, r, g, b, a, 0.05f, 0, 0, 0); } }
