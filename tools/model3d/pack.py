@@ -15,14 +15,30 @@ P[:, 1] -= P[:, 1].min(); s = 2.8 / (P[:, 2].max() - P[:, 2].min()); P *= s; P[:
 H = P[:, 1].max(); X = np.abs(P[:, 0]).max()
 # the wheels: the outermost low parts in each corner; each is a round thing, so its center is the middle of its outline
 parts = []; used = np.zeros(len(F), bool); fc = P[F].mean(1)
+# find the wheels: draw each side of the kart flat, as the picture shows it, and look for the round shapes standing on the ground
+import cv2
+T = np.asarray(Image.open(tex).convert('RGB')); TS = T.shape[0] - 1
+def side_circles(sx):
+    res = 300; W = int(3.0 * res); Hh = int((H + 0.1) * res); img = np.full((Hh, W, 3), 255, np.uint8)
+    for fi in np.argsort(sx * fc[:, 0]):
+        if sx * fc[fi, 0] < 0: continue
+        t = F[fi]; pts = np.stack([(P[t, 2] + 1.5) * res, Hh - P[t, 1] * res], 1).astype(np.int32); uv = UV[t].mean(0)
+        cv2.fillPoly(img, [pts], tuple(int(x) for x in T[int(np.clip(uv[1], 0, 1) * TS), int(np.clip(uv[0], 0, 1) * TS)]))
+    g = cv2.medianBlur(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY), 5)
+    c = cv2.HoughCircles(g, cv2.HOUGH_GRADIENT, dp=1.5, minDist=150, param1=80, param2=30, minRadius=int(0.3 * res), maxRadius=int(0.62 * res))
+    out = []
+    for x, y, r in (c[0] if c is not None else []):
+        z, yy, R = x / res - 1.5, (Hh - y) / res, r / res
+        if abs(yy - R) < 0.12: out.append((z, yy, R))   # standing on the ground
+    return out
 for kind, (sx, sz) in enumerate(((1, 1), (-1, 1), (1, -1), (-1, -1)), start=1):
-    sel = (np.sign(P[:, 0]) == sx) & (np.sign(P[:, 2]) == sz) & (np.abs(P[:, 0]) > X * 0.72) & (P[:, 1] < H * 0.45)
-    if sel.sum() < 30: continue
-    Q = P[sel]; cy = (Q[:, 1].min() + Q[:, 1].max()) / 2; R = (Q[:, 1].max() - Q[:, 1].min()) / 2; cz = (Q[:, 2].min() + Q[:, 2].max()) / 2
-    zr = (Q[:, 2].max() - Q[:, 2].min()) / 2
-    if zr > R * 1.4: cz = Q[:, 2].max() - R if sz > 0 else Q[:, 2].min() + R   # the outline ran along the body: take the wheel's end
-    outer = np.abs(Q[:, 0]).max(); inner = outer - R * 0.75
-    dyz = np.hypot(fc[:, 1] - cy, fc[:, 2] - cz); w = (~used) & (dyz < R * 1.03) & (np.sign(fc[:, 0]) == sx) & (np.abs(fc[:, 0]) > inner)
+    cs = [c for c in side_circles(sx) if np.sign(c[0]) == sz]
+    if not cs: print('no wheel found for', kind); continue
+    cz, cy, R = cs[0]
+    sel = (np.sign(P[:, 0]) == sx) & (np.hypot(P[:, 1] - cy, P[:, 2] - cz) < R) & (np.abs(P[:, 0]) > X * 0.5)
+    outer = np.abs(P[sel, 0]).max() if sel.any() else X; inner = outer - R * 0.8
+    vd = np.hypot(P[:, 1] - cy, P[:, 2] - cz); fmax = vd[F].max(1)
+    w = (~used) & (fmax < R * 1.03) & (np.sign(fc[:, 0]) == sx) & (np.abs(fc[:, 0]) > inner)
     used |= w; parts.append((kind, np.array([sx * (outer + inner) / 2, cy, cz]), R, F[w]))
     print('wheel', kind, 'center (%.2f %.2f %.2f) radius %.2f, %d triangles' % (sx * (outer + inner) / 2, cy, cz, R, w.sum()))
 parts.insert(0, (0, np.zeros(3), 0.0, F[~used]))
