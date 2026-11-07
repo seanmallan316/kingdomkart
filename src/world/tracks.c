@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <math.h>
 #include <string.h>
 // tracks.c - the roads: control points, lighting, textures and scenery for each one.
@@ -480,7 +481,8 @@ const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 static const float TRACK_SCALE[] = {2.7f, 2.55f, 3.0f, 2.65f, 3.6f, 2.75f, 1.2f, 1.0f, 1.0f};   /* (Sean, again: longer) about 3:20 a race */   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
 
 /* every racing road is this much wider than first drawn (Sean: room between the racers); arena and test loop stay */
-#define ROAD_WIDEN 1.45f
+#define ROAD_WIDEN 1.85f   /* (Sean, again: wider) */
+static float cm_(float p0, float p1, float p2, float p3, float u) { float u2 = u * u, u3 = u2 * u; return 0.5f * ((2 * p1) + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (-p0 + 3 * p1 - 3 * p2 + p3) * u3); }
 void track_from_def(Track *t, const TrackDef *d) {
     int di = (int)(d - TRACK_DEFS); float sc = (di >= 0 && di < (int)(sizeof TRACK_SCALE / sizeof TRACK_SCALE[0])) ? TRACK_SCALE[di] : 1.0f;
     float wd = (sc != 1.0f || d->laps == 7) ? ROAD_WIDEN : 1.0f;   /* the stretched roads and Jericho */
@@ -494,10 +496,59 @@ void track_from_def(Track *t, const TrackDef *d) {
         pts[i + 1] = *b; pts[i + 1].x = pts[i].x + (b->x - a->x) * f; pts[i + 1].z = pts[i].z + (b->z - a->z) * f;
         if (!a->jump && nfree) { pts[i + 1].x += ex / nfree; pts[i + 1].z += ez / nfree; } }
     for (int i = 0; i < np; i++) pts[i].width *= wd;
-    const int SPS = 30; float ks = SPS / 20.0f;   /* finer sampling for the longer roads; indices from the definition scale with it */
-    track_build(t, d->name, d->laps, pts, np, SPS); t->def_scale = ks;
-#define DI(i) ((int)((i) * ks + 0.5f))
-    t->shortcut_from = DI(d->shortcut_from); t->shortcut_to = DI(d->shortcut_to); t->shortcut_side = d->shortcut_side;
+    /* S-bends, climbs and dips (Sean: the roads were too easy): every long stretch of a racing road is cut into pieces, and
+       the pieces swing left and right of the old line and rise and fall. A stretch next to a jump stays straight so the jump
+       still works. Any swing that would bring the road too close to another part of itself is made smaller until it is clear. */
+    int meander = sc != 1.0f && d->laps != 7 && !d->finale_img && d->bonus != 2 && d->bonus != 3;
+    static TrackPoint p2[512]; static float af[256]; int q[257], mseg[256], n2 = 0, per = 30;
+    for (int i = 0; i < np; i++) af[i] = 1.0f;
+    for (int pass = 0; pass < 6; pass++) {
+        n2 = 0;
+        for (int i = 0; i < np; i++) {
+            const TrackPoint *a = &pts[i], *b = &pts[(i + 1) % np], *p0 = &pts[(i + np - 1) % np], *p3 = &pts[(i + 2) % np];
+            float L = sqrtf((b->x - a->x) * (b->x - a->x) + (b->z - a->z) * (b->z - a->z));
+            int m = 1, style = (i * 7 + di * 3) % 4;   /* each stretch gets its own kind: a straight to race down, a big sweeping bend, or an S-bend */
+            if (i == 0 || i == np - 1) style = 0;     /* the start and finish stay straight */
+            if (meander && style && !a->jump && !b->jump && !p0->jump && af[i] > 0.05f) {
+                if (style == 1) m = 2; else { m = (int)(L / 48.0f); if (m < 3) m = 3; if (m > 4) m = 4; } }
+            if (n2 + m > 510) m = 1;
+            q[i] = n2; mseg[i] = m; p2[n2++] = *a;
+            for (int j = 1; j < m; j++) { float u = (float)j / (float)m, e = 0.02f;
+                TrackPoint c = *a; c.jump = 0;
+                c.x = cm_(p0->x, a->x, b->x, p3->x, u); c.z = cm_(p0->z, a->z, b->z, p3->z, u); c.y = cm_(p0->y, a->y, b->y, p3->y, u);
+                c.width = cm_(p0->width, a->width, b->width, p3->width, u); c.bank = cm_(p0->bank, a->bank, b->bank, p3->bank, u);
+                float tx = cm_(p0->x, a->x, b->x, p3->x, u + e) - cm_(p0->x, a->x, b->x, p3->x, u - e), tz = cm_(p0->z, a->z, b->z, p3->z, u + e) - cm_(p0->z, a->z, b->z, p3->z, u - e);
+                float tl = sqrtf(tx * tx + tz * tz); if (tl < 1e-4f) tl = 1e-4f; tx /= tl; tz /= tl;
+                float side = ((i + j) & 1) ? 1.0f : -1.0f; if (m == 2) side = (i & 2) ? 1.0f : -1.0f; float piece = L / (float)m;
+                float amp = (m == 2 ? fminf(0.26f * L, 26.0f) : fminf(0.2f * piece, 9.0f)) * af[i];
+                c.x += -tz * amp * side; c.z += tx * amp * side;      /* to the right is (-tz, tx) */
+                c.bank += 0.07f * side * af[i];                      /* leaning into each bend */
+                if (!d->water) c.y += (((i * 3 + j) % 3) - 1) * fminf(piece * 0.06f, 3.2f) * af[i];   /* up, level, down */
+                p2[n2++] = c; }
+        }
+        q[np] = n2;
+        per = (np * 30 + n2 / 2) / n2; if (per < 8) per = 8; if (per > 30) per = 30; while (n2 * per > TRACK_MAX_SAMPLES) per--;
+        track_build(t, d->name, d->laps, p2, n2, per);
+        if (!meander) break;
+        /* too close to another part of the road? (more than a short way further along it, at about the same height) */
+        int bad[256] = {0}, nbad = 0;
+        for (int a = 0; a < t->n; a += 2) for (int b = a + 1; b < t->n; b += 2) {
+            float along = fabsf(t->s[b].dist - t->s[a].dist); if (along > t->length * 0.5f) along = t->length - along;
+            float need = (t->s[a].width + t->s[b].width) * 0.5f + 2 * SHOULDER_W + 6.0f; if (along < need * 2.2f) continue;
+            if (fabsf(t->s[a].y - t->s[b].y) > 7.0f) continue;
+            float dx = t->s[a].x - t->s[b].x, dz = t->s[a].z - t->s[b].z; if (dx * dx + dz * dz >= need * need) continue;
+            int sa = 0, sb = 0; for (int i = 0; i < np; i++) { if (a >= q[i] * per && a < q[i + 1] * per) sa = i; if (b >= q[i] * per && b < q[i + 1] * per) sb = i; }
+            if (af[sa] > 0.05f || af[sb] > 0.05f) { if (!bad[sa]) { bad[sa] = 1; nbad++; } if (!bad[sb]) { bad[sb] = 1; nbad++; } } }
+        if (!nbad) break;
+        for (int i = 0; i < np; i++) if (bad[i]) af[i] = pass >= 4 ? 0.0f : af[i] * 0.55f;
+    }
+#ifdef KK_MEANDER_DEBUG
+    { printf("%s: %d pieces, %d a piece:", d->name, n2, per); for (int i = 0; i < np; i++) printf(" %d/%.2f", mseg[i], af[i]); printf("\n"); }
+#endif
+    t->def_np = (short)np; t->def_per = (short)per; for (int i = 0; i <= np && i < 257; i++) t->def_q[i] = (short)q[i]; for (int i = 0; i < np && i < 256; i++) t->def_m[i] = (unsigned char)mseg[i];
+    t->def_scale = (float)t->n / (float)(np * 20);
+#define DI(i) track_def_idx(t, (i))
+    t->shortcut_from = d->shortcut_from < 0 ? -1 : DI(d->shortcut_from); t->shortcut_to = d->shortcut_to < 0 ? -1 : DI(d->shortcut_to); t->shortcut_side = d->shortcut_side;
     t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx = DI(t->pad[i].idx) % t->n; t->pad[i].lateral *= wd; t->pad[i].halfw *= wd; t->npad++; }
     t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx = DI(t->mover[i].idx) % t->n; t->mover[i].lateral *= wd; t->mover[i].amp *= wd; t->nmover++; }
     t->water = d->water; t->grid_idx = DI(d->grid_idx) % t->n;

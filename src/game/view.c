@@ -140,7 +140,7 @@ static void mat_buckets(ModelOut *mo) {   /* the buckets the models are built in
 static void mat_flush(ModelOut *mo) { for (int m = 0; m < MAT_N; m++) { if (mo->b[m]->n && m_nprops[m] < PROP_CHUNKS) m_props[m][m_nprops[m]++] = gfx_mesh_static(mo->b[m]->v, mo->b[m]->n); batch_clear(mo->b[m]); } }
 static void draw_mat_meshes(Mesh *const *ms, int n, int m, const Mat4 *mx) { if (!n) return; gfx_bind(tx_mat[m]); for (int c = 0; c < n; c++) if (ms[c]) gfx_draw(ms[c], mx, 1, 1, 1, 1); }   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
-static Mesh *m_hills; static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_hills, *m_mountains, *m_clouds; static Texture *tx_white; static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
 
@@ -361,7 +361,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
 }
 static void free_track_meshes(void) {
     gfx_mesh_free(m_hills); m_hills = NULL;
-    Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_whale, &m_whale_jaw, &m_shield, &m_items, &m_shadow};
+    Mesh **ms[] = {&m_mountains, &m_clouds, &m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_whale, &m_whale_jaw, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
     gfx_mesh_free(m_driver_box); gfx_mesh_free(m_driver_head); m_driver_box = m_driver_head = NULL;
@@ -377,6 +377,92 @@ static void batch_quad4_shade(Batch *b, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, Vec3
 static float ground_level(const Track *t) {   /* the height of the ground plane (the sea on a water road) */
     float lowest = 1e9f; for (int i = 0; i < t->n; i++) for (int sd = -1; sd <= 1; sd += 2) { float y = track_surface_height(t, i, sd * track_bound(t, i, sd)); if (y < lowest) lowest = y; }
     return t->water && t->water_y > -1e8f ? t->water_y + 0.35f : lowest - 0.6f;   /* on the sea the karts sit a little way into the water: wading */
+}
+
+/* ---- the far world (Sean: the whole world was still flat pictures): real 3D mountain ranges standing in a ring round the
+   road, and real 3D clouds drifting overhead. They are lit and hazed when built (the shader's fog is off while they are
+   drawn, like the sky), and they stay put in the world, so they slide past each other as you drive. */
+#define FAR_CAP 40000
+static Vertex *far_buf(void) { static Vertex *b = NULL; if (!b) b = malloc(sizeof(Vertex) * FAR_CAP); return b; }
+static void px_white(int x, int y, uint32_t *o) { (void)x; (void)y; *o = rgba(255, 255, 255, 255); }
+static void far_vert(Batch *b, Vec3 p, Vec3 n, float u, float v, float r, float g, float bl) {
+    if (b->n >= b->cap) return; Vertex q = {p.x, p.y, p.z, n.x, n.y, n.z, u, v, r, g, bl, 1}; b->v[b->n++] = q; }
+static void build_far_world(const Track *t) {
+    gfx_mesh_free(m_mountains); m_mountains = NULL; gfx_mesh_free(m_clouds); m_clouds = NULL;
+    if (!tx_white) tx_white = make_tex(4, 4, 1, 0, px_white);
+    const TrackDef *d = g_def; if (!d || d->finale_img) return;   /* the road to Heaven is above the clouds already */
+    float x0 = 1e9f, x1 = -1e9f, z0 = 1e9f, z1 = -1e9f;
+    for (int i = 0; i < t->n; i++) { x0 = fminf(x0, t->s[i].x); x1 = fmaxf(x1, t->s[i].x); z0 = fminf(z0, t->s[i].z); z1 = fmaxf(z1, t->s[i].z); }
+    float cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, rad = sqrtf((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0)) / 2;
+    Vec3 L = v3(d->light_x, d->light_y, d->light_z); { float l = sqrtf(L.x * L.x + L.y * L.y + L.z * L.z); if (l < 1e-4f) l = 1; L = v3(L.x / l, L.y / l, L.z / l); }
+    float night = d->night ? 0.42f : 1.0f, fr = d->fog_r, fg = d->fog_g, fb = d->fog_b;
+    /* rock and land colors by road: green-brown hills, pale desert stone, or the sunrise's warm rock */
+    int desert = d->bonus == 3 || !strcmp(d->prefix, "tomb") || !strcmp(d->prefix, "elah"), lush = !strcmp(d->prefix, "eden") || d->water;
+    float lr = desert ? 0.78f : (lush ? 0.42f : 0.62f), lg = desert ? 0.66f : (lush ? 0.58f : 0.6f), lb = desert ? 0.48f : (lush ? 0.32f : 0.4f);
+    Batch b; batch_init(&b, far_buf(), FAR_CAP); batch_clear(&b);
+    /* two ranges: a nearer row of rolling hills and a taller, hazier range behind it */
+    enum { NA = 120, NR = 7 };
+    for (int layer = 0; layer < 2; layer++) {
+        float r0 = rad + (d->water ? 330.0f : 260.0f) + layer * 230.0f, span = 260.0f + layer * 120.0f;
+        float hmax = layer ? 230.0f : 95.0f, haze = layer ? 0.62f : 0.36f; if (d->bonus == 2) { r0 = rad + 140.0f + layer * 200.0f; }
+        static float hy[NA + 1][NR + 1]; static Vec3 P[NA + 1][NR + 1];
+        for (int a = 0; a <= NA; a++) for (int r = 0; r <= NR; r++) {
+            float ang = a * 6.2831853f / NA, rr = (float)r / NR, R = r0 + rr * span;
+            float ridge = sinf(rr * 3.14159265f); ridge = powf(fmaxf(ridge, 0), 0.7f);   /* up from the near foot to the crest, down the far side */
+            float n = smooth_noise(a * 0.11f + layer * 40, rr * 2.0f) * 0.6f + smooth_noise(a * 0.37f + layer * 17, rr * 4.0f + 3) * 0.3f + smooth_noise(a * 1.1f, rr * 9.0f) * 0.1f;
+            float h = hmax * (0.25f + 0.95f * n * n) * ridge;
+            hy[a][r] = h; P[a][r] = v3(cx + cosf(ang) * R, g_ground_y - 2.0f + h, cz + sinf(ang) * R); }
+        for (int a = 0; a < NA; a++) for (int r = 0; r < NR; r++) {
+            Vec3 q[4] = {P[a][r], P[a + 1][r], P[a + 1][r + 1], P[a][r + 1]}; float c[4][3]; Vec3 nn[4];
+            int ia[4] = {a, a + 1, a + 1, a}, ir[4] = {r, r, r + 1, r + 1};
+            for (int k = 0; k < 4; k++) { int A = ia[k], Rr = ir[k];
+                Vec3 ta = v3_sub(P[A < NA ? A + 1 : 1][Rr], P[A > 0 ? A - 1 : NA - 1][Rr]), tr = v3_sub(P[A][Rr < NR ? Rr + 1 : Rr], P[A][Rr > 0 ? Rr - 1 : Rr]);
+                Vec3 n = v3_norm(v3_cross(tr, ta)); if (n.y < 0) n = v3(-n.x, -n.y, -n.z); nn[k] = n;
+                float lit = 0.55f + 0.45f * fmaxf(0, n.x * L.x + n.y * L.y + n.z * L.z), up = clampf(hy[A][Rr] / hmax, 0, 1);
+                float snow = (!desert && !lush && layer && up > 0.72f) ? (up - 0.72f) * 3.0f : 0;   /* a little snow on the high tops */
+                float rr2 = lr + (0.85f - lr) * up * 0.5f, gg = lg + (0.8f - lg) * up * 0.4f, bb2 = lb + (0.75f - lb) * up * 0.5f;
+                rr2 += (1 - rr2) * snow; gg += (1 - gg) * snow; bb2 += (1 - bb2) * snow;
+                float hz = haze * (1.0f - 0.35f * up);   /* hazier at the foot, clearer on the crests */
+                c[k][0] = (rr2 * lit * (1 - hz) + fr * hz) * night * d->sun_r; c[k][1] = (gg * lit * (1 - hz) + fg * hz) * night * d->sun_g; c[k][2] = (bb2 * lit * (1 - hz) + fb * hz) * night * d->sun_b; }
+            static const int ix[6] = {0, 1, 2, 0, 2, 3};
+            for (int k = 0; k < 6; k++) { int j = ix[k]; far_vert(&b, q[j], nn[j], q[j].x / 25.0f, q[j].z / 25.0f, c[j][0], c[j][1], c[j][2]); } }
+    }
+    /* a far-off town on the hills: little flat-roofed houses (not on the sea or in the desert) */
+    if (!d->water && !desert) for (int h = 0; h < 46; h++) {
+        float ang = 0.6f + h * 0.137f + noise2(h, 7) * 0.08f, R = rad + 300.0f + noise2(h, 3) * 60.0f;
+        float px = cx + cosf(ang) * R, pz = cz + sinf(ang) * R, w = 7 + noise2(h, 1) * 8, hh = 6 + noise2(h, 2) * 7, base = g_ground_y - 2 + 30 + noise2(h, 5) * 25;
+        float shade[6] = {1.0f, 0.62f, 0.8f, 0.7f, 0.9f, 0.5f}; float wr = 0.92f, wg = 0.86f, wb = 0.74f;
+        Vec3 c0 = v3(px, base, pz); float ca = cosf(ang * 3), sa = sinf(ang * 3);
+        Vec3 ax = v3(ca * w, 0, sa * w), az = v3(-sa * w, 0, ca * w);
+        Vec3 corner[8]; for (int k = 0; k < 8; k++) corner[k] = v3(c0.x + ax.x * ((k & 1) ? 0.5f : -0.5f) + az.x * ((k & 2) ? 0.5f : -0.5f), c0.y + ((k & 4) ? hh : 0.0f), c0.z + ax.z * ((k & 1) ? 0.5f : -0.5f) + az.z * ((k & 2) ? 0.5f : -0.5f));
+        static const int face[6][4] = {{4, 5, 7, 6}, {0, 1, 5, 4}, {1, 3, 7, 5}, {3, 2, 6, 7}, {2, 0, 4, 6}, {0, 2, 3, 1}};
+        for (int f = 0; f < 5; f++) { float sh = shade[f] * night, hz = 0.45f; float r = (wr * sh) * (1 - hz) + fr * hz, g = (wg * sh) * (1 - hz) + fg * hz, bl = (wb * sh) * (1 - hz) + fb * hz;
+            Vec3 n = v3_norm(v3_cross(v3_sub(corner[face[f][1]], corner[face[f][0]]), v3_sub(corner[face[f][2]], corner[face[f][0]])));
+            static const int ix[6] = {0, 1, 2, 0, 2, 3}; for (int k = 0; k < 6; k++) far_vert(&b, corner[face[f][ix[k]]], n, 0.5f, 0.5f, r, g, bl); }
+    }
+    m_mountains = b.n ? gfx_mesh_static(b.v, b.n) : NULL;
+    /* clouds: each a bunch of soft, lumpy balls, bright on top and grey-blue underneath */
+    batch_clear(&b);
+    int nc = d->night ? 6 : 16;
+    for (int cl = 0; cl < nc; cl++) {
+        float ang = cl * 6.2831853f / nc + noise2(cl, 11) * 0.3f, R = rad * 0.4f + 150.0f + noise2(cl, 12) * (rad + 250.0f);
+        Vec3 cc = v3(cx + cosf(ang) * R, g_ground_y + 150.0f + noise2(cl, 13) * 90.0f, cz + sinf(ang) * R);
+        int np = 5 + (int)(noise2(cl, 14) * 4);
+        for (int p = 0; p < np; p++) {
+            float pr = 18 + noise2(cl * 7 + p, 15) * 16; Vec3 pc = v3(cc.x + (p - np / 2.0f) * 16 + noise2(cl, p) * 10, cc.y + noise2(p, cl) * 10 - fabsf(p - np / 2.0f) * 3, cc.z + (noise2(cl + p, 9) - 0.5f) * 26);
+            enum { SU = 10, SV = 6 };
+            for (int i = 0; i < SU; i++) for (int j = 0; j < SV; j++) {
+                Vec3 q[4]; Vec3 nn[4]; float cr[4];
+                int ii[4] = {i, i + 1, i + 1, i}, jj[4] = {j, j, j + 1, j + 1};
+                for (int k = 0; k < 4; k++) { float th = ii[k] * 6.2831853f / SU, ph = jj[k] * 3.14159265f / SV - 1.5707963f;
+                    Vec3 n = v3(cosf(ph) * cosf(th), sinf(ph), cosf(ph) * sinf(th)); nn[k] = n;
+                    float sq = n.y < 0 ? 0.45f : 0.8f;   /* flat-bottomed */
+                    q[k] = v3(pc.x + n.x * pr * 1.25f, pc.y + n.y * pr * sq, pc.z + n.z * pr);
+                    float lit = 0.72f + 0.28f * fmaxf(0, n.x * L.x + n.y * L.y + n.z * L.z); lit *= 0.8f + 0.2f * (n.y * 0.5f + 0.5f); cr[k] = lit; }
+                static const int ix[6] = {0, 2, 1, 0, 3, 2};
+                for (int k = 0; k < 6; k++) { int jx = ix[k]; float l = cr[jx], hz = 0.18f;
+                    far_vert(&b, q[jx], nn[jx], 0.5f, 0.5f, (l * (1 - hz) + fr * hz) * night * (0.9f + 0.1f * d->sun_r), (l * (1 - hz) + fg * hz) * night * (0.9f + 0.1f * d->sun_g), (l * 1.03f * (1 - hz) + fb * hz) * night * (0.9f + 0.1f * d->sun_b)); } } } }
+    m_clouds = b.n ? gfx_mesh_static(b.v, b.n) : NULL;
 }
 static void build_track_meshes(void) {
     const Track *t = &g_track;
@@ -587,7 +673,7 @@ static void build_track_meshes(void) {
     m_ground = gfx_mesh_static(g_b.v, g_b.n);
     /* real hills beyond the walls (Bethlehem first): a grid of land that stays flat near the road and rises into rolling
        hills further out, fading back down at the edge of the grid where the flat ground carries on */
-    if (!t->water && g_def && !strcmp(g_def->name, "Bethlehem Road")) {
+    if (!t->water && g_def && !g_def->finale_img) {   /* (Sean: the whole world was flat) every land road now */
         enum { GN = 72 }; static float hy[GN + 1][GN + 1]; float x0 = 1e9f, x1 = -1e9f, z0 = 1e9f, z1 = -1e9f;
         for (int i = 0; i < t->n; i++) { if (t->s[i].x < x0) x0 = t->s[i].x; if (t->s[i].x > x1) x1 = t->s[i].x; if (t->s[i].z < z0) z0 = t->s[i].z; if (t->s[i].z > z1) z1 = t->s[i].z; }
         x0 -= 220; x1 += 220; z0 -= 220; z1 += 220; float cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, half = fmaxf(x1 - x0, z1 - z0) / 2, cell = 2 * half / GN;
@@ -597,7 +683,7 @@ static void build_track_meshes(void) {
             float edge = fminf(fminf(a, GN - a), fminf(b, GN - b)) / 6.0f; edge = clampf(edge, 0, 1);
             float n = smooth_noise(x * 0.012f, z * 0.012f) * 0.65f + smooth_noise(x * 0.03f + 7, z * 0.03f) * 0.35f;
             hy[a][b] = g_ground_y + rise * edge * (6.0f + 30.0f * n * n); }
-        batch_clear(&g_b);
+        Batch save = g_b; batch_init(&g_b, far_buf(), FAR_CAP); batch_clear(&g_b);
         for (int a = 0; a < GN; a++) for (int b = 0; b < GN; b++) { if (g_b.n + 6 > g_b.cap) break;
             float xa = cx - half + a * cell, za = cz - half + b * cell; int ia[4] = {a, a + 1, a + 1, a}, ib[4] = {b, b, b + 1, b + 1}; Vertex q[4];
             if (hy[a][b] <= g_ground_y + 0.01f && hy[a + 1][b] <= g_ground_y + 0.01f && hy[a][b + 1] <= g_ground_y + 0.01f && hy[a + 1][b + 1] <= g_ground_y + 0.01f) continue;   /* flat: the ground plane is already there */
@@ -606,7 +692,8 @@ static void build_track_meshes(void) {
                 float x = xa + (A - a) * cell, z = za + (B - b) * cell, y = hy[A][B], sh = 0.8f + 0.2f * n.y, dry = clampf((y - g_ground_y) / 40.0f, 0, 1);   /* higher up: drier, sandier */
                 Vertex v = {x, y - 0.05f, z, n.x, n.y, n.z, x / 10.0f, z / 10.0f, sh * (1 + 0.25f * dry), sh * (1 + 0.1f * dry), sh * (1 - 0.15f * dry), 1}; q[k] = v; }
             static const int ix[6] = {0, 2, 1, 0, 3, 2}; for (int k = 0; k < 6; k++) g_b.v[g_b.n++] = q[ix[k]]; }
-        m_hills = g_b.n ? gfx_mesh_static(g_b.v, g_b.n) : NULL; }
+        m_hills = g_b.n ? gfx_mesh_static(g_b.v, g_b.n) : NULL; g_b = save; }
+    build_far_world(t);
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
     m_spark = gfx_mesh_dynamic(MAX_SPARK * 6);
@@ -1171,7 +1258,7 @@ static void load_theme(void) {
     g_nkind = 0; g_nplaced = 0; g_nwalls = 0; g_ground_y = ground_level(&g_track);
     for (int i = 0; i < g_track.nmover; i++) g_mover_kind[i] = sprite_kind(g_track.mover[i].img);
     for (int i = 0; i < d->nscenery && g_nplaced < MAX_SCENERY; i++) {
-        const Scenery *sc = &d->scenery[i]; int idx = (int)(sc->idx * g_track.def_scale + 0.5f) % g_track.n;
+        const Scenery *sc = &d->scenery[i]; int idx = track_def_idx(&g_track, sc->idx);
         Placed *p = &g_placed[g_nplaced++];
         p->kind = sprite_kind(sc->img);
         float edge = track_edge(&g_track, idx), sgn = sc->side < 0 ? -1.0f : 1.0f, bound = track_bound(&g_track, idx, (int)sgn);
@@ -2417,7 +2504,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
     if (cv->finish_t > 0 && !g_attract && g_mode != MODE_BATTLE) at = v3(k->x, k->y + 1.0f, k->z);   /* the celebration looks at the kart itself */
     {
         Mat4 view = m4_look_at(eye, at, v3(0, 1, 0));
-        Mat4 proj = m4_perspective(cam_fov * fov_mul * 3.14159265f / 180.0f, aspect, 0.3f, 1200.0f);
+        Mat4 proj = m4_perspective(cam_fov * fov_mul * 3.14159265f / 180.0f, aspect, 0.3f, 2400.0f);   /* far enough for the mountain ranges */
         Mat4 vp = m4_mul(proj, view);
         Mat4 id = m4_identity();
         Vec3 ldir = v3(g_def->light_x, g_def->light_y, g_def->light_z);
@@ -2428,6 +2515,10 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
           gfx_light(v3(g_def->sun_r, g_def->sun_g, g_def->sun_b), skyc, gnd, eye); }
         gfx_set_time(g_time); gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f);
         gfx_state(ST_BLEND); gfx_bind(tx_sky); { Mat4 sm = m4_translate(cam_x, -30.0f, cam_z); gfx_draw_ex(m_sky, &sm, 1, 1, 1, 1, 0, 1, 0, 0); }
+        if (m_mountains || m_clouds) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(tx_white);   /* the 3D far world: lit and hazed when it was built */
+            if (m_mountains) { gfx_bind(tx_grass); gfx_draw_ex(m_mountains, &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(tx_white); }
+            if (m_clouds) { Mat4 cm = m4_translate(fmodf(g_time * 1.5f, 400.0f) - 200.0f, 0, 0); gfx_draw_ex(m_clouds, &cm, 1, 1, 1, 1, 0, 1, 0, 0); }
+            gfx_state(ST_SOLID); }
         if (tx_star) { gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_star);
             batch_clear(&g_b); float ss = g_def->star_size * (0.95f + 0.05f * sinf(g_time * 3.0f));
             Vec3 sp = v3(cam_x + g_def->star_x, g_def->star_y, cam_z + g_def->star_z);

@@ -213,7 +213,10 @@ void kart_autopilot(const Kart *k, const Track *t, KartInput *in, float skill) {
     float want = atan2f(aimx - k->x, aimz - k->z);
     float err = wrap_pi(want - k->yaw);
     in->steer = clampf1(err * 2.5f, -1, 1);
-    float sharp = fmaxf(fabsf(curve), fabsf(curve_far) * 0.7f);
+    /* how hard to slow: the turn over the whole stretch ahead, so a quick left-right S-bend (which the racing line runs
+       nearly straight through) does not look like two hairpins */
+    float net = wrap_pi(ang_b - ang_h), net_far = wrap_pi(ang_c - ang_a);
+    float sharp = fmaxf(fminf(fabsf(curve), fabsf(net) * 0.6f + 0.15f), fminf(fabsf(curve_far), fabsf(net_far) * 0.6f + 0.15f) * 0.7f);
     float limit = BASE_TOP * k->st.top_speed * (1.2f - 0.95f * clampf1(sharp * 1.3f, 0, 1)) * (0.60f + 0.40f * skill);   /* lower skill = never quite flat out */
     in->gas = k->speed < limit;
     in->brake = k->speed > limit * 1.3f && !k->air;

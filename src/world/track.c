@@ -9,7 +9,7 @@ static float catmull(float p0, float p1, float p2, float p3, float t) {
 }
 
 void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, int npts, int per) {
-    t->name = name; t->laps = laps; t->n = 0; t->shortcut_from = t->shortcut_to = -1; t->shortcut_side = 0;
+    t->name = name; t->laps = laps; t->n = 0; t->def_np = 0; t->def_scale = 1.0f; t->shortcut_from = t->shortcut_to = -1; t->shortcut_side = 0;
     memset(t->field, 0, sizeof t->field); t->ngem = 0; t->water_y = -1e9f;
     int total = npts * per; if (total > TRACK_MAX_SAMPLES) { per = TRACK_MAX_SAMPLES / npts; total = npts * per; }
     for (int i = 0; i < npts; i++) {
@@ -36,6 +36,14 @@ void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, in
         float ex = nx->x - s->x, ez = nx->z - s->z; t->length += sqrtf(ex * ex + ez * ez);
     }
     for (int c = 0; c < TRACK_CHECKPOINTS; c++) t->checkpoint[c] = (t->n * c) / TRACK_CHECKPOINTS;
+}
+
+int track_def_idx(const Track *t, int di) {
+    if (t->n <= 0) return 0;
+    if (t->def_np <= 0) { float sc = t->def_scale > 0 ? t->def_scale : 1.0f; int k = (int)(di * sc + 0.5f) % t->n; return k < 0 ? k + t->n : k; }
+    int tot = t->def_np * 20; di %= tot; if (di < 0) di += tot;
+    int p = di / 20, m = t->def_m[p] ? t->def_m[p] : 1; float f = (float)(di % 20) / 20.0f * (float)m; int j = (int)f; float fr = f - (float)j;
+    return ((t->def_q[p] + j) * t->def_per + (int)(fr * (float)t->def_per + 0.5f)) % t->n;
 }
 
 float track_edge(const Track *t, int idx) { return t->s[idx].width * 0.5f + SHOULDER_W; }

@@ -63,7 +63,7 @@ static void race_setup(Race *r, const Track *t, const int *chars_in, const int *
     if (g_field_on) for (int i = 0; i < NKARTS; i++) if (!r->human[i] && g_field[i] >= 0 && g_field[i] < NCHARS) r->character[i] = g_field[i];
     if (r->player < 0) r->player = 0;
     for (int i = 0; i < NKARTS; i++) r->order[i] = i;
-    float base = difficulty == DIFF_EASY ? 0.52f : (difficulty == DIFF_NORMAL ? 0.68f : 0.80f);
+    float base = difficulty == DIFF_EASY ? 0.55f : (difficulty == DIFF_NORMAL ? 0.74f : 0.87f);   /* (Sean: not difficult enough) */
     for (int i = 0; i < r->nk; i++) {
         Kart *k = &r->k[i];
         memset(k, 0, sizeof *k);
@@ -260,7 +260,7 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
         if (ai) {
             float skill = r->human[i] ? 0.9f : r->ai_skill[i];
             /* keep the race close without cheating: a little braver when far behind the people, a little more careful when far ahead */
-            if (!r->human[i]) { float gap = k->dist - best_human; if (gap < -60) skill += 0.05f; else if (gap > 40) skill -= 0.14f; skill = fminf(skill, 0.95f); }   /* the computer never drives a perfect line */
+            if (!r->human[i]) { float gap = k->dist - best_human; if (gap < -60) skill += 0.08f; else if (gap > 70) skill -= 0.08f; skill = fminf(skill, 0.97f); }   /* the computer never drives a perfect line */
             kart_autopilot(k, t, &in, clampf(skill, 0.3f, 1.0f));
             r->ai_wobble[i] += dt * 0.7f;
             if (k->finished) { in.steer *= 0.5f; in.gas = k->speed < 14.0f; }
