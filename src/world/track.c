@@ -60,10 +60,10 @@ float track_surface_height(const Track *t, int idx, float lateral) {
 void track_make_field(Track *t, int water) {
     /* walk outward from each stretch of road a meter at a time; stop where the nearest bit of road would be some other
        part of the course (half way to it, less a margin), so open land never joins two parts of the road together */
-    const int near_idx = 6;
+    const int near_idx = 9;
     for (int i = 0; i < t->n; i++) for (int sd = 0; sd < 2; sd++) {
         const TrackSample *s = &t->s[i]; float side = sd ? 1.0f : -1.0f, edge = track_edge(t, i), got = 0;
-        for (float L = edge + 1.0f; L <= edge + FIELD_MAX + 3.0f; L += 1.0f) {
+        for (float L = edge + 2.0f; L <= edge + FIELD_MAX + 3.0f; L += 2.0f) {
             float px = s->x + s->nx * side * L, pz = s->z + s->nz * side * L; int best = i; float bd = 1e30f;
             for (int j = 0; j < t->n; j++) { float dx = px - t->s[j].x, dz = pz - t->s[j].z, d = dx * dx + dz * dz - t->s[j].width * t->s[j].width * 0.25f; if (d < bd) { bd = d; best = j; } }
             int di = abs(best - i); if (di > t->n / 2) di = t->n - di;
@@ -86,12 +86,13 @@ void track_make_field(Track *t, int water) {
     if (water) { float lo = 1e9f; for (int i = 0; i < t->n; i++) { float y = t->s[i].y - WALL_DROP; if (y < lo) lo = y; } t->water_y = lo - 0.3f; }
     /* out in the open land: a few boost arrows and bounce ramps, each in a wide stretch, away from each other */
     int added = 0;
-    for (int i = 20; i < t->n && added < 4 && t->npad < MAX_PADS; i += 3) {
+    for (int i = 20; i < t->n && added < 8 && t->npad < MAX_PADS; i += 3) {
         int sd = ((i / 11) & 1); float f = t->field[i][sd];
         if (f < 11.0f || t->field[(i + 6) % t->n][sd] < 11.0f) continue;
+        float frac = (added & 2) ? 0.7f : 0.4f;
         int ok = 1; for (int p = 0; p < t->npad; p++) { int di = abs(t->pad[p].idx - i); if (di > t->n / 2) di = t->n - di; if (di < (fabsf(t->pad[p].lateral) > track_edge(t, t->pad[p].idx) ? t->n / 6 : 3)) ok = 0; }
         if (!ok) continue;
-        RoadPad *pd = &t->pad[t->npad++]; pd->idx = i; pd->lateral = (sd ? 1.0f : -1.0f) * (track_edge(t, i) + f * 0.45f); pd->halfw = 2.0f; pd->kind = (added & 1) ? PAD_BOUNCE : PAD_BOOST; added++;
+        RoadPad *pd = &t->pad[t->npad++]; pd->idx = i; pd->lateral = (sd ? 1.0f : -1.0f) * (track_edge(t, i) + f * frac); pd->halfw = 2.0f; pd->kind = (added & 1) ? PAD_BOUNCE : PAD_BOOST; added++;
     }
     /* hidden gems: in the widest stretches of open land, out of sight of the racing line */
     t->ngem = 0;

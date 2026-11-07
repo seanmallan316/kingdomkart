@@ -3,7 +3,7 @@
 #define KK_TRACK_H
 #include "../render/kkmath.h"
 
-#define TRACK_MAX_SAMPLES 512
+#define TRACK_MAX_SAMPLES 1024
 #define TRACK_CHECKPOINTS 8
 #define SHOULDER_W 4.0f          /* dirt strip on each side of the road, in meters */
 #define WALL_DROP 1.2f           /* how far the shoulder slopes down below the road at its outer edge */
@@ -31,7 +31,7 @@ typedef struct { int idx, n, step; float lateral; } CoinRow;                  /*
 typedef struct { int idx; float lateral; } Coin;
 typedef struct { int from, to; float height; } Tunnel;                        /* the road runs under a roof between these samples */
 #define MAX_GEMS 16
-#define FIELD_MAX 16.0f          /* the most open land beside the road, past the shoulder, in meters */
+#define FIELD_MAX 40.0f          /* the most open land beside the road, past the shoulder, in meters */
 typedef struct { int idx; float lateral; int color; } Gem;                    /* a hidden gem out in the open land: coins and a burst of speed */
 
 typedef struct {
@@ -51,6 +51,8 @@ typedef struct {
     float field[TRACK_MAX_SAMPLES][2];      /* open land past the shoulder on the left [0] and right [1] side, in meters (0 = the wall is at the shoulder) */
     float water_y;                          /* water roads: the open land is shallow water at this height */
     Gem gem[MAX_GEMS]; int ngem;
+    float def_scale;                        /* sample numbers in a road's definition (drawn at 20 a stretch) times this = sample numbers here */
+    int nobst; struct { float x, z, r; } obst[96];   /* scenery standing out in the open land: trees, rocks, houses to steer round */
 } Track;
 
 typedef struct {

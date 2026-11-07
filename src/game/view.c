@@ -125,7 +125,7 @@ static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
 static Mesh *m_props, *m_curbs;   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
-static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
 
@@ -136,17 +136,17 @@ static float g_slowmo = 0;      /* finish-line slow motion (single player): seco
 static float cele_bounce(const Race *r, int i);
 /* Time Trial ghost: the best run is recorded ten times a second and replayed as a see-through kart */
 #define GHOST_HZ 10
-#define GHOST_MAX (GHOST_HZ * 180)
+#define GHOST_MAX (GHOST_HZ * 420)   /* seven minutes: the roads are long now */
 typedef struct { int16_t x, z, yaw; } GhostSample;        /* position in 1/16 m, yaw in 1/10000 rad */
 static GhostSample g_ghost[GHOST_MAX], g_rec[GHOST_MAX]; static int g_ghost_n = 0, g_rec_n = 0, g_ghost_char = 0; static float g_rec_t = 0; static Mesh *m_ghost;
 static void ghost_load(int road) {
-    g_ghost_n = 0; char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost3_%d.bin", road);
+    g_ghost_n = 0; char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost4_%d.bin", road);
     FILE *f = fopen(save_dir_path(path, sizeof path, name), "rb"); if (!f) return;
     int hdr[2]; if (fread(hdr, sizeof hdr, 1, f) == 1 && hdr[0] > 0 && hdr[0] <= GHOST_MAX) { g_ghost_char = hdr[1]; g_ghost_n = (int)fread(g_ghost, sizeof(GhostSample), (size_t)hdr[0], f); }
     fclose(f); gfx_log("ghost: %d samples for road %d", g_ghost_n, road);
 }
 static void ghost_save(int road) {
-    char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost3_%d.bin", road);
+    char name[64], path[300]; snprintf(name, sizeof name, "kingdomkart_ghost4_%d.bin", road);
     FILE *f = fopen(save_dir_path(path, sizeof path, name), "wb"); if (!f) return;
     int hdr[2] = {g_rec_n, g_player_char}; fwrite(hdr, sizeof hdr, 1, f); fwrite(g_rec, sizeof(GhostSample), (size_t)g_rec_n, f); fclose(f);
     memcpy(g_ghost, g_rec, sizeof(GhostSample) * (size_t)g_rec_n); g_ghost_n = g_rec_n; g_ghost_char = g_player_char; gfx_log("ghost: saved %d samples", g_rec_n);
@@ -1058,6 +1058,7 @@ static void prop_cyl(float r0, float r1, float y0, float y1, int n, float r, flo
         batch_quad4(&g_b, v3(sinf(a0) * r0, y0, cosf(a0) * r0), v3(sinf(a1) * r0, y0, cosf(a1) * r0), v3(sinf(a1) * r1, y1, cosf(a1) * r1), v3(sinf(a0) * r1, y1, cosf(a0) * r1), v3(sinf(am), 0, cosf(am)), 0, 0, 1, 1, r, g, bl, 1);
         prop_tri(v3(0, y1, 0), v3(sinf(a0) * r1, y1, cosf(a0) * r1), v3(sinf(a1) * r1, y1, cosf(a1) * r1), r * 1.05f, g * 1.05f, bl * 1.05f); } }
 static void build_props(void) {
+    batch_init(&g_b, g_vtmp, 16384);   /* the kerbs of a long road need over 13000 corners */
     int heaven = g_def->finale_img != NULL; float sr = 0.86f, sg = 0.78f, sb = 0.62f;   /* sun-baked limestone */
     if (heaven) { sr = 0.97f; sg = 0.95f; sb = 0.9f; } else if (!strcmp(g_def->prefix, "tomb")) { sr = 0.7f; sg = 0.68f; sb = 0.64f; } else if (!strcmp(g_def->prefix, "eden")) { sr = 0.62f; sg = 0.5f; sb = 0.36f; }
     batch_clear(&g_b);
@@ -1124,6 +1125,7 @@ static void build_props(void) {
             Vec3 b0 = v3(o0.x, o0.y - 0.3f, o0.z), b1 = v3(o1.x, o1.y - 0.3f, o1.z), no = v3(a->nx * sd, 0, a->nz * sd);   /* its outer face, down to the shoulder */
             if (sd > 0) batch_quad4(&g_b, b0, b1, to1, to0, no, 0, 0, 1, 1, cr * 0.7f, cg * 0.7f, cb * 0.7f, 1); else batch_quad4(&g_b, b1, b0, to0, to1, no, 0, 0, 1, 1, cr * 0.7f, cg * 0.7f, cb * 0.7f, 1); } }
     gfx_mesh_free(m_curbs); m_curbs = g_b.n ? gfx_mesh_static(g_b.v, g_b.n) : NULL;
+    batch_init(&g_b, g_vtmp, 8192);
 }
 static void load_theme(void) {
     const TrackDef *d = g_def;
@@ -1150,16 +1152,21 @@ static void load_theme(void) {
     gfx_texture_free(tx_finale); tx_finale = d->finale_img ? asset_texture(d->finale_img, 0, NULL, NULL) : NULL;
     tx_star = NULL;
     if (d->star_size > 0) { tx_star = asset_texture("beth_star", 0, NULL, NULL); if (!tx_star && g_sky_wrap > 1.5f) tx_star = make_tex(64, 64, 0, 0, px_star); }
+    for (int i = 0; i < 4; i++) { gfx_texture_free(tx_whale[i]); tx_whale[i] = NULL; }
+    if (g_track.water) { static const char *wn[4] = {"whale_f", "whale_fl", "whale_l", "whale_b"};
+        for (int i = 0; i < 4; i++) { int w = 0, h = 0; tx_whale[i] = asset_texture(wn[i], 0, &w, &h); g_whale_asp[i] = h ? (float)w / h : 1.3f; } }
     g_nkind = 0; g_nplaced = 0; g_nwalls = 0; g_ground_y = ground_level(&g_track);
     for (int i = 0; i < g_track.nmover; i++) g_mover_kind[i] = sprite_kind(g_track.mover[i].img);
     for (int i = 0; i < d->nscenery && g_nplaced < MAX_SCENERY; i++) {
-        const Scenery *sc = &d->scenery[i]; int idx = sc->idx % g_track.n;
+        const Scenery *sc = &d->scenery[i]; int idx = (int)(sc->idx * g_track.def_scale + 0.5f) % g_track.n;
         Placed *p = &g_placed[g_nplaced++];
         p->kind = sprite_kind(sc->img);
         float edge = track_edge(&g_track, idx), sgn = sc->side < 0 ? -1.0f : 1.0f, bound = track_bound(&g_track, idx, (int)sgn);
-        float lat = sgn * (bound + fmaxf(fabsf(sc->side) - edge, 0.0f));   /* as far outside the wall as it was meant to stand outside the shoulder */
+        float wide = fabsf(sc->side) * (g_def->bonus == 2 ? 1.0f : 1.45f);   /* the roads were widened by 1.45, so the scenery moves out with them */
+        float lat = (wide > edge + 0.5f && wide < bound - 1.0f) ? sgn * wide                     /* out in the open land: it stays there (and is solid, see the race) */
+                  : sgn * (bound + fmaxf(fabsf(sc->side) - edge, 0.0f));                          /* otherwise just outside the wall */
         p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * lat, 0, g_track.s[idx].z + g_track.s[idx].nz * lat);
-        p->p.y = fmaxf(track_surface_height(&g_track, idx, sgn * bound), g_ground_y) - 0.2f;   /* stands on the ground just outside the wall */
+        p->p.y = fmaxf(track_surface_height(&g_track, idx, fabsf(lat) < bound ? lat : sgn * bound), g_ground_y) - 0.2f;   /* stands on the ground */
         p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
         p->wall = (!strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab")) ? ++g_nwalls : 0; p->fall_t = 0;
         p->yaw = atan2f(g_track.s[idx].tx, g_track.s[idx].tz) + i * 0.37f;   /* roughly along the road, each a little turned */
@@ -2335,8 +2342,20 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                 float pitch = -atan2f(yy2 - yy, al2 - al), yaw = atan2f(r->whale.dx, r->whale.dz);
                 float jaw = u < 0.48f ? 0.65f : (u < 0.56f ? 0.65f * (0.56f - u) / 0.08f : 0);
                 Mat4 m = m4_mul(m4_translate(r->whale.x + r->whale.dx * al, yy, r->whale.z + r->whale.dz * al), m4_mul(m4_rotate_y(yaw), m4_rotate_x(pitch)));
-                gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); gfx_draw_ex(m_whale, &m, 1, 1, 1, 1, 0.8f, 0, 0, 0);
-                Mat4 mj = m4_mul(m, m4_mul(m4_translate(0, -0.55f, -0.4f), m4_rotate_x(jaw))); gfx_draw_ex(m_whale_jaw, &mj, 1, 1, 1, 1, 0.6f, 0, 0, 0); gfx_state(ST_SOLID);
+                if (tx_whale[2]) {   /* Sean's pictures: the one for the angle we see it from, tipped nose-up as it rises and nose-down as it falls */
+                    float wx = r->whale.x + r->whale.dx * al, wz = r->whale.z + r->whale.dz * al;
+                    float rel = atan2f(cam_x - wx, cam_z - wz) - yaw; while (rel > 3.14159265f) rel -= 6.2831853f; while (rel < -3.14159265f) rel += 6.2831853f;
+                    float ar = fabsf(rel); int v = ar < 0.45f ? 0 : (ar < 1.15f ? 1 : (ar < 2.3f ? 2 : 3)); if (!tx_whale[v]) v = 2;
+                    Vec3 ax2 = v3(-cosf(cam_yaw), 0, sinf(cam_yaw)); float head = r->whale.dx * ax2.x + r->whale.dz * ax2.z; int mirror = head < 0;
+                    float hh = 7.5f, ww = hh * g_whale_asp[v], th = (v == 1 || v == 2) ? -pitch * (mirror ? -1.0f : 1.0f) * (v == 1 ? 0.6f : 1.0f) : 0, ct = cosf(th), st = sinf(th);
+                    Vec3 R = v3(ax2.x * ct, st, ax2.z * ct), U = v3(-ax2.x * st, ct, -ax2.z * st), c = v3(wx, yy, wz);
+                    Vertex wv[6]; Batch wb; batch_init(&wb, wv, 6); float u0 = mirror ? 1.0f : 0.0f, u1 = 1.0f - u0;
+                    batch_quad4(&wb, v3(c.x - R.x * ww / 2 - U.x * hh / 2, c.y - R.y * ww / 2 - U.y * hh / 2, c.z - R.z * ww / 2 - U.z * hh / 2), v3(c.x + R.x * ww / 2 - U.x * hh / 2, c.y + R.y * ww / 2 - U.y * hh / 2, c.z + R.z * ww / 2 - U.z * hh / 2),
+                                v3(c.x + R.x * ww / 2 + U.x * hh / 2, c.y + R.y * ww / 2 + U.y * hh / 2, c.z + R.z * ww / 2 + U.z * hh / 2), v3(c.x - R.x * ww / 2 + U.x * hh / 2, c.y - R.y * ww / 2 + U.y * hh / 2, c.z - R.z * ww / 2 + U.z * hh / 2), v3(0, 1, 0), u0, 0, u1, 1, 1, 1, 1, 1);   /* same corner order as the scenery pictures */
+                    static Mesh *m_wspr = NULL; if (!m_wspr) m_wspr = gfx_mesh_dynamic(6); gfx_mesh_update(m_wspr, wb.v, wb.n);
+                    Mat4 idm = m4_identity(); gfx_state(ST_CUTOUT); gfx_bind(tx_whale[v]); gfx_draw(m_wspr, &idm, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); (void)jaw; (void)m; }
+                else { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); gfx_draw_ex(m_whale, &m, 1, 1, 1, 1, 0.8f, 0, 0, 0);
+                    Mat4 mj = m4_mul(m, m4_mul(m4_translate(0, -0.55f, -0.4f), m4_rotate_x(jaw))); gfx_draw_ex(m_whale_jaw, &mj, 1, 1, 1, 1, 0.6f, 0, 0, 0); gfx_state(ST_SOLID); }
                 static float last_u = 1; if ((last_u < 0.02f || last_u > u) && u >= 0) { for (int n = 0; n < 24; n++) add_dust(v3(r->whale.x - r->whale.dx * 10 + (frand01() - 0.5f) * 4, wy, r->whale.z - r->whale.dz * 10 + (frand01() - 0.5f) * 4), 3.0f, 6.0f); }
                 if (last_u < 0.72f && u >= 0.72f) for (int n = 0; n < 30; n++) add_dust(v3(r->whale.x + r->whale.dx * 3 + (frand01() - 0.5f) * 5, wy, r->whale.z + r->whale.dz * 3 + (frand01() - 0.5f) * 5), 4.0f, 7.0f);
                 last_u = u; } }

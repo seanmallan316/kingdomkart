@@ -1,3 +1,4 @@
+#include <math.h>
 #include <string.h>
 // tracks.c - the roads: control points, lighting, textures and scenery for each one.
 #include "theme.h"
@@ -476,7 +477,7 @@ const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 /* How much each road's layout is stretched (x and z; heights, widths and scenery spacing from the road stay as they are).
    Chosen so the winner of a race takes about 2:15 (Sean: at least two minutes).
    Order = TRACK_DEFS. Battle arena and test loop stay as built. */
-static const float TRACK_SCALE[] = {1.81f, 1.7f, 2.0f, 1.78f, 2.5f, 1.84f, 1.2f, 1.0f, 1.0f};   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
+static const float TRACK_SCALE[] = {2.7f, 2.55f, 3.0f, 2.65f, 3.6f, 2.75f, 1.2f, 1.0f, 1.0f};   /* (Sean, again: longer) about 3:20 a race */   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
 
 /* every racing road is this much wider than first drawn (Sean: room between the racers); arena and test loop stay */
 #define ROAD_WIDEN 1.45f
@@ -493,17 +494,27 @@ void track_from_def(Track *t, const TrackDef *d) {
         pts[i + 1] = *b; pts[i + 1].x = pts[i].x + (b->x - a->x) * f; pts[i + 1].z = pts[i].z + (b->z - a->z) * f;
         if (!a->jump && nfree) { pts[i + 1].x += ex / nfree; pts[i + 1].z += ez / nfree; } }
     for (int i = 0; i < np; i++) pts[i].width *= wd;
-    track_build(t, d->name, d->laps, pts, np, 20);
-    t->shortcut_from = d->shortcut_from; t->shortcut_to = d->shortcut_to; t->shortcut_side = d->shortcut_side;
-    t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx %= t->n; t->pad[i].lateral *= wd; t->pad[i].halfw *= wd; t->npad++; }
-    t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx %= t->n; t->mover[i].lateral *= wd; t->mover[i].amp *= wd; t->nmover++; }
-    t->water = d->water; t->grid_idx = d->grid_idx % t->n;
+    const int SPS = 30; float ks = SPS / 20.0f;   /* finer sampling for the longer roads; indices from the definition scale with it */
+    track_build(t, d->name, d->laps, pts, np, SPS); t->def_scale = ks;
+#define DI(i) ((int)((i) * ks + 0.5f))
+    t->shortcut_from = DI(d->shortcut_from); t->shortcut_to = DI(d->shortcut_to); t->shortcut_side = d->shortcut_side;
+    t->npad = 0; for (int i = 0; i < d->npads && i < MAX_PADS; i++) { t->pad[i] = d->pads[i]; t->pad[i].idx = DI(t->pad[i].idx) % t->n; t->pad[i].lateral *= wd; t->pad[i].halfw *= wd; t->npad++; }
+    t->nmover = 0; for (int i = 0; i < d->nmovers && i < MAX_MOVERS; i++) { t->mover[i] = d->movers[i]; t->mover[i].idx = DI(t->mover[i].idx) % t->n; t->mover[i].lateral *= wd; t->mover[i].amp *= wd; t->nmover++; }
+    t->water = d->water; t->grid_idx = DI(d->grid_idx) % t->n;
     t->ncoin = 0;
-    for (int i = 0; i < d->ncoinrows; i++) for (int c = 0; c < d->coins[i].n && t->ncoin < MAX_COINS; c++) { t->coin[t->ncoin].idx = (d->coins[i].idx + c * d->coins[i].step) % t->n; t->coin[t->ncoin].lateral = d->coins[i].lateral * wd; t->ncoin++; }
-    t->ntunnel = 0; for (int i = 0; i < d->ntunnels && i < MAX_TUNNELS; i++) { t->tunnel[i] = d->tunnels[i]; t->tunnel[i].from %= t->n; t->tunnel[i].to %= t->n; t->ntunnel++; }
+    for (int i = 0; i < d->ncoinrows; i++) for (int c = 0; c < d->coins[i].n && t->ncoin < MAX_COINS; c++) { t->coin[t->ncoin].idx = DI(d->coins[i].idx + c * d->coins[i].step) % t->n; t->coin[t->ncoin].lateral = d->coins[i].lateral * wd; t->ncoin++; }
+    t->ntunnel = 0; for (int i = 0; i < d->ntunnels && i < MAX_TUNNELS; i++) { t->tunnel[i] = d->tunnels[i]; t->tunnel[i].from = DI(t->tunnel[i].from) % t->n; t->tunnel[i].to = DI(t->tunnel[i].to) % t->n; t->ntunnel++; }
     /* open land beside the road (Sean: a semi-open world), except on the road through the sky to Heaven, round the walls
        of Jericho, and in the battle arena */
     memset(t->field, 0, sizeof t->field); t->ngem = 0; t->water_y = -1e9f;
     if (!d->finale_img && d->bonus != 2 && d->bonus != 3) track_make_field(t, d->water);
+    /* scenery that stands out in the open land (not past its wall) is solid: a kart has to steer round it */
+    t->nobst = 0;
+    for (int i = 0; i < d->nscenery && t->nobst < 96; i++) { const Scenery *sc = &d->scenery[i]; if (sc->img[0] != '#') continue;
+        int idx = DI(sc->idx) % t->n; float lat = sc->side * wd, sgn = lat < 0 ? -1.0f : 1.0f;
+        if (fabsf(lat) < track_edge(t, idx) + 0.5f || fabsf(lat) > track_bound(t, idx, (int)sgn) - 1.0f) continue;
+        if (!strcmp(sc->img, "#cloud") || !strcmp(sc->img, "#flowers") || !strcmp(sc->img, "#lily") || !strcmp(sc->img, "#waterfall") || !strcmp(sc->img, "#sheep") || !strcmp(sc->img, "#lamb")) continue;
+        const TrackSample *s2 = &t->s[idx]; float r = sc->height * 0.16f; if (r < 0.7f) r = 0.7f; if (r > 3.0f) r = 3.0f;
+        t->obst[t->nobst].x = s2->x + s2->nx * lat; t->obst[t->nobst].z = s2->z + s2->nz * lat; t->obst[t->nobst].r = r; t->nobst++; }
 }
 void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[NUM_TRACK_DEFS - 1]); }

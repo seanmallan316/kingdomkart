@@ -201,7 +201,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
 
 void kart_autopilot(const Kart *k, const Track *t, KartInput *in, float skill) {
     memset(in, 0, sizeof *in);
-    int look = 5 + (int)(k->speed * 0.35f);
+    float dsc = t->def_scale > 0 ? t->def_scale : 1.0f; int look = (int)((5 + k->speed * 0.35f) * dsc);   /* in samples: more of them on the finer-sampled roads */
     const TrackSample *h = &t->s[(k->hit.idx + 2) % t->n], *a = &t->s[(k->hit.idx + look) % t->n], *b = &t->s[(k->hit.idx + look * 2) % t->n], *c = &t->s[(k->hit.idx + look * 3) % t->n];
     float ang_h = atan2f(h->tx, h->tz), ang_a = atan2f(a->tx, a->tz), ang_b = atan2f(b->tx, b->tz), ang_c = atan2f(c->tx, c->tz);
     float curve_now = wrap_pi(ang_a - ang_h);                      /* the bend we are in right now */

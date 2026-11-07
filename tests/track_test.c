@@ -10,7 +10,7 @@ int main(void) {
         Track t; track_from_def(&t, &TRACK_DEFS[d]);
         printf("%s: %d samples, %.0f m, %d laps, %d scenery items\n", t.name, t.n, t.length, t.laps, TRACK_DEFS[d].nscenery);
         if (TRACK_DEFS[d].bonus == 2) { printf("  (battle arena: no race checks)\n"); continue; }
-        CHECK(t.length * t.laps > 1200 && t.length < 4000, "length %.0f x %d laps", t.length, t.laps);   /* a race is at least 1.2 km (Jericho: a short ring, seven times round) */
+        CHECK(t.length * t.laps > 1200 && t.length < 7000, "length %.0f x %d laps", t.length, t.laps);   /* a race is at least 1.2 km (Jericho: a short ring, seven times round) */
         for (int i = 0; i < t.n; i++) for (int j = i + 1; j < t.n; j++) {
             int gap = j - i; if (t.n - gap < gap) gap = t.n - gap; if (gap < 70) continue;
             float dx = t.s[i].x - t.s[j].x, dz = t.s[i].z - t.s[j].z, dd = sqrtf(dx * dx + dz * dz);
@@ -22,7 +22,7 @@ int main(void) {
             (void)sc; }   /* scenery closer than the wall is moved out past it when the road is drawn (the roads were widened) */
         /* a full race must end in time on every road */
         Race r; race_init(&r, &t, 0, 5, DIFF_NORMAL, NKARTS); KartInput in; memset(&in, 0, sizeof in); float time = 0;
-        while (r.state != RACE_FINISHED && time < 200) { race_step(&r, &in, 1, SIM_DT); time += SIM_DT; }
+        while (r.state != RACE_FINISHED && time < RACE_TIME_LIMIT) { race_step(&r, &in, 1, SIM_DT); time += SIM_DT; }
         int finished = 0; for (int i = 0; i < r.nk; i++) finished += r.k[i].lap > t.laps;
         printf("  race ended at %.1fs, %d/8 crossed the line, winner time %.1fs, pickups %d, hits %d (by obstacles %d), pads %d, items:", r.race_t, finished, r.k[r.order[0]].total_time, r.stat_pickups, r.stat_hits, r.stat_mover_hits, r.stat_pads);
         for (int it = 1; it < ITEM_COUNT; it++) printf(" %s %d", item_name(it), r.stat_item_used[it]);

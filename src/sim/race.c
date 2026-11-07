@@ -410,6 +410,11 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
     }
     for (int i = 0; i < r->nk; i++) if (r->k[i].pad_flag) { r->stat_pads++; push_event(r, r->k[i].pad_flag == PAD_BOOST ? EV_PAD_BOOST : EV_PAD_BOUNCE, i); }
     for (int i = 0; i < r->nk; i++) if (r->k[i].trick_flag) push_event(r, r->k[i].trick_flag == 1 ? EV_TRICK : EV_TRICK_LAND, i);
+    /* scenery out in the open land is solid: push the kart out and take some speed off */
+    for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; if (!k->hit.on_field || k->air) continue;
+        for (int o = 0; o < t->nobst; o++) { float dx = k->x - t->obst[o].x, dz = k->z - t->obst[o].z, rr2 = t->obst[o].r + 0.9f, d2 = dx * dx + dz * dz;
+            if (d2 < rr2 * rr2 && d2 > 1e-4f) { float d = sqrtf(d2), push = rr2 - d; k->x += dx / d * push; k->z += dz / d * push;
+                float into = -(sinf(k->yaw) * dx + cosf(k->yaw) * dz) / d; if (into > 0.3f && k->speed > 6.0f) { k->speed *= 1.0f - 0.5f * into; push_event(r, EV_BUMP, i); } } } }
     /* kart-to-kart bumping: push apart, heavier kart wins */
     for (int i = 0; i < r->nk; i++) for (int j = i + 1; j < r->nk; j++) {
         Kart *a = &r->k[i], *b = &r->k[j];

@@ -6,7 +6,7 @@
 
 Save g_save;
 static char g_path[256] = "kingdomkart_save.txt";
-static const float PAR_TIME[SAVE_MAX_ROADS] = {146.0f, 147.0f, 144.0f, 145.0f, 139.0f, 145.0f, 0, 0};   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
+static const float PAR_TIME[SAVE_MAX_ROADS] = {218.0f, 215.0f, 225.0f, 229.0f, 210.0f, 234.0f, 0, 0};   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
 
 void save_set_path(const char *path) { snprintf(g_path, sizeof g_path, "%s", path); }
 const char *save_dir_path(char *buf, int n, const char *file) {
@@ -40,6 +40,7 @@ void save_load(void) {
     fclose(f);
     if (layout < 3) { memset(g_save.best_ms, 0, sizeof g_save.best_ms); g_save.dirty = 1; gfx_log("roads were lengthened: old best times cleared"); }   /* times from the shorter roads no longer compare */
     if (layout < 4) { g_save.best_ms[6] = 0; g_save.dirty = 1; }   /* the Walls of Jericho got shorter laps */
+    if (layout < 5) { memset(g_save.best_ms, 0, sizeof g_save.best_ms); g_save.dirty = 1; gfx_log("roads were lengthened again: old best times cleared"); }
     gfx_log("save loaded: %d races, %d wins, unlocks %u", g_save.races, g_save.wins, g_save.unlocks);
 }
 
@@ -48,7 +49,7 @@ void save_store(void) {
     FILE *f = fopen(g_path, "w");
     if (!f) { gfx_log("could not write %s", g_path); return; }
     fprintf(f, "# Kingdom Kart: Road to Glory - progress. Delete this file to start over.\n");
-    fprintf(f, "layout 4\n");
+    fprintf(f, "layout 5\n");
     for (int i = 0; i < SAVE_MAX_ROADS; i++) if (g_save.best_ms[i]) fprintf(f, "best%d %d\n", i, g_save.best_ms[i]);
     fprintf(f, "races %d\nwins %d\n", g_save.races, g_save.wins);
     for (int i = 0; i < 3; i++) fprintf(f, "gpwins%d %d\n", i, g_save.gp_wins[i]);
