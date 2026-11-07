@@ -102,6 +102,7 @@ static const float PLAYER_COL[MAX_HUMANS][3] = {{1.0f, 0.85f, 0.3f}, {0.35f, 0.6
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Texture *tx_bearer; static float g_bearer_aspect = 0.67f; static Mesh *m_bearer;   /* Goliath's shield-bearer (char_shieldbearer.png, or a drawn one) */
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
+static unsigned g_unl_bits; static float g_unl_t;   /* the "UNLOCKED!" screens still to show after this race, one per prize, and how long the current one has been up */
 static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
 static Texture *tx_finale; static Mesh *m_finale;
 static Texture *tx_title, *tx_title_bg; static Mesh *m_title, *m_title_bg, *m_logo_small; static float g_title_h;      /* title_art.png: the logo on the title screen, when Sean has made it */
@@ -1771,6 +1772,45 @@ static void hud_kart(void) {
     text_c("A: CHOOSE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
 }
 static int g_emb_kind; static void px_emblem(int x, int y, uint32_t *o);
+/* "UNLOCKED!" after a race: the word bursts in over a dark screen with golden beams turning and flashing behind it,
+   then it rises and the picture of the prize grows in under it (the character, the kart, the road or Goliath), with its name */
+static void draw_unlock(const Mat4 *id) {
+    static Vertex tv[512]; Batch tb; batch_init(&tb, tv, 512);
+    static Mesh *m_back, *m_rays, *m_pic, *m_txt; static Texture *tx_emb[NSTYLES];
+    if (!m_back) { m_back = gfx_mesh_dynamic(12); m_rays = gfx_mesh_dynamic(64 * 6); m_pic = gfx_mesh_dynamic(12); m_txt = gfx_mesh_dynamic(4096); }
+    int bit = (int)(g_unl_bits & (0u - g_unl_bits)); float t = g_unl_t, in = clampf(t / 0.35f, 0, 1), rise = clampf((t - 1.3f) / 0.5f, 0, 1), ease = 1 - (1 - rise) * (1 - rise);
+    float flash = 0.5f + 0.5f * sinf(t * 9.0f), pop = t < 0.35f ? 0.4f + 0.6f * in + 0.25f * sinf(in * 3.14159f) : 1.0f;
+    float ty = 330 - 230 * ease;   /* where the word sits: the middle, then up near the top */
+    gfx_camera_2d(); gfx_state(ST_HUD);
+    batch_rect(&tb, 0, 0, 1280, 720, 0.02f, 0.03f, 0.1f, 0.92f * in); gfx_mesh_update(m_back, tb.v, tb.n); gfx_bind(tx_font); gfx_draw(m_back, id, 1, 1, 1, 1);
+    /* the beams and the glow, in time with the flashing */
+    batch_clear(&tb);
+    for (int i = 0; i < 24; i++) { float a = t * 0.5f + i * 6.2831853f / 24, len = (520 + 90 * sinf(t * 2.1f + i * 1.3f)) * in, wid = 20 + 8 * (i & 1);
+        float dx = cosf(a), dy = sinf(a), cy = ty + 40; Vec3 c = v3(640 + dx * len * 0.5f, cy + dy * len * 0.5f, 0);
+        q2d(&tb, c, v3(dx * len * 0.5f, dy * len * 0.5f, 0), v3(-dy * wid, dx * wid, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.8f, 0.3f, (0.35f + 0.45f * flash) * in); }
+    q2d(&tb, v3(640, ty + 40, 0), v3(420 + 40 * flash, 0, 0), v3(0, 120 + 20 * flash, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.9f, 0.5f, (0.5f + 0.5f * flash) * in);
+    if (t < 0.5f) q2d(&tb, v3(640, ty + 40, 0), v3(1400, 0, 0), v3(0, 800, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 1 - t / 0.5f);   /* the first white flash */
+    gfx_mesh_update(m_rays, tb.v, tb.n); gfx_state(ST_HUD | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_rays, id, 1, 1, 1, 1); gfx_state(ST_HUD);
+    /* the picture of the prize */
+    Texture *pic = NULL; float asp = 1;
+    for (int c = 0; c < NCHARS; c++) if (char_lock_bit(c) == bit) { if (tx_char[c]) { pic = tx_char[c]; asp = g_char_aspect[c]; } else if (tx_portrait[c]) { pic = tx_portrait[c]; asp = g_portrait_aspect[c]; } }
+    for (int sty = 1; sty < NSTYLES; sty++) if (style_lock_bit(sty) == bit) { if (!tx_emb[sty]) { g_emb_kind = sty; tx_emb[sty] = make_tex(128, 96, 0, 0, px_emblem); } pic = tx_emb[sty]; asp = 128.0f / 96.0f; }
+    if (bit == UNLOCK_HEAVEN) for (int d = 0; d < 8; d++) if (TRACK_DEFS[d].bonus == 1 && tx_card[d]) { pic = tx_card[d]; asp = 1.85f; }
+    if (bit == UNLOCK_GOLIATH && tx_goliath) { pic = tx_goliath; asp = g_goliath_aspect; }
+    float grow = clampf((t - 1.5f) / 0.6f, 0, 1), g2 = 1 - (1 - grow) * (1 - grow) * (1 - grow);
+    if (pic && grow > 0) { float ph = 380 * (0.6f + 0.4f * g2), pw = ph * asp; if (pw > 760) { pw = 760; ph = pw / asp; } float bob = 6 * sinf(t * 2.5f);
+        batch_clear(&tb); batch_rect_uv(&tb, 640 - pw / 2, 200 + (380 - ph) / 2 + bob, pw, ph, 0, 0, 1, 1, 1, 1, 1, g2);
+        gfx_mesh_update(m_pic, tb.v, tb.n); gfx_bind(pic); gfx_draw(m_pic, id, 1, 1, 1, 1); }
+    /* the words on top */
+    Batch save = g_b; static Vertex txv[4096]; batch_init(&g_b, txv, 4096);
+    float sz = 62 * pop, gl = 0.75f + 0.25f * flash;
+    text_c("UNLOCKED!", ty + 4 - sz * 0.5f + 31, sz, 0, 0, 0, 0.6f * in);
+    text_c("UNLOCKED!", ty - sz * 0.5f + 31, sz, 1, 0.85f * gl + 0.15f, 0.3f * gl, in);
+    if (grow > 0) { const char *nm = unlock_name(bit); text_c(nm, 600, 38, 1, 1, 1, g2);
+        if (t > 2.2f) text_c(bit == UNLOCK_HEAVEN || bit == UNLOCK_GOLIATH ? "NOW OPEN - PRESS A" : "NOW YOU CAN CHOOSE IT - PRESS A", 660, 20, 1, 0.85f, 0.3f, 0.6f + 0.4f * sinf(t * 4)); }
+    gfx_mesh_update(m_txt, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_txt, id, 1, 1, 1, 1);
+    g_b = save;
+}
 static void draw_kart_models(void) {    /* the kart-body cards: an emblem for each kind of kart (the 3D stand-ins looked like an early build) */
     static Texture *tx_emb[NSTYLES]; static Mesh *m_emb[NSTYLES]; Mat4 id = m4_identity();
     gfx_camera_2d(); gfx_state(ST_HUD);
@@ -2667,7 +2707,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                     if (q->kind == TZ_LEFT) mx = -1; else if (q->kind == TZ_RIGHT) mx = 1;
                     else if (g_screen == SCR_MCHAR) pa_s[0] = 1; else pa = 1; }
                 sfx_play(SFX_MENU_MOVE, 0.6f, 0); }
-            else if (g_screen == SCR_TITLE || (g_screen == SCR_RESULTS && (g_mode == MODE_GP || g_mode == MODE_BATTLE)) || g_screen == SCR_GP || g_screen == SCR_TROPHY || g_screen == SCR_CREDITS || g_screen == SCR_OPENER) pa = 1;   /* a tap anywhere carries on */
+            else if (g_screen == SCR_TITLE || (g_screen == SCR_RESULTS && (g_mode == MODE_GP || g_mode == MODE_BATTLE || g_unl_bits)) || g_screen == SCR_GP || g_screen == SCR_TROPHY || g_screen == SCR_CREDITS || g_screen == SCR_OPENER) pa = 1;   /* a tap anywhere carries on */
         }
         memcpy(g_tz_prev, g_tz, sizeof g_tz); g_ntz_prev = g_ntz; g_ntz = 0;
     }
@@ -2803,6 +2843,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 g_fresh_unlocks = save_check_unlocks(); save_store(); race_set_unlocked(unlocked_mask()); race_set_styles(g_player_style, unlocked_styles());
                 { int hwon = 0; for (int i = 0; i < r->nk; i++) if (r->human[i] && r->k[i].place == 1) hwon = 1;
                   if (g_fresh_unlocks) sfx_play(SFX_UNLOCK, 1, 0); else if (!g_demo && hwon) sfx_play(SFX_WIN, 1, 0); }
+                g_unl_bits = g_demo ? 0 : g_fresh_unlocks; g_unl_t = 0;
                 g_screen = SCR_RESULTS; g_screen_t = 0;
             }
         }
@@ -2819,6 +2860,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pb) { g_screen = SCR_RACE; g_screen_t = 0; save_store(); }
         break;
     case SCR_RESULTS:
+        if (g_unl_bits) {   /* the unlock screens come first: A (or a tap) moves on once the picture is up */
+            g_unl_t += dt; if ((pa || pb) && g_unl_t > 2.2f) { g_unl_bits &= g_unl_bits - 1; g_unl_t = 0; sfx_play(g_unl_bits ? SFX_UNLOCK : SFX_MENU_OK, 1, 0); g_screen_t = 0.3f; }
+            break; }
         if (g_mode != MODE_GP && g_mode != MODE_BATTLE) {
             int first = results_first_choice(); if (g_res_sel < first) g_res_sel = first;
             if (mx) { g_res_sel += mx; if (g_res_sel < first) g_res_sel = 3; if (g_res_sel > 3) g_res_sel = first; sfx_play(SFX_MENU_MOVE, 1, 0); }
@@ -3137,6 +3181,10 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 batch_clear(&g_b); batch_rect_uv(&g_b, cx - pw / 2, 67 + (220 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m_kartpic, g_b.v, g_b.n); gfx_bind(tx_kart[g_player_char]); gfx_draw(m_kartpic, &id, 1, 1, 1, 1);
                 if (two) { static Mesh *m2 = NULL; if (!m2) m2 = gfx_mesh_dynamic(6); a = g_kartback_aspect[g_player_char]; ph = 220; pw = ph * a; if (pw > 330) { pw = 330; ph = pw / a; }
                     batch_clear(&g_b); batch_rect_uv(&g_b, 810 - pw / 2, 67 + (220 - ph) / 2, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m2, g_b.v, g_b.n); gfx_bind(tx_kartback[g_player_char]); gfx_draw(m2, &id, 1, 1, 1, 1); } } }
+#if defined(KK_TOUR) && KK_TOUR_ROAD == 2
+        if (g_screen == SCR_RACE && g_time > 112) { g_unl_bits = g_time > 126 ? UNLOCK_KART_CHARIOT : UNLOCK_SAMSON; g_unl_t = fmodf(g_time - 112, 14.0f); draw_unlock(&id); }   /* the CI photos of the unlock screen */
+#endif
+        if (g_screen == SCR_RESULTS && g_unl_bits) draw_unlock(&id);
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
             if (it > 0 && it < ITEM_COUNT && !r->jericho) draw_item_window(0, 44, 118, 104); }
         gfx_view_end(drc);
