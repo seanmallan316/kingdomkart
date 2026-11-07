@@ -3334,6 +3334,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (rt) { batch_clear(&g_b); if (mir) batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 1, 0, 0, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
                     gfx_mesh_update(m_tt[drc], g_b.v, g_b.n); gfx_bind(rt); gfx_draw(m_tt[drc], &id, 1, 1, 1, 1); } } }
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 2
+        if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_race.race_t < 5 && gfx_shadow_texture()) {   /* the CI photos: the sun's shadow map itself, top right */
+            static Mesh *m_dbg = NULL; if (!m_dbg) m_dbg = gfx_mesh_dynamic(6); Vertex dv[6]; Batch db; batch_init(&db, dv, 6); batch_rect_uv(&db, 1000, 120, 260, 260, 0, 0, 1, 1, 1, 1, 1, 1);
+            gfx_mesh_update(m_dbg, db.v, db.n); gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(gfx_shadow_texture()); gfx_draw_ex(m_dbg, &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); }
+#endif
+#if defined(KK_TOUR) && KK_TOUR_ROAD == 2
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_race.race_t > 5) { g_unl_bits = g_race.race_t > 12 ? UNLOCK_KART_CHARIOT : UNLOCK_SAMSON; g_unl_t = g_race.race_t - (g_race.race_t > 12 ? 10 : 5); draw_unlock(&id, drc); }   /* the CI photos of the unlock screen */
 #endif
         if (g_screen == SCR_RESULTS && g_unl_bits) draw_unlock(&id, drc);

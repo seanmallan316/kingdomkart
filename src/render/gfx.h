@@ -46,7 +46,8 @@ void gfx_clear_depth(int drc);
 int gfx_shadow_begin(const Mat4 *lightvp);
 void gfx_shadow_end(void);
 void gfx_shadow_use(int on);
-void gfx_shadow_none(void);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */
+void gfx_shadow_none(void);
+Texture *gfx_shadow_texture(void);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */
 void gfx_set_time(float t);                                    /* the clock the wind runs on (trees, fronds, flags sway) */
 void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
 void gfx_camera_2d_virtual(float vw, float vh);               /* the same, with the 2D helpers' 1280 x 720 layout mapped onto a view of vw x vh pixels */

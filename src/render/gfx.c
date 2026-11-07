@@ -431,6 +431,7 @@ void gfx_shadow_end(void) {
     g_in_shadow = 0; g_shadow_have = 1; g_bound = NULL; g_flags = -1;
     GX2Invalidate(GX2_INVALIDATE_MODE_COLOR_BUFFER | GX2_INVALIDATE_MODE_TEXTURE, g_shcb.surface.image, g_shcb.surface.imageSize); }
 void gfx_shadow_use(int on) { g_shadow_use = on; }
+Texture *gfx_shadow_texture(void) { static Texture t; if (!g_shadow_ok) return NULL; t.tex = g_shtex; t.smp = g_shsmp; return &t; }   /* for looking at the shadow map itself (tests) */
 void gfx_shadow_none(void) { g_shadow_have = 0; }
 void gfx_view_end(int drc) { if (drc) WHBGfxFinishRenderDRC(); else WHBGfxFinishRenderTV(); }
 void gfx_frame_end(void) { WHBGfxFinishRender(); }
