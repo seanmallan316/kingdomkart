@@ -8,7 +8,8 @@
 typedef struct { float sx, sy; int a, b, zl, zr, plus, x, y; int source; int touch; float tx, ty; } Pad;   /* touch: a finger is on the GamePad screen at (tx, ty) in 1280 x 720 screen units */   /* source bits: 1 GamePad, 2 Pro Controller, 4 Wii Remote, 8 Classic Controller, 16 Nunchuk; 0 = nothing in this slot */
 
 int  game_init(int gfx_status);                 /* gfx_status from gfx_init; the game still runs its loop to show an error color */
-void game_frame(const Pad *pads, int npads, float dt);   /* simulates and draws one frame (both screens); pads[0] is the GamePad, the rest the Wii controllers */
+void game_frame(const Pad *pads, int npads, float dt);
+const char *game_where(void);   /* a few words for the log: which screen, which road, how many players */   /* simulates and draws one frame (both screens); pads[0] is the GamePad, the rest the Wii controllers */
 void game_shutdown(void);
 void platform_rumble(float strength, float seconds);              /* vibration on every controller that is player 1's (the GamePad and, alone, a Pro Controller); a no-op on a PC */
 void platform_rumble_pad(int slot, float strength, float seconds);   /* vibration on one controller slot */

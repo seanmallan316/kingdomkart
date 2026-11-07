@@ -137,13 +137,15 @@ int main(int argc, char **argv) {
     game_init(status);
     wiiu_audio_start();
 
-    OSTime last = OSGetTime(); uint64_t frames = 0; double acc_ms = 0, worst_ms = 0; Pad pads[KK_PADS]; memset(pads, 0, sizeof pads);
+    OSTime last = OSGetTime(); uint64_t frames = 0; double acc_ms = 0, worst_ms = 0; int slow = 0; Pad pads[KK_PADS]; memset(pads, 0, sizeof pads);
     while (WHBProcIsRunning()) {
         OSTime now = OSGetTime();
         float dt = (float)OSTicksToMicroseconds(now - last) / 1000000.0f; last = now;
         if (dt > 0.1f) dt = 0.1f;
-        frames++; acc_ms += dt * 1000.0; if (dt * 1000.0 > worst_ms) worst_ms = dt * 1000.0;
-        if (frames % 300 == 0) { gfx_log("frame %llu: avg %.2f ms, worst %.2f ms, controllers %d/%d/%d/%d/%d", (unsigned long long)frames, acc_ms / 300.0, worst_ms, pads[0].source, pads[1].source, pads[2].source, pads[3].source, pads[4].source); acc_ms = 0; worst_ms = 0; }
+        frames++; acc_ms += dt * 1000.0; if (dt * 1000.0 > worst_ms) worst_ms = dt * 1000.0; if (dt * 1000.0 > 20.0) slow++;
+        if (frames % 300 == 0) {   /* how smooth it really runs on the console: frames per second, the worst frame, and how many fell below 50 fps */
+            gfx_log("FPS %.1f (avg %.2f ms, worst %.2f ms, %d slow frames of 300) - %s; controllers %d/%d/%d/%d/%d", 300000.0 / acc_ms, acc_ms / 300.0, worst_ms, slow, game_where(), pads[0].source, pads[1].source, pads[2].source, pads[3].source, pads[4].source);
+            acc_ms = 0; worst_ms = 0; slow = 0; }
         read_pads(pads);
         game_frame(pads, KK_PADS, dt);
         rumble_tick(dt);

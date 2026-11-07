@@ -138,7 +138,7 @@ static void mat_buckets(ModelOut *mo) {   /* the buckets the models are built in
 static void mat_flush(ModelOut *mo) { for (int m = 0; m < MAT_N; m++) { if (mo->b[m]->n && m_nprops[m] < PROP_CHUNKS) m_props[m][m_nprops[m]++] = gfx_mesh_static(mo->b[m]->v, mo->b[m]->n); batch_clear(mo->b[m]); } }
 static void draw_mat_meshes(Mesh *const *ms, int n, int m, const Mat4 *mx) { if (!n) return; gfx_bind(tx_mat[m]); for (int c = 0; c < n; c++) if (ms[c]) gfx_draw(ms[c], mx, 1, 1, 1, 1); }   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
-static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
+static Mesh *m_hills; static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
 static Batch g_b;
 
@@ -358,6 +358,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
 }
 static void free_track_meshes(void) {
+    gfx_mesh_free(m_hills); m_hills = NULL;
     Mesh **ms[] = {&m_brook, &m_tunnel, &m_arch, &m_coin, &m_coins, &m_finale, &m_boostpads, &m_bouncepads, &m_road, &m_shoulder, &m_wall, &m_startline, &m_ground, &m_sky, &m_skid, &m_dust, &m_spark, &m_hud, &m_kart_body, &m_kart_rest, &m_cube, &m_qface, &m_qframe, &m_field, &m_gem, &m_pebble, &m_whale, &m_whale_jaw, &m_shield, &m_items, &m_shadow};
     for (size_t i = 0; i < sizeof ms / sizeof ms[0]; i++) { gfx_mesh_free(*ms[i]); *ms[i] = NULL; }
     for (int i = 1; i < NSTYLES; i++) { gfx_mesh_free(m_body_style[i]); gfx_mesh_free(m_rest_style[i]); m_body_style[i] = m_rest_style[i] = NULL; }
@@ -582,6 +583,28 @@ static void build_track_meshes(void) {
     batch_clear(&g_b);
     { batch_quad(&g_b, v3(0, g_ground_y, 0), v3(600, 0, 0), v3(0, 0, -600), v3(0, 1, 0), 0, 0, 120, 120, 1, 1, 1, 1); }
     m_ground = gfx_mesh_static(g_b.v, g_b.n);
+    /* real hills beyond the walls (Bethlehem first): a grid of land that stays flat near the road and rises into rolling
+       hills further out, fading back down at the edge of the grid where the flat ground carries on */
+    if (!t->water && g_def && !strcmp(g_def->name, "Bethlehem Road")) {
+        enum { GN = 72 }; static float hy[GN + 1][GN + 1]; float x0 = 1e9f, x1 = -1e9f, z0 = 1e9f, z1 = -1e9f;
+        for (int i = 0; i < t->n; i++) { if (t->s[i].x < x0) x0 = t->s[i].x; if (t->s[i].x > x1) x1 = t->s[i].x; if (t->s[i].z < z0) z0 = t->s[i].z; if (t->s[i].z > z1) z1 = t->s[i].z; }
+        x0 -= 220; x1 += 220; z0 -= 220; z1 += 220; float cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, half = fmaxf(x1 - x0, z1 - z0) / 2, cell = 2 * half / GN;
+        for (int a = 0; a <= GN; a++) for (int b = 0; b <= GN; b++) { float x = cx - half + a * cell, z = cz - half + b * cell, dmin = 1e9f;
+            for (int i = 0; i < t->n; i += 2) { float dx = x - t->s[i].x, dz = z - t->s[i].z, d = sqrtf(dx * dx + dz * dz) - track_bound(t, i, 1) * 0.5f - track_bound(t, i, -1) * 0.5f; if (d < dmin) dmin = d; }
+            float rise = clampf((dmin - 12.0f) / 45.0f, 0, 1); rise = rise * rise * (3 - 2 * rise);
+            float edge = fminf(fminf(a, GN - a), fminf(b, GN - b)) / 6.0f; edge = clampf(edge, 0, 1);
+            float n = smooth_noise(x * 0.012f, z * 0.012f) * 0.65f + smooth_noise(x * 0.03f + 7, z * 0.03f) * 0.35f;
+            hy[a][b] = g_ground_y + rise * edge * (6.0f + 30.0f * n * n); }
+        batch_clear(&g_b);
+        for (int a = 0; a < GN; a++) for (int b = 0; b < GN; b++) { if (g_b.n + 6 > g_b.cap) break;
+            float xa = cx - half + a * cell, za = cz - half + b * cell; int ia[4] = {a, a + 1, a + 1, a}, ib[4] = {b, b, b + 1, b + 1}; Vertex q[4];
+            if (hy[a][b] <= g_ground_y + 0.01f && hy[a + 1][b] <= g_ground_y + 0.01f && hy[a][b + 1] <= g_ground_y + 0.01f && hy[a + 1][b + 1] <= g_ground_y + 0.01f) continue;   /* flat: the ground plane is already there */
+            for (int k = 0; k < 4; k++) { int A = ia[k], B = ib[k]; float hxp = hy[A < GN ? A + 1 : A][B] - hy[A > 0 ? A - 1 : A][B], hzp = hy[A][B < GN ? B + 1 : B] - hy[A][B > 0 ? B - 1 : B];
+                Vec3 n = v3(-hxp, 2 * cell, -hzp); float l = sqrtf(n.x * n.x + n.y * n.y + n.z * n.z); n = v3(n.x / l, n.y / l, n.z / l);
+                float x = xa + (A - a) * cell, z = za + (B - b) * cell, y = hy[A][B], sh = 0.8f + 0.2f * n.y, dry = clampf((y - g_ground_y) / 40.0f, 0, 1);   /* higher up: drier, sandier */
+                Vertex v = {x, y - 0.05f, z, n.x, n.y, n.z, x / 10.0f, z / 10.0f, sh * (1 + 0.25f * dry), sh * (1 + 0.1f * dry), sh * (1 - 0.15f * dry), 1}; q[k] = v; }
+            static const int ix[6] = {0, 2, 1, 0, 3, 2}; for (int k = 0; k < 6; k++) g_b.v[g_b.n++] = q[ix[k]]; }
+        m_hills = g_b.n ? gfx_mesh_static(g_b.v, g_b.n) : NULL; }
     m_skid = gfx_mesh_dynamic(MAX_SKID * 6);
     m_dust = gfx_mesh_dynamic(MAX_DUST * 6);
     m_spark = gfx_mesh_dynamic(MAX_SPARK * 6);
@@ -2394,6 +2417,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
         gfx_bind(tx_grass); if (g_def->water) gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); else gfx_draw(m_ground, &id, sr, sg, sb, 1);
         if (m_field) gfx_draw(m_field, &id, sr, sg, sb, 1);   /* the open land, same grass as the ground */
+        if (m_hills) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_draw(m_hills, &id, sr, sg, sb, 1); gfx_state(ST_SOLID); }   /* the hills beyond the walls */
         gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
         gfx_bind(tx_road); gfx_draw_ex(m_road, &id, 1, 1, 1, 1, g_def->night ? 0.35f : 0.18f, 0, 0, 0);   /* a faint sheen on the road, wetter at night */
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1); }
@@ -3279,6 +3303,15 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 for (int k = 0; k < 24; k++) { float h1 = noise2(k, 77), ph2 = fmodf(g_time * 0.35f + h1, 1.0f), a3 = h1 * 6.28f + g_time * 0.8f;   /* motes of light rising round it */
                     q2d(&g_b, v3(640 + cosf(a3) * 210, 290 - ph2 * 220, 0), v3(5, 0, 0), v3(0, 5, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.9f, 0.6f, sinf(ph2 * 3.14159f)); }
                 gfx_mesh_update(m_ttfx[drc], g_b.v, g_b.n); gfx_state(ST_HUD | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_ttfx[drc], &id, 1, 1, 1, 1); gfx_state(ST_HUD);
+                if (g_k3d[ch].ok) {   /* the real 3D kart turning on the stand */
+                    gfx_clear_depth(drc); float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f;
+                    Mat4 vp = m4_mul(m4_perspective(0.55f, aspect, 0.5f, 80.0f), m4_look_at(v3(0, 3.2f, 9.5f), v3(0, 0.6f, 0), v3(0, 1, 0)));
+                    /* the turntable sits in the top middle of the screen: shift the picture up to it */
+                    Mat4 shift = m4_identity(); shift.m[13] = 0.42f; shift.m[0] = shift.m[5] = 1.0f; vp = m4_mul(shift, vp);
+                    gfx_camera(&vp, v3(0.4f, 0.8f, 0.6f), 0.5f, 0, 0, 0, 1e6f, 2e6f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
+                    Mat4 m = m4_mul(m4_translate(0, -0.15f + 0.05f * sinf(g_time * 2.2f), 0), m4_rotate_y(g_time * 0.8f));
+                    kart3d_draw(&g_k3d[ch], &m, g_time * 6.0f, 0.3f * sinf(g_time * 0.9f), 1, 1, 1, 1);
+                    gfx_camera_2d(); gfx_state(ST_HUD); rt = NULL; }
                 if (rt) { batch_clear(&g_b); if (mir) batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 1, 0, 0, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
                     gfx_mesh_update(m_tt[drc], g_b.v, g_b.n); gfx_bind(rt); gfx_draw(m_tt[drc], &id, 1, 1, 1, 1); } } }
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 2
@@ -3293,3 +3326,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
 }
 int game_debug_screen(void) { return g_screen + 20 * g_mode + 100 * g_menu_sel + 1000 * (int)g_race.state; }
 const char *game_debug_track(void) { return g_track.name; }
+
+const char *game_where(void) {   /* for the frame-rate lines in the log, so a slow spot can be found */
+    static char buf[96]; int in_race = g_screen == SCR_RACE || g_screen == SCR_PAUSE;
+    snprintf(buf, sizeof buf, "%s%s%s, %d player%s", in_race ? "racing " : "menus", in_race && g_def ? g_def->name : "", in_race && g_k3d[0].ok ? " (3D Jesus)" : "", g_multi ? g_multi : 1, g_multi > 1 ? "s" : "");
+    return buf; }
