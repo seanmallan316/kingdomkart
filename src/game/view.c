@@ -1779,6 +1779,7 @@ static void draw_unlock(const Mat4 *id, int drc) {
             batch_box(&tb, v3(0, 0.1f, -0.14f), v3(0.07f, H * 0.7f, 0.03f), 1.0f, 0.86f, 0.4f); batch_box(&tb, v3(0, 0.35f, -0.14f), v3(W * 0.45f, 0.07f, 0.03f), 1.0f, 0.86f, 0.4f);
             for (int k = 0; k < 4; k++) batch_box(&tb, v3((k & 1 ? 1 : -1) * (W + fw / 2), (k & 2 ? 1 : -1) * (H + fw / 2), d + 0.02f), v3(0.07f, 0.07f, 0.04f), k & 1 ? 0.9f : 0.2f, 0.15f, k & 1 ? 0.2f : 0.85f);
             gfx_mesh_free(m_frame[drc]); m_frame[drc] = gfx_mesh_static(tb.v, tb.n); frame_bit[drc] = bit; }
+        gfx_clear_depth(drc);   /* nothing of the race behind may cut into it */
         float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f; Mat4 vp = m4_mul(m4_perspective(0.62f, aspect, 0.5f, 60.0f), m4_look_at(v3(0, 0, 7.5f), v3(0, 0, 0), v3(0, 1, 0)));
         gfx_camera(&vp, v3(0.35f, 0.55f, 0.75f), 0.5f, 0, 0, 0, 1e6f, 2e6f);
         float spin = (1 - e3) * 5.0f * 3.14159265f + sinf(t * 1.3f) * 0.18f * e3, scale = 0.3f + 0.7f * e3, yy = -0.32f + (1 - e3) * -2.5f + 0.05f * sinf(t * 2.0f);
@@ -2108,8 +2109,8 @@ static void draw_trophy_pictures(int drc) {
         m_floor = gfx_mesh_static(tb.v, tb.n); }
     gfx_clear_depth(drc);
     float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f, sw = clampf(t / 1.6f, 0, 1), swe = 1 - (1 - sw) * (1 - sw) * (1 - sw);
-    float orbit = sinf(t * 0.22f) * 0.38f * clampf(t - 1.0f, 0, 1), dist = 10.5f + 9.0f * (1 - swe), ey = 3.4f + 3.0f * (1 - swe);
-    Vec3 eye = v3(sinf(orbit) * dist, ey, cosf(orbit) * dist), at = v3(0, 1.9f, 0);
+    float orbit = sinf(t * 0.22f) * 0.38f * clampf(t - 1.0f, 0, 1), dist = 13.0f + 9.0f * (1 - swe), ey = 3.0f + 3.0f * (1 - swe);
+    Vec3 eye = v3(sinf(orbit) * dist, ey, cosf(orbit) * dist), at = v3(0, 2.6f, 0);
     Mat4 vp = m4_mul(m4_perspective(0.72f, aspect, 0.3f, 200.0f), m4_look_at(eye, at, v3(0, 1, 0)));
     gfx_camera(&vp, v3(0.3f, 0.8f, 0.55f), 0.55f, 0, 0, 0, 1e6f, 2e6f);
     Vec3 R = v3_norm(v3(eye.z, 0, -eye.x)); if (eye.z < 0) R = v3(-R.x, 0, -R.z); R = v3_norm(v3_cross(v3(0, 1, 0), v3_norm(v3_sub(eye, at)))); R = v3(R.x, 0, R.z);
@@ -2118,10 +2119,10 @@ static void draw_trophy_pictures(int drc) {
     float mx = (float)cer_max(ord), top[3];
     for (int p = 0; p < 3 && p < nk; p++) { float h = 0.25f + 2.6f * cer_shown(p, ord) / mx, x = CER_SX[p], lock = cer_lock_t(p, ord); top[p] = h;
         float pulse = t >= lock ? 1.0f + 0.4f * expf(-(t - lock) * 4) : 1.0f;
-        Mat4 m = m4_mul(m4_translate(x, 0, 0), m4_scale(1, h, 1)); gfx_draw_ex(m_col, &m, col[p][0] * 0.75f * pulse, col[p][1] * 0.75f * pulse, col[p][2] * 0.75f * pulse, 1, 0.8f, 0, 0, 0);
+        Mat4 m = m4_mul(m4_translate(x, 0, 0), m4_scale(1, h, 1)); gfx_draw_ex(m_col, &m, col[p][0] * 1.15f * pulse, col[p][1] * 1.15f * pulse, col[p][2] * 1.15f * pulse, 1, 0.9f, 0, 0, 0);
         Mat4 mt = m4_translate(x, h, 0); gfx_draw_ex(m_trim, &mt, col[p][0], col[p][1], col[p][2], 1, 1.0f, 0, 0, 0);
         /* where the labels go: the points on the stand's face, the place above the head, the name at the foot */
-        Vec3 pts[3] = {v3(x, h * 0.5f, 0.9f), v3(x, h + 2.75f, 0), v3(x, -0.05f, 0.95f)};
+        Vec3 pts[3] = {v3(x, h * 0.42f, 0.9f), v3(x, h * 0.42f + 0.62f, 0.9f), v3(x, -0.05f, 0.95f)};
         for (int k = 0; k < 3; k++) { const float *M = vp.m; float cx = M[0] * pts[k].x + M[4] * pts[k].y + M[8] * pts[k].z + M[12], cy = M[1] * pts[k].x + M[5] * pts[k].y + M[9] * pts[k].z + M[13], cw = M[3] * pts[k].x + M[7] * pts[k].y + M[11] * pts[k].z + M[15];
             if (cw < 0.01f) cw = 0.01f; float sx2 = (cx / cw * 0.5f + 0.5f) * 1280, sy2 = (1 - (cy / cw * 0.5f + 0.5f)) * 720;
             if (k == 0) { g_cer_lab[p][0] = sx2; g_cer_lab[p][1] = sy2; } else if (k == 1) g_cer_lab[p][2] = sy2; else g_cer_lab[p][3] = sy2 + 8; } }
@@ -3245,7 +3246,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (g_screen == SCR_MAIN && tx_title && m_logo_small) { gfx_bind(tx_title); gfx_draw(m_logo_small, &id, 1, 1, 1, 1); }
         if (g_screen == SCR_CHAR || g_screen == SCR_MCHAR) draw_portraits();
         if (g_screen == SCR_RESULTS && g_mode != MODE_TT && g_mode != MODE_BATTLE) draw_podium_karts();
-        if (g_screen == SCR_TROPHY) { draw_trophy_pictures(drc); static Mesh *m_top = NULL; if (!m_top) m_top = gfx_mesh_dynamic(8192); batch_clear(&g_b); hud_trophy_top(); gfx_mesh_update(m_top, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_top, &id, 1, 1, 1, 1); }
+        if (g_screen == SCR_TROPHY) { draw_trophy_pictures(drc); static Mesh *m_top[2]; if (!m_top[drc]) m_top[drc] = gfx_mesh_dynamic(8192); batch_clear(&g_b); hud_trophy_top(); gfx_mesh_update(m_top[drc], g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_top[drc], &id, 1, 1, 1, 1); }
         if (g_screen == SCR_TRACK) for (int c2 = 0; c2 < ncards() && c2 < 8; c2++) { int d = card_track(c2); if (d >= 8 || !tx_card[d] || !track_unlocked(d)) continue;
             if (!m_card[c2]) m_card[c2] = gfx_mesh_dynamic(6);
             { float x = 40 + c2 * CARD_STEP + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, CARD_IN, CARD_IN * 0.54f, 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m_card[c2], g_b.v, g_b.n); }
