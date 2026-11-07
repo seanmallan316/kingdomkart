@@ -45,6 +45,12 @@ static const char *VS_SRC =
     "layout(location = 3) out float v_fog;\n"
     "void main() {\n"
     "  vec4 wp = u_model * vec4(in_position, 1.0);\n"
+    /* wind: a normal stored longer than 1 marks a corner that sways (leaves, fronds, flags), by that much extra in meters */
+    "  float sw = max(length(in_normal) - 1.05, 0.0);\n"
+    "  if (sw > 0.0) { float tt = u_eye.w;\n"
+    "    wp.x += sw * (sin(tt * 1.6 + wp.x * 0.17 + wp.z * 0.11) * 0.7 + sin(tt * 3.7 + wp.z * 0.5 + wp.y) * 0.3);\n"
+    "    wp.z += sw * (cos(tt * 1.25 + wp.z * 0.15 + wp.x * 0.09) * 0.55 + sin(tt * 4.1 + wp.x * 0.45) * 0.25);\n"
+    "    wp.y += sw * sin(tt * 2.3 + wp.x * 0.3) * 0.15; }\n"
     "  vec3 n = normalize((u_model * vec4(in_normal, 0.0)).xyz);\n"
     "  vec3 L = normalize(u_lightdir.xyz);\n"
     "  float amb = u_lightdir.w;\n"
@@ -80,7 +86,8 @@ static const char *PS_SRC =
 
 typedef struct { float viewproj[16]; float lightdir[4]; float fog[4]; float sky[4]; float ground[4]; float sun[4]; float eye[4]; } FrameBlock;
 typedef struct { float model[16]; float tint[4]; float params[4]; } ObjectBlock;
-static float g_sun[3] = {1, 1, 1}, g_sky[3] = {1, 1, 1}, g_ground[3] = {1, 1, 1}, g_eye[3] = {0, 0, 0};
+static float g_sun[3] = {1, 1, 1}, g_sky[3] = {1, 1, 1}, g_ground[3] = {1, 1, 1}, g_eye[3] = {0, 0, 0}, g_wind_t = 0;
+void gfx_set_time(float t) { g_wind_t = t; }
 typedef struct { float color[4]; float spec[4]; } FogBlock;
 
 #define UB_ALIGN 256
@@ -323,7 +330,7 @@ void gfx_camera(const Mat4 *vp, Vec3 l, float ambient, float fr, float fg, float
     fb2.lightdir[0] = l.x; fb2.lightdir[1] = l.y; fb2.lightdir[2] = l.z; fb2.lightdir[3] = ambient;
     fb2.fog[0] = fs; fb2.fog[1] = fe; fb2.fog[2] = 1.0f; fb2.fog[3] = 0;
     for (int i = 0; i < 3; i++) { fb2.sky[i] = g_sky[i]; fb2.ground[i] = g_ground[i]; fb2.sun[i] = g_sun[i]; fb2.eye[i] = g_eye[i]; }
-    fb2.sky[3] = fb2.ground[3] = fb2.sun[3] = fb2.eye[3] = 0;
+    fb2.sky[3] = fb2.ground[3] = fb2.sun[3] = 0; fb2.eye[3] = g_wind_t;
     g_framebuf = pool_upload(&fb2, sizeof fb2);
     FogBlock fg2 = {{fr, fg, fb, 1}, {g_sun[0], g_sun[1], g_sun[2], 1}};
     g_fogbuf = pool_upload(&fg2, sizeof fg2);

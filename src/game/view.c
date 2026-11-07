@@ -125,8 +125,16 @@ static float g_results_t;
 /* textures */
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
-#define PROP_CHUNKS 32
-static Mesh *m_props[PROP_CHUNKS], *m_curbs; static int m_nprops;   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
+static uint32_t g_px[256 * 256];
+#define PROP_CHUNKS 12
+static Mesh *m_props[MAT_N][PROP_CHUNKS], *m_curbs; static int m_nprops[MAT_N]; static Texture *tx_mat[MAT_N];
+static Vertex *g_matv[MAT_N]; static Batch g_matb[MAT_N];
+#define MATB_CAP 24000
+static void mat_buckets(ModelOut *mo) {   /* the buckets the models are built into, made once */
+    for (int m = 0; m < MAT_N; m++) { if (!g_matv[m]) g_matv[m] = malloc(sizeof(Vertex) * MATB_CAP); batch_init(&g_matb[m], g_matv[m], g_matv[m] ? MATB_CAP : 0); mo->b[m] = &g_matb[m]; }
+    if (!tx_mat[0]) for (int m = 0; m < MAT_N; m++) { model_texture(m, g_px, 256); tx_mat[m] = gfx_texture_rgba_ex(g_px, 256, 256, 1, 0, 1); } }
+static void mat_flush(ModelOut *mo) { for (int m = 0; m < MAT_N; m++) { if (mo->b[m]->n && m_nprops[m] < PROP_CHUNKS) m_props[m][m_nprops[m]++] = gfx_mesh_static(mo->b[m]->v, mo->b[m]->n); batch_clear(mo->b[m]); } }
+static void draw_mat_meshes(Mesh *const *ms, int n, int m, const Mat4 *mx) { if (!n) return; gfx_bind(tx_mat[m]); for (int c = 0; c < n; c++) if (ms[c]) gfx_draw(ms[c], mx, 1, 1, 1, 1); }   /* 3D buildings, columns, tents and rocks where there is no picture; raised kerbs along the road */
 /* meshes */
 static Mesh *m_field, *m_gem, *m_pebble, *m_whale, *m_whale_jaw; static Texture *tx_whale[4]; static float g_whale_asp[4];   /* Sean's whale: front, front-side, side, back */ static float g_ground_y; static Mesh *m_brook, *m_tunnel, *m_arch, *m_coin, *m_coins, *m_boostpads, *m_bouncepads, *m_road, *m_shoulder, *m_ground, *m_wall, *m_startline, *m_kart_body, *m_kart_rest, *m_body_style[NSTYLES], *m_rest_style[NSTYLES], *m_cube, *m_shield, *m_items, *m_skid, *m_glow, *m_dust, *m_hud, *m_shadow, *m_sky;
 static Vertex g_vtmp[16384];   /* scratch for building meshes (the walls of a long road need over 9000 corners) */
@@ -184,7 +192,6 @@ static void px_tread(int x, int y, uint32_t *o) {   /* tire tread seen edge-on: 
     else if (r > 7 && r < 13) *o = rgba(185, 185, 185, r == 8 || r == 12 ? 70 : 120); else *o = rgba(0, 0, 0, 0); }
 
 // ------------------------------------------------------------------ procedural textures (placeholders until the real art arrives)
-static uint32_t g_px[256 * 256];
 static Texture *make_tex(int w, int h, int repeat, int nearest, void (*fn)(int x, int y, uint32_t *out)) {
     for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) fn(x, y, &g_px[y * w + x]);
     return gfx_texture_rgba(g_px, w, h, repeat, nearest);
@@ -1072,68 +1079,20 @@ static void build_props(void) {
     batch_init(&g_b, g_vtmp, 16384);   /* the kerbs of a long road need over 13000 corners */
     int heaven = g_def->finale_img != NULL; float sr = 0.86f, sg = 0.78f, sb = 0.62f;   /* sun-baked limestone */
     if (heaven) { sr = 0.97f; sg = 0.95f; sb = 0.9f; } else if (!strcmp(g_def->prefix, "tomb")) { sr = 0.7f; sg = 0.68f; sb = 0.64f; } else if (!strcmp(g_def->prefix, "eden")) { sr = 0.62f; sg = 0.5f; sb = 0.36f; }
-    batch_clear(&g_b); for (int c = 0; c < m_nprops; c++) { gfx_mesh_free(m_props[c]); m_props[c] = NULL; } m_nprops = 0;
+    /* every piece of scenery is a 3D model now: its corners go into one bucket per surface (plaster, stone, bark, leaves...),
+       and full buckets go to the GPU in pieces, each drawn with its surface's picture */
+    for (int m = 0; m < MAT_N; m++) { for (int c = 0; c < m_nprops[m]; c++) { gfx_mesh_free(m_props[m][c]); m_props[m][c] = NULL; } m_nprops[m] = 0; }
+    ModelOut mo; mat_buckets(&mo);
     for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (!pl->solid) continue;
-        if (g_b.n + 4000 > g_b.cap && m_nprops < PROP_CHUNKS) { m_props[m_nprops++] = gfx_mesh_static(g_b.v, g_b.n); batch_clear(&g_b); }   /* the scenery goes into the GPU in pieces */
-        if (model_known(g_kind[pl->kind].img)) { int n1 = g_b.n; model_build(&g_b, g_kind[pl->kind].img, pl->h, (unsigned)i); prop_place(n1, pl->p, pl->yaw); continue; }
-        int shape = prop_shape(g_kind[pl->kind].img), n0 = g_b.n; float h = pl->h, w = fmaxf(pl->w, h * 0.6f), d = w * 0.8f;
-        unsigned hsh = (unsigned)i * 2654435761u; float tint = 0.92f + 0.08f * ((hsh >> 8) & 255) / 255.0f, r = sr * tint, g = sg * tint, b = sb * tint;
-        switch (shape) {
-            case 0: {   /* a flat-roofed house: walls, a low parapet round the roof, a dark doorway and windows, steps to the roof */
-                float wh = h * 0.78f; batch_box(&g_b, v3(0, wh / 2, 0), v3(w / 2, wh / 2, d / 2), r, g, b);
-                batch_box(&g_b, v3(0, wh + 0.2f, d / 2 - 0.12f), v3(w / 2, 0.2f, 0.12f), r * 0.95f, g * 0.95f, b * 0.95f); batch_box(&g_b, v3(0, wh + 0.2f, -d / 2 + 0.12f), v3(w / 2, 0.2f, 0.12f), r * 0.95f, g * 0.95f, b * 0.95f);
-                batch_box(&g_b, v3(w / 2 - 0.12f, wh + 0.2f, 0), v3(0.12f, 0.2f, d / 2), r * 0.95f, g * 0.95f, b * 0.95f); batch_box(&g_b, v3(-w / 2 + 0.12f, wh + 0.2f, 0), v3(0.12f, 0.2f, d / 2), r * 0.95f, g * 0.95f, b * 0.95f);
-                for (int sd = -1; sd <= 1; sd += 2) {   /* doors and windows on both long sides */
-                    batch_box(&g_b, v3(0, wh * 0.28f, sd * (d / 2 + 0.02f)), v3(w * 0.12f, wh * 0.28f, 0.03f), 0.18f, 0.12f, 0.08f);
-                    batch_box(&g_b, v3(-w * 0.3f, wh * 0.66f, sd * (d / 2 + 0.02f)), v3(w * 0.08f, wh * 0.1f, 0.03f), 0.12f, 0.1f, 0.1f);
-                    batch_box(&g_b, v3(w * 0.3f, wh * 0.66f, sd * (d / 2 + 0.02f)), v3(w * 0.08f, wh * 0.1f, 0.03f), 0.12f, 0.1f, 0.1f); }
-                if (hsh & 1) batch_box(&g_b, v3(w * 0.25f, wh + 0.9f, 0), v3(w * 0.18f, 0.9f, d * 0.22f), r, g, b);   /* an upper room on some */
-                break; }
-            case 1: {   /* a fisherman's hut: mud walls and a reed roof */
-                float wh = h * 0.55f; batch_box(&g_b, v3(0, wh / 2, 0), v3(w / 2, wh / 2, d / 2), 0.62f * tint, 0.48f * tint, 0.32f * tint);
-                Vec3 a = v3(-w / 2 - 0.3f, wh, -d / 2 - 0.3f), b2 = v3(w / 2 + 0.3f, wh, -d / 2 - 0.3f), c = v3(w / 2 + 0.3f, wh, d / 2 + 0.3f), e = v3(-w / 2 - 0.3f, wh, d / 2 + 0.3f), top = v3(0, h, 0);
-                float tr = 0.78f * tint, tg = 0.66f * tint, tb = 0.38f * tint;
-                prop_tri(a, top, b2, tr, tg, tb); prop_tri(b2, top, c, tr * 0.9f, tg * 0.9f, tb * 0.9f); prop_tri(c, top, e, tr, tg, tb); prop_tri(e, top, a, tr * 0.9f, tg * 0.9f, tb * 0.9f);
-                batch_box(&g_b, v3(0, wh * 0.35f, d / 2 + 0.02f), v3(w * 0.14f, wh * 0.35f, 0.03f), 0.15f, 0.1f, 0.06f); break; }
-            case 2: {   /* a watchtower with battlements */
-                float tw = fminf(w, h * 0.45f); batch_box(&g_b, v3(0, h / 2, 0), v3(tw / 2, h / 2, tw / 2), r, g, b);
-                for (int q = 0; q < 4; q++) for (int k = -1; k <= 1; k += 2) { float o = tw / 2 - 0.25f; Vec3 c = q == 0 ? v3(k * o * 0.6f, h + 0.35f, o) : q == 1 ? v3(k * o * 0.6f, h + 0.35f, -o) : q == 2 ? v3(o, h + 0.35f, k * o * 0.6f) : v3(-o, h + 0.35f, k * o * 0.6f);
-                    batch_box(&g_b, c, v3(0.28f, 0.35f, 0.28f), r * 0.95f, g * 0.95f, b * 0.95f); }
-                batch_box(&g_b, v3(0, h * 0.7f, tw / 2 + 0.02f), v3(0.18f, 0.45f, 0.03f), 0.1f, 0.08f, 0.08f); break; }
-            case 3: {   /* a column: square base, round shaft narrowing a little, a capital (gold on the golden pillars) */
-                int gold = !strcmp(g_kind[pl->kind].img, "#gpillar") || heaven; float cr = gold ? 1.0f : 0.92f, cg = gold ? 0.85f : 0.9f, cb = gold ? 0.45f : 0.86f, rad = fmaxf(0.35f, h * 0.08f);
-                batch_box(&g_b, v3(0, 0.25f, 0), v3(rad * 1.5f, 0.25f, rad * 1.5f), cr * 0.9f, cg * 0.9f, cb * 0.9f);
-                prop_cyl(rad, rad * 0.88f, 0.5f, h - 0.5f, 12, cr, cg, cb);
-                batch_box(&g_b, v3(0, h - 0.25f, 0), v3(rad * 1.45f, 0.25f, rad * 1.45f), cr, cg, cb); break; }
-            case 4: {   /* a goat-hair tent: a ridge on two poles, sloping sides, open at the front */
-                float tr = 0.36f * tint, tg = 0.27f * tint, tb = 0.2f * tint, L = d / 2 + 0.6f;
-                Vec3 rf = v3(0, h, L), rb = v3(0, h, -L), lf = v3(-w / 2, 0, L), lb = v3(-w / 2, 0, -L), qf = v3(w / 2, 0, L), qb = v3(w / 2, 0, -L);
-                batch_quad4(&g_b, lf, lb, rb, rf, face_normal(lf, lb, rb), 0, 0, 1, 1, tr, tg, tb, 1); batch_quad4(&g_b, rb, qb, qf, rf, face_normal(rb, qb, qf), 0, 0, 1, 1, tr * 0.85f, tg * 0.85f, tb * 0.85f, 1);
-                prop_tri(qb, rb, lb, tr * 0.9f, tg * 0.9f, tb * 0.9f);
-                for (int sd = -1; sd <= 1; sd += 2) batch_box(&g_b, v3(sd * 0.04f, h / 2, sd * 0 + (sd < 0 ? -L : L)), v3(0.06f, h / 2, 0.06f), 0.4f, 0.3f, 0.18f);
-                break; }
-            case 5: {   /* a rock: a lumpy, squashed ball */
-                const int R = 5, S = 8; float rx = w * 0.5f, ry = h * 0.5f, rz = w * 0.42f;
-                for (int ri = 0; ri < R; ri++) for (int si = 0; si < S; si++) { Vec3 q[4]; float tt[4] = {ri, ri + 1.0f, ri + 1.0f, (float)ri}, pp[4] = {(float)si, (float)si, si + 1.0f, si + 1.0f};
-                    for (int k = 0; k < 4; k++) { float th = 3.14159265f * tt[k] / R, ph = 6.2831853f * pp[k] / S; unsigned hh = (unsigned)((int)tt[k] * 31 + ((int)pp[k] % S) * 17 + i * 7) * 2654435761u; float lump = 0.85f + 0.3f * ((hh >> 12) & 255) / 255.0f;
-                        if (tt[k] == 0 || tt[k] == R) lump = 1.0f; q[k] = v3(sinf(th) * cosf(ph) * rx * lump, ry + cosf(th) * ry * lump - 0.15f * ry, sinf(th) * sinf(ph) * rz * lump); }
-                    Vec3 n = face_normal(q[0], q[1], q[2]); if (n.y * 0 + n.x * q[0].x + n.z * q[0].z + n.y * (q[0].y - ry) < 0) { Vec3 t2 = q[1]; q[1] = q[3]; q[3] = t2; n = v3(-n.x, -n.y, -n.z); }
-                    float sh = 0.75f + 0.25f * n.y; batch_quad4(&g_b, q[0], q[1], q[2], q[3], n, 0, 0, 1, 1, 0.6f * sh * tint, 0.56f * sh * tint, 0.5f * sh * tint, 1); }
-                break; }
-            case 6: { prop_cyl(w * 0.45f, w * 0.45f, 0, h * 0.5f, 12, r, g, b); prop_tri(v3(0, 0, 0), v3(0, 0, 0), v3(0, 0, 0), 0, 0, 0); batch_box(&g_b, v3(0, h * 0.51f, 0), v3(w * 0.38f, 0.02f, w * 0.38f), 0.1f, 0.18f, 0.3f); break; }   /* a well */
-            case 7: { batch_box(&g_b, v3(0, h / 2, 0), v3(w / 2, h / 2, 0.6f), r, g, b); for (int k = -2; k <= 2; k++) batch_box(&g_b, v3(k * w / 5, h + 0.3f, 0), v3(w / 14, 0.3f, 0.6f), r, g, b); break; }   /* a stretch of wall */
-        }
-        prop_place(n0, pl->p, pl->yaw);
-    }
-    if (g_b.n && m_nprops < PROP_CHUNKS) m_props[m_nprops++] = gfx_mesh_static(g_b.v, g_b.n);
+        const char *img = g_kind[pl->kind].img; if (!model_known(img)) continue;
+        unsigned hsh = (unsigned)i * 2654435761u; float tint = 0.92f + 0.08f * ((hsh >> 8) & 255) / 255.0f;
+        if (model_build(&mo, img, pl->h, pl->w, (unsigned)i, pl->p, pl->yaw, sr * tint, sg * tint, sb * tint) < 0) { mat_flush(&mo); model_build(&mo, img, pl->h, pl->w, (unsigned)i, pl->p, pl->yaw, sr * tint, sg * tint, sb * tint); } }
+    mat_flush(&mo);
     /* the walls of Jericho: each stretch its own 3D model (stone courses, battlements), so it can fall flat */
     for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; gfx_mesh_free(pl->m3); pl->m3 = NULL; if (!pl->wall) continue;
         const char *img = g_kind[pl->kind].img; int tower = !strcmp(img, "#jtower"), rahab = !strcmp(img, "#rahab"); float L = fmaxf(pl->w, 4.0f), H = pl->h, T = tower ? L * 0.8f : 2.2f;
         batch_clear(&g_b);
-        for (int c = 0; c < 4; c++) { float y0 = H * c / 4, y1 = H * (c + 1) / 4, sh = (c & 1) ? 0.92f : 1.0f; batch_box(&g_b, v3(0, (y0 + y1) / 2, -T / 2), v3(L / 2, (y1 - y0) / 2, T / 2), 0.82f * sh, 0.7f * sh, 0.5f * sh); }
-        for (int k = 0; k < (int)(L / 1.6f); k++) batch_box(&g_b, v3(-L / 2 + 0.8f + k * 1.6f, H + 0.4f, -T / 2), v3(0.5f, 0.4f, T / 2), 0.78f, 0.66f, 0.47f);
-        if (rahab) { batch_box(&g_b, v3(0, H + 1.6f, -T / 2), v3(L * 0.3f, 1.6f, T * 0.45f), 0.8f, 0.7f, 0.55f); batch_box(&g_b, v3(L * 0.1f, H + 1.8f, 0.02f), v3(0.4f, 0.5f, 0.03f), 0.1f, 0.08f, 0.08f);
-            batch_box(&g_b, v3(L * 0.1f, H * 0.6f + 1.0f, 0.06f), v3(0.05f, H * 0.4f, 0.03f), 0.9f, 0.1f, 0.1f); }   /* her window and the scarlet cord (Joshua 2:18) */
+        (void)tower; model_jwall(&g_b, L, H, T, rahab, (unsigned)i);
         pl->m3 = gfx_mesh_static(g_b.v, g_b.n); }
     /* raised kerbs along both edges of the road: red and white blocks, a hand's height, on the roads of the earth */
     batch_clear(&g_b);
@@ -2318,7 +2277,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
           Vec3 skyc = v3(0.3f + 0.7f * g_def->sky_r / mx, 0.3f + 0.7f * g_def->sky_g / mx, 0.3f + 0.7f * g_def->sky_b / mx);
           Vec3 gnd = g_def->night ? v3(0.5f, 0.45f, 0.5f) : (g_def->water ? v3(0.75f, 0.85f, 0.95f) : (g_def->grid_idx ? v3(1.0f, 0.95f, 0.9f) : v3(0.95f, 0.85f, 0.7f)));
           gfx_light(v3(g_def->sun_r, g_def->sun_g, g_def->sun_b), skyc, gnd, eye); }
-        gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f);
+        gfx_set_time(g_time); gfx_camera(&vp, ldir, 1.0f, g_def->fog_r, g_def->fog_g, g_def->fog_b, 1e6f, 2e6f);
         gfx_state(ST_BLEND); gfx_bind(tx_sky); { Mat4 sm = m4_translate(cam_x, -30.0f, cam_z); gfx_draw_ex(m_sky, &sm, 1, 1, 1, 1, 0, 1, 0, 0); }
         if (tx_star) { gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_star);
             batch_clear(&g_b); float ss = g_def->star_size * (0.95f + 0.05f * sinf(g_time * 3.0f));
@@ -2360,24 +2319,28 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             gfx_mesh_update(m_sun, g_b.v, g_b.n); gfx_state(ST_BLEND | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_sun, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
         gfx_state(ST_TRANSPARENT); gfx_bind(NULL); gfx_draw(m_skid, &id, 1, 1, 1, 1);
         gfx_bind(tx_blob); gfx_draw(m_scshadow, &id, 1, 1, 1, 1); gfx_draw(m_shadow, &id, 1, 1, 1, 1);
-        gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); for (int c = 0; c < m_nprops; c++) gfx_draw(m_props[c], &id, 1, 1, 1, 1); if (m_curbs) gfx_draw(m_curbs, &id, 1, 1, 1, 1);
+        gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); for (int m = 0; m < MAT_N; m++) draw_mat_meshes(m_props[m], m_nprops[m], m, &id); gfx_bind(NULL); if (m_curbs) gfx_draw(m_curbs, &id, 1, 1, 1, 1);
         for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; if (!pl->m3) continue;   /* the walls of Jericho, falling flat outward when their time comes */
             float f = pl->fall_t > 0 ? clampf((pl->fall_t - 0.15f) / 0.95f, 0, 1) : 0, a = 1.5707963f * f * f, ca = cosf(a), sa = sinf(a), shud = pl->fall_t > 0 && pl->fall_t < 0.3f ? sinf(pl->fall_t * 60.0f) * 0.15f : 0;
             Vec3 e1 = pl->t3, up = v3(pl->o3.x * sa, ca, pl->o3.z * sa), out = v3(pl->o3.x * ca, -sa, pl->o3.z * ca);
             Mat4 m = m4_identity(); m.m[0] = e1.x; m.m[1] = e1.y; m.m[2] = e1.z; m.m[4] = up.x; m.m[5] = up.y; m.m[6] = up.z; m.m[8] = out.x; m.m[9] = out.y; m.m[10] = out.z;
-            m.m[12] = pl->p.x + e1.x * shud; m.m[13] = pl->p.y + 0.15f; m.m[14] = pl->p.z + e1.z * shud; gfx_draw(pl->m3, &m, 1, 1, 1, 1); }
+            m.m[12] = pl->p.x + e1.x * shud; m.m[13] = pl->p.y + 0.15f; m.m[14] = pl->p.z + e1.z * shud; gfx_bind(tx_mat[MAT_STONE]); gfx_draw(pl->m3, &m, 1, 1, 1, 1); } gfx_bind(NULL);
         {   /* the obstacles that cross the road, as 3D models: sheep, carts, nets, rolling stones, rubble */
-            static Mesh *m_mov[MAX_MOVERS]; static const Track *built_for = NULL; static int built_n = -1;
-            if (built_for != &g_track || built_n != g_loaded_track) { for (int m = 0; m < MAX_MOVERS; m++) { gfx_mesh_free(m_mov[m]); m_mov[m] = NULL; }
-                for (int m = 0; m < g_track.nmover; m++) if (model_known(g_track.mover[m].img)) { batch_clear(&g_b); model_build(&g_b, g_track.mover[m].img, g_track.mover[m].height, (unsigned)m * 7u); m_mov[m] = gfx_mesh_static(g_b.v, g_b.n); }
+            static Mesh *m_mov[MAX_MOVERS][MAT_N]; static int has_mov[MAX_MOVERS]; static const Track *built_for = NULL; static int built_n = -1;
+            if (built_for != &g_track || built_n != g_loaded_track) { ModelOut mo; mat_buckets(&mo);
+                for (int m = 0; m < MAX_MOVERS; m++) { for (int q = 0; q < MAT_N; q++) { gfx_mesh_free(m_mov[m][q]); m_mov[m][q] = NULL; } has_mov[m] = 0; }
+                for (int m = 0; m < g_track.nmover; m++) if (model_known(g_track.mover[m].img)) { for (int q = 0; q < MAT_N; q++) batch_clear(mo.b[q]);
+                    model_build(&mo, g_track.mover[m].img, g_track.mover[m].height, g_track.mover[m].height, (unsigned)m * 7u, v3(0, 0, 0), 0, 0.8f, 0.72f, 0.58f);
+                    for (int q = 0; q < MAT_N; q++) if (mo.b[q]->n) m_mov[m][q] = gfx_mesh_static(mo.b[q]->v, mo.b[q]->n); has_mov[m] = 1;
+                    for (int q = 0; q < MAT_N; q++) batch_clear(mo.b[q]); }
                 built_for = &g_track; built_n = g_loaded_track; }
-            for (int m = 0; m < g_track.nmover; m++) { const Mover *mv = &g_track.mover[m]; if (!m_mov[m]) continue;
+            for (int m = 0; m < g_track.nmover; m++) { const Mover *mv = &g_track.mover[m]; if (!has_mov[m]) continue;
                 if (r->jericho && mv->img[1] == 'r' && mv->img[2] == 'u' && r->wall_fall < 0.3f) continue;
                 float mx, my, mz, mx2, my2, mz2; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); track_mover_pos(&g_track, mv, r->race_t + 0.05f, &mx2, &my2, &mz2);
                 float dxm = mx2 - mx, dzm = mz2 - mz, face = (dxm * dxm + dzm * dzm > 1e-6f) ? atan2f(dxm, dzm) : 0;   /* it faces the way it is going */
                 Mat4 mm = m4_mul(m4_translate(mx, my, mz), m4_rotate_y(face));
                 if (!strcmp(mv->img, "#stone")) { float roll = r->race_t * mv->speed * 2.0f; mm = m4_mul(mm, m4_mul(m4_translate(0, mv->height * 0.5f, 0), m4_mul(m4_rotate_x(roll), m4_translate(0, -mv->height * 0.5f, 0)))); }
-                gfx_draw(m_mov[m], &mm, 1, 1, 1, 1); } }
+                for (int q = 0; q < MAT_N; q++) if (m_mov[m][q]) { gfx_bind(tx_mat[q]); gfx_draw(m_mov[m][q], &mm, 1, 1, 1, 1); } } gfx_bind(NULL); }
         gfx_state(ST_SOLID);   /* both sides drawn: no chance of a model showing inside out */
         /* item boxes: spinning cubes */
         /* the boxes float a metre up, turn slowly, shimmer through the rainbow and glow */
