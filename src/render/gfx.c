@@ -3,6 +3,7 @@
 #include <coreinit/cache.h>
 #include <coreinit/time.h>
 #include <gx2/clear.h>
+#include <gx2/utils.h>
 #include <gx2/draw.h>
 #include <gx2/enum.h>
 #include <gx2/event.h>
@@ -37,12 +38,14 @@ static const char *VS_SRC =
     "layout(location = 3) in vec4 in_color;\n"
     /* Frame: u_lightdir.w = ambient strength, u_fog = start, end, enabled, 0; u_sky / u_ground = the ambient light from above / below
        (hemisphere lighting), u_sun = the sun's color, u_eye = camera position. Object: u_params = specular strength, unlit flag, uv scroll */
-    "layout(binding = 0) uniform Frame { mat4 u_viewproj; vec4 u_lightdir; vec4 u_fog; vec4 u_sky; vec4 u_ground; vec4 u_sun; vec4 u_eye; };\n"
+    "layout(binding = 0) uniform Frame { mat4 u_viewproj; vec4 u_lightdir; vec4 u_fog; vec4 u_sky; vec4 u_ground; vec4 u_sun; vec4 u_eye; mat4 u_shadowvp; vec4 u_shadowp; };\n"
     "layout(binding = 1) uniform Object { mat4 u_model; vec4 u_tint; vec4 u_params; };\n"
     "layout(location = 0) out vec2 v_texcoord;\n"
     "layout(location = 1) out vec4 v_color;\n"
     "layout(location = 2) out vec4 v_light;\n"
     "layout(location = 3) out float v_fog;\n"
+    "layout(location = 4) out vec4 v_sun;\n"
+    "layout(location = 5) out vec4 v_shadow;\n"
     "void main() {\n"
     "  vec4 wp = u_model * vec4(in_position, 1.0);\n"
     /* wind: a normal stored longer than 1 marks a corner that sways (leaves, fronds, flags), by that much extra in meters */
@@ -56,12 +59,17 @@ static const char *VS_SRC =
     "  float amb = u_lightdir.w;\n"
     "  float diff = max(dot(n, L), 0.0);\n"
     "  vec3 hemi = mix(u_ground.rgb, u_sky.rgb, n.y * 0.5 + 0.5);\n"
-    "  vec3 lc = hemi * amb + u_sun.rgb * diff * (1.0 - amb);\n"
+    "  vec3 lc = hemi * amb;\n"
+    "  vec3 sunc = u_sun.rgb * diff * (1.0 - amb);\n"
     "  vec3 V = normalize(u_eye.xyz - wp.xyz);\n"
     "  vec3 H = normalize(L + V);\n"
     "  float spec = pow(max(dot(n, H), 0.0), 40.0) * u_params.x;\n"
-    "  if (u_params.y > 0.5) { lc = vec3(1.0); spec = 0.0; }\n"
+    "  if (u_params.y > 0.5) { lc = vec3(1.0); sunc = vec3(0.0); spec = 0.0; }\n"
     "  v_light = vec4(lc, spec);\n"
+    "  v_sun = vec4(sunc, u_shadowp.x * (1.0 - u_params.y));\n"
+    /* where this spot falls in the sun's view, for the shadow (pushed out a little along its normal so surfaces don't shadow themselves) */
+    "  vec4 sp = u_shadowvp * vec4(wp.xyz + n * u_shadowp.w, 1.0);\n"
+    "  v_shadow = vec4(sp.xy * 0.5 + 0.5, sp.z, max(dot(n, L), 0.0));\n"
     "  v_texcoord = in_texcoord + u_params.zw;\n"
     "  v_color = in_color * u_tint;\n"
     "  vec4 cp = u_viewproj * wp;\n"
@@ -74,21 +82,65 @@ static const char *PS_SRC =
     "layout(location = 1) in vec4 v_color;\n"
     "layout(location = 2) in vec4 v_light;\n"
     "layout(location = 3) in float v_fog;\n"
-    "layout(binding = 0) uniform FogColor { vec4 u_fogcolor; vec4 u_speccolor; };\n"
+    "layout(location = 4) in vec4 v_sun;\n"
+    "layout(location = 5) in vec4 v_shadow;\n"
+    "layout(binding = 0) uniform FogColor { vec4 u_fogcolor; vec4 u_speccolor; vec4 u_shadowpx; };\n"
     "layout(binding = 0) uniform sampler2D u_tex;\n"
+    "layout(binding = 1) uniform sampler2D u_shadowmap;\n"
     "layout(location = 0) out vec4 out_color;\n"
     "void main() {\n"
     "  vec4 t = texture(u_tex, v_texcoord) * v_color;\n"
     "  if (t.a < 0.03) discard;\n"
-    "  vec3 c = mix(t.rgb * v_light.rgb + u_speccolor.rgb * v_light.a, u_fogcolor.rgb, v_fog);\n"
+    "  float lit = 1.0;\n"
+    "  if (v_sun.a > 0.5) {\n"   /* in the sun's view: 4 soft samples of what is nearest the sun there */
+    "    vec2 uv = vec2(v_shadow.x, 1.0 - v_shadow.y); float d = v_shadow.z - u_shadowpx.y; float o = u_shadowpx.x;\n"
+    "    if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) {\n"
+    "      lit = 0.25 * (step(d, texture(u_shadowmap, uv + vec2(-o, -o)).r) + step(d, texture(u_shadowmap, uv + vec2(o, -o)).r)\n"
+    "                  + step(d, texture(u_shadowmap, uv + vec2(-o, o)).r) + step(d, texture(u_shadowmap, uv + vec2(o, o)).r));\n"
+    "      lit = mix(1.0, lit, clamp(v_shadow.w * 4.0, 0.0, 1.0) * u_shadowpx.z); } }\n"
+    "  vec3 c = mix(t.rgb * (v_light.rgb + v_sun.rgb * lit) + u_speccolor.rgb * v_light.a * lit, u_fogcolor.rgb, v_fog);\n"
     "  out_color = vec4(c, t.a);\n"
     "}\n";
 
-typedef struct { float viewproj[16]; float lightdir[4]; float fog[4]; float sky[4]; float ground[4]; float sun[4]; float eye[4]; } FrameBlock;
+/* the shadow pass: the scene seen from the sun, writing only how far each spot is from it (see-through leaf pixels skipped) */
+static const char *VS_SHADOW_SRC =
+    "#version 450\n"
+    "layout(location = 0) in vec3 in_position;\n"
+    "layout(location = 1) in vec3 in_normal;\n"
+    "layout(location = 2) in vec2 in_texcoord;\n"
+    "layout(location = 3) in vec4 in_color;\n"
+    "layout(binding = 0) uniform Frame { mat4 u_viewproj; vec4 u_lightdir; vec4 u_fog; vec4 u_sky; vec4 u_ground; vec4 u_sun; vec4 u_eye; mat4 u_shadowvp; vec4 u_shadowp; };\n"
+    "layout(binding = 1) uniform Object { mat4 u_model; vec4 u_tint; vec4 u_params; };\n"
+    "layout(location = 0) out vec2 v_texcoord;\n"
+    "layout(location = 1) out float v_depth;\n"
+    "layout(location = 2) out float v_alpha;\n"
+    "void main() {\n"
+    "  vec4 wp = u_model * vec4(in_position, 1.0);\n"
+    "  float sw = max(length(in_normal) - 1.05, 0.0);\n"
+    "  if (sw > 0.0) { float tt = u_eye.w;\n"
+    "    wp.x += sw * (sin(tt * 1.6 + wp.x * 0.17 + wp.z * 0.11) * 0.7 + sin(tt * 3.7 + wp.z * 0.5 + wp.y) * 0.3);\n"
+    "    wp.z += sw * (cos(tt * 1.25 + wp.z * 0.15 + wp.x * 0.09) * 0.55 + sin(tt * 4.1 + wp.x * 0.45) * 0.25);\n"
+    "    wp.y += sw * sin(tt * 2.3 + wp.x * 0.3) * 0.15; }\n"
+    "  vec4 cp = u_viewproj * wp;\n"
+    "  v_depth = cp.z; v_texcoord = in_texcoord + u_params.zw; v_alpha = in_color.a * u_tint.a;\n"
+    "  gl_Position = cp;\n"
+    "}\n";
+static const char *PS_SHADOW_SRC =
+    "#version 450\n"
+    "layout(location = 0) in vec2 v_texcoord;\n"
+    "layout(location = 1) in float v_depth;\n"
+    "layout(location = 2) in float v_alpha;\n"
+    "layout(binding = 0) uniform sampler2D u_tex;\n"
+    "layout(location = 0) out vec4 out_color;\n"
+    "void main() {\n"
+    "  if (texture(u_tex, v_texcoord).a * v_alpha < 0.5) discard;\n"
+    "  out_color = vec4(v_depth, 0.0, 0.0, 1.0);\n"
+    "}\n";
+typedef struct { float viewproj[16]; float lightdir[4]; float fog[4]; float sky[4]; float ground[4]; float sun[4]; float eye[4]; float shadowvp[16]; float shadowp[4]; } FrameBlock;
 typedef struct { float model[16]; float tint[4]; float params[4]; } ObjectBlock;
 static float g_sun[3] = {1, 1, 1}, g_sky[3] = {1, 1, 1}, g_ground[3] = {1, 1, 1}, g_eye[3] = {0, 0, 0}, g_wind_t = 0;
 void gfx_set_time(float t) { g_wind_t = t; }
-typedef struct { float color[4]; float spec[4]; } FogBlock;
+typedef struct { float color[4]; float spec[4]; float shadowpx[4]; } FogBlock;
 
 #define UB_ALIGN 256
 #define UB_SLOTS 4096   /* per frame, both screens; running out would overwrite matrices the GPU has not used yet */
@@ -98,6 +150,13 @@ static WHBGfxShaderGroup g_shader; static Texture *g_white; static Texture *g_bo
 static uint32_t g_loc_frame = 0, g_loc_object = 1, g_loc_fog = 0;
 static void *g_framebuf = NULL, *g_fogbuf = NULL;
 static int g_flags = -1, g_initialized = 0;
+/* the sun's shadow map */
+#define SHADOW_RES 1024
+static WHBGfxShaderGroup g_shs; static uint32_t g_shloc_frame = 0, g_shloc_object = 1; static int g_shadow_ok = 0, g_in_shadow = 0, g_shadow_use = 0, g_shadow_have = 0;
+static GX2ColorBuffer g_shcb; static GX2DepthBuffer g_shdb; static GX2Texture g_shtex; static GX2Sampler g_shsmp; static GX2ContextState *g_shctx; static float g_shadow_vp[16];
+static void bind_shadow_sampler(void);
+static uint32_t g_loc_tex = 0, g_loc_shmap = 1, g_shloc_tex = 0;
+static uint32_t sampler_location(const GX2PixelShader *ps, const char *name, uint32_t fallback) { for (uint32_t i = 0; i < ps->samplerVarCount; i++) if (!strcmp(ps->samplerVars[i].name, name)) return ps->samplerVars[i].location; return fallback; }
 static FILE *g_logfile = NULL;
 
 void gfx_log(const char *fmt, ...) {
@@ -147,11 +206,42 @@ int gfx_init(void) {
     g_loc_frame = vblock_location(g_shader.vertexShader, "Frame", 0);
     g_loc_object = vblock_location(g_shader.vertexShader, "Object", 1);
     g_loc_fog = pblock_location(g_shader.pixelShader, "FogColor", 0);
+    g_loc_tex = sampler_location(g_shader.pixelShader, "u_tex", g_shader.pixelShader->samplerVars[0].location); g_loc_shmap = sampler_location(g_shader.pixelShader, "u_shadowmap", 1);
     gfx_log("shaders ok: blocks Frame@%u Object@%u FogColor@%u, samplers %u", g_loc_frame, g_loc_object, g_loc_fog, g_shader.pixelShader->samplerVarCount);
     for (int i = 0; i < 2; i++) { g_pool[i].mem = memalign(UB_ALIGN, UB_ALIGN * UB_SLOTS); memset(g_pool[i].mem, 0, UB_ALIGN * UB_SLOTS); g_pool[i].next = 0; }
     uint32_t white[4] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
     g_white = gfx_texture_rgba(white, 2, 2, 1, 1);
     g_initialized = 1;
+    /* the shadow map: optional - if any of this fails the game simply has no sun shadows */
+    memset(&g_shs, 0, sizeof g_shs); info[0] = 0;
+    g_shs.vertexShader = glsl_CompileVertexShader(VS_SHADOW_SRC, info, sizeof info, GLSL_COMPILER_FLAG_NONE);
+    if (g_shs.vertexShader) g_shs.pixelShader = glsl_CompilePixelShader(PS_SHADOW_SRC, info, sizeof info, GLSL_COMPILER_FLAG_NONE);
+    if (g_shs.vertexShader && g_shs.pixelShader) {
+        int k = 1; k &= WHBGfxInitShaderAttribute(&g_shs, "in_position", 0, 0, GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
+        WHBGfxInitShaderAttribute(&g_shs, "in_normal", 0, 12, GX2_ATTRIB_FORMAT_FLOAT_32_32_32); WHBGfxInitShaderAttribute(&g_shs, "in_texcoord", 0, 24, GX2_ATTRIB_FORMAT_FLOAT_32_32);
+        WHBGfxInitShaderAttribute(&g_shs, "in_color", 0, 32, GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32);
+        if (k && WHBGfxInitFetchShader(&g_shs) && g_shs.pixelShader->samplerVarCount >= 1 && g_shader.pixelShader->samplerVarCount >= 2) {
+            g_shloc_tex = sampler_location(g_shs.pixelShader, "u_tex", g_shs.pixelShader->samplerVars[0].location); g_shloc_frame = vblock_location(g_shs.vertexShader, "Frame", 0); g_shloc_object = vblock_location(g_shs.vertexShader, "Object", 1);
+            memset(&g_shcb, 0, sizeof g_shcb); g_shcb.surface.use = GX2_SURFACE_USE_TEXTURE | GX2_SURFACE_USE_COLOR_BUFFER; g_shcb.surface.dim = GX2_SURFACE_DIM_TEXTURE_2D;
+            g_shcb.surface.width = g_shcb.surface.height = SHADOW_RES; g_shcb.surface.depth = 1; g_shcb.surface.mipLevels = 1; g_shcb.surface.format = GX2_SURFACE_FORMAT_FLOAT_R32;
+            g_shcb.surface.aa = GX2_AA_MODE1X; g_shcb.surface.tileMode = GX2_TILE_MODE_DEFAULT; g_shcb.viewNumSlices = 1;
+            GX2CalcSurfaceSizeAndAlignment(&g_shcb.surface); GX2InitColorBufferRegs(&g_shcb);
+            memset(&g_shdb, 0, sizeof g_shdb); g_shdb.surface.use = GX2_SURFACE_USE_DEPTH_BUFFER; g_shdb.surface.dim = GX2_SURFACE_DIM_TEXTURE_2D;
+            g_shdb.surface.width = g_shdb.surface.height = SHADOW_RES; g_shdb.surface.depth = 1; g_shdb.surface.mipLevels = 1; g_shdb.surface.format = GX2_SURFACE_FORMAT_FLOAT_D24_S8;
+            g_shdb.surface.aa = GX2_AA_MODE1X; g_shdb.surface.tileMode = GX2_TILE_MODE_DEFAULT; g_shdb.viewNumSlices = 1; g_shdb.depthClear = 1.0f;
+            GX2CalcSurfaceSizeAndAlignment(&g_shdb.surface); GX2InitDepthBufferRegs(&g_shdb);
+            g_shcb.surface.image = memalign(g_shcb.surface.alignment, g_shcb.surface.imageSize); g_shdb.surface.image = memalign(g_shdb.surface.alignment, g_shdb.surface.imageSize);
+            g_shctx = memalign(GX2_CONTEXT_STATE_ALIGNMENT, sizeof(GX2ContextState));
+            if (g_shcb.surface.image && g_shdb.surface.image && g_shctx) {
+                GX2Invalidate(GX2_INVALIDATE_MODE_CPU, g_shcb.surface.image, g_shcb.surface.imageSize); GX2Invalidate(GX2_INVALIDATE_MODE_CPU, g_shdb.surface.image, g_shdb.surface.imageSize);
+                memset(&g_shtex, 0, sizeof g_shtex); g_shtex.surface = g_shcb.surface; g_shtex.surface.use = GX2_SURFACE_USE_TEXTURE; g_shtex.viewNumMips = 1; g_shtex.viewNumSlices = 1;
+                g_shtex.compMap = GX2_COMP_MAP(GX2_SQ_SEL_R, GX2_SQ_SEL_0, GX2_SQ_SEL_0, GX2_SQ_SEL_1); GX2InitTextureRegs(&g_shtex);
+                GX2InitSampler(&g_shsmp, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_POINT);
+                GX2SetupContextStateEx(g_shctx, TRUE); GX2SetContextState(g_shctx);
+                GX2SetColorBuffer(&g_shcb, GX2_RENDER_TARGET_0); GX2SetDepthBuffer(&g_shdb);
+                GX2SetViewport(0, 0, SHADOW_RES, SHADOW_RES, 0.0f, 1.0f); GX2SetScissor(0, 0, SHADOW_RES, SHADOW_RES);
+                g_shadow_ok = 1; } } }
+    gfx_log("sun shadows %s%s", g_shadow_ok ? "on" : "off: ", g_shadow_ok ? "" : info);
     return GFX_OK;
 }
 
@@ -311,7 +401,7 @@ void gfx_view_begin(int drc, float r, float g, float b) {
     GX2SetPixelShader(g_shader.pixelShader);
     GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_BLOCK);
     g_flags = -1; g_bound = NULL;
-    gfx_bind(g_white);
+    gfx_bind(g_white); bind_shadow_sampler();
 }
 void gfx_clear_depth(int drc) {   /* a fresh depth buffer partway through a screen (for a 3D scene drawn over another), keeping the picture */
     GX2DepthBuffer *db = drc ? WHBGfxGetDRCDepthBuffer() : WHBGfxGetTVDepthBuffer();
@@ -320,7 +410,28 @@ void gfx_clear_depth(int drc) {   /* a fresh depth buffer partway through a scre
     gfx_viewport(drc, 0, 0, 1, 1);
     if (!g_initialized) return;
     GX2SetFetchShader(&g_shader.fetchShader); GX2SetVertexShader(g_shader.vertexShader); GX2SetPixelShader(g_shader.pixelShader); GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_BLOCK);
-    g_flags = -1; Texture *b = g_bound; g_bound = NULL; gfx_bind(b ? b : g_white); }
+    g_flags = -1; Texture *b = g_bound; g_bound = NULL; gfx_bind(b ? b : g_white); bind_shadow_sampler(); }
+static void bind_shadow_sampler(void) {   /* the main pixel shader's second picture: the shadow map, or plain white when there is none */
+    if (g_shader.pixelShader->samplerVarCount < 2) return; uint32_t loc = g_loc_shmap;
+    if (g_shadow_ok) { GX2SetPixelTexture(&g_shtex, loc); GX2SetPixelSampler(&g_shsmp, loc); } else { GX2SetPixelTexture(&g_white->tex, loc); GX2SetPixelSampler(&g_white->smp, loc); } }
+int gfx_shadow_begin(const Mat4 *lightvp) {   /* call between gfx_frame_begin and the first gfx_view_begin; then draw what casts shadows */
+    if (!g_shadow_ok) return 0;
+    GX2SetContextState(g_shctx);
+    GX2ClearColor(&g_shcb, 1e6f, 0, 0, 1); GX2ClearDepthStencilEx(&g_shdb, 1.0f, 0, GX2_CLEAR_FLAGS_DEPTH | GX2_CLEAR_FLAGS_STENCIL);
+    GX2SetContextState(g_shctx);
+    GX2SetViewport(0, 0, SHADOW_RES, SHADOW_RES, 0.0f, 1.0f); GX2SetScissor(0, 0, SHADOW_RES, SHADOW_RES);
+    GX2SetFetchShader(&g_shs.fetchShader); GX2SetVertexShader(g_shs.vertexShader); GX2SetPixelShader(g_shs.pixelShader); GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_BLOCK);
+    g_in_shadow = 1; g_flags = -1; g_bound = NULL; gfx_bind(g_white);
+    memcpy(g_shadow_vp, lightvp->m, sizeof g_shadow_vp);
+    gfx_camera(lightvp, v3(0, 1, 0), 1, 0, 0, 0, 1e6f, 2e6f);
+    GX2SetDepthOnlyControl(TRUE, TRUE, GX2_COMPARE_FUNC_LEQUAL); GX2SetCullOnlyControl(GX2_FRONT_FACE_CCW, FALSE, FALSE); GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, TRUE); g_flags = ST_DEPTH | ST_DEPTH_WRITE;
+    return 1; }
+void gfx_shadow_end(void) {
+    if (!g_in_shadow) return;
+    g_in_shadow = 0; g_shadow_have = 1; g_bound = NULL; g_flags = -1;
+    GX2Invalidate(GX2_INVALIDATE_MODE_COLOR_BUFFER | GX2_INVALIDATE_MODE_TEXTURE, g_shcb.surface.image, g_shcb.surface.imageSize); }
+void gfx_shadow_use(int on) { g_shadow_use = on; }
+void gfx_shadow_none(void) { g_shadow_have = 0; }
 void gfx_view_end(int drc) { if (drc) WHBGfxFinishRenderDRC(); else WHBGfxFinishRenderTV(); }
 void gfx_frame_end(void) { WHBGfxFinishRender(); }
 float gfx_aspect(int drc) { return drc ? 854.0f / 480.0f : 1280.0f / 720.0f; }
@@ -339,8 +450,10 @@ void gfx_camera(const Mat4 *vp, Vec3 l, float ambient, float fr, float fg, float
     fb2.fog[0] = fs; fb2.fog[1] = fe; fb2.fog[2] = 1.0f; fb2.fog[3] = 0;
     for (int i = 0; i < 3; i++) { fb2.sky[i] = g_sky[i]; fb2.ground[i] = g_ground[i]; fb2.sun[i] = g_sun[i]; fb2.eye[i] = g_eye[i]; }
     fb2.sky[3] = fb2.ground[3] = fb2.sun[3] = 0; fb2.eye[3] = g_wind_t;
+    int sh = g_shadow_ok && g_shadow_have && g_shadow_use && !g_in_shadow;
+    memcpy(fb2.shadowvp, g_shadow_vp, sizeof fb2.shadowvp); fb2.shadowp[0] = sh ? 1.0f : 0.0f; fb2.shadowp[1] = fb2.shadowp[2] = 0; fb2.shadowp[3] = 0.08f;
     g_framebuf = pool_upload(&fb2, sizeof fb2);
-    FogBlock fg2 = {{fr, fg, fb, 1}, {g_sun[0], g_sun[1], g_sun[2], 1}};
+    FogBlock fg2 = {{fr, fg, fb, 1}, {g_sun[0], g_sun[1], g_sun[2], 1}, {0.7f / SHADOW_RES, 0.0015f, 0.78f, 0}};
     g_fogbuf = pool_upload(&fg2, sizeof fg2);
 }
 void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye) {
@@ -357,18 +470,21 @@ void gfx_camera_2d_virtual(float vw, float vh) {
     fb2.lightdir[0] = 0; fb2.lightdir[1] = 0; fb2.lightdir[2] = 1; fb2.lightdir[3] = 1.0f;
     fb2.fog[0] = 0; fb2.fog[1] = 1; fb2.fog[2] = 0; fb2.fog[3] = 0;
     for (int i = 0; i < 4; i++) { fb2.sky[i] = fb2.ground[i] = fb2.sun[i] = 1; fb2.eye[i] = 0; }
+    memset(fb2.shadowvp, 0, sizeof fb2.shadowvp); memset(fb2.shadowp, 0, sizeof fb2.shadowp);
     g_framebuf = pool_upload(&fb2, sizeof fb2);
-    FogBlock fg2 = {{0, 0, 0, 1}, {0, 0, 0, 0}};
+    FogBlock fg2 = {{0, 0, 0, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}};
     g_fogbuf = pool_upload(&fg2, sizeof fg2);
 }
 void gfx_bind(Texture *t) {
     if (!t) t = g_white;
     if (t == g_bound) return;
     g_bound = t;
-    GX2SetPixelTexture(&t->tex, g_shader.pixelShader->samplerVars[0].location);
-    GX2SetPixelSampler(&t->smp, g_shader.pixelShader->samplerVars[0].location);
+    uint32_t loc = g_in_shadow ? g_shloc_tex : g_loc_tex;
+    GX2SetPixelTexture(&t->tex, loc);
+    GX2SetPixelSampler(&t->smp, loc);
 }
 void gfx_state(int flags) {
+    if (g_in_shadow) return;   /* the shadow pass keeps its own: depth on, nothing blended */
     if (flags == g_flags) return;
     g_flags = flags;
     GX2SetDepthOnlyControl((flags & ST_DEPTH) ? TRUE : FALSE, (flags & ST_DEPTH_WRITE) ? TRUE : FALSE, (flags & ST_LESS) ? GX2_COMPARE_FUNC_LESS : GX2_COMPARE_FUNC_LEQUAL);
@@ -389,9 +505,11 @@ void gfx_draw_ex(const Mesh *m, const Mat4 *model, float r, float g, float b, fl
     ObjectBlock ob; memcpy(ob.model, model->m, sizeof ob.model); ob.tint[0] = r; ob.tint[1] = g; ob.tint[2] = b; ob.tint[3] = a;
     ob.params[0] = specular; ob.params[1] = unlit ? 1.0f : 0.0f; ob.params[2] = scroll_u; ob.params[3] = scroll_v;
     void *obuf = pool_upload(&ob, sizeof ob);
+    if (g_in_shadow) { GX2SetVertexUniformBlock(g_shloc_frame, sizeof(FrameBlock), g_framebuf); GX2SetVertexUniformBlock(g_shloc_object, sizeof(ObjectBlock), obuf); }
+    else {
     GX2SetVertexUniformBlock(g_loc_frame, sizeof(FrameBlock), g_framebuf);
     GX2SetVertexUniformBlock(g_loc_object, sizeof(ObjectBlock), obuf);
-    GX2SetPixelUniformBlock(g_loc_fog, sizeof(FogBlock), g_fogbuf);
+    GX2SetPixelUniformBlock(g_loc_fog, sizeof(FogBlock), g_fogbuf); }
     GX2RSetAttributeBuffer((GX2RBuffer *)&m->buf[m->cur], 0, sizeof(Vertex), 0);
     GX2DrawEx(GX2_PRIMITIVE_MODE_TRIANGLES, m->count, 0, 1);
 }

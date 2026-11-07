@@ -2210,7 +2210,7 @@ static void tour_pads(Pad *pads, float t) {
         {8, 'A'}, {11, 'U'}, {14, 'A'},          /* the credits, then (back at the title) options and records */
         {88, 'B'}, {91, 'A'}, {94, 'U'}, {96, 'U'}, {98, 'A'},
 #else
-        {8, 'A'}, {11, 'D'}, {13, KK_TOUR_ROAD == 5 ? 'D' : 0}, {15, KK_TOUR_ROAD == 5 ? 'D' : 0}, {18, KK_TOUR_ROAD == 5 ? 'A' : 0}, {14, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {17, KK_TOUR_ROAD == 5 ? 0 : 'R'}, {22, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {26, KK_TOUR_ROAD == 5 ? 0 : 'A'},
+        {8, 'A'}, {11, 'D'}, {13, KK_TOUR_ROAD == 5 ? 'D' : 0}, {15, KK_TOUR_ROAD == 5 ? 'D' : 0}, {18, KK_TOUR_ROAD == 5 ? 'A' : 0}, {14, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {17, (KK_TOUR_ROAD == 5 || KK_TOUR_ROAD == 0) ? 0 : 'R'}, {22, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {26, KK_TOUR_ROAD == 5 ? 0 : 'A'},
         {27, KK_TOUR_ROAD >= 1 ? 'R' : 0}, {29, KK_TOUR_ROAD >= 2 ? 'R' : 0}, {31, KK_TOUR_ROAD >= 3 ? 'R' : 0}, {33, KK_TOUR_ROAD >= 4 ? 'R' : 0}, {35, KK_TOUR_ROAD == 9 ? 'R' : 0}, {36, 'A'},   /* road 9: the Garden of Eden (sixth card) */
         {70, 'P'}, {84, 'P'}
 #endif
@@ -2386,6 +2386,24 @@ static void build_dynamic(void) {
     }
 }
 /* the 3D world as seen from the view cv, for the player driving kart vk; aspect is the viewport's width / height, fov_mul trims the lens for a wide half-screen view */
+static Mat4 kart_mat(const Race *r, int i) {   /* where a kart is drawn: on the road's slope and bank, leaning into turns, squashing on landings */
+    const Kart *q = &r->k[i];
+    float pitch = -atan2f(q->hit.slope, 1.0f) * (q->air ? 0.3f : 1.0f) + (q->air ? -q->vy * 0.03f : 0.0f);
+    float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f, sq = 1.0f - q->squash * 0.25f;
+    return m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f + cele_bounce(r, i), q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.06f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f))))); }
+/* the shadow pass: everything that casts a sun shadow, seen from the sun, around player 1 */
+static void draw_shadow_casters(void) {
+    const Race *r = &g_race; if (!g_def || g_nplayers > 1) { gfx_shadow_none(); return; }
+    const Kart *k = &r->k[r->player]; Vec3 L = v3(g_def->light_x, g_def->light_y, g_def->light_z); float ll = sqrtf(L.x * L.x + L.y * L.y + L.z * L.z); L = v3(L.x / ll, L.y / ll, L.z / ll);
+    Vec3 c = v3(k->x + sinf(k->yaw) * 22.0f, k->y, k->z + cosf(k->yaw) * 22.0f); const float half = 60.0f, dep = 260.0f;
+    c.x = floorf(c.x / (2 * half / 1024)) * (2 * half / 1024); c.z = floorf(c.z / (2 * half / 1024)) * (2 * half / 1024);   /* steady edges as the kart moves */
+    Mat4 view = m4_look_at(v3(c.x + L.x * dep * 0.5f, c.y + L.y * dep * 0.5f, c.z + L.z * dep * 0.5f), c, fabsf(L.y) > 0.95f ? v3(0, 0, 1) : v3(0, 1, 0));
+    Mat4 proj = m4_identity(); proj.m[0] = 1.0f / half; proj.m[5] = 1.0f / half; proj.m[10] = -2.0f / dep; proj.m[14] = -1.0f;   /* square, straight-on (orthographic) */
+    Mat4 lvp = m4_mul(proj, view), id = m4_identity();
+    if (!gfx_shadow_begin(&lvp)) return;
+    for (int m = 0; m < MAT_N; m++) { if (m == MAT_PLAIN && 0) continue; draw_mat_meshes(m_props[m], m_nprops[m], m, &id); }
+    for (int i = 0; i < r->nk; i++) { int ch = r->character[i]; if (!g_k3d[ch].ok || r->swallow_t[i] > 0) continue; Mat4 km = kart_mat(r, i); kart3d_draw(&g_k3d[ch], &km, g_wheel_ang[i], 0, 1, 1, 1, 1); }
+    gfx_shadow_end(); }
 static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
     Race *r = &g_race;
     float cy = cam_yaw; Vec3 ax = v3(-cosf(cy), 0, sinf(cy));
@@ -2411,7 +2429,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             Vec3 sp = v3(cam_x + g_def->star_x, g_def->star_y, cam_z + g_def->star_z);
             batch_quad(&g_b, sp, v3(ax.x * ss, 0, ax.z * ss), v3(0, ss, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
             static Mesh *m_star = NULL; if (!m_star) m_star = gfx_mesh_dynamic(12); gfx_mesh_update(m_star, g_b.v, g_b.n); gfx_draw_ex(m_star, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
-        gfx_camera(&vp, ldir, g_def->ambient, g_def->fog_r, g_def->fog_g, g_def->fog_b, g_def->fog_start, g_def->fog_end);
+        gfx_shadow_use(g_nplayers <= 1); gfx_camera(&vp, ldir, g_def->ambient, g_def->fog_r, g_def->fog_g, g_def->fog_b, g_def->fog_start, g_def->fog_end); gfx_shadow_use(0);   /* sun shadows in 1-player */
         gfx_state(ST_SOLID);
         float sr = 1, sg = 1, sb = 1;    /* the sun's color is applied by the shader now */
         /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
@@ -2538,7 +2556,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             float pitch = -atan2f(q->hit.slope, 1.0f) * (q->air ? 0.3f : 1.0f) + (q->air ? -q->vy * 0.03f : 0.0f);
             float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f;
             float sq = 1.0f - q->squash * 0.25f;
-            Mat4 m = m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f + cele_bounce(r, i), q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.04f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f)))));
+            Mat4 m = kart_mat(r, i); (void)pitch; (void)roll; (void)sq;
             int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
             if (g_k3d[r->character[i]].ok) {   /* a real 3D kart: body and driver, wheels that roll and steer, and its shadow on the road */
                 const Kart3D *k3 = &g_k3d[r->character[i]]; float st = q->stun > 0 ? 0.6f : 1.0f;
@@ -3207,6 +3225,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
     int split = g_nplayers > 1 && (g_screen == SCR_RACE || g_screen == SCR_PAUSE);
     if (!split) { cv = &g_view[0]; build_dynamic(); }
     gfx_frame_begin();
+    if (g_status == GFX_OK && g_def && (g_screen == SCR_RACE || g_screen == SCR_PAUSE || g_screen == SCR_RESULTS)) draw_shadow_casters(); else gfx_shadow_none();
     for (int drc = 0; drc < 2; drc++) {
         if (g_status == GFX_NO_COMPILER) { gfx_view_begin(drc, 1.0f, 0.5f, 0.0f); gfx_view_end(drc); continue; }
         if (g_status == GFX_SHADER_FAILED) { gfx_view_begin(drc, 0.8f, 0.05f, 0.05f); gfx_view_end(drc); continue; }

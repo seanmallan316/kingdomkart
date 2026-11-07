@@ -40,7 +40,13 @@ float gfx_aspect(int drc);
 void gfx_viewport(int drc, float fx, float fy, float fw, float fh);   /* draw into part of the screen: fractions, origin top-left (split screen); gfx_view_begin resets it */
 
 void gfx_camera(const Mat4 *viewproj, Vec3 lightdir, float ambient, float fog_r, float fog_g, float fog_b, float fog_start, float fog_end);
-void gfx_clear_depth(int drc);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */
+void gfx_clear_depth(int drc);
+/* sun shadows: between gfx_frame_begin and the first gfx_view_begin, gfx_shadow_begin(sun's view) then draw what casts shadows,
+   then gfx_shadow_end. gfx_shadow_use(1) before a scene's gfx_camera lets that scene receive them; gfx_shadow_none() for a frame with none */
+int gfx_shadow_begin(const Mat4 *lightvp);
+void gfx_shadow_end(void);
+void gfx_shadow_use(int on);
+void gfx_shadow_none(void);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */
 void gfx_set_time(float t);                                    /* the clock the wind runs on (trees, fronds, flags sway) */
 void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
 void gfx_camera_2d_virtual(float vw, float vh);               /* the same, with the 2D helpers' 1280 x 720 layout mapped onto a view of vw x vh pixels */
