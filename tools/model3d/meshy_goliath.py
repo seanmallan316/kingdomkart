@@ -1,6 +1,6 @@
 import json, sys, time, base64, urllib.request
 S='/tmp/claude-0/-home-claude/fecd6cea-9518-53bf-8507-8392c7159c17/scratchpad'
-K=open(S+'/.meshykey').read().strip()   # the Meshy key is kept out of the project; B='https://api.meshy.ai/openapi/v1'
+K=open(S+'/.meshykey').read().strip(); B='https://api.meshy.ai/openapi/v1'   # the Meshy key is kept out of the project
 def req(m,p,b=None):
     r=urllib.request.Request(B+p,data=json.dumps(b).encode() if b is not None else None,method=m,headers={'Authorization':'Bearer '+K,'Content-Type':'application/json'})
     try: return json.load(urllib.request.urlopen(r,timeout=120))

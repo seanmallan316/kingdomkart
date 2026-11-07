@@ -1503,8 +1503,9 @@ static void reset_views(void) {   /* every player's camera starts just behind th
         g_pmsg_t[p] = 0; g_pmsg2[p][0] = 0; g_pside_t[p] = 0; g_proulette[p] = 0; }
     cv = &g_view[0];
 }
+static void drivers_reset(void);
 static void start_race(int attract) {
-    g_attract = attract; g_slowmo = 0; g_rec_n = 0; g_rec_t = 0;
+    drivers_reset(); g_attract = attract; g_slowmo = 0; g_rec_n = 0; g_rec_t = 0;
     if (g_mode == MODE_TT && !attract && !g_multi) ghost_load(g_track_idx); else g_ghost_n = 0;
     int nk = (g_mode == MODE_TT && !attract) ? 1 : NKARTS;
     g_nplayers = (g_multi && !attract && g_njoined >= 2) ? g_njoined : 1;
@@ -2692,6 +2693,81 @@ static Mat4 kart_mat(const Race *r, int i) {   /* where a kart is drawn: on the 
     float pitch = -atan2f(q->hit.slope, 1.0f) * (q->air ? 0.3f : 1.0f) + (q->air ? -q->vy * 0.03f : 0.0f);
     float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f, sq = 1.0f - q->squash * 0.25f;
     return m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f + cele_bounce(r, i), q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.06f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f))))); }
+/* ---- the drivers come alive (Sean: "move their heads, arms... so it looks like they are interacting with one another"):
+   heads turn to the racer alongside or behind, bodies lean into the turns, a wave for the one you just passed or who just
+   blessed you, a guard when hit, a cheer at the finish. Drawn by kart3d_draw_pose for karts whose driver moves. ---- */
+enum { GEST_NONE, GEST_WAVE, GEST_CHEER, GEST_PUMP, GEST_GUARD, GEST_POINT };
+typedef struct { K3Pose p; int gest, side, look_at, last_rank; float gest_t, gest_len, look_hold, wave_cd, shake, idle_cd; } DrvState;
+static DrvState g_drv[NKARTS];
+static void drv_gesture(int i, int g, int side, float len) {   /* side: 0 left arm, 1 right arm, 2 both */
+    if (i < 0 || i >= NKARTS) return; DrvState *d = &g_drv[i];
+    if (d->gest == GEST_GUARD && g != GEST_GUARD && d->gest_t < d->gest_len) return;   /* a hit outranks a wave */
+    d->gest = g; d->side = side; d->gest_t = 0; d->gest_len = len; }
+static void drivers_reset(void) { memset(g_drv, 0, sizeof g_drv); for (int i = 0; i < NKARTS; i++) { g_drv[i].look_at = -1; g_drv[i].idle_cd = 0.5f + 0.4f * i; } }
+static void drv_look(int i, int at, float hold) { if (i >= 0 && i < NKARTS) { g_drv[i].look_at = at; g_drv[i].look_hold = hold; } }
+static float drv_side_of(const Race *r, int i, int j, float *ang) {   /* where kart j is, seen from kart i's seat: + = to the left */
+    const Kart *a = &r->k[i], *b = &r->k[j]; float dx = b->x - a->x, dz = b->z - a->z, yw = a->yaw + a->slide + a->spin_vis, c = cosf(yw), s = sinf(yw);
+    float lx = c * dx - s * dz, lz = s * dx + c * dz; if (ang) *ang = atan2f(lx, lz); return lx; }
+static void drv_event(const Race *r, const RaceEvent *ev) {
+    int i = ev->kart; if (i < 0 || i >= r->nk) return;
+    switch (ev->type) {
+    case EV_HIT: drv_gesture(i, GEST_GUARD, 2, 1.1f); g_drv[i].shake = 1.0f; break;
+    case EV_BLOCK: drv_gesture(i, GEST_PUMP, 1, 1.2f); break;
+    case EV_BUMP: g_drv[i].shake = fmaxf(g_drv[i].shake, 0.5f); { int best = -1; float bd = 36; for (int j = 0; j < r->nk; j++) if (j != i) { float dx = r->k[j].x - r->k[i].x, dz = r->k[j].z - r->k[i].z, dd = dx * dx + dz * dz; if (dd < bd) { bd = dd; best = j; } } if (best >= 0) drv_look(i, best, 1.4f); } break;
+    case EV_BLESSED: { int by = r->blessed_by[i]; if (by >= 0 && by < r->nk && by != i) {   /* thank the giver, and the giver waves back */
+        float a; int sd = drv_side_of(r, i, by, &a) > 0 ? 0 : 1; drv_look(i, by, 2.0f); drv_gesture(i, GEST_WAVE, sd, 1.8f);
+        sd = drv_side_of(r, by, i, &a) > 0 ? 0 : 1; drv_look(by, i, 2.0f); if (g_drv[by].gest != GEST_GUARD) drv_gesture(by, GEST_WAVE, sd, 1.5f); } } break;
+    case EV_USE_LOAVES: case EV_USE_JUBILEE: drv_gesture(i, GEST_CHEER, 2, 1.3f); break;
+    case EV_USE_FIRE: case EV_USE_PARTING: case EV_USE_MANNA: case EV_USE_WATER: drv_gesture(i, GEST_POINT, 1, 0.9f); break;
+    case EV_TRICK: drv_gesture(i, GEST_CHEER, 2, 0.7f); break;
+    case EV_TRICK_LAND: case EV_ROCKET_START: case EV_PAD_BOOST: if (g_drv[i].gest == GEST_NONE) drv_gesture(i, GEST_PUMP, (i & 1), 0.9f); break;
+    case EV_FINISH: drv_gesture(i, r->k[i].place <= 3 ? GEST_CHEER : GEST_WAVE, r->k[i].place <= 3 ? 2 : 1, r->k[i].place <= 3 ? 3.5f : 2.5f); break;
+    default: break; } }
+static void drivers_update(const Race *r, float dt) {
+    int rank[NKARTS]; for (int i = 0; i < NKARTS; i++) rank[i] = i; for (int n = 0; n < r->nk; n++) if (r->order[n] >= 0 && r->order[n] < NKARTS) rank[r->order[n]] = n;
+    for (int i = 0; i < r->nk && i < NKARTS; i++) { const Kart *q = &r->k[i]; DrvState *d = &g_drv[i]; K3Pose *p = &d->p; p->t += dt;
+        float h = noise2(i * 31 + 7, 5);
+        /* passing someone close: a friendly wave as you go by */
+        if (r->state == RACE_RUNNING && !q->finished) {
+            if (d->last_rank > 0 && rank[i] < d->last_rank && d->wave_cd <= 0 && q->stun <= 0) {
+                int passed = -1; for (int j = 0; j < r->nk; j++) if (rank[j] == rank[i] + 1) passed = j;
+                if (passed >= 0) { float dx = r->k[passed].x - q->x, dz = r->k[passed].z - q->z;
+                    if (dx * dx + dz * dz < 18 * 18 && (h > 0.35f || r->human[i])) { float a; int sd = drv_side_of(r, i, passed, &a) > 0 ? 0 : 1;
+                        drv_look(i, passed, 1.6f); drv_gesture(i, GEST_WAVE, sd, 1.4f); d->wave_cd = 5.0f + 4.0f * h;
+                        drv_look(passed, i, 1.4f); } } }
+            d->last_rank = rank[i]; }
+        else d->last_rank = rank[i];
+        if (d->wave_cd > 0) d->wave_cd -= dt;
+        /* before the start and after the finish: look about and wave to the crowd now and then */
+        if ((r->state == RACE_COUNTDOWN || q->finished) && d->gest == GEST_NONE) { d->idle_cd -= dt;
+            if (d->idle_cd <= 0) { int tk = (int)(p->t * 10.0f); d->idle_cd = 2.5f + 4.0f * noise2(i, tk); float u = noise2(tk, i * 7 + 3);
+                if (u < 0.35f) drv_gesture(i, GEST_WAVE, u < 0.17f ? 0 : 1, 1.6f); else if (q->finished && u < 0.5f && q->place <= 3) drv_gesture(i, GEST_PUMP, 1, 1.4f);
+                else { int j = (int)(noise2(i + 11, tk) * r->nk) % (r->nk > 0 ? r->nk : 1); if (j != i) drv_look(i, j, 2.0f); } } }
+        if (q->stun > 0 && d->gest != GEST_GUARD) drv_gesture(i, GEST_GUARD, 2, q->stun + 0.2f);
+        /* the gesture: arms out to it and back to the wheel */
+        float tw[2] = { 0, 0 }; int ta[2] = { K3A_WHEEL, K3A_WHEEL };
+        if (d->gest != GEST_NONE) { d->gest_t += dt; if (d->gest_t >= d->gest_len) d->gest = GEST_NONE;
+            else { int a = d->gest == GEST_WAVE ? K3A_WAVE : d->gest == GEST_CHEER ? K3A_UP : d->gest == GEST_PUMP ? K3A_PUMP : d->gest == GEST_GUARD ? K3A_GUARD : K3A_POINT;
+                for (int sd = 0; sd < 2; sd++) if (d->side == 2 || d->side == sd) { ta[sd] = a; tw[sd] = 1; } } }
+        for (int sd = 0; sd < 2; sd++) { if (tw[sd] > 0) p->arm[sd] = ta[sd];
+            float rate = tw[sd] > p->arm_w[sd] ? 7.0f : 4.0f; p->arm_w[sd] += clampf(tw[sd] - p->arm_w[sd], -rate * dt, rate * dt);
+            if (p->arm_w[sd] <= 0) p->arm[sd] = K3A_WHEEL; }
+        /* the head: at whoever it is watching, else at the racer alongside, else into the bend */
+        if (d->look_hold > 0) d->look_hold -= dt; else d->look_at = -1;
+        if (d->look_at < 0 && r->state != RACE_FINISHED) { int best = -1; float bd = 9.0f * 9.0f;
+            for (int j = 0; j < r->nk; j++) if (j != i && r->swallow_t[j] <= 0) { float dx = r->k[j].x - q->x, dz = r->k[j].z - q->z, dd = dx * dx + dz * dz; if (dd < bd) { bd = dd; best = j; } }
+            if (best >= 0 && noise2(i * 17 + 1, (int)(p->t * 0.5f)) > 0.4f) drv_look(i, best, 1.2f + h); }
+        float ly = -q->steer_vis * 0.3f, lp = q->air ? 0.15f : -0.04f;
+        if (d->look_at >= 0 && d->look_at < r->nk) { float a; drv_side_of(r, i, d->look_at, &a); ly = clampf(a, -1.45f, 1.45f); lp = 0.05f; }
+        float sk = d->shake; d->shake = fmaxf(0, d->shake - dt * 1.4f);
+        float k = 1 - expf(-dt * 7.0f);
+        p->look_yaw += (ly - p->look_yaw) * k; p->look_pitch += (lp - p->look_pitch) * k;
+        p->tilt = sk * 0.35f * sinf(p->t * 28.0f) + (q->drifting ? 0.08f * (float)q->drift_dir : 0);
+        /* the body: into the turn, back in the seat on a boost, a twist to look far round, a bump over the ground */
+        float lean = q->steer_vis * (q->drifting ? 0.22f : 0.14f), tw2 = -q->steer_vis * 0.08f + (fabsf(p->look_yaw) > 1.0f ? (p->look_yaw > 0 ? 0.25f : -0.25f) : 0);
+        float bow = q->boost_t > 0 ? -0.12f : (q->speed < 3 ? 0.04f : 0); if (p->arm[0] == K3A_UP && p->arm_w[0] > 0.5f) bow -= 0.08f;
+        p->lean += (lean - p->lean) * k; p->twist += (tw2 - p->twist) * k; p->bow += (bow - p->bow) * k;
+        float sp = clampf(fabsf(q->speed) / 25.0f, 0, 1); p->bob = 0.012f * sp * sinf(p->t * 14.0f + i) + q->squash * -0.05f; } }
 /* the shadow pass: everything that casts a sun shadow, seen from the sun, around player 1 */
 static void draw_shadow_casters(void) {
     const Race *r = &g_race; if (!g_def || g_nplayers > 1) { gfx_shadow_none(); return; }
@@ -2703,7 +2779,7 @@ static void draw_shadow_casters(void) {
     Mat4 lvp = m4_mul(proj, view), id = m4_identity();
     if (!gfx_shadow_begin(&lvp)) return;
     for (int m = 0; m < MAT_N; m++) { if (m == MAT_PLAIN && 0) continue; draw_mat_meshes(m_props[m], m_nprops[m], m, &id); }
-    for (int i = 0; i < r->nk; i++) { int ch = r->character[i]; if (!g_k3d[ch].ok || r->swallow_t[i] > 0) continue; Mat4 km = kart_mat(r, i); kart3d_draw(&g_k3d[ch], &km, g_wheel_ang[i], 0, 1, 1, 1, 1); }
+    for (int i = 0; i < r->nk; i++) { int ch = r->character[i]; if (!g_k3d[ch].ok || r->swallow_t[i] > 0) continue; Mat4 km = kart_mat(r, i); kart3d_draw_pose(&g_k3d[ch], &km, g_wheel_ang[i], 0, &g_drv[i].p, 1, 1, 1, 1); }
     gfx_shadow_end(); }
 static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
     Race *r = &g_race;
@@ -2883,13 +2959,12 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
             if (g_k3d[r->character[i]].ok) {   /* a real 3D kart: body and driver, wheels that roll and steer, and its shadow on the road */
                 const Kart3D *k3 = &g_k3d[r->character[i]]; float st = q->stun > 0 ? 0.6f : 1.0f;
-                gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw(k3, &m, g_wheel_ang[i], -q->steer_vis * 0.42f, sr * st, sg * st, sb * st, 1);
+                gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(k3, &m, g_wheel_ang[i], -q->steer_vis * 0.42f, &g_drv[i].p, sr * st, sg * st, sb * st, 1);
                 if (!q->air || q->hop < 2.5f) {   /* the shadow: the kart squashed flat onto the road along the sun */
                     float gy = q->hit.height + 0.04f, lx = ldir.x, ly = ldir.y < 0.25f ? 0.25f : ldir.y, lz = ldir.z;
                     Mat4 sh = m4_identity(); sh.m[4] = -lx / ly; sh.m[5] = 0.0f; sh.m[6] = -lz / ly; sh.m[12] = lx / ly * gy; sh.m[13] = gy; sh.m[14] = lz / ly * gy;
                     Mat4 smx = m4_mul(sh, m); gfx_state(ST_DEPTH | ST_DEPTH_WRITE | ST_BLEND | ST_LESS); gfx_bind(NULL);
-                    gfx_draw_ex(k3->m[K3_BODY], &smx, 0.0f, 0.0f, 0.05f, 0.42f, 0, 1, 0, 0);
-                    for (int w = K3_FL; w <= K3_BR; w++) if (k3->m[w]) { Mat4 wm = m4_mul(smx, m4_translate(k3->piv[w].x, k3->piv[w].y, k3->piv[w].z)); gfx_draw_ex(k3->m[w], &wm, 0, 0, 0.05f, 0.42f, 0, 1, 0, 0); } }
+                    kart3d_draw_flat(k3, &smx, 0, 0, &g_drv[i].p, 0.0f, 0.0f, 0.05f, 0.42f); }
                 gfx_state(ST_SOLID); gfx_bind(NULL); continue; }
             if (tx_kartback[r->character[i]]) continue;      /* drawn as a picture below */
             gfx_draw(m_body_style[sty], &m, c->r, c->g, c->b, 1);
@@ -3151,6 +3226,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
            hubcaps whirl like a cartoon, so they turn with the kart's speed but never more than about two turns a second */
         float wr = g_race.k[i].speed / 0.42f * dt, wcap = 12.0f * dt; if (wr > wcap) wr = wcap; if (wr < -wcap) wr = -wcap;
         g_wheel_ang[i] += wr; if (g_wheel_ang[i] > 6283.0f) g_wheel_ang[i] -= 6283.1853f; }
+    if (g_screen == SCR_RACE || g_screen == SCR_RESULTS) drivers_update(&g_race, dt);
     { /* speed report for the log file (the real Wii U's frame rate is only visible here): every 10 seconds */
       static float acc = 0, worst = 0; static int nf = 0, slow = 0; acc += dt; nf++; if (g_frame_ms > worst) worst = g_frame_ms; if (g_frame_ms > 17.5f) slow++;
       if (acc >= 10.0f) { gfx_log("speed: %.1f fps average, slowest frame %.1f ms, %d of %d frames over 1/60 s (screen %d)", nf / acc, worst, slow, nf, (int)g_screen); acc = 0; worst = 0; nf = 0; slow = 0; } }
@@ -3455,6 +3531,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (g_rec_t >= 1.0f / GHOST_HZ && g_rec_n < GHOST_MAX) { g_rec_t -= 1.0f / GHOST_HZ; Kart *pk = &r->k[r->player]; GhostSample *gs = &g_rec[g_rec_n++];
                     gs->x = (int16_t)(pk->x * 16.0f); gs->z = (int16_t)(pk->z * 16.0f); gs->yaw = (int16_t)(pk->yaw * 10000.0f); } } }
         acc -= SIM_DT; steps++;
+        for (int e = 0; e < r->nev; e++) drv_event(r, &r->ev[e]);
         for (int e = 0; e < r->nev && !g_attract; e++) {
             RaceEvent *ev = &r->ev[e]; int who = ev->kart >= 0 ? race_human_index(r, ev->kart) : -1;   /* which player's screen gets the message (-1: a computer driver) */
             Kart *ek = ev->kart >= 0 ? &r->k[ev->kart] : NULL;
@@ -3708,7 +3785,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
                     gfx_light(v3(0.85f, 0.82f, 0.78f), v3(0.75f, 0.8f, 0.9f), v3(0.45f, 0.4f, 0.38f), v3(0, 3.6f, 15.5f));   /* plain studio light, not the road's */
                     gfx_camera(&vp, v3(0.4f, 0.8f, 0.6f), 0.55f, 0, 0, 0, 1e6f, 2e6f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
                     Mat4 m = m4_mul(m4_translate(0, 0.35f + 0.05f * sinf(g_time * 2.2f), 0), m4_mul(m4_rotate_y(g_time * 0.8f), m4_scale(0.9f, 0.9f, 0.9f)));   /* up clear of the words under it */
-                    kart3d_draw(&g_k3d[ch], &m, g_time * 6.0f, 0.3f * sinf(g_time * 0.9f), 1, 1, 1, 1);
+                    { K3Pose tp; memset(&tp, 0, sizeof tp); tp.t = g_time;   /* the driver looks at you and waves as the stand turns round */
+                      float ang = fmodf(-g_time * 0.8f, 6.2831853f); if (ang < -3.14159f) ang += 6.2831853f; if (ang > 3.14159f) ang -= 6.2831853f;
+                      tp.look_yaw = clampf(ang, -1.3f, 1.3f); tp.twist = clampf(ang * 0.25f, -0.3f, 0.3f); tp.look_pitch = 0.08f;
+                      float wv = fabsf(ang) < 1.3f ? clampf((1.3f - fabsf(ang)) * 3.0f, 0, 1) : 0; tp.arm[ang > 0 ? 0 : 1] = K3A_WAVE; tp.arm_w[ang > 0 ? 0 : 1] = wv;
+                      kart3d_draw_pose(&g_k3d[ch], &m, g_time * 6.0f, 0.3f * sinf(g_time * 0.9f), &tp, 1, 1, 1, 1); }
                     gfx_camera_2d(); gfx_state(ST_HUD); rt = NULL; }
                 if (rt) { batch_clear(&g_b); if (mir) batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 1, 0, 0, 1, 1, 1, 1, 1); else batch_rect_uv(&g_b, cx - pw / 2, by - ph, pw, ph, 0, 0, 1, 1, 1, 1, 1, 1);
                     gfx_mesh_update(m_tt[drc], g_b.v, g_b.n); gfx_bind(rt); gfx_draw(m_tt[drc], &id, 1, 1, 1, 1); } } }

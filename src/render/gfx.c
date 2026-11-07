@@ -156,7 +156,7 @@ void gfx_set_time(float t) { g_wind_t = t; }
 typedef struct { float color[4]; float spec[4]; float shadowpx[4]; float light[4]; float sky[4]; float ground[4]; float grade[4]; } FogBlock;
 
 #define UB_ALIGN 256
-#define UB_SLOTS 4096   /* per frame, both screens; running out would overwrite matrices the GPU has not used yet */
+#define UB_SLOTS 8192   /* per frame, both screens (the moving drivers add about 7 draws a kart); running out would overwrite matrices the GPU has not used yet */
 typedef struct { uint8_t *mem; int next; } UniformPool;
 static UniformPool g_pool[2]; static int g_pool_cur = 0;
 static WHBGfxShaderGroup g_shader; static Texture *g_white; static Texture *g_bound;

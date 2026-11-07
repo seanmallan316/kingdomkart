@@ -2,3 +2,4 @@ music_preview.wav
 sfx_preview.wav
 *.o
 assets/music/*.wav
+__pycache__/
