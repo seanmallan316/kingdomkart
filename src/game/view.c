@@ -1220,11 +1220,46 @@ static void icon_rect_3d(Batch *b, int item, float cx, float cy, float size, flo
    flat version. Corners are in screen pixels with z toward the viewer (gfx_camera_ui3d). */
 static void rv(Batch *b, Vec3 p, Vec3 n, float u, float v, float sh, float r, float g, float bl) { if (b->n >= b->cap) return; Vertex q = {p.x, p.y, p.z, n.x, n.y, n.z, u, v, r * sh, g * sh, bl * sh, 1}; b->v[b->n++] = q; }
 static Vec3 rot_y_about(Vec3 p, Vec3 c, float a) { float dx = p.x - c.x, dz = p.z - c.z, ca = cosf(a), sa = sinf(a); return v3(c.x + dx * ca + dz * sa, p.y, c.z - dx * sa + dz * ca); }
-static void draw_item_drum(int p, float x, float y, float size) {
-    Kart *k = &g_race.k[human_kart(p)]; Mat4 id = m4_identity(); if (!k->item) return;
+/* ---- the item slot in 3D, in every mode (Sean: the box was flat - "needs to be 3 dimensional") ---- */
+static Mesh *m_slot[MAX_HUMANS][3]; static Vertex g_slotv[900];
+static Vec3 xf_about(Vec3 p, Vec3 c, const Mat4 *m) { Vec3 d = v3(p.x - c.x, p.y - c.y, p.z - c.z); return v3(c.x + m->m[0] * d.x + m->m[4] * d.y + m->m[8] * d.z, c.y + m->m[1] * d.x + m->m[5] * d.y + m->m[9] * d.z, c.z + m->m[2] * d.x + m->m[6] * d.y + m->m[10] * d.z); }
+/* a box with its own turn, each face shaded by how much it faces the light (up-left, toward you); faces turned away are left out */
+static void slot_box(Batch *b, Vec3 c, Vec3 h, const Mat4 *rot, Vec3 pivot, float r, float g, float bl, float a) {
+    static const int F[6][4] = {{0, 1, 2, 3}, {5, 4, 7, 6}, {4, 0, 3, 7}, {1, 5, 6, 2}, {4, 5, 1, 0}, {3, 2, 6, 7}};
+    Vec3 P[8];
+    const float sx[8] = {-1, 1, 1, -1, -1, 1, 1, -1}, sy[8] = {-1, -1, 1, 1, -1, -1, 1, 1}, sz[8] = {1, 1, 1, 1, -1, -1, -1, -1};
+    for (int i = 0; i < 8; i++) P[i] = xf_about(v3(c.x + sx[i] * h.x, c.y + sy[i] * h.y, c.z + sz[i] * h.z), pivot, rot);
+    for (int f = 0; f < 6; f++) { Vec3 A = P[F[f][0]], B = P[F[f][1]], C = P[F[f][2]];
+        Vec3 n = v3_norm(v3_cross(v3_sub(B, A), v3_sub(C, A))); if (n.z < 0.02f) continue;   /* z toward you, y down: a face you can see points at you */
+        float sh = 0.45f + 0.35f * n.z + 0.3f * fmaxf(0, -n.y) + 0.12f * fmaxf(0, -n.x);
+        Vec3 Q[4] = {P[F[f][0]], P[F[f][1]], P[F[f][2]], P[F[f][3]]}; static const int T[6] = {0, 1, 2, 0, 2, 3};
+        for (int k = 0; k < 6 && b->n < b->cap; k++) { Vertex v = {Q[T[k]].x, Q[T[k]].y, Q[T[k]].z, 0, 0, 1, WHITE_U, WHITE_V, r * sh, g * sh, bl * sh, a}; b->v[b->n++] = v; } } }
+/* the frame of the slot, for the split-screen views (the full screen has its own 3D plaque): a gold rim with depth and a deep blue well */
+static void slot_frame(Batch *b, float x, float y, float size, float sway) {
+    Vec3 c = v3(x + size / 2, y + size / 2, 0); Mat4 rot = m4_mul(m4_rotate_y(sway), m4_rotate_x(-0.12f));
+    float H = size / 2 + 7, t = 6, d = 9;
+    slot_box(b, v3(c.x, c.y, -d - 2), v3(H - 2, H - 2, 1), &rot, c, 0.06f, 0.1f, 0.3f, 0.92f);                 /* the well */
+    slot_box(b, v3(c.x, c.y - H + t / 2, 0), v3(H, t / 2, d), &rot, c, 1, 0.8f, 0.32f, 1);                    /* top, bottom, left, right rims */
+    slot_box(b, v3(c.x, c.y + H - t / 2, 0), v3(H, t / 2, d), &rot, c, 1, 0.8f, 0.32f, 1);
+    slot_box(b, v3(c.x - H + t / 2, c.y, 0), v3(t / 2, H - t, d), &rot, c, 1, 0.8f, 0.32f, 1);
+    slot_box(b, v3(c.x + H - t / 2, c.y, 0), v3(t / 2, H - t, d), &rot, c, 1, 0.8f, 0.32f, 1); }
+/* the empty slot: a little glass blessing box with a gold cross inside, turning and bobbing, glowing now and then */
+static void slot_empty(Batch *b, float cx, float cy, float size) {
+    float s = size * 0.27f, bob = sinf(g_time * 2.4f) * size * 0.04f, glow = 0.5f + 0.5f * sinf(g_time * 3.1f);
+    Vec3 c = v3(cx, cy + bob, size * 0.12f); Mat4 rot = m4_mul(m4_rotate_x(0.42f + 0.08f * sinf(g_time * 1.7f)), m4_rotate_y(g_time * 1.3f));
+    slot_box(b, c, v3(s * 0.16f, s * 0.78f, s * 0.16f), &rot, c, 1, 0.85f, 0.35f, 1);                                  /* the cross */
+    slot_box(b, v3(c.x, c.y - s * 0.22f, c.z), v3(s * 0.52f, s * 0.16f, s * 0.16f), &rot, c, 1, 0.85f, 0.35f, 1);
+    slot_box(b, c, v3(s, s, s), &rot, c, 0.55f + 0.3f * glow, 0.75f + 0.2f * glow, 1, 0.32f + 0.1f * glow); }       /* the glass box round it */
+static void draw_item_drum(int p, float x, float y, float size, float vw, float vh, int frame) {
+    Kart *k = &g_race.k[human_kart(p)]; Mat4 id = m4_identity();
     float cx = x + size / 2, cy = y + size / 2, R = size * 0.62f, W = size * 0.86f; const int NF = 8; const float step = 6.2831853f / NF;
     float tilt = 0.32f + 0.06f * sinf(g_time * 1.3f); Vec3 ctr = v3(cx, cy, -R);
-    gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); int mi = 0; Vertex vb[64]; Batch b;
+    gfx_camera_ui3d_v(UI_EYE, vw, vh); gfx_state(ST_HUD); int mi = 0; Vertex vb[64]; Batch b;
+    for (int j = 0; j < 3; j++) if (!m_slot[p][j]) m_slot[p][j] = gfx_mesh_dynamic(900);
+    if (frame) { batch_init(&b, g_slotv, 900); slot_frame(&b, x, y, size, 0.16f * sinf(g_time * 0.9f + p)); gfx_mesh_update(m_slot[p][0], b.v, b.n); gfx_bind(tx_font); gfx_draw(m_slot[p][0], &id, 1, 1, 1, 1); }
+    if (!k->item && g_proulette[p] <= 0) {
+        batch_init(&b, g_slotv, 900); slot_empty(&b, cx, cy, size); gfx_mesh_update(m_slot[p][1], b.v, b.n); gfx_bind(tx_font); gfx_draw(m_slot[p][1], &id, 1, 1, 1, 1);
+        gfx_camera_2d_virtual(vw, vh); return; }
     if (g_proulette[p] > 0) {
         float f = rou_phase(p); int i0 = (int)floorf(f);
         /* the drum's body: dark wood-and-gold faces behind the pictures, and the gold end bands */
@@ -1262,34 +1297,17 @@ static void draw_item_drum(int p, float x, float y, float size) {
         float sh = 0.55f + 0.45f * fabsf(cosf(spin)); batch_init(&b, vb, 64);
         rv(&b, c[0], n, 0, 0, sh, 1, 1, 1); rv(&b, c[1], n, 1, 0, sh, 1, 1, 1); rv(&b, c[2], n, 1, 1, sh, 1, 1, 1); rv(&b, c[0], n, 0, 0, sh, 1, 1, 1); rv(&b, c[2], n, 1, 1, sh, 1, 1, 1); rv(&b, c[3], n, 0, 1, sh, 1, 1, 1);
         gfx_mesh_update(m_rou[p][mi], b.v, b.n); gfx_bind(tx_item[k->item]); gfx_draw(m_rou[p][mi], &id, 1, 1, 1, 1); }
-    gfx_camera_2d();
+    gfx_camera_2d_virtual(vw, vh);
 }
-static void draw_item_window(int p, float x, float y, float size) {   /* the pictures in the window (the frame is in the HUD batch) */
-    Kart *k = &g_race.k[human_kart(p)]; Mat4 id = m4_identity(); if (!k->item) return;
+static void draw_item_window(int p, float x, float y, float size, float vw, float vh) {   /* the slot in 3D: frame (split screen), empty box, spinning drum or the item's coin */
     for (int j = 0; j < 8; j++) if (!m_rou[p][j]) m_rou[p][j] = gfx_mesh_dynamic(64);
-    if (g_nplayers <= 1) { draw_item_drum(p, x, y, size); return; }
-    float cx = x + size / 2, cy = y + size / 2;
-    if (g_proulette[p] > 0) {   /* a drum turning toward you: each picture rolls in from the top, full size facing you, and away under the bottom */
-        float f = rou_phase(p); int i0 = (int)f; float fr = f - i0; const float step = 0.75f, R = size * 0.62f;
-        for (int j = -1; j <= 1; j++) { int idx = i0 + j; if (idx < 0 || idx > ROU_N) continue; int it = g_rou_seq[p][idx]; if (!tx_item[it]) continue;
-            float th = (j - fr) * step; if (fabsf(th) > 1.5f) continue;   /* angle on the drum: 0 = facing you */
-            float c = cosf(th), sy = c, py = cy + sinf(th) * R, shade = 0.35f + 0.65f * c;
-            batch_clear(&g_b); icon_rect_3d(&g_b, it, cx, py, size, 1.0f - 0.08f * (1 - c), sy, y + 2, y + size - 2, shade);
-            if (!g_b.n) continue; gfx_mesh_update(m_rou[p][j + 1], g_b.v, g_b.n); gfx_bind(tx_item[it]); gfx_draw(m_rou[p][j + 1], &id, 1, 1, 1, 1); } }
-    else if (tx_item[k->item]) {   /* landed: it flips round twice like a coin, pops, then keeps gently turning to and fro */
-        float t = g_rou_land[p] < 99 ? g_rou_land[p] : 1, spin = t < 0.7f ? (1.0f - (1.0f - t / 0.7f) * (1.0f - t / 0.7f)) * 12.566f : 0.35f * sinf(g_time * 2.2f);
-        float sx = fabsf(cosf(spin)), pop = 1.0f + 0.22f * expf(-t * 6.0f) * cosf(t * 18.0f), bob = 2.0f * sinf(g_time * 3.0f) * (t > 0.7f), shade = 0.6f + 0.4f * sx;
-        batch_clear(&g_b); icon_rect_3d(&g_b, k->item, cx, cy + bob, size * pop, fmaxf(sx, 0.06f), 1.0f, y - size, y + 2 * size, shade);
-        gfx_mesh_update(m_rou[p][0], g_b.v, g_b.n); gfx_bind(tx_item[k->item]); gfx_draw(m_rou[p][0], &id, 1, 1, 1, 1); }
+    draw_item_drum(p, x, y, size, vw, vh, g_nplayers > 1);
 }
 static void hud_item_window(int p, float x, float y, float size, int text_below) {   /* the frame and the name */
     Kart *k = &g_race.k[human_kart(p)];
     if (g_ui3d) ui_plaque(x - 8, y - 8, size + 16, size + 16, 16, 12, &UI_BLUE, 0.95f, g_proulette[p] > 0 ? 0.6f + 0.4f * sinf(g_time * 14) : 0.25f, g_proulette[p] > 0 ? fmodf(g_time * 1.6f, 1.4f) : -1);
-    else { batch_rect(&g_b, x - 4, y - 4, size + 8, size + 8, 1, 0.82f, 0.35f, 0.95f); batch_rect(&g_b, x, y, size, size, 0.05f, 0.08f, 0.22f, 0.88f); batch_rect(&g_b, x, y, size, size * 0.12f, 1, 1, 1, 0.08f); }
-    if (!k->item) { const char *h = "ZL"; batch_text(&g_b, h, x + size / 2 - text_width(h, size * 0.22f) / 2, y + size / 2 - size * 0.11f, size * 0.22f, 0.6f, 0.7f, 0.9f, 0.6f); return; }
-    if (g_proulette[p] > 0 && !g_ui3d) {   /* the curve of the drum: darker toward the top and bottom edges, a glint across the middle */
-        for (int i = 0; i < 6; i++) { float a = 0.5f * (1.0f - i / 6.0f), hh = size * 0.06f; batch_rect(&g_b, x, y + i * hh, size, hh, 0, 0, 0, a); batch_rect(&g_b, x, y + size - (i + 1) * hh, size, hh, 0, 0, 0, a); }
-        batch_rect(&g_b, x, y + size * 0.47f, size, size * 0.06f, 1, 1, 1, 0.07f); return; }
+    /* (split screen: the frame is drawn in 3D with the slot, see draw_item_drum) */
+    if (!k->item) { if (g_proulette[p] <= 0) { const char *h = "ZL"; float fs = size * 0.16f; if (fs < 9) fs = 9; batch_text(&g_b, h, x + size - text_width(h, fs) - 2, y + size - fs - 1, fs, 1, 0.9f, 0.55f, 0.85f); } return; }
     if (g_proulette[p] > 0) return;
     const char *nm = item_name(k->item); float fs = size * 0.15f; if (fs < 11) fs = 11;
     if (text_below) { if (text_width(nm, fs) > size * 1.9f) fs *= 0.8f; batch_text(&g_b, nm, x + size / 2 - text_width(nm, fs) / 2, y + size + 10, fs, 1, 0.9f, 0.4f, 1);
@@ -1674,6 +1692,45 @@ static void checker_band(float y, float h) {
 }
 static void text_c(const char *s, float y, float size, float r, float g, float b, float a) { batch_text(&g_b, s, 640 - text_width(s, size) / 2, y, size, r, g, b, a); }
 static void text_c_in(const char *s, float vw, float y, float size, float r, float g, float b, float a) { batch_text(&g_b, s, vw / 2 - text_width(s, size) / 2, y, size, r, g, b, a); }   /* centred in a view of width vw */
+
+/* ---- words that move (Sean: the messages in the middle and the box at the bottom "need to be animated and more interactive") ---- */
+static float ease_back(float t) { t = clampf(t, 0, 1); float u = t - 1; return 1 + 2.70158f * u * u * u + 1.70158f * u * u; }
+/* big words: the letters drop in one after another and bounce, thick 3D letters with a dark edge below, a shine running
+   across, a gentle wave while they stay, and a burst outward as they go. age = seconds since shown, left = seconds still to show */
+static void fx_words(const char *s, float cx, float y, float size, float age, float left, int gold, float r, float g, float b, float amul) {
+    int n = (int)strlen(s); if (n <= 0 || n > 60) { if (n > 0) batch_text(&g_b, s, cx - text_width(s, size) / 2, y, size, r, g, b, amul); return; }
+    char pre[64], one[2] = {0, 0}; float x0 = cx - text_width(s, size) / 2, prev = 0;
+    float out = left < 0.28f ? clampf((0.28f - left) / 0.28f, 0, 1) : 0, sweep = fmodf(age * 0.9f, 2.0f) * (n + 6) - 3;
+    for (int i = 0; i < n; i++) {
+        memcpy(pre, s, (size_t)(i + 1)); pre[i + 1] = 0; float next = text_width(pre, size) + (i + 1 < n ? 0 : 0); float adv = next - prev; float lx = x0 + prev + adv * 0.5f; prev = next;
+        if (s[i] == ' ') continue;
+        float la = age - i * 0.035f; if (la <= 0) continue;
+        float e = clampf(la / 0.42f, 0, 1), sc = ease_back(e) * (1 + 0.45f * out);
+        float dy = -(1 - e) * (1 - e) * size * 1.3f + sinf(g_time * 5.0f - i * 0.6f) * size * 0.035f * e - out * size * 0.35f;
+        float al = amul * clampf(la * 7, 0, 1) * (1 - out), sh = expf(-(i - sweep) * (i - sweep) * 0.3f);
+        one[0] = s[i]; float sz = size * sc, px = lx - text_width(one, sz) * 0.5f - (lx - cx) * 0.18f * out, py = y + size * 0.5f - sz * 0.5f + dy;
+        for (int d = 5; d >= 1; d--) { float o = d * sz * 0.016f; batch_text_g(&g_b, one, px + o * 0.55f, py + o, sz, gold ? 0.32f : r * 0.3f, gold ? 0.16f : g * 0.25f, gold ? 0.05f : b * 0.2f, al, 0); }   /* the letter's side, going back */
+        if (gold) batch_text_g(&g_b, one, px, py, sz, 1, 1, 1, al, 1); else batch_text_g(&g_b, one, px, py, sz, r, g, b, al, 0);
+        if (sh > 0.04f) batch_text_g(&g_b, one, px, py, sz, 1, 1, 1, al * sh * 0.55f, 0); } }   /* the shine passing over */
+/* the small line under them: it slides up and types itself out, just after the big words land */
+static void fx_line(const char *s, float cx, float y, float size, float age, float left, float r, float g, float b, float amul) {
+    float t = age - 0.3f; if (t <= 0) return; int n = (int)strlen(s), show = (int)(t * 70); if (show > n) show = n; if (show <= 0) return;
+    char buf[160]; if (n > 158) n = 158; memcpy(buf, s, (size_t)n); buf[n] = 0;
+    float x = cx - text_width(buf, size) / 2, e = clampf(t / 0.25f, 0, 1), a = amul * e * (left < 0.2f ? clampf(left / 0.2f, 0, 1) : 1);
+    buf[show] = 0; batch_text(&g_b, buf, x, y + (1 - e) * 16, size, r, g, b, a); }
+/* how long a player's message has been showing: restarts when the words change or are shown again */
+static float msg_age(int p) {
+    static char last[MAX_HUMANS][40]; static float t0[MAX_HUMANS], prevleft[MAX_HUMANS];
+    if (p < 0 || p >= MAX_HUMANS) return 1;
+    if (strcmp(last[p], g_pmsg[p]) || g_pmsg_t[p] > prevleft[p] + 0.05f) { snprintf(last[p], sizeof last[p], "%s", g_pmsg[p]); t0[p] = g_time; }
+    prevleft[p] = g_pmsg_t[p]; return g_time - t0[p]; }
+/* the big countdown number: it slams in each second and shrinks away */
+static void fx_count(int nnum, float cd, float cx, float y, float size) {
+    char buf[4]; snprintf(buf, sizeof buf, "%d", nnum); float frac = nnum - (cd - 0.5f); frac = clampf(frac, 0, 1);
+    float sc = frac < 0.18f ? 2.2f - 1.2f * ease_back(frac / 0.18f) : 1.0f - 0.25f * (frac - 0.18f), al = frac < 0.7f ? 1 : clampf((1 - frac) / 0.3f, 0, 1);
+    float sz = size * sc, px = cx - text_width(buf, sz) / 2, py = y + size * 0.5f - sz * 0.5f;
+    for (int d = 7; d >= 1; d--) { float o = d * sz * 0.014f; batch_text_g(&g_b, buf, px + o * 0.55f, py + o, sz, 0.32f, 0.16f, 0.05f, al, 0); }
+    batch_text_g(&g_b, buf, px, py, sz, 1, 1, 1, al, 1); }
 /* one frame with a message on both screens, shown while the pictures load (the game is otherwise black for a few seconds) */
 static void draw_loading(const char *msg) {
     static Mesh *m = NULL; if (!m) m = gfx_mesh_dynamic(2048);
@@ -1800,10 +1857,11 @@ static void hud_race(const Pad *pad) {
       for (int p = r->nk - 1; p >= 0; p--) { int i = r->order[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]]; float sz = i == r->player ? 12 : 8;
           batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - sz / 2, mz - (q->z - map_z0) * map_scale - sz / 2, sz, sz, c->r, c->g, c->b, 1);
           if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * map_scale - 3, mz - (q->z - map_z0) * map_scale - 3, 6, 6, 1, 1, 1, 1); } }
-    if (r->state == RACE_COUNTDOWN) { text_c(g_track.name, 180, 34, 1, 1, 1, 1); int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); }
-        if (!r->jericho) { const char *ref, *v = road_verse(g_def->prefix, &ref); float a = clampf(r->cd * 1.2f, 0, 1); text_c(v, 404, text_width(v, 20) > 1100 ? 16 : 20, 1, 1, 1, a); text_c(ref, 434, 15, 1, 0.9f, 0.5f, a); }
+    if (r->state == RACE_COUNTDOWN) { static float cd0 = 0, cdl = -1; if (r->cd > cdl + 0.01f) cd0 = r->cd; cdl = r->cd; float ca = cd0 - r->cd;   /* seconds since the countdown began */
+        fx_words(g_track.name, 640, 180, 34, ca, r->cd, 0, 1, 1, 1, 1); int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) fx_count(n, r->cd, 640, 250, 110);
+        if (!r->jericho) { const char *ref, *v = road_verse(g_def->prefix, &ref); float a = clampf(r->cd * 1.2f, 0, 1); fx_line(v, 640, 404, text_width(v, 20) > 1100 ? 16 : 20, ca - 0.6f, r->cd, 1, 1, 1, a); fx_line(ref, 640, 434, 15, ca - 1.4f, r->cd, 1, 0.9f, 0.5f, a); }
         if (r->jericho) { text_c("SEVEN TIMES ROUND THE CITY. A SHOFAR EVERY LAP: ZL BLOWS IT.", 400, 18, 1, 1, 1, 1); text_c("SAVE THEM FOR THE GREAT SHOUT ON THE SEVENTH LAP!", 426, 18, 1, 0.9f, 0.5f, 1); } }
-    if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
+    if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60, ag = msg_age(0); fx_words(g_msg, 640, 260, sz, ag, g_msg_t, 1, 1, 1, 1, 1); if (g_msg2[0]) fx_line(g_msg2, 640, 334, 22, ag, g_msg_t, 0.9f, 0.95f, 1, 1); }
     if (k->wrongway_t > WRONGWAY_DELAY && ((int)(g_time * 4) & 1)) text_c("WRONG WAY", 330, 56, 1, 0.3f, 0.2f, 1);
     if (g_demo && !g_attract) text_c("DEMO - MOVE THE STICK TO DRIVE", 680, 20, 1, 1, 1, 0.8f);
     (void)pad;
@@ -2256,17 +2314,25 @@ static void hud_battle(void) {
     for (int i = 0; i < battle_need(b); i++) batch_rect(&g_b, 1240 - (i + 1) * 36, 60, 30, 24, 0.9f, i < battle_need(b) - b->hits_on_goliath ? 0.65f : 0.15f, 0.15f, 1);
     if (b->gstate == GOL_DAZED) text_c("HE IS REELING - SLING AT HIS FOREHEAD!", 96, 22, 1, 0.9f, 0.3f, 0.6f + 0.4f * sinf(g_time * 8));
     { char tb[32]; fmt_time(tb, sizeof tb, BATTLE_TIME_LIMIT - b->race.race_t > 0 ? BATTLE_TIME_LIMIT - b->race.race_t : 0); batch_text(&g_b, tb, 640 - text_width(tb, 26) / 2, 30, 26, 1, 0.9f, 0.5f, 1); }
-    if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); text_c(buf, 250, 110, 1, 0.9f, 0.3f, 1); } text_c("PICK UP STONES, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); text_c("HIS SHIELD-BEARER GUARDS HIS FRONT AS HE WALKS: SLING FROM THE SIDE, OR WHEN HE STOPS", 204, 15, 1, 0.9f, 0.5f, 1); }
-    if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60; text_c(g_msg, 260, sz, 1, 0.95f, 0.4f, 1); if (g_msg2[0]) text_c(g_msg2, 330, 22, 0.9f, 0.95f, 1, 1); }
-    if (b->quote >= 0 && b->quote < BATTLE_NQUOTES) {      /* the words of 1 Samuel 17, wrapped into a panel at the bottom */
-        const BattleQuote *q = &BATTLE_QUOTES[b->quote]; float y0 = 560;
-        batch_rect(&g_b, 140, y0, 1000, 120, 0.05f, 0.08f, 0.2f, 0.85f); batch_rect(&g_b, 140, y0, 1000, 3, 1, 0.85f, 0.3f, 1);
-        char head[64]; snprintf(head, sizeof head, "%s%s%s", q->who, q->who[0] ? "  -  " : "", q->ref); batch_text(&g_b, head, 160, y0 + 12, 14, 1, 0.85f, 0.3f, 1);
-        char line[80]; int li = 0, row = 0; const char *p = q->line;
-        for (;; p++) { if ((*p == ' ' || *p == 0) && text_width(line, 18) > 860) { line[li] = 0; batch_text(&g_b, line, 160, y0 + 36 + row * 24, 18, 1, 1, 1, 1); row++; li = 0; if (*p == 0) break; continue; }
-            if (*p == 0) { line[li] = 0; batch_text(&g_b, line, 160, y0 + 36 + row * 24, 18, 1, 1, 1, 1); break; }
+    if (b->race.state == RACE_COUNTDOWN) { int n = (int)ceilf(b->race.cd - 0.5f); if (n >= 1 && n <= 3) fx_count(n, b->race.cd, 640, 250, 110); text_c("PICK UP STONES, PRESS ZL TO SLING", 180, 18, 1, 1, 1, 1); text_c("HIS SHIELD-BEARER GUARDS HIS FRONT AS HE WALKS: SLING FROM THE SIDE, OR WHEN HE STOPS", 204, 15, 1, 0.9f, 0.5f, 1); }
+    if (g_msg_t > 0) { float sz = text_width(g_msg, 60) > 1100 ? 44 : 60, ag = msg_age(0); fx_words(g_msg, 640, 260, sz, ag, g_msg_t, 1, 1, 1, 1, 1); if (g_msg2[0]) fx_line(g_msg2, 640, 334, 22, ag, g_msg_t, 0.9f, 0.95f, 1, 1); }
+    { static int lastq = -1; static float qt0 = 0; if (b->quote != lastq) { lastq = b->quote; qt0 = g_time; }
+    if (b->quote >= 0 && b->quote < BATTLE_NQUOTES) {      /* the words of 1 Samuel 17: the panel springs up from the bottom, the speaker's name on a gold tab, the words type themselves out */
+        const BattleQuote *q = &BATTLE_QUOTES[b->quote]; float qa = g_time - qt0, e = ease_back(clampf(qa / 0.45f, 0, 1)), y0 = 560 + (1 - e) * 190, glow = 0.6f + 0.4f * sinf(g_time * 4);
+        int goli = !strncmp(q->who, "GOLIATH", 7); float tr = goli ? 0.55f : 0.12f, tg = goli ? 0.08f : 0.16f, tb = goli ? 0.06f : 0.42f;   /* Goliath's words on red, the others on blue */
+        batch_rect(&g_b, 146, y0 + 8, 1000, 120, 0, 0, 0, 0.35f);                                     /* its shadow */
+        batch_rect(&g_b, 137, y0 - 3, 1006, 126, 1, 0.82f, 0.32f, 0.55f + 0.45f * glow);              /* gold edge, glowing */
+        batch_rect(&g_b, 140, y0, 1000, 120, tr * 0.5f, tg * 0.5f, tb * 0.5f, 0.92f); batch_rect(&g_b, 140, y0, 1000, 40, tr, tg, tb, 0.55f);
+        batch_rect(&g_b, 140 + fmodf(qa * 520, 1300) - 150, y0, 60, 120, 1, 1, 1, 0.05f);              /* a shine sweeping across */
+        char head[64]; snprintf(head, sizeof head, "%s%s%s", q->who, q->who[0] ? "  -  " : "", q->ref); float hw = text_width(head, 16) + 28;
+        batch_rect(&g_b, 160, y0 - 20, hw, 30, 1, 0.82f, 0.32f, 1); batch_rect(&g_b, 162, y0 - 18, hw - 4, 26, 0.18f, 0.1f, 0.04f, 1);   /* the name tab */
+        batch_text(&g_b, head, 174, y0 - 12, 16, 1, 0.85f, 0.3f, 1);
+        int shown = (int)((qa - 0.25f) * 48), total = 0; char line[80]; int li = 0, row = 0; const char *p = q->line;
+        for (;; p++) { int brk = (*p == ' ' || *p == 0) && text_width(line, 19) > 860, end = *p == 0;
+            if (brk || end) { line[li] = 0; int vis = shown - total; if (vis > 0) { if (vis < li) line[vis] = 0; batch_text(&g_b, line, 166, y0 + 36 + row * 26, 19, 1, 1, 1, 1); } total += li; row++; li = 0; if (end) break; continue; }
             if (li < 78) { line[li++] = *p; line[li] = 0; } }
-    }
+        if (shown >= total && fmodf(g_time, 0.8f) < 0.5f) batch_rect(&g_b, 1110, y0 + 92 + 3 * sinf(g_time * 6), 14, 10, 1, 0.85f, 0.3f, 1);   /* done: a little marker bobs */
+    } }
     if (g_demo && !g_attract) text_c("DEMO - MOVE THE STICK TO DRIVE", 700, 16, 1, 1, 1, 0.8f);
 }
 static void hud_battle_results(void) {
@@ -3232,12 +3298,12 @@ static void hud_split(int p, float vw, float vh) {
       if (g_track.ncoin) { batch_rect(&g_b, bx + bw + 10, by + bh - 16 * sc, 12 * sc, 12 * sc, 1, 0.85f, 0.3f, 1); snprintf(buf, sizeof buf, "x%d", k->coins); batch_text(&g_b, buf, bx + bw + 26 * sc, by + bh - 18 * sc, 14 * sc, 1, 0.9f, 0.5f, 1); } }
     if (k->drifting) { float c = clampf(k->drift_charge / 1.6f, 0, 1), w = 140 * sc; batch_rect(&g_b, vw - 16 - w, vh - 24, w, 10, 0.1f, 0.1f, 0.1f, 0.6f);
         batch_rect(&g_b, vw - 16 - w, vh - 24, w * c, 10, c >= 1 ? 1.0f : 0.3f, c >= 0.5f ? 0.9f : 0.4f, 0.2f, 1); }
-    if (r->state == RACE_COUNTDOWN) { int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) { snprintf(buf, sizeof buf, "%d", n); batch_text(&g_b, buf, vw / 2 - text_width(buf, 80 * sc) / 2, vh * 0.3f, 80 * sc, 1, 0.9f, 0.3f, 1); }
-        else if (r->cd > 3.5f) { float a = clampf((r->cd - 3.5f) * 2.0f, 0, 1) * clampf((3.5f + RACE_READY_T - r->cd) * 3.0f, 0, 1); batch_text(&g_b, "GET READY", vw / 2 - text_width("GET READY", 44 * sc) / 2, vh * 0.3f, 44 * sc, 1, 0.95f, 0.6f, a); }
+    if (r->state == RACE_COUNTDOWN) { int n = (int)ceilf(r->cd - 0.5f); if (n >= 1 && n <= 3) fx_count(n, r->cd, vw / 2, vh * 0.3f, 80 * sc);
+        else if (r->cd > 3.5f) { float a = clampf((r->cd - 3.5f) * 2.0f, 0, 1); fx_words("GET READY", vw / 2, vh * 0.3f, 44 * sc, 3.5f + RACE_READY_T - r->cd, r->cd - 3.5f, 1, 1, 1, 1, a); }
         if (p == 0 && !r->jericho) { const char *ref, *v = road_verse(g_def->prefix, &ref); float fs = 12 * sc; if (text_width(v, fs) > vw - 30) fs = 9 * sc; batch_text(&g_b, v, vw / 2 - text_width(v, fs) / 2, vh * 0.62f, fs, 1, 1, 1, clampf(r->cd * 1.2f, 0, 1)); } }
     if (g_pmsg_t[p] > 0) { float sz = 30 * sc; if (text_width(g_pmsg[p], sz) > vw - 40) sz = 22 * sc; float my = vh * 0.15f;   /* up over the sky, so the road stays in view */
-        batch_text(&g_b, g_pmsg[p], vw / 2 - text_width(g_pmsg[p], sz) / 2, my, sz, 1, 0.95f, 0.4f, 1);
-        if (g_pmsg2[p][0]) batch_text(&g_b, g_pmsg2[p], vw / 2 - text_width(g_pmsg2[p], 13 * sc) / 2, my + sz + 4, 13 * sc, 0.9f, 0.95f, 1, 1); }
+        float ag = msg_age(p); fx_words(g_pmsg[p], vw / 2, my, sz, ag, g_pmsg_t[p], 1, 1, 1, 1, 1);
+        if (g_pmsg2[p][0]) fx_line(g_pmsg2[p], vw / 2, my + sz + 6, 13 * sc, ag, g_pmsg_t[p], 0.9f, 0.95f, 1, 1); }
     if (g_pside_t[p] > 0) { /* small note beside your kart: rises a little and fades */
         float sz = 14 * sc, a = clampf(g_pside_t[p] / 0.4f, 0, 1), rise = (1.8f - g_pside_t[p]) * 10 * sc, x = vw * 0.5f + 175 * sc, y = vh * 0.58f - rise, w = text_width(g_pside[p], sz);
         if (x + w > vw - 10) x = vw - 10 - w;
@@ -3780,7 +3846,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (g_mode == MODE_BATTLE) hud_battle_split(p, vw, vh); else hud_split(p, vw, vh);
                 gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1);
                 int it = r->k[human_kart(p)].item;
-                if (it > 0 && it < ITEM_COUNT && !r->jericho && g_mode != MODE_BATTLE) { float sc = vw < 1000 ? 0.75f : 1.0f; draw_item_window(p, 16, vh - 64 * sc - 14, 64 * sc); } }
+                if (it >= 0 && it < ITEM_COUNT && !r->jericho && g_mode != MODE_BATTLE && g_mode != MODE_TT) { float sc = vw < 1000 ? 0.75f : 1.0f; draw_item_window(p, 16, vh - 64 * sc - 14, 64 * sc, vw, vh); } }
             if (g_nplayers == 3) { gfx_viewport(drc, 0.5f, 0.5f, 0.5f, 0.5f); gfx_camera_2d_virtual(640, 360); gfx_state(ST_HUD); batch_clear(&g_b); hud_quarter_map(); gfx_mesh_update(m_hud, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud, &id, 1, 1, 1, 1); }
             gfx_viewport(drc, 0, 0, 1, 1); gfx_camera_2d(); gfx_state(ST_HUD); batch_clear(&g_b);
             batch_rect(&g_b, 0, 358, 1280, 4, 0.02f, 0.03f, 0.08f, 1); if (g_nplayers >= 3) batch_rect(&g_b, 638, 0, 4, 720, 0.02f, 0.03f, 0.08f, 1);   /* the bars between the views */
@@ -3891,7 +3957,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
 #endif
         if (g_screen == SCR_RESULTS && g_unl_bits) draw_unlock(&id, drc);
         if ((g_screen == SCR_RACE || g_screen == SCR_PAUSE) && g_mode != MODE_TT) { int it = r->k[r->player].item;
-            if (it > 0 && it < ITEM_COUNT && !r->jericho) draw_item_window(0, 44, 118, 104); }
+            if (it >= 0 && it < ITEM_COUNT && !r->jericho && g_mode != MODE_BATTLE) draw_item_window(0, 44, 118, 104, 1280, 720); }
         gfx_view_end(drc);
     }
     gfx_frame_end();

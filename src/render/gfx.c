@@ -507,10 +507,11 @@ void gfx_light(Vec3 sun, Vec3 sky, Vec3 ground, Vec3 eye) {
 void gfx_camera_2d(void) { gfx_camera_2d_virtual(1280.0f, 720.0f); }
 /* the 3D menus: the 1280 x 720 layout as a plane facing a camera 'eye' pixels away, so a menu card can lift toward you,
    tilt and turn in real perspective; anything left on the plane (z = 0) lands exactly where the 2D layout put it */
-void gfx_camera_ui3d(float eye) {
-    gfx_camera_2d_virtual(1280.0f, 720.0f);
+void gfx_camera_ui3d(float eye) { gfx_camera_ui3d_v(eye, 1280.0f, 720.0f); }
+void gfx_camera_ui3d_v(float eye, float vw, float vh) {   /* the same in a view vw x vh units wide (a split-screen quarter) */
+    gfx_camera_2d_virtual(vw, vh);
     FrameBlock fb2; Mat4 m; memset(&m, 0, sizeof m);
-    m.m[0] = eye / 640.0f; m.m[12] = -eye; m.m[5] = -eye / 360.0f; m.m[13] = eye; m.m[11] = -1.0f; m.m[15] = eye;
+    m.m[0] = eye / (vw * 0.5f); m.m[12] = -eye; m.m[5] = -eye / (vh * 0.5f); m.m[13] = eye; m.m[11] = -1.0f; m.m[15] = eye;
     memcpy(fb2.viewproj, m.m, sizeof fb2.viewproj);
     fb2.lightdir[0] = 0; fb2.lightdir[1] = 0; fb2.lightdir[2] = 1; fb2.lightdir[3] = 1.0f;
     fb2.fog[0] = 0; fb2.fog[1] = 1; fb2.fog[2] = 0; fb2.fog[3] = 0;

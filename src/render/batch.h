@@ -103,12 +103,14 @@ static inline void font_build_texture(uint32_t *px) {        /* px has FONT_TEX_
 #include "font_hd.h"
 static int g_font_hd = 0;      /* 1 when content/img/font_hd.png is loaded and bound as the text texture */
 /* draws text in the virtual 1280x720 space; size = pixel height of a capital letter; returns width used */
-static inline float batch_text(Batch *b, const char *s, float x, float y, float size, float r, float g, float bl, float a) {
+/* gold: -1 = decide by the colour (big text in gold uses the gold letters), 0 = plain letters tinted, 1 = gold letters tinted */
+static inline float batch_text_g(Batch *b, const char *s, float x, float y, float size, float r, float g, float bl, float a, int gold);
+static inline float batch_text(Batch *b, const char *s, float x, float y, float size, float r, float g, float bl, float a) { return batch_text_g(b, s, x, y, size, r, g, bl, a, -1); }
+static inline float batch_text_g(Batch *b, const char *s, float x, float y, float size, float r, float g, float bl, float a, int gold) {
     float sc = size / 7.0f, x0 = x;
     if (g_font_hd) {
         float hs = size / 50.0f;     /* the HD glyphs have 50-pixel capitals in an 80-pixel cell, cap tops 10 pixels down */
-        int gold = size >= 34 && r > 0.9f && g > 0.7f && g < 0.95f && bl < 0.5f;   /* big text asked for in gold uses the gold letters (Sean's title style) */
-        if (gold) { r = g = bl = 1; }
+        if (gold < 0) { gold = size >= 34 && r > 0.9f && g > 0.7f && g < 0.95f && bl < 0.5f; if (gold) { r = g = bl = 1; } }   /* big text asked for in gold uses the gold letters (Sean's title style) */
         for (; *s; s++) {
             char c = *s; if (c >= 'a' && c <= 'z') c = (char)(c - 32);
             if (c == ' ') { x += 24 * hs; continue; }

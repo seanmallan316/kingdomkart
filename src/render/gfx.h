@@ -56,6 +56,7 @@ void gfx_set_time(float t);                                    /* the clock the 
 void gfx_camera_2d(void);                                     /* clip-space drawing for the HUD, no lighting or fog */
 void gfx_grade(float film, float rim, float wrap, float rich);   /* the look of the lighting from the next gfx_camera on */
 void gfx_camera_ui3d(float eye);                             /* the menus in 3D: vertices in screen pixels (x right, y down) with z toward the viewer */
+void gfx_camera_ui3d_v(float eye, float vw, float vh);   /* gfx_camera_ui3d for a view vw x vh (split screen) */
 void gfx_camera_2d_virtual(float vw, float vh);               /* the same, with the 2D helpers' 1280 x 720 layout mapped onto a view of vw x vh pixels */
 void gfx_bind(Texture *t);
 void gfx_state(int flags);
