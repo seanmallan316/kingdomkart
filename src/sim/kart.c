@@ -1,7 +1,7 @@
 #include "kart.h"
 #include <string.h>
 
-#define BASE_TOP 36.0f          /* m/s on the road for an average kart (about 130 km/h) */
+#define BASE_TOP 32.5f          /* m/s on the road for an average kart (about 117 km/h; Sean: it felt too fast) */
 #define BASE_ACCEL 13.0f
 #define BRAKE 28.0f
 #define COAST 3.0f
@@ -80,10 +80,10 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
         if (k->speed > 0) k->speed = fmaxf(0, k->speed - 20.0f * dt);
     } else if (k->spin_vis != 0) { k->spin_vis = 0; }
     if (!k->finished) { k->total_time += dt; if (k->lap >= 1) k->lap_time += dt; }
-    float top = BASE_TOP * st->top_speed * k->boost_mul * (1.0f + 0.01f * (float)k->coins);
+    float top = BASE_TOP * st->top_speed * (1.0f + (k->boost_mul - 1.0f) * 0.7f) * (1.0f + 0.01f * (float)k->coins);   /* boosts give 70% of what they say: one after another stays controllable */
     int on_road = k->hit.on_road;
     if (!on_road && !k->air && k->grace_t <= 0) top *= k->hit.on_field ? (t->water ? 0.42f : 0.5f) : OFFROAD_MUL;   /* (Sean) off the road you really slow down: dirt, grass, sand; wading is slowest */
-    if (k->carried_t > 0) { k->carried_t -= dt; k->boost_t = fmaxf(k->boost_t, 0.2f); k->boost_mul = fmaxf(k->boost_mul, 1.7f); k->shield = fmaxf(k->shield, 0.2f); top = BASE_TOP * st->top_speed * 1.7f; }
+    if (k->carried_t > 0) { k->carried_t -= dt; k->boost_t = fmaxf(k->boost_t, 0.2f); k->boost_mul = fmaxf(k->boost_mul, 1.7f); k->shield = fmaxf(k->shield, 0.2f); top = BASE_TOP * st->top_speed * 1.5f; }
     if (k->grace_t > 0) { k->grace_t -= dt; top *= 1.12f; }
     if (k->slow_t > 0) top *= 0.62f;
     float accel = BASE_ACCEL * st->accel * (k->boost_t > 0 ? 1.8f : 1.0f);
@@ -175,7 +175,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
             const RoadPad *pd = &t->pad[p]; int d = k->hit.idx - pd->idx; if (d > t->n / 2) d -= t->n; if (d < -t->n / 2) d += t->n;
             if (d < -1 || d > 1 || fabsf(k->hit.lateral - pd->lateral) > pd->halfw) continue;
             k->pad_cd = 0.6f; k->pad_flag = pd->kind;
-            if (pd->kind == PAD_BOOST) { k->boost_t = fmaxf(k->boost_t, 1.3f); k->boost_mul = fmaxf(k->boost_mul, 1.4f); k->speed = fmaxf(k->speed, BASE_TOP * st->top_speed * 1.1f); }
+            if (pd->kind == PAD_BOOST) { k->boost_t = fmaxf(k->boost_t, 1.3f); k->boost_mul = fmaxf(k->boost_mul, 1.4f); k->speed = fmaxf(k->speed, BASE_TOP * st->top_speed * 1.05f); }
             else if (pd->kind == PAD_BOUNCE) { k->air = 1; k->air_t = 0; k->vy = 12.0f; k->drifting = 0; }
             break;
         }

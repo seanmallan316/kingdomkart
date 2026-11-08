@@ -8,6 +8,7 @@
 #define SHOULDER_W 4.0f          /* dirt strip on each side of the road, in meters */
 #define WALL_DROP 1.2f           /* how far the shoulder slopes down below the road at its outer edge */
 
+#define MAX_OBST 320
 typedef struct { float x, y, z, width, bank; int jump; } TrackPoint;   /* a control point of the curve; jump = 1 makes the road drop away right after this point */
 
 typedef struct {
@@ -53,7 +54,7 @@ typedef struct {
     Gem gem[MAX_GEMS]; int ngem;
     short def_q[257]; unsigned char def_m[256]; short def_per, def_np;   /* where each stretch of the road's definition went once its S-bends were added */
     float def_scale;                        /* sample numbers in a road's definition (drawn at 20 a stretch) times this = sample numbers here */
-    int nobst; struct { float x, z, r; } obst[200]; float widen;   /* widen: how much wider the road is than drawn (scenery moves out with it) */   /* scenery standing out in the open land: trees, rocks, houses to steer round */
+    int nobst; struct { float x, z, r; } obst[MAX_OBST]; float widen;   /* widen: how much wider the road is than drawn (scenery moves out with it) */   /* scenery standing out in the open land: trees, rocks, houses to steer round */
 } Track;
 
 typedef struct {
@@ -71,6 +72,8 @@ void track_build(Track *t, const char *name, int laps, const TrackPoint *pts, in
 void track_locate(const Track *t, float x, float z, int hint, TrackHit *out);   /* hint = last known index, -1 for a full search */
 float track_surface_height(const Track *t, int idx, float lateral);
 int track_def_idx(const Track *t, int def_idx);   /* a sample number from a road's definition (20 a stretch) -> the sample here */
+float track_scenery_radius(const char *img, float height);                        /* ground room a piece of scenery takes (0: drive through) */
+float track_scenery_lat(const Track *t, int idx, float side, float r);           /* where it stands across the road, clear of the road */
 float track_edge(const Track *t, int idx);                                      /* distance from center to the outer edge of the shoulder */
 float track_bound(const Track *t, int idx, int side);                           /* distance from center to the outer wall on a side (-1 left, +1 right) */
 void  track_make_field(Track *t, int water);                                    /* works out how much open land each stretch can have without reaching another part of the road */

@@ -1465,10 +1465,9 @@ static void load_theme(void) {
         const Scenery *sc = &d->scenery[i]; int idx = track_def_idx(&g_track, sc->idx);
         Placed *p = &g_placed[g_nplaced++];
         p->kind = sprite_kind(sc->img);
-        float edge = track_edge(&g_track, idx), sgn = sc->side < 0 ? -1.0f : 1.0f, bound = track_bound(&g_track, idx, (int)sgn);
-        float wide = fabsf(sc->side) * (g_track.widen > 0 ? g_track.widen : 1.0f);   /* the same place the race uses for its solid scenery */
-        float lat = (wide > edge + 0.5f && wide < bound - 1.0f) ? sgn * wide                     /* out in the open land: it stays there (and is solid, see the race) */
-                  : sgn * (bound + fmaxf(fabsf(sc->side) - edge, 0.0f));                          /* otherwise just outside the wall */
+        float sgn = sc->side < 0 ? -1.0f : 1.0f, bound = track_bound(&g_track, idx, (int)sgn);
+        int jw = !strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab");
+        float lat = track_scenery_lat(&g_track, idx, sc->side, jw ? 0 : track_scenery_radius(sc->img, sc->height));   /* the same place the race makes solid */
         p->p = v3(g_track.s[idx].x + g_track.s[idx].nx * lat, 0, g_track.s[idx].z + g_track.s[idx].nz * lat);
         p->p.y = fmaxf(track_surface_height(&g_track, idx, fabsf(lat) < bound ? lat : sgn * bound), g_ground_y) - 0.2f;   /* stands on the ground */
         p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
@@ -3346,8 +3345,8 @@ static void draw_boost_blur(int drc, int p, float fx, float fy, float fw, float 
     Texture *tx = gfx_grab(drc); gfx_viewport(drc, fx, fy, fw, fh); if (!tx) return;
     if (!m_blur) m_blur = gfx_mesh_dynamic(3600);
     Batch b; batch_init(&b, g_blurv, 3600);
-    const int NX = 12, NY = 8, NL = 6; float uc = fx + fw * 0.5f, vc = fy + fh * 0.5f;
-    for (int l = 1; l <= NL; l++) { float z = 1.0f + 0.013f * l * k, la = 0.27f * k;
+    const int NX = 12, NY = 8, NL = 3; float uc = fx + fw * 0.5f, vc = fy + fh * 0.5f;
+    for (int l = 1; l <= NL; l++) { float z = 1.0f + 0.016f * l * k, la = 0.3f * k;
         for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
             Vertex c4[4]; const int ci[4][2] = {{i, j + 1}, {i + 1, j + 1}, {i + 1, j}, {i, j}};
             for (int n = 0; n < 4; n++) { float gx = (float)ci[n][0] / NX, gy = (float)ci[n][1] / NY, dx = gx * 2 - 1, dy = gy * 2 - 1;
@@ -4114,7 +4113,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
     all_auto = 1;   /* the CI tour has nobody holding the controllers: the four people drive themselves */
 #endif
     int steps = 0;
+    static float ipx[NKARTS][4]; static int ip_ok = 0; if (!sim_running || g_mode == MODE_BATTLE) ip_ok = 0;   /* where each kart was one step ago: the picture is drawn between the last two steps (smooth even when the frame time wobbles) */
     while (acc >= SIM_DT && steps < 8) {
+        if (g_mode != MODE_BATTLE) { for (int i = 0; i < r->nk && i < NKARTS; i++) { ipx[i][0] = r->k[i].x; ipx[i][1] = r->k[i].y; ipx[i][2] = r->k[i].z; ipx[i][3] = r->k[i].yaw; } ip_ok = 1; }
         if (g_mode == MODE_BATTLE) {
             if (g_nplayers > 1) { KartInput bin[MAX_HUMANS]; for (int p = 0; p < g_nplayers; p++) bin[p] = hin[human_kart(p)]; battle_step(&g_battle, bin, 0, SIM_DT); }
             else battle_step(&g_battle, &in, g_demo || g_attract, SIM_DT);
@@ -4244,6 +4245,13 @@ void game_frame(const Pad *pads, int npads, float dt) {
         for (int i = 0; i < MAX_SPARK; i++) if (g_spark[i].life > 0) { Spark *s = &g_spark[i]; s->life -= dt; s->p.x += s->v.x * dt; s->p.y += s->v.y * dt; s->p.z += s->v.z * dt; s->v.y -= 9.0f * dt; }
     }
 
+    /* draw the karts where they are between the last two steps of the simulation */
+    float ipcur[NKARTS][4]; int ip_n = 0;
+    if (ip_ok && sim_running && g_slowmo <= 0) { float al = clampf(acc / SIM_DT, 0, 1); ip_n = r->nk < NKARTS ? r->nk : NKARTS;
+        for (int i = 0; i < ip_n; i++) { Kart *q = &r->k[i]; ipcur[i][0] = q->x; ipcur[i][1] = q->y; ipcur[i][2] = q->z; ipcur[i][3] = q->yaw;
+            float dx = q->x - ipx[i][0], dz = q->z - ipx[i][2]; if (dx * dx + dz * dz > 25.0f) continue;   /* a jump back onto the road: no blending */
+            float dy = q->yaw - ipx[i][3]; while (dy > 3.14159265f) dy -= 6.2831853f; while (dy < -3.14159265f) dy += 6.2831853f;
+            q->x = ipx[i][0] + dx * al; q->y = ipx[i][1] + (q->y - ipx[i][1]) * al; q->z = ipx[i][2] + dz * al; q->yaw = q->yaw - dy * (1 - al); } }
     /* every player's camera */
     for (int p = 0; p < g_nplayers; p++) { cv = &g_view[p]; k = &r->k[human_kart(p)];
     if (cv->finish_t > 0) cv->finish_t += dt;   /* after the finish: the celebration, the camera all the way round the kart */
@@ -4324,10 +4332,15 @@ void game_frame(const Pad *pads, int npads, float dt) {
         cv = &g_view[0];
         /* on the GamePad the menus sit on a plain background: drawing the 3D road behind them a second time halved the
            frame rate of every menu (the log from the real Wii U: 30 a second instead of 60) */
-        int plain_bg = g_screen == SCR_SCENE || (drc && (g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP || g_screen == SCR_OPTIONS || g_screen == SCR_CREDITS || g_screen == SCR_GP));
+        int menu_bg = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP || g_screen == SCR_OPTIONS || g_screen == SCR_CREDITS || g_screen == SCR_GP;
+        int plain_bg = g_screen == SCR_SCENE || (drc && menu_bg);   /* the GamePad's menus show the TV's moving race behind them (copied, not drawn twice) */
         if (plain_bg) gfx_view_begin(drc, 0.06f, 0.09f, 0.24f); else gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 id = m4_identity();
         if (!plain_bg) draw_scene(g_mode == MODE_BATTLE ? 0 : r->player, gfx_aspect(drc), 1.0f, 0);
+        { static Texture *menubg; static Mesh *m_menubg;
+          if (!drc && menu_bg) menubg = gfx_grab_ex(0, 0);   /* the TV's race behind the menu, before the menu is drawn on it */
+          if (drc && menu_bg && menubg) { if (!m_menubg) { static Vertex mv[6]; Batch mb; batch_init(&mb, mv, 6); batch_rect_uv(&mb, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_menubg = gfx_mesh_static(mb.v, mb.n); }
+              gfx_viewport(drc, 0, 0, 1, 1); gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(menubg); gfx_draw_ex(m_menubg, &id, 1, 1, 1, 1, 0, 1, 0, 0); } }
         if (!plain_bg && g_mode != MODE_BATTLE && g_screen == SCR_RACE) draw_boost_blur(drc, 0, 0, 0, 1, 1, 1280, 720);
         /* ---- HUD and menus */
         gfx_camera_2d(); gfx_state(ST_HUD);
@@ -4431,6 +4444,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         gfx_view_end(drc);
     }
     gfx_frame_end();
+    for (int i = 0; i < ip_n; i++) { Kart *q = &r->k[i]; q->x = ipcur[i][0]; q->y = ipcur[i][1]; q->z = ipcur[i][2]; q->yaw = ipcur[i][3]; }   /* back to the true positions for the next step */
 }
 int game_debug_screen(void) { return g_screen + 20 * g_mode + 100 * g_menu_sel + 1000 * (int)g_race.state; }
 const char *game_debug_track(void) { return g_track.name; }

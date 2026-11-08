@@ -563,20 +563,29 @@ void track_from_def(Track *t, const TrackDef *d) {
     /* scenery that stands out in the open land (not past its wall) is solid: a kart bumps into it (Sean: you could drive
        straight through waterfalls and the like). The size it blocks follows the kind of thing it is. */
     t->widen = wd; t->nobst = 0;
-    for (int i = 0; i < d->nscenery && t->nobst < 200; i++) { const Scenery *sc = &d->scenery[i]; if (sc->img[0] != '#') continue;
-        int idx = DI(sc->idx) % t->n; float lat = sc->side * wd, sgn = lat < 0 ? -1.0f : 1.0f;
-        if (fabsf(lat) < track_edge(t, idx) + 0.5f || fabsf(lat) > track_bound(t, idx, (int)sgn) - 1.0f) continue;
-        const char *k = sc->img;
-        if (!strcmp(k, "#cloud") || !strcmp(k, "#flowers") || !strcmp(k, "#lily") || !strcmp(k, "#fern")) continue;   /* soft things you can drive through */
-        float h = sc->height, r;
-        if (!strcmp(k, "#house1") || !strcmp(k, "#house2") || !strcmp(k, "#inn") || !strcmp(k, "#stable") || !strcmp(k, "#tent") || !strcmp(k, "#ark") || !strcmp(k, "#tomb") || !strcmp(k, "#hut"))
-            r = h * 0.55f;
-        else if (!strcmp(k, "#waterfall")) r = h * 0.42f;
-        else if (!strcmp(k, "#rock") || !strcmp(k, "#stone") || !strcmp(k, "#rubble") || !strcmp(k, "#well") || !strcmp(k, "#stall") || !strcmp(k, "#tower") || !strcmp(k, "#boat") || !strcmp(k, "#cart") || !strcmp(k, "#camp")) r = h * 0.4f;
-        else if (!strcmp(k, "#sheep") || !strcmp(k, "#lamb") || !strcmp(k, "#deer") || !strcmp(k, "#lion")) r = 0.9f;
-        else r = h * 0.12f;   /* trees, palms, pillars, lanterns, banners, people: the trunk or the post */
-        if (r < 0.6f) r = 0.6f; if (r > 6.0f) r = 6.0f;
-        const TrackSample *s2 = &t->s[idx];
+    for (int i = 0; i < d->nscenery && t->nobst < MAX_OBST; i++) { const Scenery *sc = &d->scenery[i]; if (sc->img[0] != '#') continue;
+        int idx = DI(sc->idx) % t->n; float r = track_scenery_radius(sc->img, sc->height); if (r <= 0) continue;
+        if (!strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab")) continue;   /* Jericho's walls have their own rules */
+        float lat = track_scenery_lat(t, idx, sc->side, r); const TrackSample *s2 = &t->s[idx];
+        if (fabsf(lat) - r > track_bound(t, idx, lat < 0 ? -1 : 1)) continue;   /* wholly behind the wall: nobody can reach it */
         t->obst[t->nobst].x = s2->x + s2->nx * lat; t->obst[t->nobst].z = s2->z + s2->nz * lat; t->obst[t->nobst].r = r; t->nobst++; }
 }
+/* how much room a piece of scenery takes up on the ground (0: soft, drive through it) */
+float track_scenery_radius(const char *k, float h) {
+    if (k[0] != '#' || !strcmp(k, "#cloud") || !strcmp(k, "#flowers") || !strcmp(k, "#lily") || !strcmp(k, "#fern") || !strcmp(k, "#lantern") || !strcmp(k, "#banner")) return 0;
+    float r;
+    if (!strcmp(k, "#house1") || !strcmp(k, "#house2") || !strcmp(k, "#inn") || !strcmp(k, "#stable") || !strcmp(k, "#tent") || !strcmp(k, "#ark") || !strcmp(k, "#tomb") || !strcmp(k, "#hut")) r = h * 0.6f;
+    else if (!strcmp(k, "#waterfall")) r = h * 0.42f;
+    else if (!strcmp(k, "#rock") || !strcmp(k, "#stone") || !strcmp(k, "#rubble") || !strcmp(k, "#well") || !strcmp(k, "#stall") || !strcmp(k, "#tower") || !strcmp(k, "#boat") || !strcmp(k, "#cart") || !strcmp(k, "#camp")) r = h * 0.45f;
+    else if (!strcmp(k, "#sheep") || !strcmp(k, "#lamb") || !strcmp(k, "#deer") || !strcmp(k, "#lion")) r = 0.9f;
+    else r = h * 0.12f;   /* trees, palms, pillars, banners, people: the trunk or the post */
+    return r < 0.6f ? 0.6f : r > 6.5f ? 6.5f : r; }
+/* where a piece of scenery stands across the road (signed metres from the middle): out in the open land where the track
+   puts it, or else just outside the wall, and never so close that any of it sits on the road or the shoulder (Sean: you
+   could drive right through the houses). The drawing and the solid circle both use this, so they always agree. */
+float track_scenery_lat(const Track *t, int idx, float side, float r) {
+    float edge = track_edge(t, idx), sgn = side < 0 ? -1.0f : 1.0f, bound = track_bound(t, idx, (int)sgn), wide = fabsf(side) * (t->widen > 0 ? t->widen : 1.0f);
+    float mag = (wide > edge + 0.5f && wide < bound - 1.0f) ? wide : bound + fmaxf(fabsf(side) - edge, 0.0f);
+    if (r > 0 && mag < edge + r + 0.4f) mag = edge + r + 0.4f;
+    return sgn * mag; }
 void track_make_test(Track *t) { track_from_def(t, &TRACK_DEFS[NUM_TRACK_DEFS - 1]); }
