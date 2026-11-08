@@ -6,7 +6,7 @@
 
 #define NKARTS 8
 #define MAX_HUMANS 4                /* people racing at once: the GamePad and up to three Wii controllers */
-#define NCHARS 20                   /* 7 to begin with, 13 unlockable (Goliath for beating him on Hard, Gideon, Zacchaeus, Jacob, Isaac, Abraham) */
+#define NCHARS 21                   /* 7 to begin with, 14 unlockable (Goliath, Gideon, Zacchaeus, Jacob, Isaac, Abraham, Pharaoh) */
 #define NMAIN 7
 #define NSTYLES 5                   /* kart bodies: standard + 4 unlockable */
 #define MAX_BOX 24

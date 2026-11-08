@@ -24,6 +24,7 @@ const Character CHARACTERS[NCHARS] = {
     {"Jacob", "JACOB", {1.02f, 1.02f, 0.98f, 1.10f}, 0.62f, 0.25f, 0.18f, 1}, /* bonus: the shepherd who wrestled till daybreak, strong and tough */
     {"Isaac", "ISAAC", {0.99f, 1.05f, 1.03f, 0.95f}, 0.85f, 0.68f, 0.42f, 1}, /* bonus: the promised son with his lamb, quick away and easy to steer */
     {"Abraham", "ABRAHAM", {1.00f, 0.99f, 1.05f, 1.08f}, 0.18f, 0.22f, 0.55f, 1}, /* bonus: the father of many nations with his tent and lanterns, steady and sure-handed */
+    {"Pharaoh", "PHARAOH", {1.07f, 0.95f, 0.93f, 1.22f}, 0.90f, 0.72f, 0.18f, 1}, /* bonus (win the Pharaoh's Cup): the king of Egypt in his golden cobra kart, fast and heavy */
 };
 static int g_field[NKARTS], g_field_on = 0;   /* a cup keeps the same field every round: who sits in each computer seat */
 void race_set_field(const int *chars) { g_field_on = chars != NULL; if (chars) for (int i = 0; i < NKARTS; i++) g_field[i] = chars[i]; }

@@ -53,7 +53,7 @@ static int g_opt_sel = 0; static char g_pause_reason[48]; static float g_erase_h
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO };   /* VS: two to four people on a split screen; JERICHO: seven laps round the walls */
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
-static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN, UNLOCK_MICHAEL, UNLOCK_GABRIEL, UNLOCK_GOLIATH_RACER, UNLOCK_GIDEON, UNLOCK_ZACCHAEUS, UNLOCK_JACOB, UNLOCK_ISAAC, UNLOCK_ABRAHAM}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
+static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN, UNLOCK_MICHAEL, UNLOCK_GABRIEL, UNLOCK_GOLIATH_RACER, UNLOCK_GIDEON, UNLOCK_ZACCHAEUS, UNLOCK_JACOB, UNLOCK_ISAAC, UNLOCK_ABRAHAM, UNLOCK_PHARAOH}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
 static int char_unlocked(int c) { return !CHARACTERS[c].bonus || (g_save.unlocks & char_lock_bit(c)); }
 static int style_lock_bit(int sty) { return sty == 1 ? UNLOCK_KART_CHARIOT : (sty == 2 ? UNLOCK_KART_BOAT : (sty == 3 ? UNLOCK_KART_ARK : (sty == 4 ? UNLOCK_KART_SLING : 0))); }
 static int style_unlocked(int sty) { return sty == 0 || (g_save.unlocks & style_lock_bit(sty)); }
@@ -1578,7 +1578,7 @@ int game_init(int status) {
     g_status = status; music_set_logger(gfx_log); sfx_set_logger(gfx_log); sfx_load_samples();
     save_load(); save_check_unlocks(); save_store(); apply_volumes();
 #ifdef KK_TOUR
-    if (KK_TOUR_ROAD >= 4) g_save.unlocks = 0xFFFFFFF;      /* the CI tour of the bonus road / the battle */
+    if (KK_TOUR_ROAD >= 4) g_save.unlocks = 0xFFFFFFFu;      /* the CI tour of the bonus road / the battle */
 #endif
     for (int d = 0; d < 8 && d < NUM_TRACK_DEFS; d++) g_best_time[d] = g_save.best_ms[d] / 1000.0f;
     race_set_unlocked(unlocked_mask()); race_set_styles(0, unlocked_styles());
@@ -1590,7 +1590,7 @@ int game_init(int status) {
           if (hd) { tx_font = hd; g_font_hd = 1; }
           else { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); } }
         draw_loading("LOADING...");
-        static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john", "portrait_michael", "portrait_gabriel", "portrait_goliath", "portrait_gideon", "portrait_zacchaeus", "portrait_jacob", "portrait_isaac", "portrait_abraham"};
+        static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john", "portrait_michael", "portrait_gabriel", "portrait_goliath", "portrait_gideon", "portrait_zacchaeus", "portrait_jacob", "portrait_isaac", "portrait_abraham", "portrait_pharaoh"};
         for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             snprintf(cn, sizeof cn, "kart_%s", pn[i] + 9); w = h = 1; tx_kart[i] = asset_texture(cn, 0, &w, &h); g_kart_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f;
@@ -2667,7 +2667,7 @@ static const SetLook SET_LOOK[SET_COUNT] = {
     /* STARS */    {{0.01f, 0.02f, 0.07f}, {0.12f, 0.12f, 0.26f}, {0.70f, 0.60f, 0.42f}, {0.55f, 0.58f, 0.85f}, {0.32f, 0.32f, 0.5f}, {-3, 12, -20}, 1},
 };
 /* where the guest stands (Jesus on the water, Gabriel over Nazareth, Mary...) and which way they face */
-static Vec3 sc_guest_pos(int set) { return set == SET_STORM ? v3(-4, 0, -7) : set == SET_JORDAN ? v3(-3.2f, 0, -4.5f) : set == SET_JERICHO ? v3(-2.0f, 0, -4.0f) : v3(-3.5f, 0, -5); }
+static Vec3 sc_guest_pos(int set) { return set == SET_STORM ? v3(-4, 0, -7) : set == SET_JORDAN ? v3(-3.2f, 0, -4.5f) : set == SET_JERICHO ? v3(-2.0f, 0, -4.0f) : set == SET_EGYPT ? v3(3.2f, 0, -5.5f) : v3(-3.5f, 0, -5); }
 static float sc_wave(float x, float z, float t, float amp) { return amp * (sinf(x * 0.55f + t * 1.3f) + 0.7f * sinf(z * 0.43f - t * 1.05f) + 0.3f * sinf((x + z) * 1.1f + t * 2.1f)); }
 static float sc_flash(void) { float ph = fmodf(g_time, 6.3f); return ph < 0.1f ? 1.0f : (ph > 0.2f && ph < 0.32f) ? 0.6f : 0.0f; }   /* lightning in the storm */
 static float sc_kart_h(void) { const Kart3D *k = &g_k3d[g_sc_char]; return k->ok ? clampf(k->hi.y, 0.8f, 3.0f) : 1.6f; }
