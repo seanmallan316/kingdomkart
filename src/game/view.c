@@ -1893,8 +1893,10 @@ static void ui_backdrop(void) {   /* behind every menu: slow golden beams fannin
 static void hud_main(void) {
     static const char *dn[3] = {"EASY", "NORMAL", "HARD"}; char buf[64];
     snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]);
-    const char *items[10] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", "ONLINE", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
-    for (int i = 0; i < 10; i++) { float y = 182 + i * 45; menu_item(items[i], y, g_menu_sel == i, i < 7 ? 26 : 21); tzone(400, y - 9, 480, 43, TZ_SEL, i); }
+    const char *items[9] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
+    /* (online play is built but switched off for now - Sean: no paid server. The ONLINE TEST screen, SCR_ONLINE, src/net and
+       server/ stay in the project for later; to bring it back, add "ONLINE" after THE WALLS OF JERICHO and open SCR_ONLINE.) */
+    for (int i = 0; i < 9; i++) { float y = 190 + i * 49; menu_item(items[i], y, g_menu_sel == i, i < 6 ? 27 : 22); tzone(400, y - 10, 480, 47, TZ_SEL, i); }
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 690, 14, 0.8f, 0.85f, 1, 1);
 }
 static void hud_online(void) {   /* the ONLINE TEST screen */
@@ -2525,10 +2527,7 @@ static void draw_trophy_pictures(int drc) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pads(Pad *pads, float t) {
     static const struct { float t; char key; int slot; } script[] = {
-#if KK_TOUR_ROAD == 13
-        /* the ONLINE TEST screen: title, menu (down six times to ONLINE), A - the emulator tries to reach the real server */
-        {8, 'A'}, {11, 'D'}, {12, 'D'}, {13, 'D'}, {14, 'D'}, {15, 'D'}, {16, 'D'}, {18, 'A'}, {70, 'A'},
-#elif KK_TOUR_ROAD == 11
+#if KK_TOUR_ROAD == 11
         /* the Grand Prix: title, GRAND PRIX, the second cup (Genesis to Glory), character, kart, the first road (Eden), then the standings */
         {8, 'A'}, {11, 'A'}, {14, 'R'}, {16, 'A'}, {19, 'A'}, {22, 'A'}, {70, 'P'}, {84, 'P'}, {130, 'A'}, {133, 'A'},
 #elif KK_TOUR_ROAD == 12
@@ -3381,13 +3380,12 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pa || pb || g_screen_t * CREDITS_SPEED > credits_height() + 760) { g_screen = SCR_TITLE; g_screen_t = 0; if (pa || pb) sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_MAIN:
-        if (my) { g_menu_sel = (g_menu_sel - my + 10) % 10; sfx_play(SFX_MENU_MOVE, 1, 0); }
-        if (g_menu_sel == 7 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
+        if (my) { g_menu_sel = (g_menu_sel - my + 9) % 9; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (g_menu_sel == 6 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
         if (pa) {
-            if (g_menu_sel == 9) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
-            else if (g_menu_sel == 8) { g_screen = SCR_OPTIONS; g_opt_sel = 0; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
-            else if (g_menu_sel == 7) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
-            else if (g_menu_sel == 6) { g_screen = SCR_ONLINE; g_screen_t = 0; net_test_start(NULL, 0); sfx_play(SFX_MENU_OK, 1, 0); }
+            if (g_menu_sel == 8) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 7) { g_screen = SCR_OPTIONS; g_opt_sel = 0; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 6) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
             else { sfx_play(SFX_MENU_OK, 1, 0); g_multi = 0;
                 static const int MODE_OF[6] = {MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO}; g_mode = MODE_OF[g_menu_sel];
                 /* every mode can be played together: with a Wii controller switched on (or MULTIPLAYER chosen) the players join first */

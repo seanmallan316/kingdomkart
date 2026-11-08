@@ -21,36 +21,15 @@ jobs:
           gcc $FLAGS -DKK_CONTENT_DIR='"content/"' tests/music_test.c src/audio/music.c -lm -o music_test && ./music_test
 
   online-server:
-    name: Online server (build, test, put online)
+    name: Online server (built and tested; not put online - switched off for now)
     needs: tests
     runs-on: ubuntu-latest
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      APP: kingdomkart-rtg-online
     steps:
       - uses: actions/checkout@v4
       - name: Build the server and test it with the game's own network code
         run: |
           gcc -std=gnu11 -O2 -Wall -Wextra -Isrc server/kkserver.c -o kkserver
           gcc -std=gnu11 -O1 -Wall -fsanitize=address,undefined -Isrc tests/net_test.c src/net/net.c -lpthread -o net_test && ./net_test ./kkserver
-      - name: No Fly.io key yet
-        if: env.FLY_API_TOKEN == ''
-        run: echo "The FLY_API_TOKEN secret is not set, so the server was tested but not put online."
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-        if: env.FLY_API_TOKEN != ''
-      - name: Put the server online on Fly.io
-        if: env.FLY_API_TOKEN != ''
-        run: |
-          flyctl status -a "$APP" >/dev/null 2>&1 || flyctl apps create "$APP" --org personal
-          flyctl deploy --remote-only --ha=false --yes -a "$APP"
-          # UDP needs the app's own internet address (a dedicated IPv4)
-          if ! flyctl ips list -a "$APP" | grep -Eq '^v4[[:space:]]'; then flyctl ips allocate-v4 --yes -a "$APP"; fi
-          flyctl ips list -a "$APP"
-          flyctl status -a "$APP"
-      - name: Check the live server answers over the internet
-        if: env.FLY_API_TOKEN != ''
-        run: ./net_test --live "$APP.fly.dev"
-
   build:
     name: Build kingdomkart.wuhb
     runs-on: ubuntu-latest
@@ -58,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the game
-        run: make && for r in 0 1 2 3 4 5 6 7 8 9 10 11 12 13; do make tour TOUR_ROAD=$r; done
+        run: make && for r in 0 1 2 3 4 5 6 7 8 9 10 11 12; do make tour TOUR_ROAD=$r; done
       - name: Save the finished game file
         uses: actions/upload-artifact@v4
         with:
@@ -106,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        road: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        road: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     permissions:
       contents: write
     steps:
