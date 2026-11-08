@@ -2618,7 +2618,7 @@ static Vec3 g_sc_eye, g_sc_at, g_sc_eye0, g_sc_at0;                         /* t
 #define SC_TYPE 38.0f   /* letters a second as the words type themselves out */
 static const char *sc_text(int beat) { const CupStory *s = &CUP_STORIES[g_sc_char];
     switch (beat) { case SB_TITLE: return s->place; case SB_STORY1: return s->story[0]; case SB_STORY2: return s->story[1]; case SB_VERSE: return s->verse; default: return s->lesson; } }
-static float sc_typed_t(int beat) { return beat == SB_TITLE ? 2.2f : 0.5f + (float)strlen(sc_text(beat)) / SC_TYPE; }
+static float sc_typed_t(int beat) { return beat == SB_TITLE ? 2.2f : 0.25f + (float)strlen(sc_text(beat)) / SC_TYPE; }
 static float sc_beat_len(int beat) {
 #ifdef KK_TOUR
     return 4.0f;   /* the CI photos: every story goes by quickly */
@@ -2788,7 +2788,7 @@ static void sc_build_set(Batch *b, int set) {
         for (int k = 0; k < 4; k++) for (int s = -1; s <= 1; s += 2) sc_cyl(b, s * 9.0f, 0, -2 - k * 7.0f, 0.8f, 11, 0.68f, 0.6f, 0.5f);
         batch_box(b, v3(0, 12.6f, -10), v3(12, 0.6f, 16), 0.5f, 0.42f, 0.34f); break;
     case SET_ARARAT:
-        sc_dome(b, 8, -22, 18, 4, 0.4f, 0.5f, 0.32f); sc_ark(b, 6, 3.2f, -18); sc_dome(b, -30, -60, 35, 22, 0.5f, 0.52f, 0.5f); sc_dome(b, 35, -70, 40, 28, 0.55f, 0.56f, 0.55f);
+        sc_dome(b, 8, -22, 18, 4, 0.4f, 0.5f, 0.32f); sc_ark(b, 6, 3.2f, -18); sc_dome(b, -40, -75, 40, 16, 0.42f, 0.48f, 0.36f); sc_dome(b, 45, -85, 45, 20, 0.46f, 0.5f, 0.4f);
         for (int k = 0; k < 6; k++) batch_quad(b, v3((noise2(k, 21) - 0.5f) * 16, 0.02f, (noise2(k, 22) - 0.5f) * 10), v3(0.9f + noise2(k, 23), 0, 0), v3(0, 0, 0.6f), v3(0, 1, 0), 0, 0, 1, 1, 0.55f, 0.7f, 0.85f, 1);   /* puddles */
         sc_sheep(b, -5, -3); sc_sheep(b, -6.5f, -1.2f); break;
     case SET_EGYPT:
@@ -2823,6 +2823,7 @@ static void draw_story_scene(int drc) {
       for (int i = 0; i < 12; i++) sb.v[sb.n++] = q[i];
       if (set == SET_NAZARETH || (L->night && set != SET_STORM)) for (int k = 0; k < 110; k++) { float x = noise2(k, 91) * 1280, y = noise2(k, 92) * 300, s = 1.2f + noise2(k, 93) * 2.2f, tw = 0.5f + 0.5f * sinf(t * (1.5f + noise2(k, 94) * 2) + k);
           batch_quad(&sb, v3(x, y, 0), v3(s, 0, 0), v3(0, s, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 0.9f, tw * (set == SET_NAZARETH ? clampf(1 - y / 260, 0, 1) : 1)); }
+      for (uint32_t i = 0; i < sb.n; i++) { sb.v[i].px = sb.v[i].px / 640.0f - 1.0f; sb.v[i].py = 1.0f - sb.v[i].py / 360.0f; }   /* the 1280 x 720 layout to the screen */
       gfx_mesh_update(m_sky[drc], sb.v, sb.n); gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(NULL); gfx_draw_ex(m_sky[drc], &id, 1, 1, 1, 1, 0, 1, 0, 0); }
     gfx_clear_depth(drc);
     float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f; Vec3 eye = g_sc_eye, at = g_sc_at;
@@ -2848,7 +2849,7 @@ static void draw_story_scene(int drc) {
     if (set == SET_STORM) { Mat4 bm = m4_mul(m4_translate(5.5f, -0.25f + sc_wave(5.5f, -10, t, 0.35f), -10), m4_mul(m4_rotate_y(0.5f), m4_rotate_z(0.12f * sinf(t * 1.3f)))); gfx_draw_ex(m_boat, &bm, 1, 1, 1, 1, 0.2f, 0, 0, 0); }
     if (set == SET_ELAH && g_gol3d.ok && anim3d_clip(&g_gol3d, "fall") >= 0) { Mat4 gm = m4_mul(m4_translate(-4.5f, 0, -9), m4_rotate_y(1.9f)); anim3d_draw(&g_gol3d, anim3d_clip(&g_gol3d, "fall"), 99.0f, &gm, 1, 1, 1, 1); gfx_bind(NULL); }
     if (set == SET_SHORE && m_whale) {   /* the great fish, at the edge of the sea, mouth open: it has just let Jonah go (Jonah 2:10) */
-        float jaw = 0.35f + 0.1f * sinf(t * 0.8f); Mat4 m = m4_mul(m4_translate(6, -1.2f + 0.15f * sinf(t * 0.7f), -14), m4_mul(m4_rotate_y(-2.3f), m4_scale(0.9f, 0.9f, 0.9f)));
+        float jaw = 0.35f + 0.1f * sinf(t * 0.8f); Mat4 m = m4_mul(m4_translate(6, -0.4f + 0.15f * sinf(t * 0.7f), -14), m4_mul(m4_rotate_y(-2.3f), m4_scale(0.9f, 0.9f, 0.9f)));
         gfx_bind(NULL); gfx_draw_ex(m_whale, &m, 1, 1, 1, 1, 0.8f, 0, 0, 0); Mat4 mj = m4_mul(m, m4_mul(m4_translate(0, -0.55f, -0.4f), m4_rotate_x(jaw))); gfx_draw_ex(m_whale_jaw, &mj, 1, 1, 1, 1, 0.6f, 0, 0, 0); }
     if (set == SET_ELAH && m_pebble) for (int k = 0; k < 5; k++) { Mat4 pm = m4_mul(m4_translate(4.2f + k * 0.12f, 0.1f, 2.0f + k * 0.5f), m4_scale(0.4f, 0.4f, 0.4f)); gfx_draw_ex(m_pebble, &pm, 0.85f, 0.83f, 0.8f, 1, 0.9f, 0, 0, 0); }
     /* the winner's kart: it drives in, stops, and the driver acts out the story */
@@ -2953,7 +2954,7 @@ static void hud_scene_top(void) {
     else {
         const char *hdr = g_sc_beat == SB_VERSE ? "THE BIBLE SAYS" : g_sc_beat == SB_LESSON ? "WHAT THIS TEACHES US" : S->title; float ha = clampf(bt * 3, 0, 1);
         batch_text(&g_b, hdr, 40 + (1 - ha) * 30, py + 16, 18, 1, 0.82f, 0.38f, ha);
-        char lines[5][140]; float sz = g_sc_beat == SB_VERSE ? 26 : 24; int n = sc_wrap(sc_text(g_sc_beat), sz, 1180, lines), left = (int)((bt - 0.5f) * SC_TYPE);
+        char lines[5][140]; float sz = g_sc_beat == SB_VERSE ? 26 : 24; int n = sc_wrap(sc_text(g_sc_beat), sz, 1180, lines), left = (int)((bt - 0.25f) * SC_TYPE);
         float lh = sz + 8, y0 = py + 50 + (n < 3 ? (3 - n) * lh * 0.3f : 0);
         float cr = g_sc_beat == SB_VERSE ? 1.0f : 1, cg = g_sc_beat == SB_VERSE ? 0.9f : 1, cb = g_sc_beat == SB_VERSE ? 0.6f : 1;
         for (int i = 0; i < n && left > 0; i++) { char part[140]; int l = (int)strlen(lines[i]), sh = left < l ? left : l; memcpy(part, lines[i], (size_t)sh); part[sh] = 0; left -= l + 1;
@@ -2984,7 +2985,7 @@ static void tour_pads(Pad *pads, float t) {
 #elif KK_TOUR_ROAD == 13
         {900, 'A'},                              /* the Bible stories run by themselves: no buttons */
 #elif KK_TOUR_ROAD == 12
-        {30, 'A'},                               /* the trophy ceremony plays out, then A: the winner's Bible story, which then runs through the stories by itself */
+        {20, 'A'},                               /* the trophy ceremony plays out, then A: the winner's Bible story, which then runs through the stories by itself */
 #elif KK_TOUR_ROAD == 10
         /* the Walls of Jericho: title, menu (down five times), character, kart, race */
         {8, 'A'}, {11, 'D'}, {13, 'D'}, {15, 'D'}, {17, 'D'}, {19, 'D'}, {21, 'A'}, {24, 'A'}, {27, 'A'},
