@@ -279,7 +279,7 @@ static void draw_story_map(int drc) {
     else if (g_sm_over || g_sm_view) { dist = 140; want_at = v3(0, 0, 6); }
     else { float kx, ky, dx, dy; if (g_sm_driving) sm_route_point(g_sm_rpos, &kx, &ky, &dx, &dy); else { kx = SM_NODE[g_sm_sel].px; ky = SM_NODE[g_sm_sel].py; }
         if (!g_sm_driving && !sm_open(g_sm_sel)) { kx = SM_NODE[g_sm_sel].px; ky = SM_NODE[g_sm_sel].py; }
-        want_at = sm_pos(kx, ky); want_at.x = clampf(want_at.x, -SM_W * 0.3f, SM_W * 0.3f); want_at.z = clampf(want_at.z, -SM_D * 0.3f, SM_D * 0.32f); dist = 78; }
+        want_at = sm_pos(kx, ky); want_at.x = clampf(want_at.x, -SM_W * 0.3f, SM_W * 0.3f); want_at.z = clampf(want_at.z, -SM_D * 0.3f, SM_D * 0.32f); dist = 62; }
     want_eye = v3(want_at.x + sinf(t * 0.13f) * dist * 0.05f, want_at.y + dist * 0.8f, want_at.z + dist * 0.6f);
     if (!g_sm_cam_ok) { g_sm_eye = want_eye; g_sm_look = want_at; g_sm_cam_ok = 1; }
     { float f = g_sm_t < SM_UNFOLD_END ? 1.0f : fminf(1.0f, g_sm_dt * 2.5f); g_sm_eye = sc_lerp(g_sm_eye, want_eye, f); g_sm_look = sc_lerp(g_sm_look, want_at, f); }
@@ -308,13 +308,13 @@ static void draw_story_map(int drc) {
         float pop = rel;   /* everything springs up with the land */
         /* the moving pictures, all 3D models */
         gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
-        { Vec3 p = sm_pos(800 + 30 * cosf(t * 0.25f), 330 + 14 * sinf(t * 0.25f)); p.y = 0.25f + 0.25f * sinf(t * 1.7f); sm_draw_model(&g_prop[PR_BOAT], p, -t * 0.25f + 1.57f, 5.5f * pop, 1, 1, 1, 1); }   /* a fishing boat sailing round Galilee */
-        { float u = 0.5f + 0.5f * sinf(t * 0.18f); Vec3 p = sm_pos(110 + 60 * u, 600 + 140 * u); sm_draw_model(road_prop("@camel"), p, cosf(t * 0.18f) > 0 ? 0.6f : 3.74f, 4.0f * pop, 1, 1, 1, 1); }   /* a camel plodding across Egypt */
-        { Vec3 p = sm_pos(160 + 40 * sinf(t * 0.2f), 905); p.y = 0.1f; sm_draw_model(road_prop("@crocodile"), p, cosf(t * 0.2f) > 0 ? 1.57f : -1.57f, 4.5f * pop, 1, 1, 1, 1); }   /* a crocodile in the Nile */
-        { float a = t * 0.3f; Vec3 p = sm_pos(1180 + 40 * cosf(a), 1035 + 18 * sinf(a)); sm_draw_model(road_prop("@lion_roar"), p, -a, 4.0f * pop, 1, 1, 1, 1); }   /* a lion pacing outside the den */
+        { Vec3 p = sm_pos(800 + 30 * cosf(t * 0.25f), 330 + 14 * sinf(t * 0.25f)); p.y = 0.25f + 0.25f * sinf(t * 1.7f); sm_draw_model(&g_prop[PR_BOAT], p, -t * 0.25f + 1.57f, 7.5f * pop, 1, 1, 1, 1); }   /* a fishing boat sailing round Galilee */
+        { float u = 0.5f + 0.5f * sinf(t * 0.18f); Vec3 p = sm_pos(110 + 60 * u, 600 + 140 * u); sm_draw_model(road_prop("@camel"), p, cosf(t * 0.18f) > 0 ? 0.6f : 3.74f, 5.5f * pop, 1, 1, 1, 1); }   /* a camel plodding across Egypt */
+        { Vec3 p = sm_pos(160 + 40 * sinf(t * 0.2f), 905); p.y = 0.1f; sm_draw_model(road_prop("@crocodile"), p, cosf(t * 0.2f) > 0 ? 1.57f : -1.57f, 6.0f * pop, 1, 1, 1, 1); }   /* a crocodile in the Nile */
+        { float a = t * 0.3f; Vec3 p = sm_pos(1180 + 40 * cosf(a), 1035 + 18 * sinf(a)); sm_draw_model(road_prop("@lion_roar"), p, -a, 5.5f * pop, 1, 1, 1, 1); }   /* a lion pacing outside the den */
         { Vec3 p = sm_pos(420, 610); sm_draw_model(&g_prop[PR_SHEEP], p, 0.8f + 0.3f * sinf(t * 0.5f), 2.2f * pop, 1, 1, 1, 1); p = sm_pos(445, 625); sm_draw_model(&g_prop[PR_SHEEP], p, 2.5f, 2.0f * pop, 1, 1, 1, 1); }   /* sheep near Bethlehem */
         for (int k = 0; k < 3; k++) { float a = t * 0.5f + k * 2.1f; Vec3 c = k == 2 ? sm_pos(490, 450) : sm_pos(672, 160); Vec3 p = v3(c.x + 9 * cosf(a), c.y + 9 + 1.5f * sinf(t * 2 + k), c.z + 6 * sinf(a));   /* doves over Eden and Bethlehem */
-            sm_draw_model(&g_prop[PR_DOVE], p, -a, 2.2f * pop, 1, 1, 1, 1); }
+            sm_draw_model(&g_prop[PR_DOVE], p, -a, 3.2f * pop, 1, 1, 1, 1); }
         for (int k = 0; k < 4; k++) { float x = 960 + fmodf(t * 6 + k * 90, 360), y = 160 + k * 85; Vec3 p = sm_pos(x, y); p.y = 5 + k % 2; float fade = sinf(clampf((x - 960) / 360, 0, 1) * 3.14159f);   /* clouds drifting round Heaven */
             sm_draw_model(&g_prop[PR_CLOUD], p, 0.3f * k, 9.0f * pop * (0.4f + 0.6f * fade), 1, 1, 1, 1); }
         /* the glows: Bethlehem's star, Heaven's gate, the empty tomb, the furnace fire, the Red Sea spray, sparkles on the sea */
@@ -331,9 +331,9 @@ static void draw_story_map(int drc) {
         for (int i = 0; i < SM_NODES; i++) { Vec3 c = sm_pos(SM_NODE[i].px, SM_NODE[i].py); float sp = sc_smooth((rel - i * 0.03f) * 2.5f), bob = 0.35f * sinf(t * 2.6f + i), sel = i == g_sm_sel;
             if (sp <= 0) continue; int op = sm_open(i) || g_sm_view, cl = sm_cleared(i) && !g_sm_view, nxt = i == g_save.story && !g_sm_view; if (g_sm_view) sel = 0;
             float pr = cl ? 1.0f : op ? 0.4f : 0.55f, pg = cl ? 0.82f : op ? 0.9f : 0.55f, pb = cl ? 0.25f : op ? 1.0f : 0.6f;
-            sc_tube(&db, v3(c.x, c.y, c.z), v3(c.x, c.y + 0.35f, c.z), 2.0f * sp, 2.0f * sp, 18, 0.95f, 0.78f, 0.35f, 1, 1);   /* a gold base */
+            sc_tube(&db, v3(c.x, c.y, c.z), v3(c.x, c.y + 0.35f, c.z), 2.6f * sp, 2.6f * sp, 18, 0.95f, 0.78f, 0.35f, 1, 1);   /* a gold base */
             sc_tube(&db, v3(c.x, c.y + 0.35f, c.z), v3(c.x, c.y + 3.6f * sp, c.z), 0.18f, 0.18f, 6, 0.9f, 0.9f, 0.88f, 1, 1);
-            sc_ball(&db, v3(c.x, c.y + 4.4f * sp + bob, c.z), (sel ? 1.25f : 0.95f) * sp, 12, pr, pg, pb, 1);
+            sc_ball(&db, v3(c.x, c.y + 4.4f * sp + bob, c.z), (sel ? 1.7f : 1.3f) * sp, 12, pr, pg, pb, 1); SM_GLOW(v3(c.x, c.y + 4.4f * sp + bob, c.z), 3.2f * sp, pr, pg, pb, 0.45f);
             if (!op) {   /* a padlock */
                 Vec3 l = v3(c.x + 2.2f, c.y + 1.4f, c.z + 1.2f); sc_tube(&db, v3(l.x, l.y - 0.8f, l.z), v3(l.x, l.y + 0.6f, l.z), 0.9f, 0.9f, 4, 0.55f, 0.5f, 0.45f, 1, 1);
                 for (int s2 = 0; s2 < 6; s2++) { float a0 = 3.14159f * s2 / 6, a1 = 3.14159f * (s2 + 1) / 6; sc_tube(&db, v3(l.x + 0.55f * cosf(a0), l.y + 0.6f + 0.7f * sinf(a0), l.z), v3(l.x + 0.55f * cosf(a1), l.y + 0.6f + 0.7f * sinf(a1), l.z), 0.14f, 0.14f, 5, 0.75f, 0.75f, 0.78f, 1, 1); } }
@@ -365,7 +365,7 @@ static void draw_story_map(int drc) {
             Vec3 p = sm_pos(kx, ky); float yaw = atan2f(dx, dy); Vec3 ah = sm_pos(kx + dx * 0.05f, ky + dy * 0.05f);
             K3Pose P; memset(&P, 0, sizeof P); P.t = t; if (!driving) { P.arm[1] = K3A_WAVE; P.arm_w[1] = 1; P.look_yaw = 0.4f * sinf(t * 0.7f); } else P.bob = 0.03f * fabsf(sinf(t * 9));
             if (g_sm_cel > 0) { P.arm[0] = P.arm[1] = K3A_UP; P.arm_w[0] = P.arm_w[1] = 1; }
-            float s = 2.4f * pop; (void)ah; Mat4 m = m4_mul(m4_translate(p.x, p.y + 0.1f + (driving ? 0.15f * fabsf(sinf(t * 11)) : 0), p.z), m4_mul(m4_rotate_y(yaw), m4_scale(s, s, s)));
+            float s = 3.4f * pop; (void)ah; Mat4 m = m4_mul(m4_translate(p.x, p.y + 0.1f + (driving ? 0.15f * fabsf(sinf(t * 11)) : 0), p.z), m4_mul(m4_rotate_y(yaw), m4_scale(s, s, s)));
             gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(&g_k3d[ch], &m, driving ? t * 12 : 0, 0, &P, 1, 1, 1, 1);
             if (driving) for (int k = 0; k < 6; k++) { float ph = fmodf(t * 3 + k / 6.0f, 1.0f); SM_GLOW(v3(p.x - sinf(yaw) * (1.5f + ph * 3), p.y + 0.5f + ph, p.z - cosf(yaw) * (1.5f + ph * 3)), 0.7f + ph, 0.9f, 0.8f, 0.6f, 0.5f * (1 - ph)); } } }
         if (gb.n) { gfx_mesh_update(m_glow[drc], gb.v, gb.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_glow[drc], &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); }
