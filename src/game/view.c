@@ -115,6 +115,7 @@ static const float PLAYER_COL[MAX_HUMANS][3] = {{1.0f, 0.85f, 0.3f}, {0.35f, 0.6
 static Anim3D g_gol3d; static Mesh *m_spear3d;
 static Texture *tx_goliath; static float g_goliath_aspect = 0.67f; static Mesh *m_goliath, *m_hud2;
 static Kart3D g_k3d[NCHARS];   /* racers with a real 3D kart (content/models/<name>.kkm) */
+static Kart3D g_k3d_lo[NCHARS];   /* the same karts in low detail (<name>_lo.kkm, tools/model3d/kkm_lod.py): far away, the other players' karts in split-screen, and every shadow */
 static Texture *tx_flame; static Texture *tx_emblem[NSTYLES]; static int g_emb_kind; static void px_emblem(int x, int y, uint32_t *o); static Texture *tx_bearer; static float g_bearer_aspect = 0.67f; static Mesh *m_bearer;   /* Goliath's shield-bearer (char_shieldbearer.png, or a drawn one) */
 static Mesh *m_driver_box, *m_driver_head, *m_driver_spr[NKARTS];
 static unsigned g_unl_bits; static float g_unl_t;   /* the "UNLOCKED!" screens still to show after this race, one per prize, and how long the current one has been up */
@@ -141,7 +142,7 @@ static float g_results_t;
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
 static Mesh *m_shsquare;
-static int g_pad_race = 1;   /* the GamePad during a race: 1 = the race itself (the TV picture), 0 = the big map and standings; tap its corner button to switch */   /* the patch of road a kart's shadow is darkened through (see ST_MULDA) */
+static int g_pad_race = 0;   /* the GamePad during a race: 1 = the race itself (the TV picture), 0 = the big map and standings; tap its corner button to switch */   /* the patch of road a kart's shadow is darkened through (see ST_MULDA) */
 static uint32_t g_px[256 * 256];
 #define PROP_CHUNKS 12
 static Mesh *m_props[MAT_N][PROP_CHUNKS], *m_curbs; static int m_nprops[MAT_N]; static Texture *tx_mat[MAT_N];
@@ -1616,6 +1617,7 @@ int game_init(int status) {
                 if (tx_kartview[i][v + 1] && (g_view_wd[i][v + 1] = wheel_def(cn)) != NULL) g_view_wtex[i][v + 1] = wheel_tex(cn); }
             static const char *rsuf[5] = {"b", "bl", "l", "fl", "f"};
             if (!g_k3d[i].ok) kart3d_load(&g_k3d[i], pn[i] + 9);
+            if (g_k3d[i].ok && !g_k3d_lo[i].ok) { char ln[64]; snprintf(ln, sizeof ln, "%s_lo", pn[i] + 9); g_kart3d_tex_override = g_k3d[i].tex; kart3d_load(&g_k3d_lo[i], ln); g_kart3d_tex_override = NULL; }
             for (int v = 0; v < 5; v++) { snprintf(cn, sizeof cn, "ride_%s_%s", pn[i] + 9, rsuf[v]); w = h = 1; tx_ride[i][v] = asset_texture(cn, 0, &w, &h); g_ride_aspect[i][v] = h > 0 ? (float)w / (float)h : 1.4f;
                 if (tx_ride[i][v] && (g_ride_wd[i][v] = wheel_def(cn)) != NULL) g_ride_wtex[i][v] = wheel_tex(cn);
                 if (tx_ride[i][v]) g_ride_td[i][v] = tread_def(cn); } }
@@ -3618,7 +3620,8 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             Mat4 m = m4_identity(); m.m[0] = e1.x; m.m[1] = e1.y; m.m[2] = e1.z; m.m[4] = up.x; m.m[5] = up.y; m.m[6] = up.z; m.m[8] = out.x; m.m[9] = out.y; m.m[10] = out.z;
             m.m[12] = pl->p.x + e1.x * shud; m.m[13] = pl->p.y + 0.15f; m.m[14] = pl->p.z + e1.z * shud; gfx_bind(tx_mat[MAT_STONE]); gfx_draw(pl->m3, &m, 1, 1, 1, 1); } gfx_bind(NULL);
         for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; const char *img = g_kind[pl->kind].img; if (img[0] != '@') continue;   /* the Meshy models by the road: pyramids, the Sphinx, colossi, camels... */
-            Kart3D *pk = road_prop(img); if (!pk) continue; float dx = pl->p.x - eye.x, dz = pl->p.z - eye.z, far2 = pl->h > 20 ? 900.0f * 900.0f : 260.0f * 260.0f; if (dx * dx + dz * dz > far2) continue;
+            Kart3D *pk = road_prop(img); if (!pk) continue; float dx = pl->p.x - eye.x, dz = pl->p.z - eye.z, far2 = pl->h > 20 ? 900.0f * 900.0f : (g_nplayers >= 3 ? 150.0f * 150.0f : g_nplayers == 2 ? 200.0f * 200.0f : 260.0f * 260.0f); if (dx * dx + dz * dz > far2) continue;
+            { float fx = at.x - eye.x, fz = at.z - eye.z, fl = sqrtf(fx * fx + fz * fz) + 1e-4f; if ((dx * fx + dz * fz) / fl < -(pl->h + 12.0f)) continue; }   /* behind the camera */
             float hgt = fmaxf(pk->hi.y - pk->lo.y, 0.1f), sc2 = pl->h / hgt, yaw = atan2f(-pl->o3.x, -pl->o3.z);   /* they face the road */
             Mat4 pm = m4_mul(m4_translate(pl->p.x, pl->p.y + 0.15f, pl->p.z), m4_mul(m4_rotate_y(yaw), m4_scale(sc2, sc2, sc2)));
             gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw(pk, &pm, 0, 0, 1, 1, 1, 1); }
@@ -3711,14 +3714,18 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         /* the karts */
         gfx_state(ST_SOLID); gfx_bind(NULL);
         for (int i = 0; i < r->nk; i++) { Kart *q = &r->k[i]; if (r->swallow_t[i] > 0) continue;   /* inside the great fish */ const Character *c = &CHARACTERS[r->character[i]];
-            if (i != vk) { float cdx = q->x - eye.x, cdz = q->z - eye.z; if (cdx * cdx + cdz * cdz < 3.2f * 3.2f) continue; }   /* a kart sitting on the camera would fill the screen */
+            float kd2 = (q->x - eye.x) * (q->x - eye.x) + (q->z - eye.z) * (q->z - eye.z);
+            if (i != vk) { if (kd2 < 3.2f * 3.2f) continue;   /* a kart sitting on the camera would fill the screen */
+                float fx = at.x - eye.x, fz = at.z - eye.z, fl = sqrtf(fx * fx + fz * fz) + 1e-4f; if (((q->x - eye.x) * fx + (q->z - eye.z) * fz) / fl < -4.0f) continue;   /* behind the camera: not drawn at all */
+                if (kd2 > 320.0f * 320.0f) continue; }
             float pitch = -atan2f(q->hit.slope, 1.0f) * (q->air ? 0.3f : 1.0f) + (q->air ? -q->vy * 0.03f : 0.0f);
             float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f;
             float sq = 1.0f - q->squash * 0.25f;
             Mat4 m = kart_mat(r, i); (void)pitch; (void)roll; (void)sq;
             int sty = r->style[i] >= 0 && r->style[i] < NSTYLES ? r->style[i] : 0;
             if (g_k3d[r->character[i]].ok) {   /* a real 3D kart: body and driver, wheels that roll and steer, and its shadow on the road */
-                const Kart3D *k3 = &g_k3d[r->character[i]]; float st = q->stun > 0 ? 0.6f : 1.0f;
+                const Kart3D *k3 = &g_k3d[r->character[i]], *k3lo = g_k3d_lo[r->character[i]].ok ? &g_k3d_lo[r->character[i]] : k3; float st = q->stun > 0 ? 0.6f : 1.0f;
+                if (i != vk && (kd2 > 24.0f * 24.0f || (g_nplayers >= 3 && kd2 > 10.0f * 10.0f) || (g_nplayers == 2 && kd2 > 16.0f * 16.0f))) k3 = k3lo;   /* far away, or small in a split screen: the low-detail kart */
                 gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(k3, &m, g_wheel_ang[i], -q->steer_vis * 0.42f, &g_drv[i].p, sr * st, sg * st, sb * st, 1);
                 if (!q->air || q->hop < 2.5f) {   /* the shadow: the kart squashed flat onto the road along the sun */
                     float gy = q->hit.height + 0.04f, lx = ldir.x, ly = ldir.y < 0.25f ? 0.25f : ldir.y, lz = ldir.z;
@@ -3728,7 +3735,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                        0.58, so overlaps can't add up), then darken the patch once by what is marked */
                     Mat4 smx = m4_mul(sh, m), pm = m4_mul(m4_translate(q->x - lx / ly * 1.3f, gy, q->z - lz / ly * 1.3f), m4_scale(2.0f + fabsf(lx / ly) * 1.5f, 1, 2.0f + fabsf(lz / ly) * 1.5f)); gfx_bind(NULL);
                     gfx_state(ST_AMASK); gfx_draw_ex(m_shsquare, &pm, 0, 0, 0, 1, 0, 1, 0, 0);
-                    gfx_state(ST_AMASK | ST_DEPTH); kart3d_draw_flat(k3, &smx, 0, 0, &g_drv[i].p, 0.0f, 0.0f, 0.0f, 0.58f);
+                    gfx_state(ST_AMASK | ST_DEPTH); kart3d_draw_flat(k3lo, &smx, 0, 0, &g_drv[i].p, 0.0f, 0.0f, 0.0f, 0.58f);   /* a shadow never needs the detail */
                     gfx_state(ST_MULDA); gfx_draw_ex(m_shsquare, &pm, 1, 1, 1, 1, 0, 1, 0, 0); }
                 gfx_state(ST_SOLID); gfx_bind(NULL); continue; }
             if (tx_kartback[r->character[i]]) continue;      /* drawn as a picture below */
@@ -4510,7 +4517,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
 #ifdef KK_TOUR
         if (!drc && g_time > 98.0f && g_time < 103.0f && g_screen == SCR_RACE && !split) gamepad_map = 1;   /* the CI camera only sees the TV: show the GamePad layout there for one photo */
 #endif
-        if (gamepad_map && g_pad_race && drc) {   /* the GamePad shows the race: the TV's finished picture, copied over (no second drawing of the race) */
+        if (gamepad_map && g_pad_race && drc && !split) {   /* the GamePad shows the race: the TV's finished picture, copied over (no second drawing of the race) */
             gfx_view_begin(drc, 0, 0, 0); Texture *tv = gfx_grab_ex(0, drc); gfx_viewport(drc, 0, 0, 1, 1); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
             batch_init(&g_b, g_vtmp, 16384); batch_clear(&g_b);
             static Mesh *m_padview; if (!m_padview) { batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_padview = gfx_mesh_static(g_b.v, g_b.n); batch_clear(&g_b); }

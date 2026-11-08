@@ -9,6 +9,7 @@ static uint32_t be32(uint32_t v) {   /* the file is in the Wii U's byte order (b
     if (g_little < 0) { uint16_t one = 1; g_little = *(uint8_t *)&one == 1; }
     return g_little ? ((v >> 24) | ((v >> 8) & 0xFF00u) | ((v << 8) & 0xFF0000u) | (v << 24)) : v; }
 static void be_words(void *p, size_t n) { uint32_t *w = p; for (size_t i = 0; i < n; i++) w[i] = be32(w[i]); }
+Texture *g_kart3d_tex_override;
 int kart3d_load(Kart3D *k, const char *name) {
     memset(k, 0, sizeof *k); char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "models/%s.kkm", name);
     FILE *f = fopen(path, "rb"); if (!f) return 0;
@@ -25,7 +26,7 @@ int kart3d_load(Kart3D *k, const char *name) {
             if (x < k->lo.x) k->lo.x = x; if (y < k->lo.y) k->lo.y = y; if (z < k->lo.z) k->lo.z = z; if (x > k->hi.x) k->hi.x = x; if (y > k->hi.y) k->hi.y = y; if (z > k->hi.z) k->hi.z = z; }
         k->m[kind] = n ? gfx_mesh_static(v, n) : NULL; k->piv[kind] = v3(hdr[0], hdr[1], hdr[2]); k->rad[kind] = hdr[3]; free(v); }
     fclose(f);
-    if (good && k->m[K3_BODY]) { snprintf(path, sizeof path, "models/%s.png", name); int w, h; k->tex = asset_texture_file(path, 1, &w, &h); }
+    if (good && k->m[K3_BODY]) { if (g_kart3d_tex_override) k->tex = g_kart3d_tex_override; else { snprintf(path, sizeof path, "models/%s.png", name); int w, h; k->tex = asset_texture_file(path, 1, &w, &h); } }
     k->ok = good && k->m[K3_BODY] && k->tex;
     k->rig = k->ok && k->m[K3_HEAD];   /* the torso, the arms and the steering wheel are optional: a driver may only turn the head */
     gfx_log("3D kart %s: %s%s", name, k->ok ? "loaded" : (good ? "picture missing" : "model file unreadable"), k->rig ? " (driver moves)" : "");
