@@ -24,6 +24,15 @@ PROPS = {   # name: (what it is, triangles)
     'sacks':        ('a pile of burlap sacks full of grain, some open showing wheat', 2500),
     'boulder':      ('a large rough sandstone boulder rock', 1500),
     'cloud':        ('a big fluffy white cumulus cloud, soft round puffs', 2000),
+    # the Pharaoh's Cup roads
+    'crocodile':    ('a big Nile crocodile lying with its jaws a little open, green scaly back, long tail', 3500),
+    'sphinx':       ('the Great Sphinx of Egypt: a lion body lying down with a pharaoh head wearing a striped nemes headdress, sandstone', 5000),
+    'obelisk':      ('a tall ancient Egyptian obelisk of pink granite carved with hieroglyphs, gold capped pyramid tip, on a stepped base', 1500),
+    'colossus':     ('a giant seated pharaoh statue on a throne, hands on knees, nemes headdress, carved sandstone, like Abu Simbel', 5000),
+    'pylon':        ('an ancient Egyptian temple gateway pylon: two tall sloping towers of carved sandstone with hieroglyphs and a big doorway between, blue ankh banners', 5000),
+    'camel':        ('a camel standing, one hump, colorful saddle blanket with tassels', 3500),
+    'stall':        ('an Egyptian market stall with a striped red and white awning, baskets of fruit, clay pots and rugs', 4000),
+    'brazier':      ('a tall bronze brazier fire bowl on a stand with burning flames, Egyptian style', 1500),
 }
 def req(m, p, b=None):
     r = urllib.request.Request(B + p, data=json.dumps(b).encode() if b is not None else None, method=m, headers={'Authorization': 'Bearer ' + K, 'Content-Type': 'application/json'})

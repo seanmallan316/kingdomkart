@@ -300,6 +300,161 @@ static const Mover EDEN_MOVERS[] = {
     {"#lamb", 198, 0.0f, 5.5f, 0.45f, 2.0f, 1.4f, 2.0f},               /* lambs wandering the orchard */
 };
 
+// ------------------------------------------------------------------ the Pharaoh's Cup (Sean's four roads of Egypt)
+// '@name' scenery is a Meshy model (content/models/prop_<name>.kkm), '#name' one of the built ones.
+// Nile River Rush: the market by the river, over the water, round the waterfall cliffs, a leap off the falls,
+// through the temple of the colossi, and home past the Sphinx. Crocodiles slide across the river road.
+static const TrackPoint NILE_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},   /* start: the riverside market */
+    {    0, 0.0f,   45, 14, 0.00f},
+    {   12, 0.5f,   90, 14, 0.10f},
+    {   50, 1.0f,  112, 13, 0.00f},   /* out onto the river causeway */
+    {   92, 0.5f,  102, 13, 0.10f},
+    {  112, 0.0f,   65, 14, 0.00f},   /* the reed beds: crocodiles */
+    {  138, 1.5f,   38, 13, 0.00f},
+    {  170, 4.0f,   50, 12, 0.15f},   /* climbing the cliff road */
+    {  182, 7.0f,   88, 12, 0.12f},
+    {  165, 9.0f,  120, 12, 0.00f, 1},/* the leap off the falls */
+    {  128, 3.0f,  145, 13, 0.00f},
+    {   82, 1.0f,  158, 14, 0.00f},   /* the temple of the colossi */
+    {   35, 0.5f,  160, 14, 0.00f},
+    {  -15, 0.0f,  138, 13, 0.00f},
+    {  -40, 0.0f,   90, 13, 0.00f},   /* past the Sphinx */
+    {  -38, 0.0f,   38, 14, 0.00f},
+};
+static const Scenery NILE_SCENERY[] = {
+    /* the market (0-59) */
+    {"#stall", 6, -13, 5, 0}, {"@camel", 10, 14, 2.6f, 0}, {"#stall", 16, 13, 5, 0}, {"@stall", 22, -14, 4, 0}, {"@brazier", 26, 12, 2.5f, 3}, {"#house1", 32, -13, 7, 0},
+    {"@camel", 38, -15, 2.6f, 0}, {"#house2", 44, 13, 9, 0}, {"@stall", 50, -13, 4, 0}, {"#palm", 56, 14, 11, 0},
+    /* the river (60-139): boats, reeds, palms, crocodiles basking */
+    {"#boat", 66, -16, 4, 0}, {"#palm", 72, 14, 12, 0}, {"@crocodile", 80, -15, 1.2f, 0}, {"#boat", 88, 17, 4, 0}, {"#lily", 94, -13, 2, 0}, {"#palm", 102, 14, 11, 0},
+    {"@crocodile", 110, 15, 1.2f, 0}, {"#fern", 116, -13, 3, 0}, {"#boat", 124, -17, 4, 0}, {"#palm", 132, 13, 11, 0},
+    /* the cliff road and the falls (140-199) */
+    {"#rock", 144, -13, 3, 0}, {"#palm", 150, 13, 11, 0}, {"#waterfall", 162, -18, 12, 0}, {"#rock", 168, 13, 3, 0}, {"#waterfall", 176, 18, 14, 0}, {"#waterfall", 182, -18, 14, 0},
+    /* the temple of the colossi (200-259) */
+    {"@colossus", 206, -16, 14, 0}, {"@colossus", 206, 16, 14, 0}, {"@obelisk", 214, -13, 10, 0}, {"@obelisk", 214, 13, 10, 0}, {"@brazier", 222, -12, 2.5f, 3}, {"@brazier", 222, 12, 2.5f, 3},
+    {"@colossus", 252, -16, 14, 0}, {"@colossus", 252, 16, 14, 0},
+    /* home past the Sphinx and the pyramids (260-319) */
+    {"@sphinx", 270, -30, 12, 0}, {"#palm", 278, 13, 11, 0}, {"@pyramid", 288, -70, 45, 0}, {"@pyramid", 296, 75, 38, 0}, {"#palm", 304, -13, 12, 0}, {"@camel", 312, 14, 2.6f, 0},
+};
+static const RoadPad NILE_PADS[] = { {40, -2.5f, 2.2f, PAD_BOOST}, {44, 2.5f, 2.2f, PAD_BOOST}, {128, 0.0f, 2.5f, PAD_BOOST}, {172, 0.0f, 2.5f, PAD_BOOST}, {284, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow NILE_COINS[] = { {28, 5, 3, 2.5f}, {100, 5, 3, -2.5f}, {150, 5, 3, 2.5f}, {230, 6, 3, 0.0f}, {300, 5, 3, -2.5f} };
+static const Tunnel NILE_TUNNELS[] = { {226, 248, 6.0f} };   /* the temple hall */
+static const Mover NILE_MOVERS[] = {
+    {"@crocodile", 114, 0.0f, 6.0f, 0.42f, 0.0f, 1.8f, 1.0f},          /* crocodiles crawling across the river road */
+    {"@crocodile", 136, 0.0f, 6.5f, 0.5f, 2.2f, 1.8f, 1.0f},
+};
+
+// Pyramid Pass: out of the market into the dunes, round the pyramids, through the temple of the kings, over the canyon
+// bridge with the waterfall below, a leap off the far side, and down past falling rocks.
+static const TrackPoint PYR_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},   /* start: the market at the edge of the desert */
+    {    0, 0.0f,   50, 14, 0.00f},
+    {  -18, 1.0f,   95, 13, -0.10f},
+    {  -58, 3.0f,  118, 13, 0.00f},   /* up into the dunes */
+    { -102, 6.0f,  105, 12, 0.12f},
+    { -125, 8.0f,   62, 12, 0.00f},   /* round the great pyramid */
+    { -112, 6.0f,   18, 13, 0.00f},
+    {  -78, 4.0f,   -8, 13, 0.00f},   /* the temple of the kings */
+    {  -40, 4.0f,  -28, 13, 0.00f},
+    {   -2, 5.0f,  -55, 12, 0.10f},
+    {   42, 9.0f,  -62, 12, 0.00f},   /* the canyon bridge */
+    {   80, 11.0f, -40, 12, 0.00f, 1},/* the leap off the far side */
+    {  100, 4.0f,    0, 13, 0.00f},
+    {   92, 2.0f,   45, 13, 0.00f},   /* falling rocks */
+    {   62, 1.0f,   62, 14, 0.00f},
+    {   36, 0.0f,   30, 14, 0.00f},
+    {   22, 0.0f,  -18, 14, 0.00f},
+};
+static const Scenery PYR_SCENERY[] = {
+    /* the market (0-39) */
+    {"#stall", 6, 13, 5, 0}, {"@camel", 12, -14, 2.6f, 0}, {"#tent", 18, 14, 5, 0}, {"@stall", 24, -13, 4, 0}, {"@obelisk", 32, 13, 10, 0},
+    /* the dunes and the pyramids (40-139) */
+    {"@pyramid", 50, -60, 40, 0}, {"@camel", 58, 14, 2.6f, 0}, {"#rock", 66, -13, 3, 0}, {"@pyramid", 78, 70, 55, 0}, {"@sphinx", 90, -26, 12, 0}, {"#palm", 100, 14, 11, 0},
+    {"@pyramid", 112, -80, 60, 0}, {"#rock", 120, 13, 3, 0}, {"@obelisk", 130, -13, 11, 0},
+    /* the temple of the kings (140-179) */
+    {"@colossus", 140, -16, 15, 0}, {"@colossus", 140, 16, 15, 0}, {"@brazier", 146, -12, 2.5f, 3}, {"@brazier", 146, 12, 2.5f, 3}, {"@brazier", 172, -12, 2.5f, 3}, {"@brazier", 172, 12, 2.5f, 3},
+    {"@colossus", 178, -16, 15, 0}, {"@colossus", 178, 16, 15, 0},
+    /* the canyon (180-239): the waterfall below the bridge */
+    {"#waterfall", 200, -22, 16, 0}, {"#waterfall", 210, 22, 14, 0}, {"#rock", 216, -13, 3, 0}, {"#waterfall", 222, -22, 14, 0},
+    /* falling rocks and home (240-339) */
+    {"#rock", 246, 13, 4, 0}, {"#rock", 256, -13, 4, 0}, {"@pyramid", 270, 75, 48, 0}, {"#rock", 280, 14, 3, 0}, {"@camel", 296, -14, 2.6f, 0}, {"#palm", 306, 13, 11, 0}, {"@obelisk", 320, -13, 10, 0}, {"#tent", 330, 14, 5, 0},
+};
+static const RoadPad PYR_PADS[] = { {36, 0.0f, 2.5f, PAD_BOOST}, {100, -2.5f, 2.2f, PAD_BOOST}, {104, 2.5f, 2.2f, PAD_BOOST}, {206, 0.0f, 2.5f, PAD_BOOST}, {300, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow PYR_COINS[] = { {26, 5, 3, -2.5f}, {80, 5, 3, 2.5f}, {150, 6, 3, 0.0f}, {262, 5, 3, -2.5f}, {316, 5, 3, 2.5f} };
+static const Tunnel PYR_TUNNELS[] = { {148, 170, 6.0f} };   /* the hall of the kings */
+static const Mover PYR_MOVERS[] = {
+    {"#stone", 250, 0.0f, 6.5f, 0.55f, 0.0f, 1.8f, 2.4f},              /* rocks tumbling down off the cliffs */
+    {"#stone", 272, 0.0f, 6.0f, 0.7f, 1.5f, 1.8f, 2.4f},
+    {"@camel", 16, 0.0f, 5.0f, 0.35f, 2.0f, 1.6f, 2.6f},
+};
+
+// Plagues of Egypt: a stormy night through the city of Egypt: the locusts, the hail and fire, the river turned to blood,
+// and the darkness that could be felt (Exodus 7-10). The ruins come down on the road.
+static const TrackPoint PLAG_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},   /* start: the city gate */
+    {    0, 0.0f,   50, 14, 0.00f},
+    {   25, 0.5f,   92, 13, 0.10f},   /* the locusts */
+    {   70, 1.0f,  108, 13, 0.00f},
+    {  110, 1.5f,   90, 13, 0.12f},
+    {  125, 2.0f,   50, 13, 0.00f},   /* the hail and fire */
+    {  110, 2.0f,   10, 13, 0.00f},
+    {   78, 2.5f,  -12, 13, 0.00f},   /* the river of blood */
+    {   55, 3.0f,  -50, 12, 0.10f},
+    {   70, 3.0f,  -92, 12, 0.00f},
+    {   35, 2.0f, -118, 13, 0.00f},   /* the darkness */
+    {   -8, 1.0f, -100, 13, 0.00f},
+    {  -30, 0.5f,  -60, 13, 0.00f},
+    {  -25, 0.0f,  -22, 14, 0.00f},
+};
+static const Scenery PLAG_SCENERY[] = {
+    {"@pylon", 4, -24, 16, 0}, {"@brazier", 8, 12, 2.5f, 3}, {"@colossus", 14, -16, 14, 0}, {"#house2", 20, 13, 9, 0}, {"@brazier", 26, -12, 2.5f, 3}, {"#wallseg", 32, 14, 9, 0},
+    {"@obelisk", 44, -13, 10, 0}, {"#house1", 52, 13, 7, 0}, {"#palm", 60, -14, 11, 0}, {"@brazier", 68, 12, 2.5f, 3}, {"#wallseg", 76, -14, 9, 0},
+    {"@colossus", 88, 16, 14, 0}, {"#pillar", 96, -13, 6, 0}, {"#pillar", 104, 13, 6, 0}, {"@brazier", 112, -12, 2.5f, 3}, {"#rubble", 120, 13, 3, 0},
+    {"#pillar", 130, -13, 6, 0}, {"@obelisk", 140, 13, 10, 0}, {"#rubble", 148, -13, 3, 0},
+    {"@brazier", 156, 12, 2.5f, 3}, {"#wallseg", 166, 14, 9, 0}, {"#palm", 176, 13, 11, 0}, {"@colossus", 186, 16, 14, 0}, {"#pillar", 196, 13, 6, 0},
+    {"@brazier", 206, -12, 2.5f, 3}, {"@brazier", 222, 12, 2.5f, 3}, {"#rubble", 232, -13, 3, 0}, {"@brazier", 244, 12, 2.5f, 3}, {"#wallseg", 254, -14, 9, 0},
+    {"@pylon", 264, 24, 16, 0}, {"@pyramid", 272, -70, 40, 0},
+};
+static const RoadPad PLAG_PADS[] = { {38, 0.0f, 2.5f, PAD_BOOST}, {114, -2.5f, 2.2f, PAD_BOOST}, {118, 2.5f, 2.2f, PAD_BOOST}, {200, 0.0f, 2.5f, PAD_BOOST}, {262, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow PLAG_COINS[] = { {24, 5, 3, 2.5f}, {84, 5, 3, -2.5f}, {150, 5, 3, 2.5f}, {214, 5, 3, 0.0f}, {250, 5, 3, -2.5f} };
+static const Tunnel PLAG_TUNNELS[] = { {124, 140, 6.0f} };   /* under the ruined colonnade */
+static const Mover PLAG_MOVERS[] = {
+    {"#stone", 142, 0.0f, 6.0f, 0.6f, 0.0f, 1.8f, 2.4f},               /* the ruins collapsing onto the road */
+    {"#rubble", 236, 0.0f, 5.5f, 0.5f, 1.0f, 1.6f, 1.6f},
+};
+
+// Red Sea Escape: the road runs on dry ground through the midst of the sea, the waters a wall on the right hand and on
+// the left (Exodus 14:22); rocks fall from the cliffs; out the far side onto the shore where Israel sings (Exodus 15).
+static const TrackPoint RSEA_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},   /* start: the shore, Pharaoh's army behind */
+    {    0, 0.0f,   55, 14, 0.00f},
+    {  -10, -1.0f, 110, 14, 0.00f},   /* down into the sea, the walls of water rising */
+    {   10, -2.0f, 160, 13, 0.08f},
+    {   55, -2.5f, 185, 13, 0.00f},
+    {  100, -2.0f, 170, 13, 0.10f},
+    {  122, -1.0f, 125, 13, 0.00f},
+    {  108, 0.0f,   80, 13, 0.00f},   /* climbing out over the rocks */
+    {   80, 1.0f,   50, 13, 0.00f, 1},/* a leap onto the far shore */
+    {   95, 1.0f,    5, 13, 0.00f},
+    {   80, 0.5f,  -38, 13, 0.10f},
+    {   40, 0.0f,  -55, 14, 0.00f},   /* the singing on the shore */
+    {    5, 0.0f,  -35, 14, 0.00f},
+};
+static const Scenery RSEA_SCENERY[] = {
+    {"@brazier", 6, -12, 2.5f, 3}, {"#tent", 12, 14, 5, 0}, {"@villager", 16, -13, 1.7f, 0}, {"@sheep", 20, 13, 1.1f, 0}, {"@villager", 24, 13, 1.7f, 0}, {"@brazier", 30, 12, 2.5f, 3},
+    {"#rock", 46, -13, 3, 0}, {"#rock", 70, 13, 3, 0}, {"#rock", 96, -13, 4, 0}, {"#rock", 120, 13, 3, 0}, {"#rock", 140, -13, 4, 0},
+    {"#rock", 152, 13, 4, 0}, {"#rock", 158, -14, 5, 0}, {"#rock", 166, 14, 4, 0},
+    {"@villager", 200, -13, 1.7f, 0}, {"@villager", 204, 13, 1.7f, 0}, {"@sheep", 208, -13, 1.1f, 0}, {"#tent", 214, -14, 5, 0}, {"@villager", 218, 13, 1.7f, 0}, {"@brazier", 224, 12, 2.5f, 3},
+    {"#palm", 232, -13, 11, 0}, {"@camel", 240, 14, 2.6f, 0}, {"#tent", 248, 13, 5, 0}, {"@sheep", 254, -13, 1.1f, 0},
+};
+static const RoadPad RSEA_PADS[] = { {40, 0.0f, 2.5f, PAD_BOOST}, {90, -2.5f, 2.2f, PAD_BOOST}, {94, 2.5f, 2.2f, PAD_BOOST}, {150, 0.0f, 2.5f, PAD_BOOST}, {226, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow RSEA_COINS[] = { {24, 5, 3, 2.5f}, {70, 5, 3, -2.5f}, {120, 6, 3, 0.0f}, {190, 5, 3, 2.5f}, {236, 5, 3, -2.5f} };
+static const Mover RSEA_MOVERS[] = {
+    {"#stone", 128, 0.0f, 6.5f, 0.55f, 0.0f, 1.8f, 2.4f},              /* rocks tumbling off the cliffs */
+    {"#stone", 162, 0.0f, 6.0f, 0.7f, 1.5f, 1.8f, 2.4f},
+};
+
 // ------------------------------------------------------------------ The Walls of Jericho: seven laps round the walled city (Joshua 6)
 // The road circles the city under its walls: Israel's camp and the priests on the outside, the walls and towers on the inside,
 // the Ark carried ahead on the north road. On the seventh lap the walls come down and the rubble lands on the road.
@@ -437,6 +592,54 @@ const TrackDef TRACK_DEFS[] = {
       128, 150, 1,                              /* the flower bank on the outside of the Tree of Life bend */
       "eden", EDEN_PADS, (int)(sizeof EDEN_PADS / sizeof EDEN_PADS[0]), EDEN_MOVERS, (int)(sizeof EDEN_MOVERS / sizeof EDEN_MOVERS[0]), 0,
       0, NULL, 0, 0, 0, 0, EDEN_COINS, (int)(sizeof EDEN_COINS / sizeof EDEN_COINS[0]), EDEN_TUNNELS, 1 },
+    { "Nile River Rush", 3, NILE_PTS, (int)(sizeof NILE_PTS / sizeof NILE_PTS[0]),
+      0.50f, 0.72f, 0.96f,                      /* clear blue sky */
+      0.86f, 0.86f, 0.80f, 130.0f, 520.0f,      /* sunny river haze */
+      0.30f, 1.0f, 0.45f, 0.52f,
+      1.0f, 0.96f, 0.86f,
+      1.0f, 0.85f, 0.5f,
+      0, "nile_road", "nile_sand", "nile_water", "jeru_wall", "gal_sky",
+      NILE_SCENERY, (int)(sizeof NILE_SCENERY / sizeof NILE_SCENERY[0]),
+      0, 0, 0, 0,
+      260, 290, -1,                             /* the sand by the Sphinx */
+      "nile", NILE_PADS, (int)(sizeof NILE_PADS / sizeof NILE_PADS[0]), NILE_MOVERS, (int)(sizeof NILE_MOVERS / sizeof NILE_MOVERS[0]), 2,
+      0, NULL, 0, 0, 0, 4, NILE_COINS, (int)(sizeof NILE_COINS / sizeof NILE_COINS[0]), NILE_TUNNELS, 1 },   /* water 2: the river (no great fish); bonus 4: the Pharaoh's Cup */
+    { "Pyramid Pass", 3, PYR_PTS, (int)(sizeof PYR_PTS / sizeof PYR_PTS[0]),
+      0.80f, 0.66f, 0.50f,                      /* hot golden sky */
+      0.94f, 0.80f, 0.58f, 110.0f, 480.0f,      /* blowing sand */
+      -0.5f, 0.8f, -0.3f, 0.46f,
+      1.0f, 0.90f, 0.72f,
+      1.0f, 0.82f, 0.45f,
+      0, "pyr_road", "pyr_sand", "pyr_dune", "jeru_wall", "jeru_sky",
+      PYR_SCENERY, (int)(sizeof PYR_SCENERY / sizeof PYR_SCENERY[0]),
+      0, 0, 0, 0,
+      90, 118, 1,                               /* firm sand on the outside of the dune bend */
+      "pyr", PYR_PADS, (int)(sizeof PYR_PADS / sizeof PYR_PADS[0]), PYR_MOVERS, (int)(sizeof PYR_MOVERS / sizeof PYR_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 4, PYR_COINS, (int)(sizeof PYR_COINS / sizeof PYR_COINS[0]), PYR_TUNNELS, 1 },
+    { "Plagues of Egypt", 3, PLAG_PTS, (int)(sizeof PLAG_PTS / sizeof PLAG_PTS[0]),
+      0.08f, 0.06f, 0.16f,                      /* a stormy night */
+      0.16f, 0.12f, 0.22f, 60.0f, 300.0f,
+      -0.3f, 1.0f, 0.2f, 0.36f,
+      0.78f, 0.72f, 0.95f,                      /* cold storm light */
+      1.0f, 0.62f, 0.25f,                       /* fire bowls */
+      1, "plag_road", "plag_dirt", "plag_earth", "jeru_wall", "plag_sky",
+      PLAG_SCENERY, (int)(sizeof PLAG_SCENERY / sizeof PLAG_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "plag", PLAG_PADS, (int)(sizeof PLAG_PADS / sizeof PLAG_PADS[0]), PLAG_MOVERS, (int)(sizeof PLAG_MOVERS / sizeof PLAG_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 4, PLAG_COINS, (int)(sizeof PLAG_COINS / sizeof PLAG_COINS[0]), PLAG_TUNNELS, 1 },
+    { "Red Sea Escape", 3, RSEA_PTS, (int)(sizeof RSEA_PTS / sizeof RSEA_PTS[0]),
+      0.55f, 0.72f, 0.96f,                      /* morning over the sea */
+      0.80f, 0.90f, 0.96f, 130.0f, 540.0f,      /* sea spray */
+      0.5f, 0.9f, -0.4f, 0.50f,
+      1.0f, 0.96f, 0.90f,
+      1.0f, 0.85f, 0.55f,
+      0, "rsea_road", "rsea_sand", "rsea_seabed", "jeru_wall", "gal_sky",
+      RSEA_SCENERY, (int)(sizeof RSEA_SCENERY / sizeof RSEA_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "rsea", RSEA_PADS, (int)(sizeof RSEA_PADS / sizeof RSEA_PADS[0]), RSEA_MOVERS, (int)(sizeof RSEA_MOVERS / sizeof RSEA_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 4, RSEA_COINS, (int)(sizeof RSEA_COINS / sizeof RSEA_COINS[0]), NULL, 0 },
     { "The Walls of Jericho", 7, JERICHO_PTS, (int)(sizeof JERICHO_PTS / sizeof JERICHO_PTS[0]),
       0.58f, 0.76f, 0.96f,                      /* hard blue desert sky */
       0.92f, 0.86f, 0.70f, 100.0f, 460.0f,      /* dusty haze */
@@ -478,7 +681,7 @@ const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 /* How much each road's layout is stretched (x and z; heights, widths and scenery spacing from the road stay as they are).
    Chosen so the winner of a race takes about 2:15 (Sean: at least two minutes).
    Order = TRACK_DEFS. Battle arena and test loop stay as built. */
-static const float TRACK_SCALE[] = {2.7f, 2.55f, 3.0f, 2.65f, 3.6f, 2.75f, 1.2f, 1.0f, 1.0f};   /* (Sean, again: longer) about 3:20 a race */   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
+static const float TRACK_SCALE[] = {2.7f, 2.55f, 3.0f, 2.65f, 3.6f, 2.75f, 2.2f, 2.1f, 2.5f, 2.5f, 1.2f, 1.0f, 1.0f};   /* (the four roads of the Pharaoh's Cup come before Jericho) */   /* (Sean, again: longer) about 3:20 a race */   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
 
 /* every racing road is this much wider than first drawn (Sean: room between the racers); arena and test loop stay */
 #define ROAD_WIDEN 2.6f    /* (Sean, again: wider; and again - Mario Kart-wide, about 32 m) */
@@ -572,6 +775,11 @@ void track_from_def(Track *t, const TrackDef *d) {
 }
 /* how much room a piece of scenery takes up on the ground (0: soft, drive through it) */
 float track_scenery_radius(const char *k, float h) {
+    if (k[0] == '@') {   /* the Meshy models: how much ground each one stands on */
+        static const struct { const char *n; float f; } R[] = {{"@pyramid", 0.55f}, {"@sphinx", 0.8f}, {"@colossus", 0.25f}, {"@pylon", 0.5f}, {"@obelisk", 0.12f}, {"@camel", 0.45f}, {"@stall", 0.45f},
+            {"@brazier", 0.15f}, {"@crocodile", 1.2f}, {"@palm", 0.1f}, {"@house", 0.5f}, {"@boulder", 0.5f}, {"@sheep", 0.6f}, {"@villager", 0.25f}, {"@lion", 0.6f}};
+        for (unsigned i = 0; i < sizeof R / sizeof R[0]; i++) if (!strcmp(k, R[i].n)) { float r = h * R[i].f; return r < 0.6f ? 0.6f : r > 40.0f ? 40.0f : r; }
+        return 0; }
     if (k[0] != '#' || !strcmp(k, "#cloud") || !strcmp(k, "#flowers") || !strcmp(k, "#lily") || !strcmp(k, "#fern") || !strcmp(k, "#lantern") || !strcmp(k, "#banner")) return 0;
     float r;
     if (!strcmp(k, "#house1") || !strcmp(k, "#house2") || !strcmp(k, "#inn") || !strcmp(k, "#stable") || !strcmp(k, "#tent") || !strcmp(k, "#ark") || !strcmp(k, "#tomb") || !strcmp(k, "#hut")) r = h * 0.6f;
@@ -579,7 +787,7 @@ float track_scenery_radius(const char *k, float h) {
     else if (!strcmp(k, "#rock") || !strcmp(k, "#stone") || !strcmp(k, "#rubble") || !strcmp(k, "#well") || !strcmp(k, "#stall") || !strcmp(k, "#tower") || !strcmp(k, "#boat") || !strcmp(k, "#cart") || !strcmp(k, "#camp")) r = h * 0.45f;
     else if (!strcmp(k, "#sheep") || !strcmp(k, "#lamb") || !strcmp(k, "#deer") || !strcmp(k, "#lion")) r = 0.9f;
     else r = h * 0.12f;   /* trees, palms, pillars, banners, people: the trunk or the post */
-    return r < 0.6f ? 0.6f : r > 6.5f ? 6.5f : r; }
+    return r < 0.6f ? 0.6f : r > 6.5f ? 6.5f : r; }   /* ('@' models above may be bigger: a pyramid) */
 /* where a piece of scenery stands across the road (signed metres from the middle): out in the open land where the track
    puts it, or else just outside the wall, and never so close that any of it sits on the road or the shoulder (Sean: you
    could drive right through the houses). The drawing and the solid circle both use this, so they always agree. */

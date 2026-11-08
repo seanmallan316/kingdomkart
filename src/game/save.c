@@ -2,11 +2,12 @@
 #include "save.h"
 #include "../render/gfx.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 Save g_save;
 static char g_path[256] = "kingdomkart_save.txt";
-static const float PAR_TIME[SAVE_MAX_ROADS] = {218.0f, 215.0f, 225.0f, 229.0f, 210.0f, 234.0f, 0, 0};   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
+static const float PAR_TIME[SAVE_MAX_ROADS] = {218.0f, 215.0f, 225.0f, 229.0f, 210.0f, 234.0f};   /* (the Pharaoh's Cup roads have no target yet) */   /* a little above what the Hard computer drivers manage */   /* time trial targets per road, seconds (0 = no target) */
 
 void save_set_path(const char *path) { snprintf(g_path, sizeof g_path, "%s", path); }
 const char *save_dir_path(char *buf, int n, const char *file) {
@@ -22,7 +23,7 @@ void save_load(void) {
     while (fgets(line, sizeof line, f)) {   /* one "key value" per line; the comment line at the top (and anything else) is skipped */
         if (sscanf(line, "%31s %ld", key, &val) != 2) continue;
         if (!strcmp(key, "layout")) { layout = (int)val; continue; }
-        if (!strncmp(key, "best", 4)) { int i = key[4] - '0'; if (i >= 0 && i < SAVE_MAX_ROADS) g_save.best_ms[i] = (int)val; }
+        if (!strncmp(key, "best", 4)) { int i = atoi(key + 4); if (i >= 0 && i < SAVE_MAX_ROADS) g_save.best_ms[i] = (int)val; }
         else if (!strcmp(key, "races")) g_save.races = (int)val;
         else if (!strcmp(key, "wins")) g_save.wins = (int)val;
         else if (!strncmp(key, "gpwins", 6)) { int i = key[6] - '0'; if (i >= 0 && i < 3) g_save.gp_wins[i] = (int)val; }

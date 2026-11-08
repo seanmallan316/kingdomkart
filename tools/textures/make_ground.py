@@ -147,6 +147,18 @@ SETS = {
     'eden_dirt':    lambda: earth_path([0.55, 0.45, 0.3], [0.3, 0.22, 0.15], 52, moss=[0.35, 0.6, 0.22], pebbles=0.18),
     'eden_grass':   lambda: grass([0.36, 0.7, 0.28], 53, flowers=0.18),
     'heaven_road':  lambda: gold_tiles(61),
+    # the Pharaoh's Cup
+    'nile_road':    lambda: pavers([0.88, 0.76, 0.54], [0.5, 0.4, 0.26], 6, 71),                              # sandstone slabs by the river
+    'nile_sand':    lambda: sand([0.9, 0.8, 0.56], 72),
+    'pyr_road':     lambda: cobbles([0.86, 0.68, 0.44], [0.6, 0.46, 0.3], 8, 81, round_=0.7, gap=0.1),          # sun-baked blocks
+    'pyr_sand':     lambda: sand([0.95, 0.8, 0.52], 82),
+    'pyr_dune':     lambda: sand([0.98, 0.84, 0.55], 83),
+    'plag_road':    lambda: pavers([0.56, 0.5, 0.46], [0.22, 0.18, 0.16], 6, 91),                             # dark temple flagstones
+    'plag_dirt':    lambda: cracked_earth([0.46, 0.36, 0.3], 92),
+    'plag_earth':   lambda: cracked_earth([0.42, 0.28, 0.24], 93),
+    'rsea_road':    lambda: cobbles([0.6, 0.58, 0.52], [0.66, 0.58, 0.42], 10, 101, round_=1.3, gap=0.13),   # wet stones on the sea floor
+    'rsea_sand':    lambda: sand([0.82, 0.74, 0.58], 102),
+    'rsea_seabed':  lambda: sand([0.7, 0.66, 0.56], 103),
 }
 
 if __name__ == '__main__':

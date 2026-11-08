@@ -27,7 +27,12 @@
 #define JERICHO_TRACK (NUM_TRACK_DEFS - 3)
 /* the Grand Prix cups: the Gospel Cup runs the four story roads; Genesis to Glory runs every road in Bible order (earned with the Road to Heaven) */
 typedef struct { const char *name, *sub; int roads[NUM_GP_ROUNDS_MAX]; int n; int needs_heaven; } Cup;
-static const Cup CUPS[2] = { {"THE GOSPEL CUP", "THE STORY OF JESUS IN FOUR ROADS", {0, 1, 2, 3}, 4, 0}, {"GENESIS TO GLORY", "FROM THE GARDEN TO THE GATES: SIX ROADS", {5, 0, 1, 2, 3, 4}, 6, 1} };
+typedef char cup_hold[NUM_GP_ROUNDS_MAX >= 6 ? 1 : -1];
+#define NCUPS 3
+static const Cup CUPS[NCUPS] = { {"THE GOSPEL CUP", "THE STORY OF JESUS IN FOUR ROADS", {0, 1, 2, 3}, 4, 0}, {"GENESIS TO GLORY", "FROM THE GARDEN TO THE GATES: SIX ROADS", {5, 0, 1, 2, 3, 4}, 6, 1},
+    {"PHARAOH'S CUP", "OUT OF EGYPT IN FOUR ROADS", {6, 7, 8, 9}, 4, 0} };   /* (Sean's roads of Egypt; winning it unlocks Pharaoh) */
+static const char *cup_champ(int c) { return c == 0 ? "GOSPEL CUP CHAMPION" : c == 1 ? "GENESIS TO GLORY CHAMPION" : "PHARAOH'S CUP CHAMPION"; }
+static const char *cup_title(int c) { return c == 0 ? "GOSPEL CUP" : c == 1 ? "GENESIS TO GLORY CUP" : "PHARAOH'S CUP"; }
 static int g_cup = 0;
 #define NUM_GP_TRACKS (CUPS[g_cup].n)
 #ifndef KK_TOUR_ROAD
@@ -64,7 +69,7 @@ static unsigned unlocked_mask(void) { unsigned m = 0; for (int c = 0; c < NCHARS
 static int cer_order(int *ord);
 static int g_gp_kp[NKARTS];   /* cup points per kart seat (the field is the same every round), so two karts can never pool their points */
 static int g_gp_round = 0, g_gp_points[NCHARS], g_gp_order[NUM_GP_ROUNDS_MAX];
-static float g_best_time[8];                 /* best time trial time per road (loaded from the save file) */
+static float g_best_time[SAVE_MAX_ROADS];                 /* best time trial time per road (loaded from the save file) */
 static Texture *tx_portrait[NCHARS]; static float g_portrait_aspect[NCHARS];
 static Texture *tx_char[NCHARS]; static float g_char_aspect[NCHARS];      /* full-body pictures: the drivers in the karts */
 static Texture *tx_kart[NCHARS]; static float g_kart_aspect[NCHARS]; static Mesh *m_kartpic;   /* each character's own kart (kart-select screen) */
@@ -114,7 +119,7 @@ static unsigned g_unl_bits; static float g_unl_t;   /* the "UNLOCKED!" screens s
 static unsigned g_fresh_unlocks;             /* unlock bits earned by the race just finished, shown on the results */
 static Texture *tx_finale; static Mesh *m_finale;
 static Texture *tx_title, *tx_title_bg; static Mesh *m_title, *m_title_bg, *m_logo_small; static float g_title_h;      /* title_art.png: the logo on the title screen, when Sean has made it */
-static Texture *tx_card[8]; static Mesh *m_card[8];   /* card_<prefix>.png: the road pictures on the road-select cards */
+static Texture *tx_card[SAVE_MAX_ROADS]; static Mesh *m_card[SAVE_MAX_ROADS];   /* card_<prefix>.png: the road pictures on the road-select cards */
 static Texture *tx_item[ITEM_COUNT]; static int g_item_sq[ITEM_COUNT]; static float g_item_asp[ITEM_COUNT];   /* item pictures for the HUD slot: Sean's files, or drawn ones (square) */
 /* the drivers' voices: content/sfx/voice_<name>_<event>.wav for one character, or voice_<event>.wav shared by all; silent when missing */
 enum { VO_START, VO_BOOST, VO_TRICK, VO_WIN, VO_OUCH, VO_BLESS, VO_FIRE, VO_COUNT };   /* start: at GO; boost: rocket start / super turbo / boost pad; fire: the Chariot of Fire */
@@ -123,7 +128,7 @@ static int g_voice[NCHARS][VO_COUNT];
 static Pad g_prev; static float g_nav_t, g_screen_t;
 static const int GP_POINTS[8] = {10, 8, 6, 5, 4, 3, 2, 1};
 typedef struct { float x[80], z[80]; int n; } Preview;
-static Preview g_preview[8];
+static Preview g_preview[SAVE_MAX_ROADS];
 static float g_idle;                   /* seconds since the last real controller input */
 static int g_demo;                     /* autopilot driving the player's kart */
 static float g_time;
@@ -1363,6 +1368,13 @@ static Texture *placeholder_sprite(const char *id, float *aspect) {
     return make_tex(64, 64, 0, 0, px_tree);
 }
 /* a scenery picture: Sean's file if it exists (beth_house1 for "#house1"), else the placeholder drawing */
+/* the Meshy models standing by the roads ('@name' scenery and obstacles: content/models/prop_<name>.kkm), loaded the first time a road asks */
+static struct { char name[24]; Kart3D k; int tried; } g_rprop[24]; static int g_nrprop;
+static Kart3D *road_prop(const char *img) {
+    if (!img || img[0] != '@') return NULL; const char *n = img + 1;
+    for (int i = 0; i < g_nrprop; i++) if (!strcmp(g_rprop[i].name, n)) return g_rprop[i].k.ok ? &g_rprop[i].k : NULL;
+    if (g_nrprop >= 24) return NULL; int i = g_nrprop++; snprintf(g_rprop[i].name, sizeof g_rprop[i].name, "%s", n);
+    char f[40]; snprintf(f, sizeof f, "prop_%s", n); kart3d_load(&g_rprop[i].k, f); g_rprop[i].tried = 1; return g_rprop[i].k.ok ? &g_rprop[i].k : NULL; }
 static int sprite_kind(const char *img) {
     for (int i = 0; i < g_nkind; i++) if (!strcmp(g_kind[i].img, img)) return i;
     if (g_nkind >= MAX_SPRITE_KINDS) return 0;
@@ -1485,7 +1497,7 @@ static void load_theme(void) {
         p->h = sc->height; p->w = sc->height * g_kind[p->kind].aspect; p->glow = sc->glow; p->purple = !strcmp(sc->img, "#crystal"); p->falls = !strcmp(sc->img, "#waterfall");
         p->wall = (!strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab")) ? ++g_nwalls : 0; p->fall_t = 0;
         p->yaw = atan2f(g_track.s[idx].tx, g_track.s[idx].tz) + i * 0.37f;   /* roughly along the road, each a little turned */
-        p->solid = !p->wall && (model_known(sc->img) || prop_shape(sc->img) >= 0);   /* everything is a 3D model now (Sean), except the waterfalls */
+        p->solid = !p->wall && (model_known(sc->img) || prop_shape(sc->img) >= 0 || (sc->img[0] == '@' && road_prop(sc->img)));   /* everything is a 3D model now (Sean), except the waterfalls */
         { const TrackSample *ts = &g_track.s[idx]; p->t3 = v3(ts->tx, 0, ts->tz); p->o3 = v3(ts->nx * sgn, 0, ts->nz * sgn); }
         if (p->falls) p->yaw = atan2f(-p->o3.x, -p->o3.z);   /* the waterfall's front (+z) faces the road */
     }
@@ -1565,7 +1577,7 @@ static void start_race(int attract) {
     g_results_t = 0; g_demo = attract; g_idle = attract ? 99 : 0;
 }
 static void build_previews(void) {
-    for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) {
+    for (int d = 0; d < NUM_TRACK_DEFS && d < SAVE_MAX_ROADS; d++) {
         static Track tmp; track_from_def(&tmp, &TRACK_DEFS[d]);
         float minx = 1e9f, maxx = -1e9f, minz = 1e9f, maxz = -1e9f;
         for (int i = 0; i < tmp.n; i++) { if (tmp.s[i].x < minx) minx = tmp.s[i].x; if (tmp.s[i].x > maxx) maxx = tmp.s[i].x; if (tmp.s[i].z < minz) minz = tmp.s[i].z; if (tmp.s[i].z > maxz) maxz = tmp.s[i].z; }
@@ -1580,7 +1592,7 @@ int game_init(int status) {
 #ifdef KK_TOUR
     if (KK_TOUR_ROAD >= 4) g_save.unlocks = 0xFFFFFFFu;      /* the CI tour of the bonus road / the battle */
 #endif
-    for (int d = 0; d < 8 && d < NUM_TRACK_DEFS; d++) g_best_time[d] = g_save.best_ms[d] / 1000.0f;
+    for (int d = 0; d < SAVE_MAX_ROADS && d < NUM_TRACK_DEFS; d++) g_best_time[d] = g_save.best_ms[d] / 1000.0f;
     race_set_unlocked(unlocked_mask()); race_set_styles(0, unlocked_styles());
     build_previews();
     if (status == GFX_OK) {
@@ -1619,7 +1631,7 @@ int game_init(int status) {
           int w = 2, h = 3; tx_goliath = asset_texture("char_goliath", 0, &w, &h); g_goliath_aspect = (float)w / (float)h; m_goliath = gfx_mesh_dynamic(6); m_hud2 = gfx_mesh_dynamic(16384);
           w = 2; h = 3; tx_bearer = asset_texture("char_shieldbearer", 0, &w, &h); if (tx_bearer) g_bearer_aspect = (float)w / (float)h; else { tx_bearer = make_tex(PW, PH, 0, 0, px_shieldbearer); g_bearer_aspect = (float)PW / (float)PH; } m_bearer = gfx_mesh_dynamic(6); }
         tx_title = asset_texture("title_art", 0, NULL, NULL);
-        for (int d = 0; d < NUM_TRACK_DEFS && d < 8; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
+        for (int d = 0; d < NUM_TRACK_DEFS && d < SAVE_MAX_ROADS; d++) { char cn[48]; snprintf(cn, sizeof cn, "card_%s", TRACK_DEFS[d].prefix); tx_card[d] = asset_texture(cn, 0, NULL, NULL); }
         if (tx_title) { int w = 1024, h = 437; gfx_texture_free(tx_title); tx_title = asset_texture("title_art", 0, &w, &h); float lw = 820, lh = lw * h / (float)w;
             batch_init(&g_b, g_vtmp, 8192); batch_clear(&g_b); batch_rect_uv(&g_b, 640 - lw / 2, 60, lw, lh, 0, 0, 1, 1, 1, 1, 1, 1); m_title = gfx_mesh_static(g_b.v, g_b.n); g_title_h = lh;
             float sw = 290, sh = sw * h / (float)w; batch_clear(&g_b); batch_rect_uv(&g_b, 640 - sw / 2, 6, sw, sh, 0, 0, 1, 1, 1, 1, 1, 1); m_logo_small = gfx_mesh_static(g_b.v, g_b.n); }
@@ -2202,7 +2214,7 @@ static void unlock_prize(int bit, Texture **pic, float *asp) {   /* the picture 
     *pic = NULL; *asp = 1;
     for (int c = 0; c < NCHARS; c++) if (char_lock_bit(c) == bit) { if (tx_char[c]) { *pic = tx_char[c]; *asp = g_char_aspect[c]; } else if (tx_portrait[c]) { *pic = tx_portrait[c]; *asp = g_portrait_aspect[c]; } }
     for (int sty = 1; sty < NSTYLES; sty++) if (style_lock_bit(sty) == bit && tx_emblem[sty]) { *pic = tx_emblem[sty]; *asp = 128.0f / 96.0f; }
-    if (bit == UNLOCK_HEAVEN) for (int d = 0; d < 8; d++) if (TRACK_DEFS[d].bonus == 1 && tx_card[d]) { *pic = tx_card[d]; *asp = 1.85f; }
+    if (bit == UNLOCK_HEAVEN) for (int d = 0; d < SAVE_MAX_ROADS && d < NUM_TRACK_DEFS; d++) if (TRACK_DEFS[d].bonus == 1 && tx_card[d]) { *pic = tx_card[d]; *asp = 1.85f; }
     if (bit == UNLOCK_GOLIATH && tx_goliath) { *pic = tx_goliath; *asp = g_goliath_aspect; } }
 /* "UNLOCKED!" after a race, in 3D: the screen dims, the word bursts in with golden beams turning and flashing behind it,
    then the prize arrives on a thick gold medallion that spins in fast and slows to a stop facing you, with a burst of
@@ -2281,11 +2293,16 @@ static void draw_kart_models(void) {    /* the kart-body cards: an emblem for ea
 static int ncards(void) { return g_mode == MODE_VS ? NUM_PLAY_TRACKS + 1 : NUM_PLAY_TRACKS; }
 static int card_track(int d) { return d < NUM_PLAY_TRACKS ? d : JERICHO_TRACK; }
 static int track_card(int t) { return t < NUM_PLAY_TRACKS ? t : NUM_PLAY_TRACKS; }
-#define CARD_STEP (1200.0f / ncards())
-#define CARD_W (CARD_STEP - 10.0f)
-#define CARD_IN (CARD_W - 24.0f)
+/* the road cards: one row when there are a few, two rows once the Pharaoh's Cup roads join them */
+static int rc_cols(void) { int n = ncards(); return n <= 7 ? n : (n + 1) / 2; }
+static int rc_compact(void) { return ncards() > 7; }
+static void road_card_rect(int c2, float *x, float *y, float *w, float *h, float *iw) {
+    int cols = rc_cols(); float step = 1200.0f / cols; *w = step - 10.0f; *x = 40 + (c2 % cols) * step;
+    if (!rc_compact()) { *y = 110; *h = 400; *iw = *w - 24.0f; return; }
+    *y = 74 + (c2 / cols) * 312.0f; *h = 300; *iw = fminf(*w - 24.0f, 150.0f); }
 static void track_card_draw(int c2) { int d = card_track(c2);
-        int sel = d == g_track_idx, open = track_unlocked(d); float x = 40 + c2 * CARD_STEP, y = 110, w = CARD_W, h = 400, iw = CARD_IN; tzone(x, y, w, h, TZ_SEL, d);
+        float x, y, w, h, iw; road_card_rect(c2, &x, &y, &w, &h, &iw); int cmp = rc_compact();
+        int sel = d == g_track_idx, open = track_unlocked(d); tzone(x, y, w, h, TZ_SEL, d);
         card_face(x, y, w, h, sel, open);
         const TrackDef *td = &TRACK_DEFS[d]; char buf[48]; float ty = y + 12 + iw + 14;
         if (!open) {
@@ -2305,19 +2322,21 @@ static void track_card_draw(int c2) { int d = card_track(c2);
         float fit = iw * 0.78f;   /* the bold font runs wider than measured */
         if (text_width(nm, 18) > fit && cut > 0) { char l1[32], l2[32]; snprintf(l1, sizeof l1, "%.*s", (int)cut, nm); snprintf(l2, sizeof l2, "%s", nm + cut + 1);
             float sz = fmaxf(text_width(l1, 18), text_width(l2, 18)) > fit ? 14 : 18;
-            batch_text(&g_b, l1, x + 12, ty, sz, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, ty + 23, sz, 1, 1, 1, 1); }
+            batch_text(&g_b, l1, x + 12, ty, sz, 1, 1, 1, 1); batch_text(&g_b, l2, x + 12, ty + (cmp ? 19 : 23), sz, 1, 1, 1, 1); }
         else batch_text(&g_b, nm, x + 12, ty, text_width(nm, 18) > fit ? 14 : 18, 1, 1, 1, 1);
-        snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : (td->bonus == 3 ? "7 LAPS - SHOFARS!" : "%d LAPS"), td->laps); batch_text(&g_b, buf, x + 12, ty + 55, text_width(buf, 14) > fit ? 11 : 14, 0.8f, 0.9f, 1, 1);
-        if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, ty + 80, 14, 1, 0.9f, 0.5f, 1); }
-        if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, ty + 103, 14, 0.7f, 0.95f, 0.8f, 1); }
-        if (td->bonus) batch_text(&g_b, "BONUS ROAD", x + 12, ty + 135, 14, 1, 0.85f, 0.3f, 1);
+        snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : (td->bonus == 3 ? "7 LAPS - SHOFARS!" : "%d LAPS"), td->laps); batch_text(&g_b, buf, x + 12, ty + (cmp ? 44 : 55), text_width(buf, 14) > fit ? 11 : 14, 0.8f, 0.9f, 1, 1);
+        if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, ty + (cmp ? 62 : 80), cmp ? 12 : 14, 1, 0.9f, 0.5f, 1); }
+        if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, ty + (cmp ? 78 : 103), cmp ? 12 : 14, 0.7f, 0.95f, 0.8f, 1); }
+        if (td->bonus == 4) batch_text(&g_b, "PHARAOH'S CUP", x + 12, ty + (cmp ? 96 : 135), text_width("PHARAOH'S CUP", 14) > fit ? 11 : 14, 1, 0.85f, 0.3f, 1);
+        else if (td->bonus) batch_text(&g_b, "BONUS ROAD", x + 12, ty + (cmp ? 96 : 135), 14, 1, 0.85f, 0.3f, 1);
     }
 static void hud_track(void) {
     text_c("CHOOSE A ROAD", 30, 40, 1, 0.85f, 0.3f, 1);
     int selc = track_card(g_track_idx);
     for (int k = 0; k <= ncards(); k++) { int c2 = k < ncards() ? k : selc; if (k < ncards() && c2 == selc) continue;   /* the chosen card last, on top */
-        uint32_t mk = ui_begin(); track_card_draw(c2); card_done(mk, c2, 40 + c2 * CARD_STEP, 110, CARD_W, 400, c2 == selc); }
-    text_c("A: RACE   B: BACK", 690, 16, 0.8f, 0.85f, 1, 1);
+        float x, y, w, h, iw; road_card_rect(c2, &x, &y, &w, &h, &iw); (void)iw;
+        uint32_t mk = ui_begin(); track_card_draw(c2); card_done(mk, c2, x, y, w, h, c2 == selc); }
+    text_c(rc_compact() ? "A: RACE   B: BACK   UP/DOWN: ROW" : "A: RACE   B: BACK", 696, 16, 0.8f, 0.85f, 1, 1);
 }
 static void hud_pause(void) {
     batch_rect(&g_b, 0, 0, 1280, 720, 0, 0, 0, 0.45f);
@@ -2425,25 +2444,26 @@ static void hud_results(void) {
 }
 static void hud_cup(void) {
     text_c("CHOOSE A CUP", 40, 40, 1, 0.85f, 0.3f, 1);
-    for (int c = 0; c < 2; c++) { const Cup *cp = &CUPS[c]; int sel = c == g_cup, open = !cp->needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
-        float x = 90 + c * 580, y = 120, w = 520, h = 470;
+    for (int c = 0; c < NCUPS; c++) { const Cup *cp = &CUPS[c]; int sel = c == g_cup, open = !cp->needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
+        float x = 30 + c * 412, y = 120, w = 396, h = 470;
         uint32_t mk = ui_begin(); card_face(x, y, w, h, sel, open); tzone(x, y, w, h, TZ_SEL, c);
-        batch_text(&g_b, cp->name, x + 20, y + 20, 30, 1, 0.95f, 0.5f, 1);
-        batch_text(&g_b, cp->sub, x + 20, y + 62, 13, 0.8f, 0.9f, 1, 1);
+        { float ns = 30; while (ns > 18 && text_width(cp->name, ns) > w - 40) ns -= 1; batch_text(&g_b, cp->name, x + 20, y + 20, ns, 1, 0.95f, 0.5f, 1); }
+        batch_text(&g_b, cp->sub, x + 20, y + 62, text_width(cp->sub, 13) > w - 40 ? 11 : 13, 0.8f, 0.9f, 1, 1);
         if (!open) { batch_text(&g_b, "?", x + w / 2 - text_width("?", 110) / 2, y + 140, 110, 0.5f, 0.55f, 0.7f, 1);
             batch_text(&g_b, "LOCKED", x + w / 2 - text_width("LOCKED", 24) / 2, y + 290, 24, 0.8f, 0.8f, 0.9f, 1);
-            batch_text(&g_b, "WIN THE GOSPEL CUP ON NORMAL OR HARD", x + w / 2 - text_width("WIN THE GOSPEL CUP ON NORMAL OR HARD", 14) / 2, y + 330, 14, 1, 0.9f, 0.5f, 1); card_done(mk, c, x, y, w, h, sel); continue; }
+            batch_text(&g_b, "WIN THE GOSPEL CUP", x + w / 2 - text_width("WIN THE GOSPEL CUP", 14) / 2, y + 330, 14, 1, 0.9f, 0.5f, 1); batch_text(&g_b, "ON NORMAL OR HARD", x + w / 2 - text_width("ON NORMAL OR HARD", 14) / 2, y + 352, 14, 1, 0.9f, 0.5f, 1); card_done(mk, c, x, y, w, h, sel); continue; }
         for (int i = 0; i < cp->n; i++) { const TrackDef *td = &TRACK_DEFS[cp->roads[i]]; float ry = y + 100 + i * 56; char nm[8]; snprintf(nm, sizeof nm, "%d.", i + 1);
             batch_rect(&g_b, x + 20, ry, 44, 44, td->sky_r, td->sky_g, td->sky_b, 1); draw_preview(&g_preview[cp->roads[i]], x + 42, ry + 22, 34, 0.95f, 0.95f, 0.95f);
-            batch_text(&g_b, nm, x + 76, ry + 10, 20, 1, 0.85f, 0.3f, 1); batch_text(&g_b, td->name, x + 110, ry + 10, 20, 1, 1, 1, 1); }
-        { char line[64]; snprintf(line, sizeof line, "%d ROADS   WON: EASY %d  NORMAL %d  HARD %d", cp->n, g_save.gp_wins[0], g_save.gp_wins[1], g_save.gp_wins[2]); if (c == 0) batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); else { snprintf(line, sizeof line, "%d ROADS - THE WHOLE STORY", cp->n); batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); } }
+            batch_text(&g_b, nm, x + 76, ry + 10, 20, 1, 0.85f, 0.3f, 1); { float ns = 20; while (ns > 12 && text_width(td->name, ns) > w - 130) ns -= 1; batch_text(&g_b, td->name, x + 110, ry + 10 + (20 - ns) * 0.5f, ns, 1, 1, 1, 1); } }
+        { char line[64]; snprintf(line, sizeof line, "WON: EASY %d  NORMAL %d  HARD %d", g_save.gp_wins[0], g_save.gp_wins[1], g_save.gp_wins[2]); if (c == 0) batch_text(&g_b, line, x + 20, y + h - 36, 12, 0.8f, 0.9f, 1, 1);
+          else if (c == 2) { snprintf(line, sizeof line, "%d ROADS - WON %d TIMES", cp->n, g_save.pharaoh_wins); batch_text(&g_b, line, x + 20, y + h - 36, 12, 0.8f, 0.9f, 1, 1); if (!(g_save.unlocks & UNLOCK_PHARAOH)) batch_text(&g_b, "WIN IT TO UNLOCK PHARAOH", x + 20, y + h - 58, 12, 1, 0.85f, 0.3f, 1); } else { snprintf(line, sizeof line, "%d ROADS - THE WHOLE STORY", cp->n); batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); } }
         card_done(mk, c, x, y, w, h, sel);
     }
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 650, 16, 0.8f, 0.85f, 1, 1);
 }
 static void hud_gp(void) {
     panel(290, 80, 700, 560); char buf[64];
-    text_c(g_gp_round >= NUM_GP_TRACKS ? (g_cup == 0 ? "GOSPEL CUP CHAMPION" : "GENESIS TO GLORY CHAMPION") : "STANDINGS", 100, g_gp_round >= NUM_GP_TRACKS && g_cup == 1 ? 32 : 40, 1, 0.85f, 0.3f, 1);
+    text_c(g_gp_round >= NUM_GP_TRACKS ? cup_champ(g_cup) : "STANDINGS", 100, g_gp_round >= NUM_GP_TRACKS && g_cup >= 1 ? 32 : 40, 1, 0.85f, 0.3f, 1);
     int ord[NKARTS]; int nk = cer_order(ord);
     for (int p = 0; p < nk; p++) { int c = ord[p]; float y = 160 + p * 50; int me = c == g_player_char;
         if (me) ui_plaque(310, y - 6, 660, 44, 12, 8, &UI_SEL, 0.95f, 0.45f, fmodf(g_time * 0.4f, 1.4f));
@@ -2554,7 +2574,7 @@ static void hud_trophy_top(void) {   /* drawn over the 3D: the points, places an
         if (t >= lock) { const char *pl = p == 0 ? "1ST" : p == 1 ? "2ND" : "3RD"; float la = clampf((t - lock) * 3, 0, 1), ps = 30 * (1 + 0.6f * expf(-(t - lock) * 5));
             batch_text(&g_b, pl, sx - text_width(pl, ps) / 2, g_cer_lab[p][2] - ps / 2, ps, col[p][0], col[p][1], col[p][2], la); }
         const char *nm = CHARACTERS[ord[p]].short_name; batch_text(&g_b, nm, sx - text_width(nm, 20) / 2, ny, 20, 1, 1, 1, a); }
-    const char *cup = g_cup == 0 ? "GOSPEL CUP" : "GENESIS TO GLORY CUP"; text_c(cup, 14, 36, 1, 0.85f, 0.3f, clampf(t * 2, 0, 1));
+    const char *cup = cup_title(g_cup); text_c(cup, 14, 36, 1, 0.85f, 0.3f, clampf(t * 2, 0, 1));
     if (t >= te + 0.9f) { snprintf(buf, sizeof buf, "CHAMPION: %s", CHARACTERS[ord[0]].name); text_c(buf, 58, 24, 1, 1, 1, clampf((t - te - 0.9f) * 2, 0, 1)); }
     int me = -1; for (int i = 0; i < nk; i++) if (ord[i] == g_player_char) me = i;
     if (t >= te + 1.4f && me >= 0) { float a = clampf((t - te - 1.4f) * 2, 0, 1);
@@ -3084,7 +3104,7 @@ static void hud_scene_top(void) {
         ui_plaque(1150 + b * 24 - s, 27 - s, s * 2, s * 2, s * 0.9f, 6, b <= g_sc_beat ? &UI_GOLD : &UI_SCENE, bars, b == g_sc_beat ? 0.6f : 0, -1); }
     if (g_sc_beat == SB_TITLE) {
         if (bt > 1.0f) { fx_words(S->title, 640, 232, strlen(S->title) > 22 ? 40 : 48, bt - 1.0f, 99, 1, 1, 1, 1, 1); fx_line(S->place, 640, 300, 24, bt - 1.3f, 99, 1, 1, 1, 1); }
-        if (bt > 2.0f) { const char *cup = g_cup == 0 ? "A STORY FOR THE WINNER OF THE GOSPEL CUP" : "A STORY FOR THE WINNER OF THE GENESIS TO GLORY CUP"; fx_line(cup, 640, py + 70, 20, bt - 2.0f, 99, 0.85f, 0.9f, 1, 1); } }
+        if (bt > 2.0f) { char cupb[80]; snprintf(cupb, sizeof cupb, "A STORY FOR THE WINNER OF THE %s", cup_title(g_cup)); const char *cup = cupb; fx_line(cup, 640, py + 70, 20, bt - 2.0f, 99, 0.85f, 0.9f, 1, 1); } }
     else {
         const char *hdr = g_sc_beat == SB_VERSE ? "THE BIBLE SAYS" : g_sc_beat == SB_LESSON ? "WHAT THIS TEACHES US" : S->title; float ha = clampf(bt * 3, 0, 1);
         text3d(hdr, 44 + (1 - ha) * 30, py + 18, 20, 1, 0.82f, 0.38f, ha, 1);
@@ -3116,6 +3136,8 @@ static void tour_pads(Pad *pads, float t) {
 #if KK_TOUR_ROAD == 11
         /* the Grand Prix: title, GRAND PRIX, the second cup (Genesis to Glory), character, kart, the first road (Eden), then the standings */
         {8, 'A'}, {11, 'A'}, {14, 'R'}, {16, 'A'}, {19, 'A'}, {22, 'A'}, {70, 'P'}, {84, 'P'}, {130, 'A'}, {133, 'A'},
+#elif KK_TOUR_ROAD >= 20
+        {900, 'A'},                              /* the Pharaoh's Cup roads drive themselves */
 #elif KK_TOUR_ROAD >= 13
         {900, 'A'},                              /* the Bible stories run by themselves: no buttons */
 #elif KK_TOUR_ROAD == 12
@@ -3245,7 +3267,7 @@ static void build_dynamic(void) {
                         batch_quad4(&g_b, v3(c.x - rr.x - uu.x, c.y - uu.y, c.z - rr.z - uu.z), v3(c.x + rr.x - uu.x, c.y - uu.y, c.z + rr.z - uu.z), v3(c.x + rr.x + uu.x, c.y + uu.y, c.z + rr.z + uu.z), v3(c.x - rr.x + uu.x, c.y + uu.y, c.z - rr.z + uu.z), v3(0, 1, 0), 0, v1, 1, v0, 1, 1, 1, 1); }
                     continue; }
                 batch_quad4(&g_b, v3(c.x - r_.x - u_.x, c.y - u_.y, c.z - r_.z - u_.z), v3(c.x + r_.x - u_.x, c.y - u_.y, c.z + r_.z - u_.z), v3(c.x + r_.x + u_.x, c.y + u_.y, c.z + r_.z + u_.z), v3(c.x - r_.x + u_.x, c.y + u_.y, c.z - r_.z + u_.z), v3(0, 1, 0), 0, v0, 1, v1, 1, 1, 1, 1); }
-            for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd || model_known(g_track.mover[m].img)) continue; const Mover *mv = &g_track.mover[m];
+            for (int m = 0; m < g_track.nmover; m++) { if (g_mover_kind[m] != kd || model_known(g_track.mover[m].img) || g_track.mover[m].img[0] == '@') continue; const Mover *mv = &g_track.mover[m];
                 if (r->jericho && mv->img[1] == 'r' && mv->img[2] == 'u' && r->wall_fall < 0.3f) continue;   /* the rubble appears once the walls start to fall */
                 float mx, my, mz; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); float w = mv->height * g_kind[kd].aspect * 0.5f;
                 batch_quad(&g_b, v3(mx, my + mv->height * 0.5f, mz), v3(ax.x * w, 0, ax.z * w), v3(0, mv->height * 0.5f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1); }
@@ -3429,6 +3451,58 @@ static void draw_shadow_casters(void) {
     for (int m = 0; m < MAT_N; m++) { if (m == MAT_PLAIN && 0) continue; draw_mat_meshes(m_props[m], m_nprops[m], m, &id); }
     /* the karts are not in the sun's shadow map: each casts its own crisp shadow (a second, blocky one doubled it up) */
     gfx_shadow_end(); }
+/* ---- the Pharaoh's Cup: the walls of water on the Red Sea road, the river of blood, the locusts, the hail and fire,
+   and the darkness that could be felt (Exodus 7-10, 14) ---- */
+static int eg_in(int idx, int a, int b) { int s0 = track_def_idx(&g_track, a), s1 = track_def_idx(&g_track, b); return s0 <= s1 ? (idx >= s0 && idx <= s1) : (idx >= s0 || idx <= s1); }
+static float eg_dark(const Kart *k) {   /* 0..1: how deep into the darkness this kart is */
+    if (!g_def || strcmp(g_def->prefix, "plag")) return 0;
+    int a = track_def_idx(&g_track, 214), b = track_def_idx(&g_track, 258), i = k->hit.idx; if (i < a || i > b) return 0;
+    float u = (float)(i - a) / (float)(b - a); return clampf(fminf(u, 1 - u) * 5.0f, 0, 1); }
+static void draw_egypt_fx(Vec3 eye, Vec3 ax, int vk) {
+    if (!g_def) return; int rsea = !strcmp(g_def->prefix, "rsea"), plag = !strcmp(g_def->prefix, "plag"); if (!rsea && !plag) return;
+    static Mesh *m_walls, *m_blood; static int built = -1; Mat4 id = m4_identity(); float t = g_time;
+    if (built != g_loaded_track) { built = g_loaded_track; gfx_mesh_free(m_walls); gfx_mesh_free(m_blood); m_walls = m_blood = NULL;
+        Batch b; batch_init(&b, far_buf(), FAR_CAP);
+        if (rsea) { int a = track_def_idx(&g_track, 36), e = track_def_idx(&g_track, 196);   /* the waters a wall on the right hand and on the left (Exodus 14:22) */
+            for (int i = a; i < e && i + 1 < g_track.n; i++) for (int sd = -1; sd <= 1; sd += 2) { const TrackSample *s0 = &g_track.s[i], *s1 = &g_track.s[i + 1];
+                float l0 = sd * (track_bound(&g_track, i, sd) + 1.0f), l1 = sd * (track_bound(&g_track, i + 1, sd) + 1.0f), u = (float)(i - a) / (float)(e - a), H = 26.0f * fminf(fminf(u, 1 - u) * 8.0f, 1.0f) + 2.0f;
+                Vec3 p0 = v3(s0->x + s0->nx * l0, s0->y - 2, s0->z + s0->nz * l0), p1 = v3(s1->x + s1->nx * l1, s1->y - 2, s1->z + s1->nz * l1); Vec3 n = v3(-s0->nx * sd, 0, -s0->nz * sd);
+                for (int r = 0; r < 5; r++) { float y0 = H * r / 5, y1 = H * (r + 1) / 5, c0 = (float)r / 5, c1 = (float)(r + 1) / 5, bulge0 = sinf(c0 * 3.0f) * 2.0f * sd, bulge1 = sinf(c1 * 3.0f) * 2.0f * sd;
+                    Vertex q[6] = {{p0.x + s0->nx * bulge0, p0.y + y0, p0.z + s0->nz * bulge0, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
+                                   {p1.x + s1->nx * bulge0, p1.y + y0, p1.z + s1->nz * bulge0, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
+                                   {p1.x + s1->nx * bulge1, p1.y + y1, p1.z + s1->nz * bulge1, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f},
+                                   {p0.x + s0->nx * bulge0, p0.y + y0, p0.z + s0->nz * bulge0, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
+                                   {p1.x + s1->nx * bulge1, p1.y + y1, p1.z + s1->nz * bulge1, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f},
+                                   {p0.x + s0->nx * bulge1, p0.y + y1, p0.z + s0->nz * bulge1, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f}};
+                    for (int k = 0; k < 6 && b.n < b.cap; k++) b.v[b.n++] = q[k]; } }
+            m_walls = b.n ? gfx_mesh_static(b.v, b.n) : NULL; }
+        if (plag) { batch_clear(&b); int a = track_def_idx(&g_track, 150), e = track_def_idx(&g_track, 206);   /* the river turned to blood (Exodus 7:20), along the left of the road */
+            for (int i = a; i < e && i + 1 < g_track.n; i++) { const TrackSample *s0 = &g_track.s[i], *s1 = &g_track.s[i + 1]; float in0 = -(track_edge(&g_track, i) + 1.5f), out0 = -(track_bound(&g_track, i, -1) - 1.0f), in1 = -(track_edge(&g_track, i + 1) + 1.5f), out1 = -(track_bound(&g_track, i + 1, -1) - 1.0f);
+                if (out0 > in0 - 4) out0 = in0 - 4; if (out1 > in1 - 4) out1 = in1 - 4;
+                Vec3 p[4] = {v3(s0->x + s0->nx * in0, s0->y - 0.25f, s0->z + s0->nz * in0), v3(s1->x + s1->nx * in1, s1->y - 0.25f, s1->z + s1->nz * in1), v3(s1->x + s1->nx * out1, s1->y - 0.25f, s1->z + s1->nz * out1), v3(s0->x + s0->nx * out0, s0->y - 0.25f, s0->z + s0->nz * out0)};
+                batch_quad4(&b, p[0], p[1], p[2], p[3], v3(0, 1, 0), 0.5f, 0.5f, 0.5f, 0.5f, 0.55f, 0.04f, 0.05f, 1); }
+            m_blood = b.n ? gfx_mesh_static(b.v, b.n) : NULL; } }
+    gfx_bind(NULL);
+    if (m_blood) { float sh = 0.85f + 0.15f * sinf(t * 1.7f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_draw_ex(m_blood, &id, sh, sh, sh, 1, 1.6f, 0, 0, 0); }
+    if (m_walls) { gfx_state(ST_TRANSPARENT); gfx_draw_ex(m_walls, &id, 1, 1, 1, 1, 1.4f, 0, 0, 0); }
+    /* the moving parts near the camera: foam on the wall tops, locusts, hail and fire */
+    static Mesh *m_fx; static Vertex fv[2400]; if (!m_fx) m_fx = gfx_mesh_dynamic(2400); Batch fb; batch_init(&fb, fv, 2400);
+    const Kart *k = &g_race.k[vk]; int ki = k->hit.idx;
+    if (rsea && eg_in(ki, 30, 200)) for (int n = 0; n < 120; n++) { float h1 = noise2(n, 7), side = (n & 1) ? 1.0f : -1.0f; int i = (ki + (int)(h1 * 60) - 10 + g_track.n) % g_track.n; if (!eg_in(i, 40, 192)) continue;
+        const TrackSample *s = &g_track.s[i]; float l = side * (track_bound(&g_track, i, (int)side) + 1.0f) - side * 1.5f, y = s->y + 22 + 3 * sinf(t * 2 + n), sz = 1.6f + noise2(n, 8) * 1.4f;
+        batch_quad(&fb, v3(s->x + s->nx * l, y, s->z + s->nz * l), v3(ax.x * sz, 0, ax.z * sz), v3(0, sz, 0), v3(0, 0, 1), 0, 0, 1, 1, 0.9f, 0.97f, 1, 0.55f); }
+    if (fb.n) { gfx_mesh_update(m_fx, fb.v, fb.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_fx, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
+    batch_clear(&fb);
+    if (plag && eg_in(ki, 20, 96)) for (int n = 0; n < 220; n++) {   /* the locusts covered the face of the whole earth (Exodus 10:15) */
+        float h1 = noise2(n, 11), h2 = noise2(n, 12), h3 = noise2(n, 13), a = h1 * 6.283f + t * (1.5f + h2), r2 = 3 + h3 * 22;
+        Vec3 c = v3(k->x + cosf(a) * r2 + sinf(t * 7 + n) * 0.5f, k->y + 1.5f + h2 * 7 + sinf(t * 9 + n * 1.7f) * 0.6f, k->z + sinf(a) * r2); float wing = 0.12f + 0.08f * fabsf(sinf(t * 40 + n));
+        batch_quad(&fb, c, v3(ax.x * wing * 1.6f, 0, ax.z * wing * 1.6f), v3(0, wing * 0.7f, 0), v3(0, 0, 1), 0, 0, 1, 1, 0.3f, 0.24f, 0.08f, 0.95f); }
+    if (plag && eg_in(ki, 96, 150)) for (int n = 0; n < 260; n++) {   /* hail, and fire mingled with the hail (Exodus 9:24) */
+        float h1 = noise2(n, 21), h2 = noise2(n, 22), fall = fmodf(t * (14 + h2 * 6) + h1 * 30, 30), x = (h1 - 0.5f) * 60, z = (h2 - 0.5f) * 60, s2 = 0.18f + 0.12f * noise2(n, 23);
+        Vec3 c = v3(eye.x + x, eye.y + 22 - fall, eye.z + z); int fire = (n % 9) == 0;
+        batch_quad(&fb, c, v3(ax.x * s2, 0, ax.z * s2), v3(0, s2 * (fire ? 2.5f : 1.3f), 0), v3(0, 0, 1), 0, 0, 1, 1, fire ? 1.0f : 0.92f, fire ? 0.5f : 0.95f, fire ? 0.15f : 1.0f, 0.9f); }
+    if (fb.n) { gfx_mesh_update(m_fx, fb.v, fb.n); gfx_state(ST_TRANSPARENT); gfx_bind(tx_blob); gfx_draw_ex(m_fx, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
+    gfx_bind(NULL); gfx_state(ST_SOLID); }
 static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
     Race *r = &g_race;
     float cy = cam_yaw; Vec3 ax = v3(-cosf(cy), 0, sinf(cy));
@@ -3466,7 +3540,8 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             Vec3 sp = v3(cam_x + g_def->star_x, g_def->star_y, cam_z + g_def->star_z);
             batch_quad(&g_b, sp, v3(ax.x * ss, 0, ax.z * ss), v3(0, ss, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 1, 1, 1);
             static Mesh *m_star = NULL; if (!m_star) m_star = gfx_mesh_dynamic(12); gfx_mesh_update(m_star, g_b.v, g_b.n); gfx_draw_ex(m_star, &id, 1, 1, 1, 1, 0, 1, 0, 0); }
-        gfx_shadow_use(g_nplayers <= 1); gfx_camera(&vp, ldir, g_def->ambient, g_def->fog_r, g_def->fog_g, g_def->fog_b, g_def->fog_start, g_def->fog_end); gfx_shadow_use(0);   /* sun shadows in 1-player */
+        { float dk = eg_dark(k); float fr = g_def->fog_r * (1 - dk) + 0.01f * dk, fg = g_def->fog_g * (1 - dk) + 0.01f * dk, fb2 = g_def->fog_b * (1 - dk) + 0.03f * dk;   /* the darkness which may be felt (Exodus 10:21) */
+          gfx_shadow_use(g_nplayers <= 1); gfx_camera(&vp, ldir, g_def->ambient * (1 - 0.6f * dk), fr, fg, fb2, g_def->fog_start * (1 - 0.85f * dk), g_def->fog_end * (1 - 0.78f * dk)); gfx_shadow_use(0); }   /* sun shadows in 1-player */
         gfx_state(ST_SOLID);
         float sr = 1, sg = 1, sb = 1;    /* the sun's color is applied by the shader now */
         /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
@@ -3517,6 +3592,16 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             Vec3 e1 = pl->t3, up = v3(pl->o3.x * sa, ca, pl->o3.z * sa), out = v3(pl->o3.x * ca, -sa, pl->o3.z * ca);
             Mat4 m = m4_identity(); m.m[0] = e1.x; m.m[1] = e1.y; m.m[2] = e1.z; m.m[4] = up.x; m.m[5] = up.y; m.m[6] = up.z; m.m[8] = out.x; m.m[9] = out.y; m.m[10] = out.z;
             m.m[12] = pl->p.x + e1.x * shud; m.m[13] = pl->p.y + 0.15f; m.m[14] = pl->p.z + e1.z * shud; gfx_bind(tx_mat[MAT_STONE]); gfx_draw(pl->m3, &m, 1, 1, 1, 1); } gfx_bind(NULL);
+        for (int i = 0; i < g_nplaced; i++) { Placed *pl = &g_placed[i]; const char *img = g_kind[pl->kind].img; if (img[0] != '@') continue;   /* the Meshy models by the road: pyramids, the Sphinx, colossi, camels... */
+            Kart3D *pk = road_prop(img); if (!pk) continue; float dx = pl->p.x - eye.x, dz = pl->p.z - eye.z, far2 = pl->h > 20 ? 900.0f * 900.0f : 260.0f * 260.0f; if (dx * dx + dz * dz > far2) continue;
+            float hgt = fmaxf(pk->hi.y - pk->lo.y, 0.1f), sc2 = pl->h / hgt, yaw = atan2f(-pl->o3.x, -pl->o3.z);   /* they face the road */
+            Mat4 pm = m4_mul(m4_translate(pl->p.x, pl->p.y + 0.15f, pl->p.z), m4_mul(m4_rotate_y(yaw), m4_scale(sc2, sc2, sc2)));
+            gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw(pk, &pm, 0, 0, 1, 1, 1, 1); }
+        for (int m = 0; m < g_track.nmover; m++) { const Mover *mv = &g_track.mover[m]; Kart3D *pk = road_prop(mv->img); if (!pk) continue;   /* Meshy obstacles: the crocodiles */
+            float mx, my, mz, mx2, my2, mz2; track_mover_pos(&g_track, mv, r->race_t, &mx, &my, &mz); track_mover_pos(&g_track, mv, r->race_t + 0.05f, &mx2, &my2, &mz2);
+            float dxm = mx2 - mx, dzm = mz2 - mz, face = (dxm * dxm + dzm * dzm > 1e-6f) ? atan2f(dxm, dzm) : 0, sc2 = mv->height / fmaxf(pk->hi.y - pk->lo.y, 0.1f);
+            Mat4 mm = m4_mul(m4_translate(mx, my, mz), m4_mul(m4_rotate_y(face), m4_scale(sc2, sc2, sc2))); gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw(pk, &mm, 0, 0, 1, 1, 1, 1); }
+        gfx_bind(NULL); draw_egypt_fx(eye, ax, vk);
         {   /* the obstacles that cross the road, as 3D models: sheep, carts, nets, rolling stones, rubble */
             static Mesh *m_mov[MAX_MOVERS][MAT_N]; static int has_mov[MAX_MOVERS]; static const Track *built_for = NULL; static int built_n = -1;
             if (built_for != &g_track || built_n != g_loaded_track) { ModelOut mo; mat_buckets(&mo);
@@ -3879,7 +3964,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
         for (int i = 0; i < g_race.nk; i++) g_gp_points[g_race.character[i]] = 60 - 7 * i;
         g_player_char = g_race.character[1]; scene_check_words(); scene_start(0); } }   /* CI: the trophy screen is unchanged; photograph the Bible stories from Jesus on (tour 13 goes from Samson) */
 #endif
-#if defined(KK_TOUR) && KK_TOUR_ROAD >= 13
+#if defined(KK_TOUR) && KK_TOUR_ROAD >= 20
+    { static int done = 0; if (!done && g_time > 2.0f) { done = 1; g_mode = MODE_SINGLE; g_player_char = 20; g_track_idx = 6 + (KK_TOUR_ROAD - 20); begin_player_race(); g_screen_t = 0; } }   /* CI: a race on each road of the Pharaoh's Cup */
+#elif defined(KK_TOUR) && KK_TOUR_ROAD >= 13
     { static int done = 0; static const int first[7] = {7, 2, 4, 6, 9, 16, 14}; if (!done && g_time > 2.0f) { done = 1; g_cup = 1; scene_check_words(); scene_start(first[(KK_TOUR_ROAD - 13) % 7]); } }   /* CI: straight into the cup winners' Bible stories, from Samson on */
 #endif
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 1
@@ -4038,7 +4125,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         break; }
     case SCR_CUP: {
         int open = !CUPS[g_cup].needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
-        if (mx) { g_cup = (g_cup + mx + 2) % 2; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (mx) { g_cup = (g_cup + mx + NCUPS) % NCUPS; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) { if (open) { sfx_play(SFX_MENU_OK, 1, 0); g_screen_t = 0;
                 if (g_multi) { memset(g_gp_points, 0, sizeof g_gp_points); memset(g_gp_kp, 0, sizeof g_gp_kp); g_gp_round = 0; for (int i = 0; i < NUM_GP_TRACKS; i++) g_gp_order[i] = CUPS[g_cup].roads[i]; begin_player_race(); }   /* together: everyone has picked already */
                 else g_screen = SCR_CHAR; } else sfx_play(SFX_WRONG_WAY, 1, 0); }
@@ -4061,6 +4148,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
         break;
     case SCR_TRACK:
         if (mx) { sfx_play(SFX_MENU_MOVE, 1, 0); int n = ncards(), d = card_track((track_card(g_track_idx) + mx + n) % n); g_track_idx = d; g_track_wait = g_multi ? 0 : 0.6f; }
+        if (my && rc_compact()) { int n = ncards(), c = track_card(g_track_idx) - my * rc_cols(); if (c < 0) c += rc_cols() * 2; if (c >= rc_cols() * 2) c -= rc_cols() * 2; if (c >= n) c = n - 1;   /* up and down between the two rows */
+            sfx_play(SFX_MENU_MOVE, 1, 0); g_track_idx = card_track(c); g_track_wait = g_multi ? 0 : 0.6f; }
         /* the road behind the cards changes only once the cursor rests (loading a road takes a moment; doing it on every
            move made the cursor stick); in multiplayer it does not change at all */
         if (g_track_wait > 0) { g_track_wait -= dt; if (g_track_wait <= 0 && track_unlocked(g_track_idx) && g_track_idx != g_loaded_track) { set_track(g_track_idx); start_race(1); } }
@@ -4088,7 +4177,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (g_mode == MODE_JERICHO && !g_demo) { Kart *k = &r->k[r->player]; if (k->place == 1) { g_save.jericho_wins++; if (k->lap > g_track.laps && (g_save.jericho_ms == 0 || (int)(k->total_time * 1000) < g_save.jericho_ms)) g_save.jericho_ms = (int)(k->total_time * 1000); } g_save.dirty = 1; }
                 if (g_mode == MODE_GP && g_gp_round + 1 >= NUM_GP_TRACKS && !g_demo) {   /* the championship is decided */
                     int best = 0; for (int c = 1; c < NCHARS; c++) if (g_gp_points[c] > g_gp_points[best]) best = c;
-                    if (best == g_player_char) { g_save.gp_wins[g_difficulty]++; if (g_cup == 1) g_save.glory_wins++; g_save.dirty = 1; } }
+                    if (best == g_player_char) { g_save.gp_wins[g_difficulty]++; if (g_cup == 1) g_save.glory_wins++; if (g_cup == 2) g_save.pharaoh_wins++; g_save.dirty = 1; } }
                 g_fresh_unlocks = save_check_unlocks(); save_store(); race_set_unlocked(unlocked_mask()); race_set_styles(g_player_style, unlocked_styles());
                 { int hwon = 0; for (int i = 0; i < r->nk; i++) if (r->human[i] && r->k[i].place == 1) hwon = 1;
                   if (g_fresh_unlocks) sfx_play(SFX_UNLOCK, 1, 0); else if (!g_demo && hwon) sfx_play(SFX_WIN, 1, 0); }
@@ -4180,7 +4269,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
     KartInput hin[NKARTS]; memset(hin, 0, sizeof hin); int all_auto = g_demo || g_attract;
     if (g_nplayers > 1 && g_screen == SCR_RACE) for (int p = 0; p < g_nplayers; p++) { const Pad *pp = player_pad(pads, npads, p); KartInput *h = &hin[human_kart(p)];
         h->steer = -pp->sx; h->gas = pp->a; h->brake = pp->b; h->drift = pp->zr; h->item = pp->zl || pp->x || pp->y; }
-#if defined(KK_TOUR) && KK_TOUR_ROAD == 8
+#if defined(KK_TOUR) && (KK_TOUR_ROAD == 8 || KK_TOUR_ROAD >= 20)
     all_auto = 1;   /* the CI tour has nobody holding the controllers: the four people drive themselves */
 #endif
     int steps = 0;
@@ -4469,9 +4558,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
             batch_clear(&g_b); g_ui3d = 1; g_ui_conv = 0; hud_scene_top(); ui_flush(); g_ui3d = 0; gfx_mesh_update(m_sct[drc], g_b.v, g_b.n);
             gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m_sct[drc], &id, 1, 1, 1, 1); gfx_camera_2d(); }
         if (g_screen == SCR_TROPHY) { draw_trophy_pictures(drc); static Mesh *m_top[2]; if (!m_top[drc]) m_top[drc] = gfx_mesh_dynamic(8192); batch_clear(&g_b); hud_trophy_top(); gfx_mesh_update(m_top[drc], g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_top[drc], &id, 1, 1, 1, 1); }
-        if (g_screen == SCR_TRACK) for (int c2 = 0; c2 < ncards() && c2 < 8; c2++) { int d = card_track(c2); if (d >= 8 || !tx_card[d] || !track_unlocked(d)) continue;
+        if (g_screen == SCR_TRACK) for (int c2 = 0; c2 < ncards() && c2 < SAVE_MAX_ROADS; c2++) { int d = card_track(c2); if (d >= SAVE_MAX_ROADS || !tx_card[d] || !track_unlocked(d)) continue;
             if (!m_card[c2]) m_card[c2] = gfx_mesh_dynamic(6);
-            { float x = 40 + c2 * CARD_STEP + 12, y = 110 + 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, CARD_IN, CARD_IN * 0.54f, 0, 0, 1, 1, 1, 1, 1, 1); ui_px(g_b.v, g_b.n, 7); gfx_mesh_update(m_card[c2], g_b.v, g_b.n); }
+            { float x, y, w, h, iw; road_card_rect(c2, &x, &y, &w, &h, &iw); x += 12; y += 12; batch_clear(&g_b); batch_rect_uv(&g_b, x, y, iw, iw * 0.54f, 0, 0, 1, 1, 1, 1, 1, 1); ui_px(g_b.v, g_b.n, 7); gfx_mesh_update(m_card[c2], g_b.v, g_b.n); }
             gfx_camera_ui3d(UI_EYE); Mat4 cm = ui_card_model(c2); gfx_bind(tx_card[d]); gfx_draw(m_card[c2], &cm, 1, 1, 1, 1); gfx_camera_2d(); }
         if (g_screen == SCR_KART) { draw_kart_models(); gfx_camera_2d(); gfx_state(ST_HUD);
             {   /* the character in the very kart they race in, turning slowly on a glowing stand under a spotlight */

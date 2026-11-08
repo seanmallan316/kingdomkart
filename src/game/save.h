@@ -2,7 +2,7 @@
 #ifndef KK_SAVE_H
 #define KK_SAVE_H
 
-#define SAVE_MAX_ROADS 8
+#define SAVE_MAX_ROADS 16
 
 enum {
     UNLOCK_SAMSON = 1 << 0,        /* win 5 races */

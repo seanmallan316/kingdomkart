@@ -351,7 +351,7 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
     /* the great fish: anyone wading out in the water for a moment is noticed; its shadow and bubbles show where it will
        come up, a little ahead of them; a second later it leaps out and comes down there with its mouth open. Out of the
        water (or out of the way) in time and it misses; the shield of faith saves you; otherwise you are swallowed */
-    if (t->water && t->water_y > -1e8f) {
+    if (t->water == 1 && t->water_y > -1e8f) {   /* (the Sea of Galilee; the Nile has its crocodiles instead) */
         if (r->whale.cool > 0) r->whale.cool -= dt;
         for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; int wet = k->hit.on_field && !k->air && r->swallow_t[i] <= 0 && !k->finished; r->wade_t[i] = wet ? r->wade_t[i] + dt : 0; }
         if (!r->whale.active && r->whale.cool <= 0) {
