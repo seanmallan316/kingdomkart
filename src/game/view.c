@@ -28,11 +28,11 @@
 /* the Grand Prix cups: the Gospel Cup runs the four story roads; Genesis to Glory runs every road in Bible order (earned with the Road to Heaven) */
 typedef struct { const char *name, *sub; int roads[NUM_GP_ROUNDS_MAX]; int n; int needs_heaven; } Cup;
 typedef char cup_hold[NUM_GP_ROUNDS_MAX >= 6 ? 1 : -1];
-#define NCUPS 3
+#define NCUPS 4
 static const Cup CUPS[NCUPS] = { {"THE GOSPEL CUP", "THE STORY OF JESUS IN FOUR ROADS", {0, 1, 2, 3}, 4, 0}, {"GENESIS TO GLORY", "FROM THE GARDEN TO THE GATES: SIX ROADS", {5, 0, 1, 2, 3, 4}, 6, 1},
-    {"PHARAOH'S CUP", "OUT OF EGYPT IN FOUR ROADS", {6, 7, 8, 9}, 4, 0} };   /* (Sean's roads of Egypt; winning it unlocks Pharaoh) */
-static const char *cup_champ(int c) { return c == 0 ? "GOSPEL CUP CHAMPION" : c == 1 ? "GENESIS TO GLORY CHAMPION" : "PHARAOH'S CUP CHAMPION"; }
-static const char *cup_title(int c) { return c == 0 ? "GOSPEL CUP" : c == 1 ? "GENESIS TO GLORY CUP" : "PHARAOH'S CUP"; }
+    {"PHARAOH'S CUP", "OUT OF EGYPT IN FOUR ROADS", {6, 7, 8, 9}, 4, 0}, {"BABYLONIAN CUP", "THE CITY OF THE KING IN FOUR ROADS", {10, 11, 12, 13}, 4, 0} };   /* (Sean's roads of Egypt; winning it unlocks Pharaoh) */
+static const char *cup_champ(int c) { return c == 0 ? "GOSPEL CUP CHAMPION" : c == 1 ? "GENESIS TO GLORY CHAMPION" : c == 2 ? "PHARAOH'S CUP CHAMPION" : "BABYLONIAN CUP CHAMPION"; }
+static const char *cup_title(int c) { return c == 0 ? "GOSPEL CUP" : c == 1 ? "GENESIS TO GLORY CUP" : c == 2 ? "PHARAOH'S CUP" : "BABYLONIAN CUP"; }
 static int g_cup = 0;
 #define NUM_GP_TRACKS (CUPS[g_cup].n)
 #ifndef KK_TOUR_ROAD
@@ -2327,7 +2327,8 @@ static void track_card_draw(int c2) { int d = card_track(c2);
         snprintf(buf, sizeof buf, td->laps == 1 ? "ONE RUN TO THE TOP" : (td->bonus == 3 ? "7 LAPS - SHOFARS!" : "%d LAPS"), td->laps); batch_text(&g_b, buf, x + 12, ty + (cmp ? 44 : 55), text_width(buf, 14) > fit ? 11 : 14, 0.8f, 0.9f, 1, 1);
         if (g_best_time[d] > 0) { char tb[32]; fmt_time(tb, sizeof tb, g_best_time[d]); snprintf(buf, sizeof buf, "RECORD %s", tb); batch_text(&g_b, buf, x + 12, ty + (cmp ? 62 : 80), cmp ? 12 : 14, 1, 0.9f, 0.5f, 1); }
         if (save_par_time(d) > 0) { char tb[32]; fmt_time(tb, sizeof tb, save_par_time(d)); snprintf(buf, sizeof buf, "TARGET %s", tb); batch_text(&g_b, buf, x + 12, ty + (cmp ? 78 : 103), cmp ? 12 : 14, 0.7f, 0.95f, 0.8f, 1); }
-        if (td->bonus == 4) batch_text(&g_b, "PHARAOH'S CUP", x + 12, ty + (cmp ? 96 : 135), text_width("PHARAOH'S CUP", 14) > fit ? 11 : 14, 1, 0.85f, 0.3f, 1);
+        if (td->bonus == 5) batch_text(&g_b, "BABYLON CUP", x + 12, ty + (cmp ? 96 : 135), text_width("BABYLON CUP", 14) > fit ? 11 : 14, 1, 0.85f, 0.3f, 1);
+        else if (td->bonus == 4) batch_text(&g_b, "PHARAOH'S CUP", x + 12, ty + (cmp ? 96 : 135), text_width("PHARAOH'S CUP", 14) > fit ? 11 : 14, 1, 0.85f, 0.3f, 1);
         else if (td->bonus) batch_text(&g_b, "BONUS ROAD", x + 12, ty + (cmp ? 96 : 135), 14, 1, 0.85f, 0.3f, 1);
     }
 static void hud_track(void) {
@@ -2445,18 +2446,19 @@ static void hud_results(void) {
 static void hud_cup(void) {
     text_c("CHOOSE A CUP", 40, 40, 1, 0.85f, 0.3f, 1);
     for (int c = 0; c < NCUPS; c++) { const Cup *cp = &CUPS[c]; int sel = c == g_cup, open = !cp->needs_heaven || (g_save.unlocks & UNLOCK_HEAVEN);
-        float x = 30 + c * 412, y = 120, w = 396, h = 470;
+        float x = 24 + c * 310, y = 120, w = 298, h = 470;
         uint32_t mk = ui_begin(); card_face(x, y, w, h, sel, open); tzone(x, y, w, h, TZ_SEL, c);
         { float ns = 30; while (ns > 18 && text_width(cp->name, ns) > w - 40) ns -= 1; batch_text(&g_b, cp->name, x + 20, y + 20, ns, 1, 0.95f, 0.5f, 1); }
-        batch_text(&g_b, cp->sub, x + 20, y + 62, text_width(cp->sub, 13) > w - 40 ? 11 : 13, 0.8f, 0.9f, 1, 1);
+        { float ss = 13; while (ss > 9 && text_width(cp->sub, ss) > w - 40) ss -= 1; batch_text(&g_b, cp->sub, x + 20, y + 62, ss, 0.8f, 0.9f, 1, 1); }
         if (!open) { batch_text(&g_b, "?", x + w / 2 - text_width("?", 110) / 2, y + 140, 110, 0.5f, 0.55f, 0.7f, 1);
             batch_text(&g_b, "LOCKED", x + w / 2 - text_width("LOCKED", 24) / 2, y + 290, 24, 0.8f, 0.8f, 0.9f, 1);
             batch_text(&g_b, "WIN THE GOSPEL CUP", x + w / 2 - text_width("WIN THE GOSPEL CUP", 14) / 2, y + 330, 14, 1, 0.9f, 0.5f, 1); batch_text(&g_b, "ON NORMAL OR HARD", x + w / 2 - text_width("ON NORMAL OR HARD", 14) / 2, y + 352, 14, 1, 0.9f, 0.5f, 1); card_done(mk, c, x, y, w, h, sel); continue; }
         for (int i = 0; i < cp->n; i++) { const TrackDef *td = &TRACK_DEFS[cp->roads[i]]; float ry = y + 100 + i * 56; char nm[8]; snprintf(nm, sizeof nm, "%d.", i + 1);
             batch_rect(&g_b, x + 20, ry, 44, 44, td->sky_r, td->sky_g, td->sky_b, 1); draw_preview(&g_preview[cp->roads[i]], x + 42, ry + 22, 34, 0.95f, 0.95f, 0.95f);
-            batch_text(&g_b, nm, x + 76, ry + 10, 20, 1, 0.85f, 0.3f, 1); { float ns = 20; while (ns > 12 && text_width(td->name, ns) > w - 130) ns -= 1; batch_text(&g_b, td->name, x + 110, ry + 10 + (20 - ns) * 0.5f, ns, 1, 1, 1, 1); } }
+            batch_text(&g_b, nm, x + 76, ry + 10, 20, 1, 0.85f, 0.3f, 1); { float ns = 20; while (ns > 9 && text_width(td->name, ns) > w - 120) ns -= 1; batch_text(&g_b, td->name, x + 110, ry + 10 + (20 - ns) * 0.5f, ns, 1, 1, 1, 1); } }
         { char line[64]; snprintf(line, sizeof line, "WON: EASY %d  NORMAL %d  HARD %d", g_save.gp_wins[0], g_save.gp_wins[1], g_save.gp_wins[2]); if (c == 0) batch_text(&g_b, line, x + 20, y + h - 36, 12, 0.8f, 0.9f, 1, 1);
-          else if (c == 2) { snprintf(line, sizeof line, "%d ROADS - WON %d TIMES", cp->n, g_save.pharaoh_wins); batch_text(&g_b, line, x + 20, y + h - 36, 12, 0.8f, 0.9f, 1, 1); if (!(g_save.unlocks & UNLOCK_PHARAOH)) batch_text(&g_b, "WIN IT TO UNLOCK PHARAOH", x + 20, y + h - 58, 12, 1, 0.85f, 0.3f, 1); } else { snprintf(line, sizeof line, "%d ROADS - THE WHOLE STORY", cp->n); batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); } }
+          else if (c >= 2) { int won = c == 2 ? g_save.pharaoh_wins : g_save.babylon_wins; unsigned ub = c == 2 ? UNLOCK_PHARAOH : UNLOCK_NEBUCHADNEZZAR; snprintf(line, sizeof line, "%d ROADS - WON %d", cp->n, won); batch_text(&g_b, line, x + 20, y + h - 36, 12, 0.8f, 0.9f, 1, 1);
+              if (!(g_save.unlocks & ub)) { batch_text(&g_b, "WIN IT TO UNLOCK", x + 20, y + h - 76, 12, 1, 0.85f, 0.3f, 1); batch_text(&g_b, c == 2 ? "PHARAOH" : "NEBUCHADNEZZAR", x + 20, y + h - 58, 12, 1, 0.85f, 0.3f, 1); } } else { snprintf(line, sizeof line, "%d ROADS - THE WHOLE STORY", cp->n); batch_text(&g_b, line, x + 20, y + h - 36, 13, 0.8f, 0.9f, 1, 1); } }
         card_done(mk, c, x, y, w, h, sel);
     }
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 650, 16, 0.8f, 0.85f, 1, 1);
@@ -3459,7 +3461,16 @@ static float eg_dark(const Kart *k) {   /* 0..1: how deep into the darkness this
     int a = track_def_idx(&g_track, 214), b = track_def_idx(&g_track, 258), i = k->hit.idx; if (i < a || i > b) return 0;
     float u = (float)(i - a) / (float)(b - a); return clampf(fminf(u, 1 - u) * 5.0f, 0, 1); }
 static void draw_egypt_fx(Vec3 eye, Vec3 ax, int vk) {
-    if (!g_def) return; int rsea = !strcmp(g_def->prefix, "rsea"), plag = !strcmp(g_def->prefix, "plag"); if (!rsea && !plag) return;
+    if (!g_def) return; int rsea = !strcmp(g_def->prefix, "rsea"), plag = !strcmp(g_def->prefix, "plag"), fur = !strcmp(g_def->prefix, "fur"), den = !strcmp(g_def->prefix, "den");
+    if (fur || den) {   /* the furnace: embers drifting up everywhere; the den: shafts of light from the openings above (Sean's art) */
+        static Mesh *m_bfx; static Vertex bv[1800]; if (!m_bfx) m_bfx = gfx_mesh_dynamic(1800); Batch bb; batch_init(&bb, bv, 1800); Mat4 id0 = m4_identity(); float t0 = g_time;
+        if (fur) for (int n = 0; n < 220; n++) { float h1 = noise2(n, 31), h2 = noise2(n, 32), rise = fmodf(t0 * (2 + h2 * 3) + h1 * 20, 20), s2 = 0.08f + 0.1f * noise2(n, 33);
+            Vec3 c = v3(eye.x + (h1 - 0.5f) * 70 + sinf(t0 + n) * 1.5f, eye.y - 6 + rise, eye.z + (h2 - 0.5f) * 70); batch_quad(&bb, c, v3(ax.x * s2, 0, ax.z * s2), v3(0, s2, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.5f + 0.3f * h2, 0.1f, 1 - rise / 20); }
+        if (den) for (int n = 0; n < 9; n++) { int i = track_def_idx(&g_track, 30 + n * 28) % g_track.n; const TrackSample *ts = &g_track.s[i]; float w2 = 6 + 3 * noise2(n, 34), a2 = 0.16f + 0.05f * sinf(t0 * 0.7f + n);
+            batch_quad(&bb, v3(ts->x + 8, ts->y + 25, ts->z), v3(ax.x * w2, 0, ax.z * w2), v3(-8, 25, 0), v3(0, 0, 1), 0.3f, 0, 0.7f, 1, 1, 0.95f, 0.75f, a2); }
+        if (bb.n) { gfx_mesh_update(m_bfx, bb.v, bb.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_bfx, &id0, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); gfx_state(ST_SOLID); }
+        return; }
+    if (!rsea && !plag) return;
     static Mesh *m_walls, *m_blood; static int built = -1; Mat4 id = m4_identity(); float t = g_time;
     if (built != g_loaded_track) { built = g_loaded_track; gfx_mesh_free(m_walls); gfx_mesh_free(m_blood); m_walls = m_blood = NULL;
         Batch b; batch_init(&b, far_buf(), FAR_CAP);
@@ -3965,7 +3976,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         g_player_char = g_race.character[1]; scene_check_words(); scene_start(0); } }   /* CI: the trophy screen is unchanged; photograph the Bible stories from Jesus on (tour 13 goes from Samson) */
 #endif
 #if defined(KK_TOUR) && KK_TOUR_ROAD >= 20
-    { static int done = 0; if (!done && g_time > 2.0f) { done = 1; g_mode = MODE_SINGLE; g_player_char = 20; g_track_idx = 6 + (KK_TOUR_ROAD - 20); begin_player_race(); g_screen_t = 0; } }   /* CI: a race on each road of the Pharaoh's Cup */
+    { static int done = 0; if (!done && g_time > 2.0f) { done = 1; g_mode = MODE_SINGLE; g_player_char = KK_TOUR_ROAD >= 24 ? 21 : 20; g_track_idx = 6 + (KK_TOUR_ROAD - 20); begin_player_race(); g_screen_t = 0; } }   /* CI: a race on each road of the Pharaoh's Cup */
 #elif defined(KK_TOUR) && KK_TOUR_ROAD >= 13
     { static int done = 0; static const int first[7] = {7, 2, 4, 6, 9, 16, 14}; if (!done && g_time > 2.0f) { done = 1; g_cup = 1; scene_check_words(); scene_start(first[(KK_TOUR_ROAD - 13) % 7]); } }   /* CI: straight into the cup winners' Bible stories, from Samson on */
 #endif
@@ -4177,7 +4188,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 if (g_mode == MODE_JERICHO && !g_demo) { Kart *k = &r->k[r->player]; if (k->place == 1) { g_save.jericho_wins++; if (k->lap > g_track.laps && (g_save.jericho_ms == 0 || (int)(k->total_time * 1000) < g_save.jericho_ms)) g_save.jericho_ms = (int)(k->total_time * 1000); } g_save.dirty = 1; }
                 if (g_mode == MODE_GP && g_gp_round + 1 >= NUM_GP_TRACKS && !g_demo) {   /* the championship is decided */
                     int best = 0; for (int c = 1; c < NCHARS; c++) if (g_gp_points[c] > g_gp_points[best]) best = c;
-                    if (best == g_player_char) { g_save.gp_wins[g_difficulty]++; if (g_cup == 1) g_save.glory_wins++; if (g_cup == 2) g_save.pharaoh_wins++; g_save.dirty = 1; } }
+                    if (best == g_player_char) { g_save.gp_wins[g_difficulty]++; if (g_cup == 1) g_save.glory_wins++; if (g_cup == 2) g_save.pharaoh_wins++; if (g_cup == 3) g_save.babylon_wins++; g_save.dirty = 1; } }
                 g_fresh_unlocks = save_check_unlocks(); save_store(); race_set_unlocked(unlocked_mask()); race_set_styles(g_player_style, unlocked_styles());
                 { int hwon = 0; for (int i = 0; i < r->nk; i++) if (r->human[i] && r->k[i].place == 1) hwon = 1;
                   if (g_fresh_unlocks) sfx_play(SFX_UNLOCK, 1, 0); else if (!g_demo && hwon) sfx_play(SFX_WIN, 1, 0); }

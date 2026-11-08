@@ -33,6 +33,14 @@ PROPS = {   # name: (what it is, triangles)
     'camel':        ('a camel standing, one hump, colorful saddle blanket with tassels', 3500),
     'stall':        ('an Egyptian market stall with a striped red and white awning, baskets of fruit, clay pots and rugs', 4000),
     'brazier':      ('a tall bronze brazier fire bowl on a stand with burning flames, Egyptian style', 1500),
+    # the Babylonian Cup roads
+    'ishtar_gate':  ('the Ishtar Gate of Babylon: a huge arched city gate of glazed deep blue bricks with golden lions and flowers, crenellated towers on both sides', 6000),
+    'lamassu':      ('a Babylonian lamassu guardian statue: a winged bull with a bearded crowned human head, golden stone', 5000),
+    'ziggurat':     ('a Babylonian ziggurat: a tall stepped temple tower of tan bricks with stairways up the front and a small shrine on top', 4000),
+    'garden_terrace': ('the Hanging Gardens of Babylon: three stacked stone terraces with arches, lush green plants and hanging vines spilling over every level, bright pink and purple flowers, palm trees on top, a waterfall pouring down the front', 6000),
+    'gold_statue':  ('a tall golden statue of a Babylonian king standing on a stone pedestal, shining gold', 3000),
+    'lion_roar':    ('a big male lion standing and roaring, golden mane, mouth wide open', 4000),
+    'fire_pillar':  ('a tall stone brazier column with a big roaring fire on top, Babylonian blue and gold tiles', 2000),
 }
 def req(m, p, b=None):
     r = urllib.request.Request(B + p, data=json.dumps(b).encode() if b is not None else None, method=m, headers={'Authorization': 'Bearer ' + K, 'Content-Type': 'application/json'})

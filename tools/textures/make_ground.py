@@ -159,6 +159,17 @@ SETS = {
     'rsea_road':    lambda: cobbles([0.6, 0.58, 0.52], [0.66, 0.58, 0.42], 10, 101, round_=1.3, gap=0.13),   # wet stones on the sea floor
     'rsea_sand':    lambda: sand([0.82, 0.74, 0.58], 102),
     'rsea_seabed':  lambda: sand([0.7, 0.66, 0.56], 103),
+    # the Babylonian Cup
+    'ish_road':     lambda: pavers([0.82, 0.72, 0.56], [0.36, 0.3, 0.24], 7, 111),                              # the Processional Way
+    'ish_dirt':     lambda: sand([0.86, 0.76, 0.56], 112),
+    'ish_grass':    lambda: grass([0.42, 0.6, 0.28], 113),
+    'gar_road':     lambda: cobbles([0.8, 0.72, 0.6], [0.36, 0.5, 0.24], 7, 121, moss=[0.34, 0.55, 0.22], round_=0.6, gap=0.08),
+    'fur_road':     lambda: pavers([0.42, 0.34, 0.3], [0.85, 0.32, 0.08], 6, 131),                             # dark stone, glowing joints
+    'fur_dirt':     lambda: cracked_earth([0.36, 0.22, 0.16], 132),
+    'fur_lava':     lambda: cracked_earth([0.95, 0.42, 0.08], 133),
+    'den_road':     lambda: cobbles([0.6, 0.5, 0.4], [0.3, 0.24, 0.18], 8, 141, round_=0.7, gap=0.1),
+    'den_dirt':     lambda: cracked_earth([0.5, 0.4, 0.3], 142),
+    'den_rock':     lambda: cracked_earth([0.44, 0.36, 0.28], 143),
 }
 
 if __name__ == '__main__':

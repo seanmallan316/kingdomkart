@@ -455,6 +455,124 @@ static const Mover RSEA_MOVERS[] = {
     {"#stone", 162, 0.0f, 6.0f, 0.7f, 1.5f, 1.8f, 2.4f},
 };
 
+// ------------------------------------------------------------------ the Babylonian Cup (Sean's four roads of Babylon)
+// Ishtar Gate Dash: through the blue gate of Babylon with its lions, along the Processional Way, over the canal bridge, a leap
+// off the city wall, past the ziggurat, home through the market.
+static const TrackPoint ISH_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},   /* start: before the Ishtar Gate */
+    {    0, 0.0f,   50, 14, 0.00f},   /* through the gate */
+    {   15, 0.5f,   95, 13, 0.10f},   /* the Processional Way */
+    {   55, 1.0f,  115, 13, 0.00f},
+    {   95, 1.5f,  100, 13, 0.10f},
+    {  108, 2.0f,   58, 13, 0.00f},   /* over the canal */
+    {   85, 3.0f,   25, 12, 0.00f},
+    {   98, 5.0f,  -12, 12, 0.12f},   /* up onto the city wall */
+    {   82, 6.0f,  -52, 12, 0.00f, 1},/* a leap off the wall */
+    {   40, 2.0f,  -68, 13, 0.00f},   /* past the ziggurat */
+    {    0, 1.0f,  -55, 13, 0.00f},
+    {  -30, 0.5f,  -30, 14, 0.00f},   /* the market */
+    {  -22, 0.0f,   10, 14, 0.00f},
+};
+static const Scenery ISH_SCENERY[] = {
+    {"@ishtar_gate", 20, -40, 20, 0}, {"@ishtar_gate", 20, 40, 20, 0}, {"@lamassu", 12, -14, 6, 0}, {"@lamassu", 12, 14, 6, 0}, {"@fire_pillar", 30, -12, 4, 3}, {"@fire_pillar", 30, 12, 4, 3},
+    {"@fire_pillar", 50, -12, 4, 3}, {"@fire_pillar", 50, 12, 4, 3}, {"#palm", 60, -14, 11, 0}, {"@lion_roar", 70, 15, 2.2f, 0}, {"#palm", 80, -14, 12, 0}, {"@fire_pillar", 90, 12, 4, 3},
+    {"#palm", 102, 13, 11, 0}, {"#boat", 110, -17, 4, 0}, {"#palm", 120, 14, 11, 0}, {"#boat", 126, 17, 4, 0},
+    {"#tower", 142, -14, 14, 0}, {"#wallseg", 150, 14, 9, 0}, {"#tower", 160, 14, 14, 0},
+    {"@ziggurat", 190, -60, 40, 0}, {"#palm", 196, 13, 11, 0}, {"@lamassu", 206, -14, 6, 0}, {"@gold_statue", 214, 15, 8, 0},
+    {"#stall", 226, -13, 5, 0}, {"@stall", 232, 13, 4, 0}, {"#house2", 238, -13, 9, 0}, {"@camel", 244, 14, 2.4f, 0}, {"#stall", 250, -13, 5, 0},
+};
+static const RoadPad ISH_PADS[] = { {36, -2.5f, 2.2f, PAD_BOOST}, {40, 2.5f, 2.2f, PAD_BOOST}, {118, 0.0f, 2.5f, PAD_BOOST}, {148, 0.0f, 2.5f, PAD_BOOST}, {222, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow ISH_COINS[] = { {26, 5, 3, 2.5f}, {80, 5, 3, -2.5f}, {130, 5, 3, 2.5f}, {196, 6, 3, 0.0f}, {236, 5, 3, -2.5f} };
+static const Tunnel ISH_TUNNELS[] = { {14, 26, 6.5f} };   /* under the Ishtar Gate */
+static const Mover ISH_MOVERS[] = { {"@camel", 240, 0.0f, 5.0f, 0.35f, 1.0f, 1.6f, 2.4f} };
+
+// Hanging Gardens Circuit: climbing the terraces of the gardens, under the vine tunnel, past the waterfalls, a leap off the
+// top terrace, and down over the arched bridges by the lily pools.
+static const TrackPoint GAR_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},
+    {    0, 0.0f,   45, 14, 0.00f},
+    {  -25, 2.0f,   85, 13, -0.10f},  /* the terrace climb */
+    {  -70, 5.0f,  100, 12, 0.00f},
+    { -108, 8.0f,   80, 12, 0.12f},
+    { -120, 10.0f,  40, 12, 0.00f},   /* the vine tunnel */
+    {  -95, 12.0f,   8, 12, 0.00f},
+    {  -60, 13.0f, -10, 12, 0.10f},
+    {  -35, 10.0f, -45, 12, 0.00f, 1},/* the leap off the top terrace */
+    {    5, 4.0f,  -80, 13, 0.00f},   /* the waterfalls */
+    {   55, 3.0f,  -75, 13, 0.10f},
+    {   85, 2.0f,  -40, 13, 0.00f},   /* the arched bridges over the lily pools */
+    {   60, 1.0f,  -15, 13, 0.00f},
+    {   20, 0.0f,  -35, 14, 0.00f},
+};
+static const Scenery GAR_SCENERY[] = {
+    {"@lamassu", 6, -14, 6, 0}, {"@lamassu", 6, 14, 6, 0}, {"#palm", 16, -13, 11, 0}, {"#flowers", 22, 13, 2.5f, 0}, {"@garden_terrace", 34, -30, 16, 0}, {"#palm", 40, 14, 12, 0},
+    {"@garden_terrace", 54, 30, 18, 0}, {"#flowers", 60, -12, 2.5f, 0}, {"#waterfall", 70, -18, 12, 0}, {"#palm", 78, 14, 11, 0}, {"@garden_terrace", 88, -32, 20, 0},
+    {"#fern", 112, -12, 3, 0}, {"#fern", 118, 12, 3, 0}, {"#flowers", 132, -12, 2.5f, 0}, {"@garden_terrace", 144, 32, 20, 0},
+    {"#waterfall", 176, -18, 14, 0}, {"#waterfall", 184, 18, 12, 0}, {"#palm", 192, -13, 11, 0}, {"#waterfall", 200, 18, 14, 0}, {"@ziggurat", 210, -80, 45, 0},
+    {"#lily", 220, -13, 2, 0}, {"#lily", 226, 13, 2, 0}, {"#flowers", 232, -12, 2.5f, 0}, {"@fire_pillar", 240, 12, 4, 3}, {"#palm", 248, -14, 12, 0}, {"#lily", 256, 13, 2, 0},
+};
+static const RoadPad GAR_PADS[] = { {30, 0.0f, 2.5f, PAD_BOOST}, {100, -2.5f, 2.2f, PAD_BOOST}, {104, 2.5f, 2.2f, PAD_BOOST}, {150, 0.0f, 2.5f, PAD_BOOST}, {236, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow GAR_COINS[] = { {24, 5, 3, 2.5f}, {72, 5, 3, -2.5f}, {128, 6, 3, 0.0f}, {196, 5, 3, 2.5f}, {246, 5, 3, -2.5f} };
+static const Tunnel GAR_TUNNELS[] = { {106, 136, 6.0f} };   /* the vine tunnel */
+static const Mover GAR_MOVERS[] = { {"#lamb", 60, 0.0f, 5.0f, 0.4f, 0.0f, 1.4f, 2.0f} };
+
+// The Fiery Furnace: through the plain of Dura past the golden image (Daniel 3:1), up to the furnace heated seven times
+// hotter, over the lava bridges, a leap through the flames, round and home.
+static const TrackPoint FUR_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},
+    {    0, 0.0f,   50, 14, 0.00f},   /* the plain of Dura, the golden image */
+    {   20, 1.0f,   92, 13, 0.10f},
+    {   62, 2.0f,  105, 13, 0.00f},
+    {  100, 4.0f,   85, 12, 0.12f},   /* up to the furnace */
+    {  115, 7.0f,   45, 12, 0.00f},
+    {  100, 9.0f,    8, 12, 0.00f, 1},/* a leap over the flames */
+    {   70, 3.0f,  -20, 13, 0.00f},   /* the furnace hall */
+    {   65, 2.0f,  -62, 13, 0.10f},
+    {   30, 1.5f,  -88, 13, 0.00f},   /* the lava bridges */
+    {  -12, 1.0f,  -75, 13, 0.00f},
+    {  -35, 0.5f,  -38, 13, 0.00f},
+    {  -25, 0.0f,   -5, 14, 0.00f},
+};
+static const Scenery FUR_SCENERY[] = {
+    {"@fire_pillar", 6, -12, 4, 3}, {"@fire_pillar", 6, 12, 4, 3}, {"@gold_statue", 22, -34, 30, 0}, {"@lamassu", 30, 14, 6, 0}, {"@fire_pillar", 40, 12, 4, 3}, {"#tower", 50, -14, 14, 0},
+    {"@fire_pillar", 62, -12, 4, 3}, {"@fire_pillar", 72, 12, 4, 3}, {"#wallseg", 84, -14, 9, 0}, {"@fire_pillar", 92, 12, 4, 3}, {"#tower", 100, 14, 14, 0},
+    {"@fire_pillar", 132, -12, 4, 3}, {"@fire_pillar", 132, 12, 4, 3}, {"@fire_pillar", 146, -12, 4, 3}, {"@fire_pillar", 146, 12, 4, 3}, {"@fire_pillar", 160, -12, 4, 3}, {"@fire_pillar", 160, 12, 4, 3},
+    {"#rubble", 176, -13, 3, 0}, {"@fire_pillar", 186, 12, 4, 3}, {"#rubble", 196, 13, 3, 0}, {"@ziggurat", 210, -70, 40, 0}, {"@fire_pillar", 222, -12, 4, 3}, {"@lamassu", 236, 14, 6, 0},
+};
+static const RoadPad FUR_PADS[] = { {36, -2.5f, 2.2f, PAD_BOOST}, {40, 2.5f, 2.2f, PAD_BOOST}, {104, 0.0f, 2.5f, PAD_BOOST}, {190, 0.0f, 2.5f, PAD_BOOST}, {230, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow FUR_COINS[] = { {24, 5, 3, 2.5f}, {76, 5, 3, -2.5f}, {150, 6, 3, 0.0f}, {200, 5, 3, 2.5f}, {240, 5, 3, -2.5f} };
+static const Tunnel FUR_TUNNELS[] = { {136, 164, 6.5f} };   /* the furnace hall */
+static const Mover FUR_MOVERS[] = { {"#stone", 182, 0.0f, 6.0f, 0.6f, 0.0f, 1.8f, 2.4f} };
+
+// Daniel's Den: down into the caverns, past the lions on the rock ledges, under the light falling from the opening above,
+// through the narrow rock tunnel, over the bridge, a leap, and up out into the light (Daniel 6:23).
+static const TrackPoint DEN_PTS[] = {
+    {    0, 0.0f,    0, 14, 0.00f},
+    {    0, 0.0f,   45, 14, 0.00f},
+    {  -15, -1.0f,  88, 13, -0.10f},  /* down into the den */
+    {  -55, -2.0f, 105, 13, 0.00f},
+    {  -95, -3.0f,  90, 12, 0.10f},   /* the lions' ledges */
+    { -120, -3.0f,  50, 12, 0.00f},
+    { -105, -2.0f,   5, 13, 0.00f},   /* the light from above */
+    {  -70, -2.0f, -10, 13, 0.00f},
+    {  -45, -1.0f, -40, 13, 0.00f},   /* the rock tunnel */
+    {  -30, 0.0f,  -80, 13, 0.10f},
+    {   10, 1.0f,  -95, 13, 0.00f},
+    {   52, 2.0f,  -75, 13, 0.00f, 1},/* a leap over the chasm */
+    {   65, 0.0f,  -35, 14, 0.00f},   /* up into the light */
+    {   40, 0.0f,  -20, 14, 0.00f},
+};
+static const Scenery DEN_SCENERY[] = {
+    {"@fire_pillar", 6, -12, 4, 3}, {"@fire_pillar", 6, 12, 4, 3}, {"@boulder", 16, -15, 3, 0}, {"@fire_pillar", 26, 12, 4, 3}, {"@boulder", 36, 16, 4, 0},
+    {"@lion_roar", 48, -15, 2.4f, 0}, {"@boulder", 54, 15, 4, 0}, {"@lion", 62, 15, 2.6f, 0}, {"@fire_pillar", 70, -12, 4, 3}, {"@lion_roar", 80, 16, 2.4f, 0}, {"@boulder", 86, -16, 5, 0},
+    {"@lion", 96, -15, 2.6f, 0}, {"@fire_pillar", 104, 12, 4, 3}, {"@lion_roar", 116, -16, 2.4f, 0}, {"@boulder", 122, 15, 4, 0}, {"@lion", 130, 15, 2.6f, 0},
+    {"@boulder", 176, -15, 4, 0}, {"@fire_pillar", 190, 12, 4, 3}, {"@boulder", 200, -16, 5, 0}, {"@lion_roar", 214, 15, 2.4f, 0}, {"@fire_pillar", 226, -12, 4, 3}, {"@boulder", 236, 15, 3, 0}, {"@lion", 250, -15, 2.6f, 0},
+};
+static const RoadPad DEN_PADS[] = { {32, 0.0f, 2.5f, PAD_BOOST}, {90, -2.5f, 2.2f, PAD_BOOST}, {94, 2.5f, 2.2f, PAD_BOOST}, {210, 0.0f, 2.5f, PAD_BOOST}, {246, 0.0f, 3.0f, PAD_BOUNCE} };
+static const CoinRow DEN_COINS[] = { {24, 5, 3, 2.5f}, {72, 5, 3, -2.5f}, {140, 6, 3, 0.0f}, {196, 5, 3, 2.5f}, {254, 5, 3, -2.5f} };
+static const Tunnel DEN_TUNNELS[] = { {160, 186, 5.5f} };   /* the rock tunnel */
+static const Mover DEN_MOVERS[] = { {"#stone", 150, 0.0f, 6.0f, 0.6f, 0.0f, 1.8f, 2.4f}, {"#stone", 230, 0.0f, 6.0f, 0.7f, 1.5f, 1.8f, 2.4f} };
+
 // ------------------------------------------------------------------ The Walls of Jericho: seven laps round the walled city (Joshua 6)
 // The road circles the city under its walls: Israel's camp and the priests on the outside, the walls and towers on the inside,
 // the Ark carried ahead on the north road. On the seventh lap the walls come down and the rubble lands on the road.
@@ -640,6 +758,38 @@ const TrackDef TRACK_DEFS[] = {
       -1, -1, 0,
       "rsea", RSEA_PADS, (int)(sizeof RSEA_PADS / sizeof RSEA_PADS[0]), RSEA_MOVERS, (int)(sizeof RSEA_MOVERS / sizeof RSEA_MOVERS[0]), 0,
       0, NULL, 0, 0, 0, 4, RSEA_COINS, (int)(sizeof RSEA_COINS / sizeof RSEA_COINS[0]), NULL, 0 },
+    { "Ishtar Gate Dash", 3, ISH_PTS, (int)(sizeof ISH_PTS / sizeof ISH_PTS[0]),
+      0.42f, 0.55f, 0.92f, 0.86f, 0.80f, 0.86f, 120.0f, 520.0f, 0.4f, 0.9f, 0.4f, 0.5f, 1.0f, 0.95f, 0.86f, 1.0f, 0.82f, 0.45f,
+      0, "ish_road", "ish_dirt", "ish_grass", "jeru_wall", "jeru_sky",
+      ISH_SCENERY, (int)(sizeof ISH_SCENERY / sizeof ISH_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "ish", ISH_PADS, (int)(sizeof ISH_PADS / sizeof ISH_PADS[0]), ISH_MOVERS, (int)(sizeof ISH_MOVERS / sizeof ISH_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 5, ISH_COINS, (int)(sizeof ISH_COINS / sizeof ISH_COINS[0]), ISH_TUNNELS, 1 },   /* bonus 5: the Babylonian Cup */
+    { "Hanging Gardens Circuit", 3, GAR_PTS, (int)(sizeof GAR_PTS / sizeof GAR_PTS[0]),
+      0.62f, 0.62f, 0.92f, 0.92f, 0.82f, 0.86f, 120.0f, 500.0f, -0.4f, 0.8f, 0.4f, 0.52f, 1.0f, 0.92f, 0.86f, 1.0f, 0.8f, 0.6f,
+      0, "gar_road", "eden_dirt", "eden_grass", "eden_wall", "gal_sky",
+      GAR_SCENERY, (int)(sizeof GAR_SCENERY / sizeof GAR_SCENERY[0]),
+      0, 0, 0, 0,
+      60, 90, 1,
+      "gar", GAR_PADS, (int)(sizeof GAR_PADS / sizeof GAR_PADS[0]), GAR_MOVERS, (int)(sizeof GAR_MOVERS / sizeof GAR_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 5, GAR_COINS, (int)(sizeof GAR_COINS / sizeof GAR_COINS[0]), GAR_TUNNELS, 1 },   /* bonus 5: the Babylonian Cup */
+    { "The Fiery Furnace", 3, FUR_PTS, (int)(sizeof FUR_PTS / sizeof FUR_PTS[0]),
+      0.30f, 0.12f, 0.10f, 0.55f, 0.24f, 0.12f, 70.0f, 340.0f, -0.3f, 0.9f, 0.3f, 0.44f, 1.0f, 0.70f, 0.48f, 1.0f, 0.55f, 0.2f,
+      1, "fur_road", "fur_dirt", "fur_lava", "jeru_wall", "plag_sky",
+      FUR_SCENERY, (int)(sizeof FUR_SCENERY / sizeof FUR_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "fur", FUR_PADS, (int)(sizeof FUR_PADS / sizeof FUR_PADS[0]), FUR_MOVERS, (int)(sizeof FUR_MOVERS / sizeof FUR_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 5, FUR_COINS, (int)(sizeof FUR_COINS / sizeof FUR_COINS[0]), FUR_TUNNELS, 1 },   /* bonus 5: the Babylonian Cup */
+    { "Daniel's Den", 3, DEN_PTS, (int)(sizeof DEN_PTS / sizeof DEN_PTS[0]),
+      0.10f, 0.08f, 0.06f, 0.22f, 0.16f, 0.10f, 60.0f, 300.0f, 0.1f, 1.0f, 0.1f, 0.4f, 1.0f, 0.86f, 0.62f, 1.0f, 0.7f, 0.35f,
+      1, "den_road", "den_dirt", "den_rock", "jeru_wall", "plag_sky",
+      DEN_SCENERY, (int)(sizeof DEN_SCENERY / sizeof DEN_SCENERY[0]),
+      0, 0, 0, 0,
+      -1, -1, 0,
+      "den", DEN_PADS, (int)(sizeof DEN_PADS / sizeof DEN_PADS[0]), DEN_MOVERS, (int)(sizeof DEN_MOVERS / sizeof DEN_MOVERS[0]), 0,
+      0, NULL, 0, 0, 0, 5, DEN_COINS, (int)(sizeof DEN_COINS / sizeof DEN_COINS[0]), DEN_TUNNELS, 1 },   /* bonus 5: the Babylonian Cup */
     { "The Walls of Jericho", 7, JERICHO_PTS, (int)(sizeof JERICHO_PTS / sizeof JERICHO_PTS[0]),
       0.58f, 0.76f, 0.96f,                      /* hard blue desert sky */
       0.92f, 0.86f, 0.70f, 100.0f, 460.0f,      /* dusty haze */
@@ -681,7 +831,7 @@ const int NUM_TRACK_DEFS = (int)(sizeof TRACK_DEFS / sizeof TRACK_DEFS[0]);
 /* How much each road's layout is stretched (x and z; heights, widths and scenery spacing from the road stay as they are).
    Chosen so the winner of a race takes about 2:15 (Sean: at least two minutes).
    Order = TRACK_DEFS. Battle arena and test loop stay as built. */
-static const float TRACK_SCALE[] = {2.7f, 2.55f, 3.0f, 2.65f, 3.6f, 2.75f, 2.2f, 2.1f, 2.5f, 2.5f, 1.2f, 1.0f, 1.0f};   /* (the four roads of the Pharaoh's Cup come before Jericho) */   /* (Sean, again: longer) about 3:20 a race */   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
+static const float TRACK_SCALE[] = {2.7f, 2.55f, 3.0f, 2.65f, 3.6f, 2.75f, 2.2f, 2.1f, 2.5f, 2.5f, 2.6f, 2.4f, 2.6f, 2.4f, 1.2f, 1.0f, 1.0f};   /* (the four roads of the Pharaoh's Cup come before Jericho) */   /* (Sean, again: longer) about 3:20 a race */   /* Jericho: seven laps, so each one is short (Sean: it went on forever) */
 
 /* every racing road is this much wider than first drawn (Sean: room between the racers); arena and test loop stay */
 #define ROAD_WIDEN 2.6f    /* (Sean, again: wider; and again - Mario Kart-wide, about 32 m) */
@@ -777,7 +927,8 @@ void track_from_def(Track *t, const TrackDef *d) {
 float track_scenery_radius(const char *k, float h) {
     if (k[0] == '@') {   /* the Meshy models: how much ground each one stands on */
         static const struct { const char *n; float f; } R[] = {{"@pyramid", 0.55f}, {"@sphinx", 0.8f}, {"@colossus", 0.25f}, {"@pylon", 0.5f}, {"@obelisk", 0.12f}, {"@camel", 0.45f}, {"@stall", 0.45f},
-            {"@brazier", 0.15f}, {"@crocodile", 1.2f}, {"@palm", 0.1f}, {"@house", 0.5f}, {"@boulder", 0.5f}, {"@sheep", 0.6f}, {"@villager", 0.25f}, {"@lion", 0.6f}};
+            {"@brazier", 0.15f}, {"@crocodile", 1.2f}, {"@palm", 0.1f}, {"@house", 0.5f}, {"@boulder", 0.5f}, {"@sheep", 0.6f}, {"@villager", 0.25f}, {"@lion", 0.6f},
+            {"@lamassu", 0.4f}, {"@ziggurat", 0.55f}, {"@gold_statue", 0.2f}, {"@lion_roar", 0.6f}, {"@fire_pillar", 0.15f}, {"@ishtar_gate", 0.5f}, {"@garden_terrace", 0.6f}};
         for (unsigned i = 0; i < sizeof R / sizeof R[0]; i++) if (!strcmp(k, R[i].n)) { float r = h * R[i].f; return r < 0.6f ? 0.6f : r > 40.0f ? 40.0f : r; }
         return 0; }
     if (k[0] != '#' || !strcmp(k, "#cloud") || !strcmp(k, "#flowers") || !strcmp(k, "#lily") || !strcmp(k, "#fern") || !strcmp(k, "#lantern") || !strcmp(k, "#banner")) return 0;
