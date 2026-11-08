@@ -133,7 +133,8 @@ static float g_results_t;
 /* textures */
 static Texture *tx_road, *tx_dirt, *tx_grass, *tx_wall, *tx_blob, *tx_font, *tx_flag, *tx_sky, *tx_star, *tx_vignette, *tx_bird;
 static Mesh *m_scshadow;   /* soft shadows under the scenery */
-static Mesh *m_shsquare;   /* the patch of road a kart's shadow is darkened through (see ST_MULDA) */
+static Mesh *m_shsquare;
+static int g_pad_race = 1;   /* the GamePad during a race: 1 = the race itself (the TV picture), 0 = the big map and standings; tap its corner button to switch */   /* the patch of road a kart's shadow is darkened through (see ST_MULDA) */
 static uint32_t g_px[256 * 256];
 #define PROP_CHUNKS 12
 static Mesh *m_props[MAT_N][PROP_CHUNKS], *m_curbs; static int m_nprops[MAT_N]; static Texture *tx_mat[MAT_N];
@@ -1717,6 +1718,10 @@ static void draw_preview(const Preview *pv, float cx, float cy, float size, floa
 }
 
 // ------------------------------------------------------------------ the race HUD
+static void pad_corner_button(const char *label) {   /* the GamePad's MAP / RACE switch, bottom right (tap it) */
+    float x = 1084, y = 634, w = 176, h = 66;
+    batch_rect(&g_b, x - 3, y - 3, w + 6, h + 6, 1, 0.82f, 0.35f, 0.95f); batch_rect(&g_b, x, y, w, h, 0.07f, 0.1f, 0.28f, 0.92f);
+    batch_text(&g_b, label, x + w * 0.5f - text_width(label, 28) * 0.5f, y + 19, 28, 1, 0.9f, 0.5f, 1); }
 static void hud_gamepad(void) {     /* the GamePad shows the big map and the standings while the TV shows the race */
     Race *r = &g_race; char buf[64];
     batch_rect(&g_b, 0, 0, 1280, 720, 0.04f, 0.07f, 0.18f, 1);
@@ -3317,6 +3322,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
     {   /* the GamePad touch screen */
         static int was_touch = 0, tz_screen = -1; const Pad *gp = npads > 0 ? &pads[0] : NULL; int tap = gp && gp->touch && !was_touch; was_touch = gp && gp->touch;
         if (tz_screen != g_screen) { g_ntz_prev = 0; tz_screen = g_screen; }   /* buttons from the screen before do not count */
+        if (tap && (g_screen == SCR_RACE || g_screen == SCR_PAUSE) && !g_attract && gp->tx > 1060 && gp->ty > 610) {   /* the MAP / RACE corner button */
+            g_pad_race = !g_pad_race; sfx_play(SFX_MENU_MOVE, 1, 0); tap = 0; }
         if (tap && g_screen_t > 0.3f) { int hit = -1;
             for (int z = 0; z < g_ntz_prev; z++) { const TZone *q = &g_tz_prev[z]; if (gp->tx >= q->x && gp->tx < q->x + q->w && gp->ty >= q->y && gp->ty < q->y + q->h) hit = z; }
             if (hit >= 0) { const TZone *q = &g_tz_prev[hit];
@@ -3749,8 +3756,16 @@ void game_frame(const Pad *pads, int npads, float dt) {
 #ifdef KK_TOUR
         if (!drc && g_time > 98.0f && g_time < 103.0f && g_screen == SCR_RACE && !split) gamepad_map = 1;   /* the CI camera only sees the TV: show the GamePad layout there for one photo */
 #endif
+        if (gamepad_map && g_pad_race && drc) {   /* the GamePad shows the race: the TV's finished picture, copied over (no second drawing of the race) */
+            gfx_view_begin(drc, 0, 0, 0); Texture *tv = gfx_grab_ex(0, drc); gfx_viewport(drc, 0, 0, 1, 1); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
+            batch_init(&g_b, g_vtmp, 16384); batch_clear(&g_b);
+            static Mesh *m_padview; if (!m_padview) { batch_rect_uv(&g_b, 0, 0, 1280, 720, 0, 0, 1, 1, 1, 1, 1, 1); m_padview = gfx_mesh_static(g_b.v, g_b.n); batch_clear(&g_b); }
+            if (tv) { gfx_bind(tv); gfx_draw_ex(m_padview, &id2, 1, 1, 1, 1, 0, 1, 0, 0); }
+            else { batch_rect(&g_b, 0, 0, 1280, 720, 0.04f, 0.07f, 0.18f, 1); text_c("LOOK AT THE TV", 340, 30, 1, 0.85f, 0.3f, 1); }
+            pad_corner_button("MAP");   /* tap: the big map instead */
+            gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
         if (gamepad_map) { gfx_view_begin(drc, 0.04f, 0.07f, 0.18f); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
-            batch_init(&g_b, g_vtmp, 16384); batch_clear(&g_b); hud_gamepad(); if (g_screen == SCR_PAUSE) hud_pause(); gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
+            batch_init(&g_b, g_vtmp, 16384); batch_clear(&g_b); hud_gamepad(); if (g_screen == SCR_PAUSE) hud_pause(); else pad_corner_button("RACE"); gfx_mesh_update(m_hud2, g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_hud2, &id2, 1, 1, 1, 1); gfx_view_end(drc); continue; }
         if (g_screen == SCR_OPENER) { gfx_view_begin(drc, 0, 0, 0); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id2 = m4_identity();
             { Texture *vt = g_op_vid ? vid_texture() : tx_op; if (vt && m_op) { gfx_bind(vt); gfx_draw(m_op, &id2, 1, 1, 1, 1); } }
             gfx_view_end(drc); continue; }

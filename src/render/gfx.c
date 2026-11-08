@@ -445,23 +445,25 @@ void gfx_shadow_end(void) {
     GX2Invalidate(GX2_INVALIDATE_MODE_COLOR_BUFFER | GX2_INVALIDATE_MODE_TEXTURE, g_shcb.surface.image, g_shcb.surface.imageSize); }
 /* the picture drawn so far, copied into a texture (for the boost blur: stretched copies of it laid over the edges) */
 static Texture g_grab[2]; static int g_grab_ok[2];
-Texture *gfx_grab(int drc) {
+Texture *gfx_grab(int drc) { return gfx_grab_ex(drc, drc); }
+Texture *gfx_grab_ex(int src, int drc) {   /* src: which screen's picture (0 TV, 1 GamePad); drc: the screen being drawn now */
     if (!g_initialized || g_in_shadow) return NULL;
-    GX2ColorBuffer *cb = drc ? WHBGfxGetDRCColourBuffer() : WHBGfxGetTVColourBuffer(); drc = drc ? 1 : 0;
-    Texture *t = &g_grab[drc]; GX2Texture *tx = &t->tex;
-    if (!g_grab_ok[drc]) {
-        g_grab_ok[drc] = -1;
+    src = src ? 1 : 0; drc = drc ? 1 : 0;
+    GX2ColorBuffer *cb = src ? WHBGfxGetDRCColourBuffer() : WHBGfxGetTVColourBuffer();
+    Texture *t = &g_grab[src]; GX2Texture *tx = &t->tex;
+    if (!g_grab_ok[src]) {
+        g_grab_ok[src] = -1;
         tx->surface.use = GX2_SURFACE_USE_TEXTURE; tx->surface.width = cb->surface.width; tx->surface.height = cb->surface.height; tx->surface.depth = 1;
         tx->surface.dim = GX2_SURFACE_DIM_TEXTURE_2D; tx->surface.format = cb->surface.format;
         tx->surface.tileMode = GX2_TILE_MODE_DEFAULT; tx->surface.aa = GX2_AA_MODE1X; tx->surface.mipLevels = 1;
         tx->viewNumSlices = 1; tx->viewNumMips = 1; tx->compMap = 0x00010205;   /* red, green, blue, and alpha always 1 */
         GX2CalcSurfaceSizeAndAlignment(&tx->surface); GX2InitTextureRegs(tx);
         tx->surface.image = memalign(tx->surface.alignment, tx->surface.imageSize);
-        if (!tx->surface.image) { gfx_log("boost blur: no memory for the screen copy"); return NULL; }
+        if (!tx->surface.image) { gfx_log("screen copy: no memory"); return NULL; }
         DCFlushRange(tx->surface.image, tx->surface.imageSize);
         GX2InitSampler(&t->smp, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_LINEAR);
-        g_grab_ok[drc] = 1; gfx_log("boost blur: screen copy ready (%ux%u)", tx->surface.width, tx->surface.height); }
-    if (g_grab_ok[drc] < 0) return NULL;
+        g_grab_ok[src] = 1; gfx_log("screen copy %d ready (%ux%u)", src, tx->surface.width, tx->surface.height); }
+    if (g_grab_ok[src] < 0) return NULL;
     GX2CopySurface(&cb->surface, 0, 0, &tx->surface, 0, 0);
     GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tx->surface.image, tx->surface.imageSize);
     /* the copy may leave the GPU's state changed: put ours back (as gfx_clear_depth does); the caller sets its viewport */
