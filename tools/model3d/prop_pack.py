@@ -9,7 +9,7 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 BL = r'''
 import bpy, sys, numpy as np
-a = sys.argv[sys.argv.index('--') + 1:]; src, out, outpng, maxt = a[0], a[1], a[2], int(a[3])
+a = sys.argv[sys.argv.index('--') + 1:]; src, out, outpng, maxt, smooth = a[0], a[1], a[2], int(a[3]), a[4] == '1'
 bpy.ops.wm.read_factory_settings(use_empty=True); bpy.ops.import_scene.gltf(filepath=src)
 obs = [o for o in bpy.context.scene.objects if o.type == 'MESH']; img = None
 for o in obs:
@@ -20,6 +20,8 @@ for o in obs:
 img.filepath_raw = outpng; img.file_format = 'PNG'; img.save()
 tot = sum(len(o.data.polygons) for o in obs); P = []; N = []; UV = []
 for o in obs:
+    if smooth:
+        o.data.shade_smooth()
     if tot > maxt: mod = o.modifiers.new('d', 'DECIMATE'); mod.ratio = maxt / tot; mod.use_collapse_triangulate = True
     dg = bpy.context.evaluated_depsgraph_get(); ev = o.evaluated_get(dg); m = ev.to_mesh(); m.calc_loop_triangles()
     uvl = m.uv_layers.active.data; mw = o.matrix_world; nm = mw.to_3x3()
@@ -31,9 +33,9 @@ for o in obs:
 np.savez(out, P=np.array(P, np.float32), N=np.array(N, np.float32), UV=np.array(UV, np.float32))
 '''
 def main():
-    src, base, size = sys.argv[1], sys.argv[2], float(sys.argv[3]); how = sys.argv[4] if len(sys.argv) > 4 else 'height'; maxt = int(sys.argv[5]) if len(sys.argv) > 5 else 4000
+    src, base, size = sys.argv[1], sys.argv[2], float(sys.argv[3]); how = sys.argv[4] if len(sys.argv) > 4 else 'height'; maxt = int(sys.argv[5]) if len(sys.argv) > 5 else 4000; smooth = sys.argv[6] if len(sys.argv) > 6 else '0'   # 1: soft rounded shading (clouds, animals, people, trees)
     td = tempfile.mkdtemp(); sp = os.path.join(td, 'p.py'); open(sp, 'w').write(BL)
-    subprocess.run(['blender', '-b', '--python', sp, '--', src, td + '/m.npz', td + '/t.png', str(maxt)], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(['blender', '-b', '--python', sp, '--', src, td + '/m.npz', td + '/t.png', str(maxt), smooth], check=True, stdout=subprocess.DEVNULL)
     d = np.load(td + '/m.npz'); P, N, UV = d['P'].astype(np.float64), d['N'], d['UV']
     P[:, 1] -= P[:, 1].min(); P[:, 0] -= (P[:, 0].max() + P[:, 0].min()) / 2; P[:, 2] -= (P[:, 2].max() + P[:, 2].min()) / 2
     s = size / (P[:, 1].max() if how == 'height' else max(np.ptp(P[:, 0]), np.ptp(P[:, 2]))); P *= s

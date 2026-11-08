@@ -2627,7 +2627,7 @@ static float sc_beat_len(int beat) {
     return beat == SB_TITLE ? 6.0f : sc_typed_t(beat) + (beat == SB_VERSE ? 5.0f : 4.0f); }
 typedef struct { float top[3], hor[3], gnd[3], sun[3], amb[3]; Vec3 focus; int night; } SetLook;
 static const SetLook SET_LOOK[SET_COUNT] = {
-    /* MOUNT */    {{0.22f, 0.45f, 0.85f}, {0.78f, 0.86f, 0.95f}, {0.36f, 0.58f, 0.26f}, {1.0f, 0.95f, 0.85f}, {0.65f, 0.72f, 0.85f}, {-7, 0.8f, 1.5f}, 0},
+    /* MOUNT */    {{0.22f, 0.45f, 0.85f}, {0.78f, 0.86f, 0.95f}, {0.42f, 0.5f, 0.28f}, {1.0f, 0.95f, 0.85f}, {0.65f, 0.72f, 0.85f}, {-7, 0.8f, 1.5f}, 0},
     /* REDSEA */   {{0.12f, 0.10f, 0.30f}, {0.95f, 0.55f, 0.38f}, {0.80f, 0.66f, 0.44f}, {1.0f, 0.78f, 0.6f}, {0.55f, 0.5f, 0.7f}, {0, 3.5f, -18}, 0},
     /* ELAH */     {{0.28f, 0.52f, 0.88f}, {0.86f, 0.86f, 0.80f}, {0.50f, 0.58f, 0.30f}, {1.0f, 0.95f, 0.85f}, {0.65f, 0.7f, 0.8f}, {-4.5f, 0.8f, -8}, 0},
     /* PALACE */   {{0.10f, 0.04f, 0.14f}, {0.34f, 0.18f, 0.30f}, {0.86f, 0.82f, 0.74f}, {1.0f, 0.85f, 0.65f}, {0.6f, 0.45f, 0.55f}, {0, 2.2f, -10}, 0},
@@ -2751,7 +2751,7 @@ static int sc_places(int set, Place *o) {   /* where every model stands in each 
     case SET_HEAVEN:
         PUT(PR_GATE, 0, -0.6f, -26, 0, 1.4f);
         for (int k = 0; k < 10; k++) { float a = -0.3f - k * 0.28f; PUTC(PR_PILLAR, cosf(a) * 20, -1, sinf(a) * 20 - 8, k, 1.6f, 1.1f, 0.95f, 0.6f); }
-        for (int k = 0; k < 40; k++) { float a = noise2(k, 50) * 6.283f, rr = 4.5f + noise2(k, 51) * 34; PUT(PR_CLOUD, cosf(a) * rr, -2.2f + noise2(k, 52) * 0.6f, sinf(a) * rr - 6, k, 0.9f + noise2(k, 53) * 0.9f); }
+        for (int k = 0; k < 44; k++) { float a = noise2(k, 50) * 6.283f, rr = 4.0f + noise2(k, 51) * 36, sc = 0.45f + noise2(k, 53) * 0.5f; PUT(PR_CLOUD, cosf(a) * rr, -3.6f * sc - 0.4f + noise2(k, 52) * 0.3f, sinf(a) * rr - 6, k, sc); }
         break; }
     return n; }
 
@@ -2797,7 +2797,7 @@ static void sc_octa(Batch *b, Vec3 c, float s, float r, float g, float bl, float
 static void sc_bank(Batch *b, float x0, float x1, float z, float rad, float r, float g, float bl, int alongz) {   /* a rounded earth bank beside a river */
     for (int k = 0; k < 20; k++) { float u0 = x0 + (x1 - x0) * k / 20, u1 = x0 + (x1 - x0) * (k + 1) / 20;
         for (int s = 0; s < 6; s++) { float a0 = 3.14159f * s / 6, a1 = 3.14159f * (s + 1) / 6; Vec3 n0 = v3(cosf(a0), sinf(a0), 0), n1 = v3(cosf(a1), sinf(a1), 0);
-            Vec3 p[4] = {v3(u0, n0.y * rad * 0.5f, z + n0.x * rad), v3(u1, n0.y * rad * 0.5f, z + n0.x * rad), v3(u1, n1.y * rad * 0.5f, z + n1.x * rad), v3(u0, n1.y * rad * 0.5f, z + n1.x * rad)};
+            Vec3 p[4] = {v3(u0, n0.y * rad * 0.28f, z + n0.x * rad), v3(u1, n0.y * rad * 0.28f, z + n0.x * rad), v3(u1, n1.y * rad * 0.28f, z + n1.x * rad), v3(u0, n1.y * rad * 0.28f, z + n1.x * rad)};
             Vec3 m0 = v3(0, n0.y, n0.x), m1 = v3(0, n1.y, n1.x);
             if (alongz) { for (int c = 0; c < 4; c++) p[c] = v3(p[c].z, p[c].y, p[c].x); m0 = v3(m0.z, m0.y, m0.x); m1 = v3(m1.z, m1.y, m1.x); }
             sc_quadn(b, p[0], p[1], p[2], p[3], m0, m0, m1, m1, r * (0.9f + 0.1f * (s & 1)), g, bl, 1); } } }
@@ -2829,10 +2829,10 @@ static void sc_build_solid(Batch *b, int set) {   /* the built shapes without a 
         for (int k = 0; k < 5; k++) for (int s = -1; s <= 1; s += 2) sc_tube(b, v3(s * 5.3f, 4.2f, 6 - k * 5.0f), v3(s * 5.3f, 4.55f, 6 - k * 5.0f), 0.18f, 0.32f, 10, 0.95f, 0.75f, 0.3f, 1, 1);   /* lamp bowls */
         break;
     case SET_TEMPLE: batch_box(b, v3(0, 11.6f, -12), v3(13, 0.8f, 18), 0.5f, 0.42f, 0.34f); for (int k = 0; k < 7; k++) batch_box(b, v3(0, 10.6f, 4 - k * 5.0f), v3(13, 0.3f, 0.45f), 0.55f, 0.45f, 0.35f); break;
-    case SET_ELAH: sc_bank(b, -40, 30, 4.1f, 0.6f, 0.45f, 0.38f, 0.25f, 1); sc_bank(b, -40, 30, 6.9f, 0.6f, 0.45f, 0.38f, 0.25f, 1); break;
+    case SET_ELAH: sc_bank(b, -40, 30, 4.1f, 1.0f, 0.45f, 0.38f, 0.25f, 1); sc_bank(b, -40, 30, 6.9f, 1.0f, 0.45f, 0.38f, 0.25f, 1); break;
     case SET_EGYPT: sc_bank(b, -80, 80, -17.6f, 0.9f, 0.7f, 0.58f, 0.36f, 0); sc_bank(b, -80, 80, -24.4f, 0.9f, 0.7f, 0.58f, 0.36f, 0); break;
     case SET_JORDAN:
-        sc_bank(b, -60, 60, -5.8f, 0.8f, 0.45f, 0.42f, 0.26f, 0); sc_bank(b, -60, 60, -12.6f, 0.8f, 0.45f, 0.42f, 0.26f, 0);
+        sc_bank(b, -60, 60, -5.8f, 1.3f, 0.42f, 0.42f, 0.25f, 0); sc_bank(b, -60, 60, -12.6f, 1.3f, 0.42f, 0.42f, 0.25f, 0);
         for (int k = 0; k < 60; k++) { float x = -30 + k * 1.0f + noise2(k, 51), z = (k & 1) ? -6.3f - noise2(k, 52) * 0.4f : -12.1f + noise2(k, 52) * 0.4f, h = 1.0f + noise2(k, 53) * 0.9f;
             sc_tube(b, v3(x, 0, z), v3(x + 0.1f, h, z), 0.04f, 0.015f, 4, 0.42f, 0.58f, 0.25f, 1, 1); } break;   /* reeds */
     case SET_SHORE: for (int k = 0; k < 40; k++) { float x = -40 + k * 2.0f; sc_bank(b, x, x + 2, -4.3f, 0.5f, 0.86f, 0.78f, 0.58f, 0); } break;
@@ -2875,6 +2875,7 @@ static void draw_story_scene(int drc) {
         if (gn[set]) tx_gnd[set] = asset_texture(gn[set], 1, NULL, NULL); }
     float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f; Vec3 eye = g_sc_eye, at = g_sc_at;
     Mat4 vp = m4_mul(m4_perspective(0.8f, aspect, 0.3f, 400.0f), m4_look_at(eye, at, v3(0, 1, 0)));
+    { Mat4 lift = m4_identity(); lift.m[13] = 0.2f; vp = m4_mul(lift, vp); }   /* the picture sits above the panel the words are on */
     float fb = 1 + fl * 1.5f; Vec3 ldir = v3_norm(v3(0.4f, 0.85f, 0.5f));
     gfx_light(v3(L->sun[0] * fb, L->sun[1] * fb, L->sun[2] * fb), v3(L->amb[0] * fb, L->amb[1] * fb, L->amb[2] * fb), v3(L->gnd[0] * 0.5f, L->gnd[1] * 0.5f, L->gnd[2] * 0.5f), eye);
     /* the sky: the dome, the sun, the clouds far off, all without fog, behind everything */
@@ -2882,7 +2883,7 @@ static void draw_story_scene(int drc) {
     { Mat4 sm = m4_translate(eye.x, eye.y, eye.z); gfx_state(ST_BLEND); gfx_bind(NULL); float f = 1 + fl * 0.8f; gfx_draw_ex(m_sky[set], &sm, f, f, f, 1, 0, 1, 0, 0);
       if (!L->night) { Vec3 sd = sc_sun_dir(set); float big = set == SET_HEAVEN ? 26 : 13, sr = set == SET_REDSEA || set == SET_NAZARETH ? 1.0f : 1.0f, sg = set == SET_REDSEA || set == SET_NAZARETH ? 0.72f : 0.97f, sbb = set == SET_REDSEA || set == SET_NAZARETH ? 0.45f : 0.85f;
           Mat4 um = m4_mul(m4_translate(eye.x + sd.x * 300, eye.y + sd.y * 300, eye.z + sd.z * 300), m4_scale(big, big, big)); gfx_draw_ex(m_ball, &um, sr, sg, sbb, 1, 0, 1, 0, 0);
-          gfx_state(ST_BLEND | ST_ADD); for (int k = 1; k <= 3; k++) { float gs = big * (1 + k * 0.7f); Mat4 gm = m4_mul(m4_translate(eye.x + sd.x * 300, eye.y + sd.y * 300, eye.z + sd.z * 300), m4_scale(gs, gs, gs)); gfx_draw_ex(m_ball, &gm, sr, sg * 0.95f, sbb * 0.8f, 0.16f / k, 0, 1, 0, 0); } } }
+          gfx_state(ST_BLEND | ST_ADD); for (int k = 1; k <= 10; k++) { float gs = big * (1 + k * 0.28f); Mat4 gm = m4_mul(m4_translate(eye.x + sd.x * 300, eye.y + sd.y * 300, eye.z + sd.z * 300), m4_scale(gs, gs, gs)); gfx_draw_ex(m_ball, &gm, sr, sg * 0.95f, sbb * 0.8f, 0.035f, 0, 1, 0, 0); } } }   /* a soft glow: many faint shells */
     gfx_clear_depth(drc);
     gfx_camera(&vp, ldir, L->night ? 0.42f : 0.55f, L->hor[0], L->hor[1], L->hor[2], set == SET_PALACE || set == SET_LIONS || set == SET_TEMPLE ? 30.0f : 60.0f, set == SET_PALACE || set == SET_LIONS ? 90.0f : 180.0f);
     /* the ground with its picture and a little relief, then the built shapes */
@@ -2903,9 +2904,9 @@ static void draw_story_scene(int drc) {
       #define WATER(a, b2, c, d, y, amp, nx, nz) do { wx0[nw] = a; wx1[nw] = b2; wz0[nw] = c; wz1[nw] = d; wy[nw] = y; wa[nw] = amp; wn[nw][0] = nx; wn[nw][1] = nz; nw++; } while (0)
       if (set == SET_STORM) WATER(-60, 60, -90, 20, 0, 0.35f, 36, 30);
       if (set == SET_SHORE) WATER(-60, 60, -90, -4.3f, 0.12f, 0.1f, 36, 26);
-      if (set == SET_JORDAN) WATER(-60, 60, -12.6f, -5.8f, 0.12f, 0.05f, 40, 5);
+      if (set == SET_JORDAN) WATER(-60, 60, -12.6f, -5.8f, 0.08f, 0.04f, 40, 5);
       if (set == SET_EGYPT) WATER(-80, 80, -24.4f, -17.6f, 0.15f, 0.05f, 40, 4);
-      if (set == SET_ELAH) WATER(4.1f, 6.9f, -40, 30, 0.12f, 0.04f, 3, 40);
+      if (set == SET_ELAH) WATER(4.1f, 6.9f, -40, 30, 0.08f, 0.03f, 3, 40);
       #undef WATER
       for (int w = 0; w < nw; w++) for (int i = 0; i < wn[w][0]; i++) for (int j = 0; j < wn[w][1]; j++) {
           float ax = wx0[w] + (wx1[w] - wx0[w]) * i / wn[w][0], bx = wx0[w] + (wx1[w] - wx0[w]) * (i + 1) / wn[w][0], az = wz0[w] + (wz1[w] - wz0[w]) * j / wn[w][1], bz = wz0[w] + (wz1[w] - wz0[w]) * (j + 1) / wn[w][1], y0 = wy[w], amp = wa[w];
@@ -2979,7 +2980,7 @@ static void draw_story_scene(int drc) {
         Mat4 m = m4_mul(m4_translate(cosf(a2) * sw, y, -18 + sinf(a2) * sw), m4_scale(s, s * 1.3f, s)); gfx_draw_ex(m_ball, &m, 1, 0.75f - life * 0.5f, 0.25f - life * 0.2f, 0.28f * sinf(life * 3.14159f) + 0.02f, 0, 1, 0, 0); }
     if (gu == 13 || set == SET_LIONS || (set == SET_STORM && gu == 0) || set == SET_JORDAN) {   /* the angel's light; the light round Jesus in the dark; the light where the dove comes down */
         Vec3 c = set == SET_LIONS ? v3(0, 3.0f, -5) : v3(gp.x, (gu == 13 ? 1.6f : 0.2f) + 1.2f, gz); float s = 1.6f + 0.15f * sinf(t * 2);
-        for (int k = 1; k <= 3; k++) { Mat4 m = m4_mul(m4_translate(c.x, c.y, c.z), m4_scale(s * k * 0.7f, s * k * 0.7f, s * k * 0.7f)); gfx_draw_ex(m_ball, &m, 1, 0.92f, 0.7f, (set == SET_LIONS ? 0.08f : 0.12f) / k, 0, 1, 0, 0); } }
+        for (int k = 1; k <= 8; k++) { float r2 = s * (0.35f + k * 0.17f); Mat4 m = m4_mul(m4_translate(c.x, c.y, c.z), m4_scale(r2, r2, r2)); gfx_draw_ex(m_ball, &m, 1, 0.92f, 0.7f, set == SET_LIONS ? 0.022f : 0.03f, 0, 1, 0, 0); } }
     batch_init(&db, g_scv[2], 12000);
     for (int k = 0; k < 44; k++) { float h1 = noise2(k, 81), ph = fmodf(t * (0.12f + h1 * 0.1f) + h1, 1.0f), a = h1 * 6.283f + t * 0.2f, rr = 2.5f + noise2(k, 82) * 6, s = 0.04f + noise2(k, 83) * 0.05f;
         sc_octa(&db, v3(cosf(a) * rr, ph * 7, sinf(a) * rr - 1), s, 1, 0.9f, 0.6f, sinf(ph * 3.14159f) * (L->night ? 0.9f : 0.6f)); }
