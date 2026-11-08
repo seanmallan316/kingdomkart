@@ -2657,6 +2657,7 @@ static void sc_shot(int beat, float u, Vec3 *eye, Vec3 *at) {   /* where the cam
         float back = 7.5f - 1.5f * u; *eye = v3(-d.x * back + side.x * 3.0f, 2.6f + F.y * 0.25f, -d.z * back + side.z * 3.0f); *at = sc_lerp(v3(0, hy * 0.7f, 0), F, 0.6f); } break;
     case SB_VERSE: *eye = v3(0.8f - 1.6f * u, 0.8f, 5.0f - 0.6f * u); *at = v3(0, hy + 0.3f, 0); break;   /* low, in front, looking up at them */
     default: { float e = sc_smooth(u); *eye = sc_lerp(v3(0, 2.4f, 8), v3(0, 7.5f, 19), e); *at = v3(0, hy * 0.8f + 1.5f * e, 0); } break; } }
+static void sc_keep_clear(Vec3 *eye, Vec3 at);
 static void scene_start(int ch) {
     g_sc_char = ch >= 0 && ch < NCHARS ? ch : 0; g_sc_beat = SB_TITLE; g_sc_bt = 0; g_sc_out = 0; g_sc_roll = 0; g_screen = SCR_SCENE; g_screen_t = 0;
     g_sc_eye = g_sc_eye0 = v3(0, 10, 30); g_sc_at = g_sc_at0 = v3(0, 1, 0);
@@ -2686,7 +2687,8 @@ static void scene_update(float dt, int pa) {
     else if (!last && g_sc_bt > sc_beat_len(g_sc_beat)) sc_next();
 #endif
     Vec3 e, a; sc_shot(g_sc_beat, clampf(g_sc_bt / sc_beat_len(g_sc_beat), 0, 1), &e, &a);
-    float bl = g_sc_beat == SB_TITLE ? 1.0f : sc_smooth(g_sc_bt / 1.5f); g_sc_eye = sc_lerp(g_sc_eye0, e, bl); g_sc_at = sc_lerp(g_sc_at0, a, bl); }
+    float bl = g_sc_beat == SB_TITLE ? 1.0f : sc_smooth(g_sc_bt / 1.5f); g_sc_eye = sc_lerp(g_sc_eye0, e, bl); g_sc_at = sc_lerp(g_sc_at0, a, bl);
+    sc_keep_clear(&g_sc_eye, g_sc_at); }
 
 /* ---- the sets, all solid 3D (Sean: "Everything needs to be in 3d"): Meshy models for the things in the stories
    (content/models/prop_*.kkm, made by tools/model3d/meshy_props.py + prop_pack.py), and built shapes for the rest:
@@ -2755,6 +2757,14 @@ static int sc_places(int set, Place *o) {   /* where every model stands in each 
         break; }
     return n; }
 
+static void sc_keep_clear(Vec3 *eye, Vec3 at) {   /* slide the camera in toward what it looks at until it is out of every big model */
+    Place pl[96]; int set = CUP_STORIES[g_sc_char].set, np = sc_places(set, pl);
+    for (int step = 0; step < 20; step++) { int hit = 0;
+        for (int i = 0; i < np && !hit; i++) { Place *q = &pl[i]; const Kart3D *k = &g_prop[q->p]; if (!k->ok || q->p == PR_CLOUD || q->p == PR_VSIT || q->p == PR_VSTAND || q->p == PR_SHEEP || q->p == PR_DOVE) continue;
+            float r = 0.5f * fmaxf(k->hi.x - k->lo.x, k->hi.z - k->lo.z) * q->s + 0.7f, top = q->y + (k->hi.y - k->lo.y) * q->s + 0.5f, dx = eye->x - q->x, dz = eye->z - q->z;
+            if (dx * dx + dz * dz < r * r && eye->y < top) hit = 1; }
+        if (set == SET_PALACE && fabsf(eye->x) > 7.6f) hit = 1;   /* the hangings along the walls */
+        if (!hit) return; *eye = sc_lerp(*eye, at, 0.12f); } }
 /* ---- built shapes ---- */
 static void sc_v(Batch *b, Vec3 p, Vec3 n, float u, float v, float r, float g, float bl, float a) { if (b->n < b->cap) { Vertex q = {p.x, p.y, p.z, n.x, n.y, n.z, u, v, r, g, bl, a}; b->v[b->n++] = q; } }
 static void sc_quadw(Batch *b, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, float r, float g, float bl, float tile) {   /* a quad whose picture is laid on the ground in world units */
@@ -2910,9 +2920,11 @@ static void draw_story_scene(int drc) {
       #undef WATER
       for (int w = 0; w < nw; w++) for (int i = 0; i < wn[w][0]; i++) for (int j = 0; j < wn[w][1]; j++) {
           float ax = wx0[w] + (wx1[w] - wx0[w]) * i / wn[w][0], bx = wx0[w] + (wx1[w] - wx0[w]) * (i + 1) / wn[w][0], az = wz0[w] + (wz1[w] - wz0[w]) * j / wn[w][1], bz = wz0[w] + (wz1[w] - wz0[w]) * (j + 1) / wn[w][1], y0 = wy[w], amp = wa[w];
-          Vec3 p[4] = {v3(ax, y0 + sc_wave(ax, az, t, amp), az), v3(ax, y0 + sc_wave(ax, bz, t, amp), bz), v3(bx, y0 + sc_wave(bx, bz, t, amp), bz), v3(bx, y0 + sc_wave(bx, az, t, amp), az)};
-          Vec3 n = face_normal(p[0], p[1], p[2]); if (n.y < 0) n = v3(-n.x, -n.y, -n.z); float c = 0.85f + 0.3f * (p[2].y - y0) / (amp * 2 + 0.01f);
-          batch_quad4(&db, p[0], p[1], p[2], p[3], n, 0.5f, 0.5f, 0.5f, 0.5f, wr * c, wg * c, wb * c, 1); } }
+          float xs[4] = {ax, ax, bx, bx}, zs[4] = {az, bz, bz, az}; Vec3 p[4], nn[4]; float cc[4];
+          for (int c = 0; c < 4; c++) { float h = sc_wave(xs[c], zs[c], t, amp), hx = sc_wave(xs[c] + 0.3f, zs[c], t, amp), hz = sc_wave(xs[c], zs[c] + 0.3f, t, amp);
+              p[c] = v3(xs[c], y0 + h, zs[c]); nn[c] = v3_norm(v3(-(hx - h) / 0.3f, 1, -(hz - h) / 0.3f)); cc[c] = 0.88f + 0.25f * h / (amp * 2 + 0.01f); }
+          Vec3 q[6] = {p[0], p[1], p[2], p[0], p[2], p[3]}, qn[6] = {nn[0], nn[1], nn[2], nn[0], nn[2], nn[3]}; float qc[6] = {cc[0], cc[1], cc[2], cc[0], cc[2], cc[3]};
+          for (int c = 0; c < 6; c++) sc_v(&db, q[c], qn[c], 0.5f, 0.5f, wr * qc[c], wg * qc[c], wb * qc[c], 1); } }
     if (db.n) { gfx_mesh_update(m_dyn[drc][0], db.v, db.n); gfx_draw_ex(m_dyn[drc][0], &id, 1, 1, 1, 1, 1.4f, 0, 0, 0); }
     if (set == SET_ELAH && g_gol3d.ok && anim3d_clip(&g_gol3d, "fall") >= 0) { Mat4 gm = m4_mul(m4_translate(-4.5f, 0, -9), m4_rotate_y(1.9f)); anim3d_draw(&g_gol3d, anim3d_clip(&g_gol3d, "fall"), 99.0f, &gm, 1, 1, 1, 1); gfx_bind(NULL); }
     if (set == SET_SHORE && m_whale) {   /* the great fish, at the edge of the sea, mouth open: it has just let Jonah go (Jonah 2:10) */
