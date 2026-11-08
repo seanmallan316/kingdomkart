@@ -1902,7 +1902,7 @@ static void hud_online(void) {   /* the ONLINE TEST screen */
     int bad = n->state == NET_NO_ADDRESS || n->state == NET_NO_ANSWER || n->state == NET_REFUSED || n->state == NET_NO_SOCKET;
     panel(240, 70, 800, 580);
     text_c("ONLINE TEST", 96, 36, 1, 0.85f, 0.3f, 1);
-    text_c("ONLINE RACING IS ON ITS WAY. THIS CHECKS YOUR WII U CAN REACH THE KINGDOM KART SERVER.", 150, 14, 0.85f, 0.9f, 1, 1);
+    text_c("ONLINE RACING IS ON ITS WAY.", 146, 14, 0.85f, 0.9f, 1, 1); text_c("THIS CHECKS YOUR WII U CAN REACH THE KINGDOM KART SERVER.", 166, 14, 0.85f, 0.9f, 1, 1);
     batch_text(&g_b, "SERVER", 300, 200, 18, 0.8f, 0.85f, 1, 1);
     { char hu[64]; int i = 0; for (; n->host[i] && i < 63; i++) hu[i] = (char)(n->host[i] >= 'a' && n->host[i] <= 'z' ? n->host[i] - 32 : n->host[i]); hu[i] = 0; batch_text(&g_b, hu, 520, 200, 18, 1, 1, 1, 1); }   /* the font has capitals only */
     batch_text(&g_b, "STATUS", 300, 240, 18, 0.8f, 0.85f, 1, 1);
@@ -1920,7 +1920,7 @@ static void hud_online(void) {   /* the ONLINE TEST screen */
         batch_text(&g_b, "ONLINE NOW", 300, 400, 18, 0.8f, 0.85f, 1, 1);
         snprintf(buf, sizeof buf, "%d KINGDOM KART %s", n->online, n->online == 1 ? "PLAYER (YOU)" : "PLAYERS"); batch_text(&g_b, buf, 520, 400, 18, 1, 1, 1, 1);
         if (n->message[0]) { char up[40]; int i = 0; for (; n->message[i] && i < 39; i++) up[i] = (char)(n->message[i] >= 'a' && n->message[i] <= 'z' ? n->message[i] - 32 : n->message[i]); up[i] = 0; text_c(up, 460, 18, 1, 0.9f, 0.55f, 1); } }
-    if (n->state == NET_NO_ADDRESS || n->state == NET_NO_SOCKET) text_c("CHECK THE WII U IS CONNECTED TO THE INTERNET (SYSTEM SETTINGS)", 300, 15, 1, 0.8f, 0.6f, 1);
+    if (n->state == NET_NO_ADDRESS || n->state == NET_NO_SOCKET) text_c("CHECK THE WII U IS ON THE INTERNET (SYSTEM SETTINGS)", 300, 15, 1, 0.8f, 0.6f, 1);
     if (n->state == NET_NO_ANSWER) text_c("THE SERVER MAY BE OFF RIGHT NOW. TRY AGAIN IN A MINUTE.", 300, 15, 1, 0.8f, 0.6f, 1);
     if (n->state == NET_REFUSED) text_c(n->refused_why == 1 ? "THIS GAME IS A DIFFERENT VERSION FROM THE SERVER. GET THE NEWEST BUILD." : "THE SERVER IS BUSY. TRY AGAIN SOON.", 300, 15, 1, 0.8f, 0.6f, 1);
     text_c("A: TRY AGAIN   B: BACK", 610, 14, 0.8f, 0.85f, 1, 1);
