@@ -46,7 +46,7 @@ static Battle g_battle;            /* the battle holds the race; in the racing m
 #define ARENA_TRACK (NUM_TRACK_DEFS - 2)   /* the Valley of Elah sits just before the Test Loop */
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* demo_char: who drives the title-screen demo */
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY, SCR_ONLINE, SCR_SCENE, SCR_MAP, SCR_STORY };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY, SCR_ONLINE, SCR_SCENE, SCR_STORY };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1, g_op_w = 0, g_op_h = 0, g_op_vid = 0; static float g_op_buf = 0; static Texture *tx_op; static Mesh *m_op;   /* g_op_vid: the background decoder is running; g_op_buf: seconds spent filling it before the clock starts */
 static int g_multi = 0;   /* 2 to 4 people are playing together (any mode) */
@@ -1998,7 +1998,7 @@ static void ui_backdrop(void) {   /* behind every menu: slow golden beams fannin
 static void hud_main(void) {
     static const char *dn[3] = {"EASY", "NORMAL", "HARD"}; char buf[64];
     snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]);
-    const char *items[10] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", "STORY MODE", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
+    const char *items[10] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", "BIBLE JOURNEYS", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
     /* (online play is built but switched off for now - Sean: no paid server. The ONLINE TEST screen, SCR_ONLINE, src/net and
        server/ stay in the project for later; to bring it back, add "ONLINE" after THE WALLS OF JERICHO and open SCR_ONLINE.) */
     for (int i = 0; i < 10; i++) { float y = 186 + i * 46; menu_item(items[i], y, g_menu_sel == i, i < 7 ? 26 : 21); tzone(400, y - 10, 480, 44, TZ_SEL, i); }
@@ -3232,7 +3232,6 @@ static const char *pick_music(void) {
         if (lost && music_available("music_lose")) return "music_lose";
         return music_available("music_results") ? "music_results" : "music_menu";
     }
-    if (g_screen == SCR_MAP) return music_available("music_map") ? "music_map" : "music_select";
     if (g_screen == SCR_STORY) return music_available("music_story") ? "music_story" : (music_available("music_map") ? "music_map" : "music_select");
     if (g_screen == SCR_SCENE) return music_available("music_scene") ? "music_scene" : (music_available("music_credits") ? "music_credits" : "music_menu");   /* Sean can drop in content/music/music_scene.mp3 */
     if (g_screen == SCR_TROPHY) return music_available("music_trophy") ? "music_trophy" : (music_available("music_results") ? "music_results" : "music_menu");
@@ -3346,7 +3345,6 @@ static Mat4 kart_mat(const Race *r, int i) {   /* where a kart is drawn: on the 
     float pitch = -atan2f(q->hit.slope, 1.0f) * (q->air ? 0.3f : 1.0f) + (q->air ? -q->vy * 0.03f : 0.0f);
     float roll = q->hit.on_road ? -g_track.s[q->hit.idx].bank : 0.0f, sq = 1.0f - q->squash * 0.25f;
     return m4_mul(m4_translate(q->x, q->y + q->hop * 0.4f + cele_bounce(r, i), q->z), m4_mul(m4_rotate_y(q->yaw + q->slide + q->spin_vis), m4_mul(m4_rotate_x(pitch), m4_mul(m4_rotate_z(roll + q->steer_vis * -0.06f), m4_scale(1.0f + (1 - sq) * 0.5f, sq, 1.0f))))); }
-#include "biblemap.h"   /* the Bible map screen */
 #include "storymode.h"   /* STORY MODE: Sean's world map */
 /* ---- the drivers come alive (Sean: "move their heads, arms... so it looks like they are interacting with one another"):
    heads turn to the racer alongside or behind, bodies lean into the turns, a wave for the one you just passed or who just
@@ -3994,10 +3992,10 @@ void game_frame(const Pad *pads, int npads, float dt) {
           case 6: g_save.story = 16; g_sm_over = 1; story_enter(0); break; }
         step++; } }
 #elif defined(KK_TOUR) && KK_TOUR_ROAD == 28
-    { static int step = -1; static const float at[6] = {2, 30, 55, 78, 98, 1e9f}; static const int who[5] = {19, 1, 0, 10, -1};   /* CI: THE BIBLE MAP - Abraham, Moses, Jesus, Jonah, then MY TRAVELS */
-      if (g_time > at[step + 1]) { step++; if (step < 5) { if (who[step] >= 0) { g_bm_char = who[step]; g_bm_travels = 0; }
-            else { static const int tr[9] = {0, 1, 2, 5, 6, 9, 10, 14, 15}; g_save.ntrail = 9; memcpy(g_save.trail, tr, sizeof tr); g_save.meters = 48200; g_bm_travels = 1; }
-            bm_open(); g_screen = SCR_MAP; g_screen_t = 1; } } }
+    { static int step = -1; static const float at[6] = {2, 30, 55, 78, 98, 1e9f}; static const int who[5] = {19, 1, 0, 6, -1};   /* CI: BIBLE JOURNEYS - Abraham, Moses, Jesus, Daniel, then MY TRAVELS */
+      if (g_time > at[step + 1]) { step++; if (step < 5) { if (step == 0) { story_enter(0); g_sm_t = 99; }
+            if (who[step] >= 0) { g_sm_jchar = who[step]; sm_set_view(1); }
+            else { static const int tr[9] = {0, 1, 2, 5, 6, 9, 10, 14, 15}; g_save.ntrail = 9; memcpy(g_save.trail, tr, sizeof tr); g_save.meters = 48200; sm_set_view(2); } } } }
 #elif defined(KK_TOUR) && KK_TOUR_ROAD >= 20
     { static int done = 0; if (!done && g_time > 2.0f) { done = 1; g_mode = MODE_SINGLE; g_player_char = KK_TOUR_ROAD >= 24 ? 21 : 20; g_track_idx = 6 + (KK_TOUR_ROAD - 20); begin_player_race(); g_screen_t = 0; } }   /* CI: a race on each road of the Pharaoh's Cup */
 #elif defined(KK_TOUR) && KK_TOUR_ROAD >= 13
@@ -4040,9 +4038,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
     int pnx = (g_prev.sx > 0.5f) - (g_prev.sx < -0.5f), pny = (g_prev.sy > 0.5f) - (g_prev.sy < -0.5f);
     int mx = 0, my = 0;
     if (nx != pnx || ny != pny) { mx = nx; my = ny; g_nav_t = 0; } else if (nx || ny) { g_nav_t += dt; if (g_nav_t > 0.35f) { mx = nx; my = ny; g_nav_t = 0.22f; } }
-    int px_ = pad->x && !g_prev.x, pye_ = pad->y && !g_prev.y, py_ = px_ || pye_;   /* X / Y: the maps */
+    int px_ = pad->x && !g_prev.x, pye_ = pad->y && !g_prev.y;   /* X / Y: the map */
     g_prev = *pad;
-    if (g_screen_t < 0.3f) { pa = pb = 0; mx = my = 0; py_ = px_ = pye_ = 0; }      /* ignore presses right after a screen change */
+    if (g_screen_t < 0.3f) { pa = pb = 0; mx = my = 0; px_ = pye_ = 0; }      /* ignore presses right after a screen change */
     {   /* the GamePad touch screen */
         static int was_touch = 0, tz_screen = -1; const Pad *gp = npads > 0 ? &pads[0] : NULL; int tap = gp && gp->touch && !was_touch; was_touch = gp && gp->touch;
         if (tz_screen != g_screen) { g_ntz_prev = 0; tz_screen = g_screen; }   /* buttons from the screen before do not count */
@@ -4214,7 +4212,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 g_fresh_unlocks = 0;
                 if (g_mode == MODE_BATTLE && !g_demo) { g_save.battles++; if (g_battle.won) { g_save.battle_wins++; if (g_difficulty == DIFF_HARD) g_save.battle_hard_wins++; } g_save.dirty = 1; }
                 if (!g_demo && !g_attract && r->player >= 0 && r->player < r->nk) story_race_over(r);
-                if (!g_demo && !g_attract && r->player >= 0 && r->player < r->nk) bm_trail_add(g_loaded_track, g_mode == MODE_BATTLE ? 0 : r->k[r->player].dist);   /* it goes on THE BIBLE MAP */
+                if (!g_demo && !g_attract && r->player >= 0 && r->player < r->nk) sm_trail_add(g_loaded_track, g_mode == MODE_BATTLE ? 0 : r->k[r->player].dist);   /* it goes on THE BIBLE MAP */
                 if (g_mode == MODE_JERICHO && !g_demo) { Kart *k = &r->k[r->player]; if (k->place == 1) { g_save.jericho_wins++; if (k->lap > g_track.laps && (g_save.jericho_ms == 0 || (int)(k->total_time * 1000) < g_save.jericho_ms)) g_save.jericho_ms = (int)(k->total_time * 1000); } g_save.dirty = 1; }
                 if (g_mode == MODE_GP && g_gp_round + 1 >= NUM_GP_TRACKS && !g_demo) {   /* the championship is decided */
                     int best = 0; for (int c = 1; c < NCHARS; c++) if (g_gp_points[c] > g_gp_points[best]) best = c;
@@ -4264,7 +4262,6 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pa) { if (g_gp_round >= NUM_GP_TRACKS) { g_screen = SCR_TROPHY; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
         break;
     case SCR_SCENE: scene_update(dt, pa); break;
-    case SCR_MAP: bm_update(dt, pa, pb, mx, py_); break;
     case SCR_STORY: story_update(dt, pa, pb, mx, my, px_, pye_, pplus); break;
     case SCR_TROPHY: {
         static float last_t = 99, tick_t = 0; float t0 = last_t; last_t = g_screen_t; int ord[NKARTS]; cer_order(ord); float te = cer_lock_t(0, ord);
@@ -4540,8 +4537,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
         /* on the GamePad the menus sit on a plain background: drawing the 3D road behind them a second time halved the
            frame rate of every menu (the log from the real Wii U: 30 a second instead of 60) */
         int menu_bg = g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP || g_screen == SCR_OPTIONS || g_screen == SCR_CREDITS || g_screen == SCR_GP;
-        int plain_bg = g_screen == SCR_SCENE || g_screen == SCR_MAP || g_screen == SCR_STORY || (drc && menu_bg);   /* the GamePad's menus show the TV's moving race behind them (copied, not drawn twice) */
-        if (g_screen == SCR_MAP || g_screen == SCR_STORY) gfx_view_begin(drc, 0.14f, 0.09f, 0.06f); else if (plain_bg) gfx_view_begin(drc, 0.06f, 0.09f, 0.24f); else gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
+        int plain_bg = g_screen == SCR_SCENE || g_screen == SCR_STORY || (drc && menu_bg);   /* the GamePad's menus show the TV's moving race behind them (copied, not drawn twice) */
+        if (g_screen == SCR_STORY) gfx_view_begin(drc, 0.14f, 0.09f, 0.06f); else if (plain_bg) gfx_view_begin(drc, 0.06f, 0.09f, 0.24f); else gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 id = m4_identity();
         if (!plain_bg) draw_scene(g_mode == MODE_BATTLE ? 0 : r->player, gfx_aspect(drc), 1.0f, 0);
         { static Texture *menubg; static Mesh *m_menubg;
@@ -4602,9 +4599,6 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (g_screen == SCR_SCENE) { draw_story_scene(drc); static Mesh *m_sct[2]; if (!m_sct[drc]) m_sct[drc] = gfx_mesh_dynamic(16384);   /* the words on solid 3D slabs */
             batch_clear(&g_b); g_ui3d = 1; g_ui_conv = 0; hud_scene_top(); ui_flush(); g_ui3d = 0; gfx_mesh_update(m_sct[drc], g_b.v, g_b.n);
             gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m_sct[drc], &id, 1, 1, 1, 1); gfx_camera_2d(); }
-        if (g_screen == SCR_MAP) { draw_bible_map(drc); static Mesh *m_bmt[2]; if (!m_bmt[drc]) m_bmt[drc] = gfx_mesh_dynamic(16384);   /* the names and panels on 3D slabs */
-            batch_clear(&g_b); g_ui3d = 1; g_ui_conv = 0; hud_bible_map(); ui_flush(); g_ui3d = 0; gfx_mesh_update(m_bmt[drc], g_b.v, g_b.n);
-            gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m_bmt[drc], &id, 1, 1, 1, 1); gfx_camera_2d(); }
         if (g_screen == SCR_STORY) { draw_story_map(drc); static Mesh *m_smt[2]; if (!m_smt[drc]) m_smt[drc] = gfx_mesh_dynamic(16384);   /* the panels on 3D slabs */
             batch_clear(&g_b); g_ui3d = 1; g_ui_conv = 0; hud_story(); ui_flush(); g_ui3d = 0; gfx_mesh_update(m_smt[drc], g_b.v, g_b.n);
             gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m_smt[drc], &id, 1, 1, 1, 1); gfx_camera_2d(); }
