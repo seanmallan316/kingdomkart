@@ -2,6 +2,7 @@
 #include "game.h"
 #include "models.h"
 #include "kart3d.h"
+#include "../net/net.h"
 #include "anim3d.h"
 #include "save.h"
 #include "../audio/sfx.h"
@@ -40,7 +41,7 @@ static Battle g_battle;            /* the battle holds the race; in the racing m
 #define ARENA_TRACK (NUM_TRACK_DEFS - 2)   /* the Valley of Elah sits just before the Test Loop */
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* demo_char: who drives the title-screen demo */
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY, SCR_ONLINE };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1, g_op_w = 0, g_op_h = 0, g_op_vid = 0; static float g_op_buf = 0; static Texture *tx_op; static Mesh *m_op;   /* g_op_vid: the background decoder is running; g_op_buf: seconds spent filling it before the clock starts */
 static int g_multi = 0;   /* 2 to 4 people are playing together (any mode) */
@@ -1892,9 +1893,37 @@ static void ui_backdrop(void) {   /* behind every menu: slow golden beams fannin
 static void hud_main(void) {
     static const char *dn[3] = {"EASY", "NORMAL", "HARD"}; char buf[64];
     snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]);
-    const char *items[9] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
-    for (int i = 0; i < 9; i++) { float y = 190 + i * 49; menu_item(items[i], y, g_menu_sel == i, i < 6 ? 27 : 22); tzone(400, y - 10, 480, 47, TZ_SEL, i); }
+    const char *items[10] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", "ONLINE", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
+    for (int i = 0; i < 10; i++) { float y = 182 + i * 45; menu_item(items[i], y, g_menu_sel == i, i < 7 ? 26 : 21); tzone(400, y - 9, 480, 43, TZ_SEL, i); }
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 690, 14, 0.8f, 0.85f, 1, 1);
+}
+static void hud_online(void) {   /* the ONLINE TEST screen */
+    const NetStatus *n = net_status(); char buf[96]; int ok = n->state == NET_CONNECTED;
+    int bad = n->state == NET_NO_ADDRESS || n->state == NET_NO_ANSWER || n->state == NET_REFUSED || n->state == NET_NO_SOCKET;
+    panel(240, 70, 800, 580);
+    text_c("ONLINE TEST", 96, 36, 1, 0.85f, 0.3f, 1);
+    text_c("ONLINE RACING IS ON ITS WAY. THIS CHECKS YOUR WII U CAN REACH THE KINGDOM KART SERVER.", 150, 14, 0.85f, 0.9f, 1, 1);
+    batch_text(&g_b, "SERVER", 300, 200, 18, 0.8f, 0.85f, 1, 1);
+    { char hu[64]; int i = 0; for (; n->host[i] && i < 63; i++) hu[i] = (char)(n->host[i] >= 'a' && n->host[i] <= 'z' ? n->host[i] - 32 : n->host[i]); hu[i] = 0; batch_text(&g_b, hu, 520, 200, 18, 1, 1, 1, 1); }   /* the font has capitals only */
+    batch_text(&g_b, "STATUS", 300, 240, 18, 0.8f, 0.85f, 1, 1);
+    { float pulse = 0.7f + 0.3f * sinf(g_time * 6); batch_text(&g_b, net_state_words(n->state), 520, 236, 24, ok ? 0.45f : bad ? 1 : pulse, ok ? 1 : bad ? 0.45f : pulse * 0.9f, ok ? 0.5f : bad ? 0.4f : 0.4f, 1); }
+    if (ok || n->answered > 0) {
+        batch_text(&g_b, "PING", 300, 290, 18, 0.8f, 0.85f, 1, 1);
+        if (n->ping_ms >= 0) snprintf(buf, sizeof buf, "%d MS", n->ping_ms); else snprintf(buf, sizeof buf, "...");
+        float g = n->ping_ms < 0 ? 1 : n->ping_ms < 80 ? 1 : n->ping_ms < 160 ? 0.85f : 0.5f;
+        batch_text(&g_b, buf, 520, 284, 30, n->ping_ms < 0 || n->ping_ms < 160 ? 0.5f : 1, g, 0.45f, 1);
+        if (n->best_ms >= 0) { snprintf(buf, sizeof buf, "BEST %d   AVERAGE %d   WORST %d", n->best_ms, n->avg_ms, n->worst_ms); batch_text(&g_b, buf, 520, 324, 14, 0.85f, 0.9f, 1, 1); }
+        batch_text(&g_b, "PACKETS", 300, 360, 18, 0.8f, 0.85f, 1, 1);
+        int lost = n->sent - n->answered - (ok ? 1 : 0); if (lost < 0) lost = 0;   /* the newest ping may still be on its way */
+        snprintf(buf, sizeof buf, "%d SENT, %d BACK, %d LOST", n->sent, n->answered, lost);
+        batch_text(&g_b, buf, 520, 360, 18, 1, 1, 1, 1);
+        batch_text(&g_b, "ONLINE NOW", 300, 400, 18, 0.8f, 0.85f, 1, 1);
+        snprintf(buf, sizeof buf, "%d KINGDOM KART %s", n->online, n->online == 1 ? "PLAYER (YOU)" : "PLAYERS"); batch_text(&g_b, buf, 520, 400, 18, 1, 1, 1, 1);
+        if (n->message[0]) { char up[40]; int i = 0; for (; n->message[i] && i < 39; i++) up[i] = (char)(n->message[i] >= 'a' && n->message[i] <= 'z' ? n->message[i] - 32 : n->message[i]); up[i] = 0; text_c(up, 460, 18, 1, 0.9f, 0.55f, 1); } }
+    if (n->state == NET_NO_ADDRESS || n->state == NET_NO_SOCKET) text_c("CHECK THE WII U IS CONNECTED TO THE INTERNET (SYSTEM SETTINGS)", 300, 15, 1, 0.8f, 0.6f, 1);
+    if (n->state == NET_NO_ANSWER) text_c("THE SERVER MAY BE OFF RIGHT NOW. TRY AGAIN IN A MINUTE.", 300, 15, 1, 0.8f, 0.6f, 1);
+    if (n->state == NET_REFUSED) text_c(n->refused_why == 1 ? "THIS GAME IS A DIFFERENT VERSION FROM THE SERVER. GET THE NEWEST BUILD." : "THE SERVER IS BUSY. TRY AGAIN SOON.", 300, 15, 1, 0.8f, 0.6f, 1);
+    text_c("A: TRY AGAIN   B: BACK", 610, 14, 0.8f, 0.85f, 1, 1);
 }
 static void volume_row(const char *label, int vol, float y, int selected) {
     float x = 400;
@@ -2496,7 +2525,10 @@ static void draw_trophy_pictures(int drc) {
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
 static void tour_pads(Pad *pads, float t) {
     static const struct { float t; char key; int slot; } script[] = {
-#if KK_TOUR_ROAD == 11
+#if KK_TOUR_ROAD == 13
+        /* the ONLINE TEST screen: title, menu (down six times to ONLINE), A - the emulator tries to reach the real server */
+        {8, 'A'}, {11, 'D'}, {12, 'D'}, {13, 'D'}, {14, 'D'}, {15, 'D'}, {16, 'D'}, {18, 'A'}, {70, 'A'},
+#elif KK_TOUR_ROAD == 11
         /* the Grand Prix: title, GRAND PRIX, the second cup (Genesis to Glory), character, kart, the first road (Eden), then the standings */
         {8, 'A'}, {11, 'A'}, {14, 'R'}, {16, 'A'}, {19, 'A'}, {22, 'A'}, {70, 'P'}, {84, 'P'}, {130, 'A'}, {133, 'A'},
 #elif KK_TOUR_ROAD == 12
@@ -3340,16 +3372,22 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if ((mx || pa) && g_opt_sel == 2) { g_save.rumble = !g_save.rumble; g_save.dirty = 1; sfx_play(SFX_MENU_MOVE, 1, 0); if (g_save.rumble) platform_rumble(0.6f, 0.25f); }
         if (pb || (pa && g_opt_sel != 2)) { save_store(); g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
+    case SCR_ONLINE:   /* Phase 1 of online play: does this Wii U reach the Kingdom Kart server? */
+        net_update(dt);
+        if (pa) { net_test_start(NULL, 0); sfx_play(SFX_MENU_OK, 1, 0); }
+        if (pb) { net_stop(); g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
+        break;
     case SCR_CREDITS:
         if (pa || pb || g_screen_t * CREDITS_SPEED > credits_height() + 760) { g_screen = SCR_TITLE; g_screen_t = 0; if (pa || pb) sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_MAIN:
-        if (my) { g_menu_sel = (g_menu_sel - my + 9) % 9; sfx_play(SFX_MENU_MOVE, 1, 0); }
-        if (g_menu_sel == 6 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
+        if (my) { g_menu_sel = (g_menu_sel - my + 10) % 10; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (g_menu_sel == 7 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
         if (pa) {
-            if (g_menu_sel == 8) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
-            else if (g_menu_sel == 7) { g_screen = SCR_OPTIONS; g_opt_sel = 0; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
-            else if (g_menu_sel == 6) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
+            if (g_menu_sel == 9) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 8) { g_screen = SCR_OPTIONS; g_opt_sel = 0; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 7) { g_difficulty = (g_difficulty + 1) % 3; sfx_play(SFX_MENU_OK, 1, 0); }
+            else if (g_menu_sel == 6) { g_screen = SCR_ONLINE; g_screen_t = 0; net_test_start(NULL, 0); sfx_play(SFX_MENU_OK, 1, 0); }
             else { sfx_play(SFX_MENU_OK, 1, 0); g_multi = 0;
                 static const int MODE_OF[6] = {MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO}; g_mode = MODE_OF[g_menu_sel];
                 /* every mode can be played together: with a Wii controller switched on (or MULTIPLAYER chosen) the players join first */
@@ -3761,6 +3799,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
             case SCR_TITLE: hud_title(); break;
             case SCR_MAIN: hud_main(); break;
             case SCR_CREDITS: hud_credits(); break;
+            case SCR_ONLINE: hud_online(); break;
             case SCR_OPTIONS: hud_options(); break;
             case SCR_CHAR: hud_char(0); break;
             case SCR_CUP: hud_cup(); break;

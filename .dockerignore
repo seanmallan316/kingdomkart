@@ -1,0 +1,4 @@
+# only what the online server needs goes to Fly.io (the game content is hundreds of MB)
+*
+!server/
+!src/net/

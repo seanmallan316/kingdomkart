@@ -1,0 +1,19 @@
+# Fly.io settings for the Kingdom Kart online server (server/kkserver.c). Deployed by GitHub Actions (build.yml).
+app = "kingdomkart-rtg-online"
+primary_region = "iad"
+
+[build]
+  dockerfile = "server/Dockerfile"
+
+[[services]]
+  internal_port = 7777
+  protocol = "udp"
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  [[services.ports]]
+    port = 7777
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
