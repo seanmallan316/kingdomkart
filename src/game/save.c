@@ -35,6 +35,9 @@ void save_load(void) {
         else if (!strcmp(key, "hardwins")) g_save.hard_wins = (int)val;
         else if (!strcmp(key, "pharaohwins")) g_save.pharaoh_wins = (int)val;
         else if (!strcmp(key, "babylonwins")) g_save.babylon_wins = (int)val;
+        else if (!strcmp(key, "meters")) g_save.meters = (int)val;
+        else if (!strcmp(key, "story")) g_save.story = (int)val;
+        else if (!strncmp(key, "trail", 5)) { int i = atoi(key + 5); if (i >= 0 && i < 24) { g_save.trail[i] = (int)val; if (i + 1 > g_save.ntrail) g_save.ntrail = i + 1; } }
         else if (!strcmp(key, "coins")) g_save.coins = (int)val;
         else if (!strcmp(key, "musicvol")) g_save.music_vol = (int)val;
         else if (!strcmp(key, "sfxvol")) g_save.sfx_vol = (int)val;
@@ -59,7 +62,8 @@ void save_store(void) {
     for (int i = 0; i < SAVE_MAX_ROADS; i++) if (g_save.best_ms[i]) fprintf(f, "best%d %d\n", i, g_save.best_ms[i]);
     fprintf(f, "races %d\nwins %d\n", g_save.races, g_save.wins);
     for (int i = 0; i < 3; i++) fprintf(f, "gpwins%d %d\n", i, g_save.gp_wins[i]);
-    fprintf(f, "winchars %u\nunlocks %u\nbattles %d\nbattlewins %d\nbattlehardwins %d\nhardwins %d\ncoins %d\npharaohwins %d\nbabylonwins %d\n", g_save.win_chars, g_save.unlocks, g_save.battles, g_save.battle_wins, g_save.battle_hard_wins, g_save.hard_wins, g_save.coins, g_save.pharaoh_wins, g_save.babylon_wins);
+    fprintf(f, "winchars %u\nunlocks %u\nbattles %d\nbattlewins %d\nbattlehardwins %d\nhardwins %d\ncoins %d\npharaohwins %d\nbabylonwins %d\nmeters %d\nstory %d\n", g_save.win_chars, g_save.unlocks, g_save.battles, g_save.battle_wins, g_save.battle_hard_wins, g_save.hard_wins, g_save.coins, g_save.pharaoh_wins, g_save.babylon_wins, g_save.meters, g_save.story);
+    for (int i = 0; i < g_save.ntrail && i < 24; i++) fprintf(f, "trail%d %d\n", i, g_save.trail[i]);
     fprintf(f, "musicvol %d\nsfxvol %d\nrumble %d\n", g_save.music_vol, g_save.sfx_vol, g_save.rumble);
     if (g_save.jericho_ms) fprintf(f, "jericho %d\n", g_save.jericho_ms);
     fprintf(f, "jerichowins %d\nglorywins %d\n", g_save.jericho_wins, g_save.glory_wins);

@@ -42,6 +42,9 @@ typedef struct {
     int jericho_ms;                /* best Walls of Jericho time in milliseconds, 0 = none */
     int jericho_wins;
     int glory_wins;                /* Genesis to Glory cups won */
+    int trail[24], ntrail;         /* the Bible map: the roads raced, in the order first raced (a new one goes on the end) */
+    int meters;                    /* how far the person has driven in races, all told */
+    int story;                     /* STORY MODE: how many of the 16 stops on the world map are cleared, in order */
     int pharaoh_wins, babylon_wins; /* Pharaoh's Cups and Babylonian Cups won (the cups come with Sean's roads) */
     int dirty;
 } Save;
