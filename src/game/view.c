@@ -53,7 +53,7 @@ static int g_opt_sel = 0; static char g_pause_reason[48]; static float g_erase_h
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO };   /* VS: two to four people on a split screen; JERICHO: seven laps round the walls */
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
-static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN, UNLOCK_MICHAEL, UNLOCK_GABRIEL, UNLOCK_GOLIATH_RACER, UNLOCK_GIDEON, UNLOCK_ZACCHAEUS, UNLOCK_JACOB, UNLOCK_ISAAC, UNLOCK_ABRAHAM, UNLOCK_PHARAOH}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
+static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN, UNLOCK_MICHAEL, UNLOCK_GABRIEL, UNLOCK_GOLIATH_RACER, UNLOCK_GIDEON, UNLOCK_ZACCHAEUS, UNLOCK_JACOB, UNLOCK_ISAAC, UNLOCK_ABRAHAM, UNLOCK_PHARAOH, UNLOCK_NEBUCHADNEZZAR}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
 static int char_unlocked(int c) { return !CHARACTERS[c].bonus || (g_save.unlocks & char_lock_bit(c)); }
 static int style_lock_bit(int sty) { return sty == 1 ? UNLOCK_KART_CHARIOT : (sty == 2 ? UNLOCK_KART_BOAT : (sty == 3 ? UNLOCK_KART_ARK : (sty == 4 ? UNLOCK_KART_SLING : 0))); }
 static int style_unlocked(int sty) { return sty == 0 || (g_save.unlocks & style_lock_bit(sty)); }
@@ -1590,7 +1590,7 @@ int game_init(int status) {
           if (hd) { tx_font = hd; g_font_hd = 1; }
           else { static uint32_t fpx[FONT_TEX_W * FONT_TEX_H]; font_build_texture(fpx); tx_font = gfx_texture_rgba(fpx, FONT_TEX_W, FONT_TEX_H, 0, 1); } }
         draw_loading("LOADING...");
-        static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john", "portrait_michael", "portrait_gabriel", "portrait_goliath", "portrait_gideon", "portrait_zacchaeus", "portrait_jacob", "portrait_isaac", "portrait_abraham", "portrait_pharaoh"};
+        static const char *pn[NCHARS] = {"portrait_jesus", "portrait_moses", "portrait_david", "portrait_esther", "portrait_peter", "portrait_mary", "portrait_daniel", "portrait_samson", "portrait_noah", "portrait_joseph", "portrait_jonah", "portrait_john", "portrait_michael", "portrait_gabriel", "portrait_goliath", "portrait_gideon", "portrait_zacchaeus", "portrait_jacob", "portrait_isaac", "portrait_abraham", "portrait_pharaoh", "portrait_nebuchadnezzar"};
         for (int i = 0; i < NCHARS; i++) { int w = 1, h = 1; tx_portrait[i] = asset_texture(pn[i], 0, &w, &h); g_portrait_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             char cn[48]; snprintf(cn, sizeof cn, "char_%s", pn[i] + 9); w = h = 1; tx_char[i] = asset_texture(cn, 0, &w, &h); g_char_aspect[i] = h > 0 ? (float)w / (float)h : 1.0f;
             snprintf(cn, sizeof cn, "kart_%s", pn[i] + 9); w = h = 1; tx_kart[i] = asset_texture(cn, 0, &w, &h); g_kart_aspect[i] = h > 0 ? (float)w / (float)h : 1.6f;

@@ -33,6 +33,7 @@ void save_load(void) {
         else if (!strcmp(key, "battlehardwins")) g_save.battle_hard_wins = (int)val;
         else if (!strcmp(key, "hardwins")) g_save.hard_wins = (int)val;
         else if (!strcmp(key, "pharaohwins")) g_save.pharaoh_wins = (int)val;
+        else if (!strcmp(key, "babylonwins")) g_save.babylon_wins = (int)val;
         else if (!strcmp(key, "coins")) g_save.coins = (int)val;
         else if (!strcmp(key, "musicvol")) g_save.music_vol = (int)val;
         else if (!strcmp(key, "sfxvol")) g_save.sfx_vol = (int)val;
@@ -57,7 +58,7 @@ void save_store(void) {
     for (int i = 0; i < SAVE_MAX_ROADS; i++) if (g_save.best_ms[i]) fprintf(f, "best%d %d\n", i, g_save.best_ms[i]);
     fprintf(f, "races %d\nwins %d\n", g_save.races, g_save.wins);
     for (int i = 0; i < 3; i++) fprintf(f, "gpwins%d %d\n", i, g_save.gp_wins[i]);
-    fprintf(f, "winchars %u\nunlocks %u\nbattles %d\nbattlewins %d\nbattlehardwins %d\nhardwins %d\ncoins %d\npharaohwins %d\n", g_save.win_chars, g_save.unlocks, g_save.battles, g_save.battle_wins, g_save.battle_hard_wins, g_save.hard_wins, g_save.coins, g_save.pharaoh_wins);
+    fprintf(f, "winchars %u\nunlocks %u\nbattles %d\nbattlewins %d\nbattlehardwins %d\nhardwins %d\ncoins %d\npharaohwins %d\nbabylonwins %d\n", g_save.win_chars, g_save.unlocks, g_save.battles, g_save.battle_wins, g_save.battle_hard_wins, g_save.hard_wins, g_save.coins, g_save.pharaoh_wins, g_save.babylon_wins);
     fprintf(f, "musicvol %d\nsfxvol %d\nrumble %d\n", g_save.music_vol, g_save.sfx_vol, g_save.rumble);
     if (g_save.jericho_ms) fprintf(f, "jericho %d\n", g_save.jericho_ms);
     fprintf(f, "jerichowins %d\nglorywins %d\n", g_save.jericho_wins, g_save.glory_wins);
@@ -86,6 +87,7 @@ unsigned save_check_unlocks(void) {
     if (g_save.gp_wins[0] + g_save.gp_wins[1] + g_save.gp_wins[2] >= 3) want |= UNLOCK_ISAAC;
     if (g_save.races >= 100) want |= UNLOCK_ABRAHAM;
     if (g_save.pharaoh_wins >= 1) want |= UNLOCK_PHARAOH;
+    if (g_save.babylon_wins >= 1) want |= UNLOCK_NEBUCHADNEZZAR;
     if (g_save.jericho_wins >= 1) want |= UNLOCK_MICHAEL;
     if (g_save.glory_wins >= 1) want |= UNLOCK_GABRIEL;
     unsigned fresh = want & ~g_save.unlocks;
@@ -100,7 +102,7 @@ const char *unlock_name(int bit) {
         case UNLOCK_SAMSON: return "SAMSON"; case UNLOCK_NOAH: return "NOAH"; case UNLOCK_JOSEPH: return "JOSEPH"; case UNLOCK_JONAH: return "JONAH"; case UNLOCK_JOHN: return "JOHN THE BAPTIST"; case UNLOCK_HEAVEN: return "ROAD TO HEAVEN";
         case UNLOCK_KART_CHARIOT: return "CHARIOT KART"; case UNLOCK_KART_BOAT: return "GALILEE BOAT KART"; case UNLOCK_KART_ARK: return "ARK KART";
         case UNLOCK_GOLIATH: return "DAVID VS GOLIATH"; case UNLOCK_KART_SLING: return "SLING KART";
-        case UNLOCK_MICHAEL: return "MICHAEL THE ARCHANGEL"; case UNLOCK_GABRIEL: return "GABRIEL THE ARCHANGEL"; case UNLOCK_GOLIATH_RACER: return "GOLIATH"; case UNLOCK_GIDEON: return "GIDEON"; case UNLOCK_ZACCHAEUS: return "ZACCHAEUS"; case UNLOCK_JACOB: return "JACOB"; case UNLOCK_ISAAC: return "ISAAC"; case UNLOCK_ABRAHAM: return "ABRAHAM"; case UNLOCK_PHARAOH: return "PHARAOH";
+        case UNLOCK_MICHAEL: return "MICHAEL THE ARCHANGEL"; case UNLOCK_GABRIEL: return "GABRIEL THE ARCHANGEL"; case UNLOCK_GOLIATH_RACER: return "GOLIATH"; case UNLOCK_GIDEON: return "GIDEON"; case UNLOCK_ZACCHAEUS: return "ZACCHAEUS"; case UNLOCK_JACOB: return "JACOB"; case UNLOCK_ISAAC: return "ISAAC"; case UNLOCK_ABRAHAM: return "ABRAHAM"; case UNLOCK_PHARAOH: return "PHARAOH"; case UNLOCK_NEBUCHADNEZZAR: return "NEBUCHADNEZZAR";
         default: return "";
     }
 }
@@ -110,7 +112,7 @@ const char *unlock_hint(int bit) {
         case UNLOCK_JONAH: return "BEAT THE TARGET ON THE SEA OF GALILEE"; case UNLOCK_JOHN: return "WIN THE GRAND PRIX ON HARD"; case UNLOCK_HEAVEN: return "WIN THE GRAND PRIX ON NORMAL";
         case UNLOCK_KART_CHARIOT: return "WIN 10 RACES"; case UNLOCK_KART_BOAT: return "BEAT THE TARGET TIME ON EVERY ROAD"; case UNLOCK_KART_ARK: return "FINISH 25 RACES";
         case UNLOCK_GOLIATH: return "WIN A RACE AS DAVID"; case UNLOCK_KART_SLING: return "BEAT GOLIATH";
-        case UNLOCK_GOLIATH_RACER: return "BEAT GOLIATH ON HARD"; case UNLOCK_GIDEON: return "WIN 3 RACES ON HARD"; case UNLOCK_ZACCHAEUS: return "COLLECT 300 COINS"; case UNLOCK_JACOB: return "WIN 14 RACES"; case UNLOCK_ISAAC: return "WIN 3 GRAND PRIX CUPS"; case UNLOCK_ABRAHAM: return "FINISH 100 RACES"; case UNLOCK_PHARAOH: return "WIN THE PHARAOH'S CUP"; case UNLOCK_MICHAEL: return "WIN THE WALLS OF JERICHO"; case UNLOCK_GABRIEL: return "WIN THE GENESIS TO GLORY CUP";
+        case UNLOCK_GOLIATH_RACER: return "BEAT GOLIATH ON HARD"; case UNLOCK_GIDEON: return "WIN 3 RACES ON HARD"; case UNLOCK_ZACCHAEUS: return "COLLECT 300 COINS"; case UNLOCK_JACOB: return "WIN 14 RACES"; case UNLOCK_ISAAC: return "WIN 3 GRAND PRIX CUPS"; case UNLOCK_ABRAHAM: return "FINISH 100 RACES"; case UNLOCK_PHARAOH: return "WIN THE PHARAOH'S CUP"; case UNLOCK_NEBUCHADNEZZAR: return "WIN THE BABYLONIAN CUP"; case UNLOCK_MICHAEL: return "WIN THE WALLS OF JERICHO"; case UNLOCK_GABRIEL: return "WIN THE GENESIS TO GLORY CUP";
         default: return "";
     }
 }

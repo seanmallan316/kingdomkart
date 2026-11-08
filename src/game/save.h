@@ -25,7 +25,8 @@ enum {
     UNLOCK_ISAAC = 1 << 17,        /* win 3 Grand Prix cups */
     UNLOCK_ABRAHAM = 1 << 18,      /* finish 100 races (he journeyed far by faith) */
     UNLOCK_PHARAOH = 1 << 19,      /* win the Pharaoh's Cup */
-    UNLOCK_COUNT = 20
+    UNLOCK_NEBUCHADNEZZAR = 1 << 20, /* win the Babylonian Cup */
+    UNLOCK_COUNT = 21
 };
 
 typedef struct {
@@ -41,7 +42,7 @@ typedef struct {
     int jericho_ms;                /* best Walls of Jericho time in milliseconds, 0 = none */
     int jericho_wins;
     int glory_wins;                /* Genesis to Glory cups won */
-    int pharaoh_wins;              /* Pharaoh's Cups won (the cup itself comes with Sean's roads) */
+    int pharaoh_wins, babylon_wins; /* Pharaoh's Cups and Babylonian Cups won (the cups come with Sean's roads) */
     int dirty;
 } Save;
 
