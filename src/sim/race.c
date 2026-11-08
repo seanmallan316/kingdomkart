@@ -18,6 +18,7 @@ const Character CHARACTERS[NCHARS] = {
     {"John",   "JOHN",   {1.08f, 1.00f, 0.94f, 1.00f}, 0.60f, 0.42f, 0.22f, 1}, /* bonus: John the Baptist, the fastest of all */
     {"Michael", "MICHAEL", {1.05f, 1.02f, 0.98f, 1.12f}, 0.90f, 0.15f, 0.15f, 1}, /* bonus: the archangel with the sword, strong and quick */
     {"Gabriel", "GABRIEL", {1.02f, 1.06f, 1.06f, 0.88f}, 0.25f, 0.35f, 0.85f, 1}, /* bonus: the archangel with the trumpet, light and nimble */
+    {"Goliath", "GOLIATH", {1.07f, 0.86f, 0.90f, 1.55f}, 0.80f, 0.55f, 0.22f, 1}, /* bonus (beat him on Hard): the giant of Gath, the heaviest of all, fast once he gets going */
 };
 static int g_field[NKARTS], g_field_on = 0;   /* a cup keeps the same field every round: who sits in each computer seat */
 void race_set_field(const int *chars) { g_field_on = chars != NULL; if (chars) for (int i = 0; i < NKARTS; i++) g_field[i] = chars[i]; }

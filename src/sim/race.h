@@ -6,7 +6,7 @@
 
 #define NKARTS 8
 #define MAX_HUMANS 4                /* people racing at once: the GamePad and up to three Wii controllers */
-#define NCHARS 14                   /* 7 to begin with, 7 unlockable */
+#define NCHARS 15                   /* 7 to begin with, 8 unlockable (the last: Goliath, for beating him on Hard) */
 #define NMAIN 7
 #define NSTYLES 5                   /* kart bodies: standard + 4 unlockable */
 #define MAX_BOX 24

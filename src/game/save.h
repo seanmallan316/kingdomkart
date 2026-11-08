@@ -18,14 +18,15 @@ enum {
     UNLOCK_KART_SLING = 1 << 10,   /* beat Goliath */
     UNLOCK_MICHAEL = 1 << 11,      /* win the Walls of Jericho */
     UNLOCK_GABRIEL = 1 << 12,      /* win the Genesis to Glory cup */
-    UNLOCK_COUNT = 13
+    UNLOCK_GOLIATH_RACER = 1 << 13, /* beat Goliath on Hard: he races */
+    UNLOCK_COUNT = 14
 };
 
 typedef struct {
     int best_ms[SAVE_MAX_ROADS];   /* best time trial per road in milliseconds, 0 = none */
     int races, wins;               /* races finished, races won (Grand Prix and Single Race) */
     int gp_wins[3];                /* Grand Prix championships per difficulty */
-    int battles, battle_wins;      /* David vs Goliath fights and wins */
+    int battles, battle_wins, battle_hard_wins;   /* David vs Goliath fights, wins, and wins on Hard */
     unsigned win_chars;            /* bit per character that has won a race */
     unsigned unlocks;              /* UNLOCK_* bits */
     int music_vol, sfx_vol;        /* 0..10 */
