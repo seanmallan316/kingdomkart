@@ -19,6 +19,11 @@ const Character CHARACTERS[NCHARS] = {
     {"Michael", "MICHAEL", {1.05f, 1.02f, 0.98f, 1.12f}, 0.90f, 0.15f, 0.15f, 1}, /* bonus: the archangel with the sword, strong and quick */
     {"Gabriel", "GABRIEL", {1.02f, 1.06f, 1.06f, 0.88f}, 0.25f, 0.35f, 0.85f, 1}, /* bonus: the archangel with the trumpet, light and nimble */
     {"Goliath", "GOLIATH", {1.07f, 0.86f, 0.90f, 1.55f}, 0.80f, 0.55f, 0.22f, 1}, /* bonus (beat him on Hard): the giant of Gath, the heaviest of all, fast once he gets going */
+    {"Gideon", "GIDEON", {1.03f, 1.03f, 1.02f, 1.02f}, 0.20f, 0.30f, 0.75f, 1}, /* bonus: the mighty man of valour, torches and trumpet, good at everything */
+    {"Zacchaeus", "ZACCHAEUS", {0.98f, 1.08f, 1.08f, 0.82f}, 0.72f, 0.22f, 0.18f, 1}, /* bonus: the short tax collector, the lightest and nippiest of all */
+    {"Jacob", "JACOB", {1.02f, 1.02f, 0.98f, 1.10f}, 0.62f, 0.25f, 0.18f, 1}, /* bonus: the shepherd who wrestled till daybreak, strong and tough */
+    {"Isaac", "ISAAC", {0.99f, 1.05f, 1.03f, 0.95f}, 0.85f, 0.68f, 0.42f, 1}, /* bonus: the promised son with his lamb, quick away and easy to steer */
+    {"Abraham", "ABRAHAM", {1.00f, 0.99f, 1.05f, 1.08f}, 0.18f, 0.22f, 0.55f, 1}, /* bonus: the father of many nations with his tent and lanterns, steady and sure-handed */
 };
 static int g_field[NKARTS], g_field_on = 0;   /* a cup keeps the same field every round: who sits in each computer seat */
 void race_set_field(const int *chars) { g_field_on = chars != NULL; if (chars) for (int i = 0; i < NKARTS; i++) g_field[i] = chars[i]; }

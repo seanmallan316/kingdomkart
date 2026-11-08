@@ -19,13 +19,19 @@ enum {
     UNLOCK_MICHAEL = 1 << 11,      /* win the Walls of Jericho */
     UNLOCK_GABRIEL = 1 << 12,      /* win the Genesis to Glory cup */
     UNLOCK_GOLIATH_RACER = 1 << 13, /* beat Goliath on Hard: he races */
-    UNLOCK_COUNT = 14
+    UNLOCK_GIDEON = 1 << 14,       /* win 3 races on Hard (God won with 300: the few against the many) */
+    UNLOCK_ZACCHAEUS = 1 << 15,    /* collect 300 coins (he gave half his goods to the poor) */
+    UNLOCK_JACOB = 1 << 16,        /* win 14 races (he served fourteen years for Rachel) */
+    UNLOCK_ISAAC = 1 << 17,        /* win 3 Grand Prix cups */
+    UNLOCK_ABRAHAM = 1 << 18,      /* finish 100 races (he journeyed far by faith) */
+    UNLOCK_COUNT = 19
 };
 
 typedef struct {
     int best_ms[SAVE_MAX_ROADS];   /* best time trial per road in milliseconds, 0 = none */
     int races, wins;               /* races finished, races won (Grand Prix and Single Race) */
     int gp_wins[3];                /* Grand Prix championships per difficulty */
+    int hard_wins, coins;          /* races won on Hard; coins picked up, all told */
     int battles, battle_wins, battle_hard_wins;   /* David vs Goliath fights, wins, and wins on Hard */
     unsigned win_chars;            /* bit per character that has won a race */
     unsigned unlocks;              /* UNLOCK_* bits */
