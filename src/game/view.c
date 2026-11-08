@@ -3236,7 +3236,11 @@ static const char *pick_music(void) {
     if (g_screen == SCR_SCENE && g_sc_char >= 0 && g_sc_char < NCHARS) {   /* each character's own scene song: content/music/music_scene_<name>.mp3 (Sean makes them) */
         static char sn[48]; const char *nm = CHARACTERS[g_sc_char].name; int k = snprintf(sn, sizeof sn, "music_scene_");
         for (int i = 0; nm[i] && k < 46; i++) if (nm[i] != ' ' && nm[i] != '\'') sn[k++] = (char)(nm[i] >= 'A' && nm[i] <= 'Z' ? nm[i] + 32 : nm[i]); sn[k] = 0;
-        if (music_available(sn)) return sn; }
+        if (music_available(sn)) return sn;
+        /* no song of their own: the one for their kind of story (5 shared moods) */
+        static const char *MOOD[NCHARS] = {"heaven", "egypt", "hero", "babylon", "hero", "heaven", "babylon", "hero", "heaven", "egypt", "babylon",
+            "fun", "heaven", "heaven", "fun", "hero", "fun", "hero", "heaven", "egypt", "egypt", "babylon"};
+        snprintf(sn, sizeof sn, "music_scene_%s", MOOD[g_sc_char]); if (music_available(sn)) return sn; }
     if (g_screen == SCR_SCENE) return music_available("music_scene") ? "music_scene" : (music_available("music_credits") ? "music_credits" : "music_menu");   /* Sean can drop in content/music/music_scene.mp3 */
     if (g_screen == SCR_TROPHY) return music_available("music_trophy") ? "music_trophy" : (music_available("music_results") ? "music_results" : "music_menu");
     if (g_screen == SCR_GP) {
