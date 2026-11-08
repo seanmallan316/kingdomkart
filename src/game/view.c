@@ -3233,6 +3233,10 @@ static const char *pick_music(void) {
         return music_available("music_results") ? "music_results" : "music_menu";
     }
     if (g_screen == SCR_STORY) return music_available("music_story") ? "music_story" : (music_available("music_map") ? "music_map" : "music_select");
+    if (g_screen == SCR_SCENE && g_sc_char >= 0 && g_sc_char < NCHARS) {   /* each character's own scene song: content/music/music_scene_<name>.mp3 (Sean makes them) */
+        static char sn[48]; const char *nm = CHARACTERS[g_sc_char].name; int k = snprintf(sn, sizeof sn, "music_scene_");
+        for (int i = 0; nm[i] && k < 46; i++) if (nm[i] != ' ' && nm[i] != '\'') sn[k++] = (char)(nm[i] >= 'A' && nm[i] <= 'Z' ? nm[i] + 32 : nm[i]); sn[k] = 0;
+        if (music_available(sn)) return sn; }
     if (g_screen == SCR_SCENE) return music_available("music_scene") ? "music_scene" : (music_available("music_credits") ? "music_credits" : "music_menu");   /* Sean can drop in content/music/music_scene.mp3 */
     if (g_screen == SCR_TROPHY) return music_available("music_trophy") ? "music_trophy" : (music_available("music_results") ? "music_results" : "music_menu");
     if (g_screen == SCR_GP) {
