@@ -63,7 +63,7 @@ static void race_setup(Race *r, const Track *t, const int *chars_in, const int *
     if (g_field_on) for (int i = 0; i < NKARTS; i++) if (!r->human[i] && g_field[i] >= 0 && g_field[i] < NCHARS) r->character[i] = g_field[i];
     if (r->player < 0) r->player = 0;
     for (int i = 0; i < NKARTS; i++) r->order[i] = i;
-    float base = difficulty == DIFF_EASY ? 0.55f : (difficulty == DIFF_NORMAL ? 0.74f : 0.87f);   /* (Sean: not difficult enough) */
+    float base = difficulty == DIFF_EASY ? 0.62f : (difficulty == DIFF_NORMAL ? 0.84f : 0.95f);   /* (Sean: not difficult enough; then: I can lap them twice even on hard) */
     for (int i = 0; i < r->nk; i++) {
         Kart *k = &r->k[i];
         memset(k, 0, sizeof *k);
@@ -247,7 +247,9 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
         for (int i = 0; i < r->nk; i++) { kart_step(&r->k[i], t, &none, dt); r->k[i].total_time = 0; }
         return;
     }
-    if (r->state == RACE_FINISHED) { r->after_t += dt; return; }
+    if (r->state == RACE_FINISHED) { r->after_t += dt;   /* after the race every kart keeps driving on down the road (Sean) */
+        for (int i = 0; i < r->nk; i++) { Kart *k = &r->k[i]; KartInput in; kart_autopilot(k, t, &in, 0.8f); in.gas = k->speed < 20.0f; in.brake = k->speed > 26.0f; in.drift = 0; in.item = 0; k->catchup = 0; kart_step(k, t, &in, dt); }
+        return; }
     r->race_t += dt;
     race_rank(r);
     int rank_of[NKARTS]; for (int p = 0; p < r->nk; p++) rank_of[r->order[p]] = p;
@@ -260,10 +262,14 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
         if (ai) {
             float skill = r->human[i] ? 0.9f : r->ai_skill[i];
             /* keep the race close without cheating: a little braver when far behind the people, a little more careful when far ahead */
-            if (!r->human[i]) { float gap = k->dist - best_human; if (gap < -60) skill += 0.08f; else if (gap > 70) skill -= 0.08f; skill = fminf(skill, 0.97f); }   /* the computer never drives a perfect line */
+            if (!r->human[i]) { float gap = k->dist - best_human; if (gap < -60) skill += 0.08f; else if (gap > 70) skill -= 0.08f; skill = fminf(skill, 0.97f);   /* the computer never drives a perfect line */
+                /* and a computer driver left behind finds a little extra speed, more on Hard, so the person always has a race on their hands */
+                float most = r->difficulty == DIFF_EASY ? 0.06f : r->difficulty == DIFF_NORMAL ? 0.16f : 0.26f, want = gap < -15.0f ? clampf((-gap - 15.0f) / 140.0f, 0, 1) * most : 0;
+                if (gap > 40.0f) want = -0.04f * clampf((gap - 40.0f) / 100.0f, 0, 1) * (r->difficulty == DIFF_HARD ? 0.3f : 1.0f);   /* way out in front: ease off a touch */
+                k->catchup += (want - k->catchup) * fminf(1.0f, dt * 0.8f); }
             kart_autopilot(k, t, &in, clampf(skill, 0.3f, 1.0f));
             r->ai_wobble[i] += dt * 0.7f;
-            if (k->finished) { in.steer *= 0.5f; in.gas = k->speed < 14.0f; }
+            if (k->finished) { in.gas = k->speed < 20.0f; in.drift = 0; k->catchup = 0; }
             /* good drivers do a trick off big jumps */
             if (k->air && k->air_t > 0.2f && k->hop <= 0 && !k->trick && skill > 0.4f && rr(r) < 0.08f) in.drift = 1;
             else in.steer += 0.06f * sinf(r->ai_wobble[i]) * (1.0f - skill);      /* human-like imperfection */
@@ -286,7 +292,7 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
                     in.steer = clampf(in.steer - dir * 0.8f * (1.0f - fabsf(gap) / need), -1.0f, 1.0f); }
             }
             in.item = r->jericho ? (k->lap >= t->laps ? r->shofars[i] > 0 : (r->shofars[i] >= 3 && rank_of[i] > 3 && rr(r) < 0.02f)) : ai_wants_item(r, i);
-        } else { in = hin[i]; if (k->finished) { in.gas = 0; in.brake = k->speed > 3.0f; in.steer = 0; in.drift = 0; in.item = 0; } }   /* past the line: the kart rolls to a stop for its celebration */
+        } else { in = hin[i]; if (k->finished) { kart_autopilot(k, t, &in, 0.8f); in.gas = k->speed < 20.0f; in.brake = k->speed > 26.0f; in.drift = 0; in.item = 0; } }   /* past the line: the kart drives itself on down the road while the camera goes round it */
         if (r->jericho) {   /* the shofar: one blow per press; on the last lap every shofar held sounds together */
             if (in.item && !r->shofar_held[i] && r->shofars[i] > 0 && k->stun <= 0) {
                 if (k->lap >= t->laps) { int n = r->shofars[i]; r->shofars[i] = 0; give_boost(k, 1.0f + 0.4f * n, 1.3f + 0.04f * n); if (r->collapse_t <= 0) r->collapse_t = 0.001f; push_event(r, EV_SHOUT, i); }

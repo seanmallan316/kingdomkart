@@ -44,6 +44,7 @@ typedef struct {
     int blocked_flag, hit_flag;/* set for one step when the shield blocks a hit / the kart is hit */
     /* race */
     int lap, next_cp; float wrongway_t, lap_time, total_time, best_lap, lap_times[MAX_LAPS]; int finished, place;
+    float catchup;             /* computer drivers only: extra top speed while they are behind the person (0 = none) */
     int skid;                  /* 1 when the tires should leave marks this step */
     int trick, trick_flag, drift_prev; float trick_vis;   /* a trick in the air (press drift while flying) earns a boost on landing */
     int rocket;                /* 1 rocket start, -1 wheelspin, set for one step at GO */

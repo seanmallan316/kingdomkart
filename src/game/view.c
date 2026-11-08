@@ -679,13 +679,31 @@ static void build_track_meshes(void) {
         float wob0 = sinf(q * 0.9f) * 1.2f, wob1 = sinf((q + 1) * 0.9f) * 1.2f;
         batch_quad4(&g_b, v3(x0, 0.06f, BROOK_Z + wob0 - hw), v3(x1, 0.06f, BROOK_Z + wob1 - hw), v3(x1, 0.06f, BROOK_Z + wob1 + hw), v3(x0, 0.06f, BROOK_Z + wob0 + hw), v3(0, 1, 0), q * 0.5f, 0, q * 0.5f + 0.5f, 1, 1, 1, 1, 0.8f); } }
     m_brook = gfx_mesh_static(g_b.v, g_b.n);
-    /* the start/finish arch: two pillars and a checkered banner across the road */
+    /* the start/finish gate (Sean: the pillars looked flat): two round fluted pillars on stone plinths with gold capitals
+       and gold balls on top, and a thick checkered beam high across the road, every piece a solid shape lit from the sun */
     batch_clear(&g_b);
-    { int i = 0; float e = track_edge(t, i);
-      for (int sd = -1; sd <= 1; sd += 2) { Vec3 base = road_point(t, i, sd * (e + 0.5f)); batch_box(&g_b, v3(base.x, base.y + 3.2f, base.z), v3(0.45f, 3.2f, 0.45f), 0.95f, 0.85f, 0.4f); }
-      /* no banner across the road: a checkered flag flies from the top of each pillar instead, out over the shoulder */
-      for (int sd = -1; sd <= 1; sd += 2) { Vec3 top = road_point(t, i, sd * (e + 0.5f)); for (int fx = 0; fx < 4; fx++) for (int fy = 0; fy < 3; fy++) { float c = ((fx + fy) & 1) ? 0.05f : 1.0f;
-          batch_box(&g_b, v3(top.x + t->s[i].nx * sd * (0.45f + 0.35f + fx * 0.7f), top.y + 5.6f + fy * 0.5f, top.z + t->s[i].nz * sd * (0.45f + 0.35f + fx * 0.7f)), v3(0.35f, 0.25f, 0.05f), c, c, c); } } }
+    { int i = 0; float e = track_edge(t, i) + 1.0f; const TrackSample *s0 = &t->s[i]; Vec3 N = v3(s0->nx, 0, s0->nz), T = v3(s0->tx, 0, s0->tz), U = v3(0, 1, 0);
+      #define OBOX(C, hn, hu, ht, R, G, B) do { Vec3 c_ = (C); Vec3 a_ = v3(N.x * (hn), 0, N.z * (hn)), b_ = v3(0, (hu), 0), d_ = v3(T.x * (ht), 0, T.z * (ht)); \
+          Vec3 P_[8]; for (int q_ = 0; q_ < 8; q_++) { float sa = (q_ & 1) ? 1.f : -1.f, sb = (q_ & 2) ? 1.f : -1.f, sd2 = (q_ & 4) ? 1.f : -1.f; P_[q_] = v3(c_.x + a_.x * sa + b_.x * sb + d_.x * sd2, c_.y + a_.y * sa + b_.y * sb + d_.y * sd2, c_.z + a_.z * sa + b_.z * sb + d_.z * sd2); } \
+          static const int F_[6][4] = {{1, 3, 7, 5}, {0, 4, 6, 2}, {2, 6, 7, 3}, {0, 1, 5, 4}, {4, 5, 7, 6}, {0, 2, 3, 1}}; Vec3 FN_[6] = {N, v3(-N.x, 0, -N.z), U, v3(0, -1, 0), T, v3(-T.x, 0, -T.z)}; \
+          float FS_[6] = {0.92f, 0.92f, 1.0f, 0.6f, 0.85f, 0.85f}; \
+          for (int f_ = 0; f_ < 6; f_++) batch_quad4(&g_b, P_[F_[f_][0]], P_[F_[f_][1]], P_[F_[f_][2]], P_[F_[f_][3]], FN_[f_], 0.5f, 0.5f, 0.5f, 0.5f, (R) * FS_[f_], (G) * FS_[f_], (B) * FS_[f_], 1); } while (0)
+      for (int sd = -1; sd <= 1; sd += 2) { Vec3 base = road_point(t, i, sd * e); float bx = base.x, by = base.y, bz = base.z;
+          OBOX(v3(bx, by + 0.35f, bz), 0.95f, 0.35f, 0.95f, 0.82f, 0.76f, 0.64f); OBOX(v3(bx, by + 0.85f, bz), 0.78f, 0.15f, 0.78f, 0.95f, 0.8f, 0.35f);   /* plinth and a gold band */
+          for (int q = 0; q < 16; q++) { float a0 = q * 0.3927f, a1 = a0 + 0.3927f, am = a0 + 0.196f, rr = 0.55f, sh = (q & 1) ? 1.0f : 0.86f;   /* the fluted shaft */
+              batch_quad4(&g_b, v3(bx + cosf(a0) * rr, by + 1.0f, bz + sinf(a0) * rr), v3(bx + cosf(a1) * rr, by + 1.0f, bz + sinf(a1) * rr), v3(bx + cosf(a1) * rr * 0.9f, by + 8.0f, bz + sinf(a1) * rr * 0.9f), v3(bx + cosf(a0) * rr * 0.9f, by + 8.0f, bz + sinf(a0) * rr * 0.9f),
+                          v3(cosf(am), 0, sinf(am)), 0.5f, 0.5f, 0.5f, 0.5f, 0.96f * sh, 0.93f * sh, 0.86f * sh, 1); }
+          OBOX(v3(bx, by + 8.15f, bz), 0.75f, 0.15f, 0.75f, 0.95f, 0.8f, 0.35f); OBOX(v3(bx, by + 8.55f, bz), 0.9f, 0.25f, 0.9f, 1.0f, 0.86f, 0.42f);   /* gold capital */
+          for (int la = 0; la < 6; la++) for (int lo = 0; lo < 10; lo++) { float t0 = la * 0.5236f, t1 = t0 + 0.5236f, p0 = lo * 0.6283f, p1 = p0 + 0.6283f, rb = 0.5f; Vec3 c = v3(bx, by + 9.4f, bz);   /* the gold ball on top */
+              Vec3 q4[4] = {v3(sinf(t0) * cosf(p0), cosf(t0), sinf(t0) * sinf(p0)), v3(sinf(t1) * cosf(p0), cosf(t1), sinf(t1) * sinf(p0)), v3(sinf(t1) * cosf(p1), cosf(t1), sinf(t1) * sinf(p1)), v3(sinf(t0) * cosf(p1), cosf(t0), sinf(t0) * sinf(p1))};
+              batch_quad4(&g_b, v3(c.x + q4[0].x * rb, c.y + q4[0].y * rb, c.z + q4[0].z * rb), v3(c.x + q4[3].x * rb, c.y + q4[3].y * rb, c.z + q4[3].z * rb), v3(c.x + q4[2].x * rb, c.y + q4[2].y * rb, c.z + q4[2].z * rb), v3(c.x + q4[1].x * rb, c.y + q4[1].y * rb, c.z + q4[1].z * rb),
+                          v3_norm(v3(q4[0].x + q4[2].x, q4[0].y + q4[2].y, q4[0].z + q4[2].z)), 0.5f, 0.5f, 0.5f, 0.5f, 1.0f, 0.84f, 0.38f, 1); } }
+      { Vec3 mid = road_point(t, i, 0); float y = fmaxf(road_point(t, i, -e).y, road_point(t, i, e).y) + 9.4f; int cols = (int)(2.0f * e / 0.7f); if (cols < 6) cols = 6; float cw = 2.0f * e / cols;
+        for (int r2 = 0; r2 < 2; r2++) for (int c = 0; c < cols; c++) { float off = -e + cw * (c + 0.5f), w = ((c + r2) & 1) ? 0.06f : 0.97f;   /* the checkered beam */
+            OBOX(v3(mid.x + N.x * off, y + 0.35f - r2 * 0.7f, mid.z + N.z * off), cw * 0.5f, 0.35f, 0.3f, w, w, w); }
+        OBOX(v3(mid.x, y + 0.8f, mid.z), e + 0.3f, 0.1f, 0.34f, 0.95f, 0.8f, 0.35f); OBOX(v3(mid.x, y - 0.8f, mid.z), e + 0.3f, 0.1f, 0.34f, 0.95f, 0.8f, 0.35f); }   /* gold trim */
+      #undef OBOX
+    }
     m_arch = gfx_mesh_static(g_b.v, g_b.n);
     /* a coin: a thick gold medal - sixteen-sided rim, raised outer ring, and a cross standing out on both faces */
     batch_clear(&g_b);
@@ -3421,7 +3439,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1); }
         gfx_bump(3); gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
         gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1); gfx_bump(0);
-        if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1); }
+        if (g_def->bonus != 2) { gfx_bind(tx_white); gfx_draw_ex(m_arch, &id, 1, 1, 1, 1, 0.6f, 0, 0, 0); }   /* solid, lit, its own colours */
         if (m_fallsw) { if (!tx_fallsw) tx_fallsw = make_tex(64, 128, 1, 0, px_waterfall);   /* the waterfalls: water sliding down, foam pulsing where it lands */
             gfx_state(ST_TRANSPARENT); gfx_bind(tx_fallsw); gfx_draw_ex(m_fallsw, &id, 1, 1, 1, 0.92f, 0.7f, 0, 0, -g_time * 1.6f);
             if (m_foam) { float fp = 0.8f + 0.2f * sinf(g_time * 7.0f); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_foam, &id, fp, fp, fp, 1, 0, 1, 0, 0); }
@@ -4264,9 +4282,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
     } else if (cv->finish_t > 0 && !g_attract && g_mode != MODE_BATTLE) {
         /* the celebration: in close and low, swinging once all the way round the kart, then drifting on slowly */
         float u = clampf(cv->finish_t / CELE_T, 0, 1), e = u * u * (3 - 2 * u), a = k->yaw + 6.2831853f * e + (cv->finish_t > CELE_T ? (cv->finish_t - CELE_T) * 0.4f : 0);
-        float in = clampf(cv->finish_t / 0.9f, 0, 1), dist = 6.0f - 2.4f * in, hgt = 2.6f - 0.9f * in;
+        float in = clampf(cv->finish_t / 0.9f, 0, 1), dist = 6.5f - 1.7f * in, hgt = 2.6f - 0.8f * in;
         float tx = k->x - sinf(a) * dist, tz = k->z - cosf(a) * dist, ty = k->y + hgt;
-        float f = fminf(1.0f, 8.0f * dt); cam_x += (tx - cam_x) * f; cam_z += (tz - cam_z) * f; cam_y += (ty - cam_y) * f;
+        float f = fminf(1.0f, 14.0f * dt); cam_x += (tx - cam_x) * f;   /* keeps up with the kart as it drives on */ cam_z += (tz - cam_z) * f; cam_y += (ty - cam_y) * f;
         cam_yaw = atan2f(k->x - cam_x, k->z - cam_z); cam_fov += (55.0f - cam_fov) * fminf(1.0f, 3.0f * dt);
         if ((int)(cv->finish_t * 2.5f) != (int)((cv->finish_t - dt) * 2.5f) && cv->finish_t < CELE_T) { const Character *ch = &CHARACTERS[r->character[human_kart(p)]]; bless_sparkle(k, 1, 0.85f, 0.3f); bless_sparkle(k, ch->r, ch->g, ch->b); }   /* confetti */
     } else {
