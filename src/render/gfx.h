@@ -49,6 +49,7 @@ int gfx_shadow_begin(const Mat4 *lightvp);
 void gfx_shadow_end(void);
 Texture *gfx_grab(int drc);   /* the picture so far as a texture (NULL if it can't be done); then set the viewport again */
 Texture *gfx_grab_ex(int src, int drc);   /* the same, copying screen src (0 TV, 1 GamePad) while drawing screen drc */
+void gfx_bump(int level);   /* 0 = flat; 1..9 = the picture's brightness read as bumps that catch the light, and stands up as you look across it (roads, ground, walls) */
 void gfx_shadow_use(int on);
 void gfx_shadow_none(void);
 Texture *gfx_shadow_texture(void);                                 /* fresh depth partway through a screen, for a 3D scene drawn over another */

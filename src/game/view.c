@@ -364,7 +364,7 @@ static void strip_quad(Batch *b, const Track *t, int i, float l0, float l1, floa
     Vec3 n = face_normal(p0, p1, p3); if (n.y < 0) n = v3(-n.x, -n.y, -n.z);
     float v0 = t->s[i].dist * vscale, v1 = (i + 1 < t->n ? t->s[j].dist : t->length) * vscale;
     /* counter-clockwise seen from above: left-near, right-near, right-far, left-far */
-    batch_quad4(b, p0, p1, p2, p3, n, 0, v0, 1, v1, r, g, bl, 1);
+    batch_quad4(b, p0, p1, p2, p3, n, l0 * vscale, v0, l1 * vscale, v1, r, g, bl, 1);   /* square tiles: across the road at the same scale as along it (it was one picture stretched over the whole width) */
 }
 static void free_track_meshes(void) {
     gfx_mesh_free(m_hills); m_hills = NULL;
@@ -488,7 +488,7 @@ static void build_track_meshes(void) {
             Vertex v[3] = { {c.x, c.y, c.z, 0, 1, 0, c.x / 10.0f, c.z / 10.0f, 1, 1, 1, 1}, {p1.x, p1.y, p1.z, 0, 1, 0, p1.x / 10.0f, p1.z / 10.0f, 1, 1, 1, 1}, {p0.x, p0.y, p0.z, 0, 1, 0, p0.x / 10.0f, p0.z / 10.0f, 1, 1, 1, 1} };
             if (g_b.n + 3 <= g_b.cap) for (int k = 0; k < 3; k++) g_b.v[g_b.n++] = v[k]; }
     } else
-    for (int i = 0; i < t->n; i++) strip_quad(&g_b, t, i, -t->s[i].width * 0.5f, t->s[i].width * 0.5f, 1.0f / 8.0f, 1, 1, 1);
+    for (int i = 0; i < t->n; i++) strip_quad(&g_b, t, i, -t->s[i].width * 0.5f, t->s[i].width * 0.5f, 1.0f / 7.0f, 1, 1, 1);
     m_road = gfx_mesh_static(g_b.v, g_b.n);
     /* shoulders (dirt); the battle valley has only an outside edge (its inside edge is the middle of the disc) */
     int skip_side = 0;
@@ -2952,14 +2952,16 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         gfx_state(ST_SOLID);
         float sr = 1, sg = 1, sb = 1;    /* the sun's color is applied by the shader now */
         /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
-        gfx_bind(tx_grass); if (g_def->water) gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); else gfx_draw(m_ground, &id, sr, sg, sb, 1);
-        if (m_field) gfx_draw(m_field, &id, sr, sg, sb, 1);   /* the open land, same grass as the ground */
+        /* depth on every ground surface (Sean: "they need to be 3 dimensional"): bumps that catch the sun - see gfx_bump */
+        gfx_bind(tx_grass); if (g_def->water) gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); else { gfx_bump(2); gfx_draw(m_ground, &id, sr, sg, sb, 1); }
+        gfx_bump(2); if (m_field) gfx_draw(m_field, &id, sr, sg, sb, 1);   /* the open land, same grass as the ground */
         if (m_hills) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_draw(m_hills, &id, sr, sg, sb, 1); gfx_state(ST_SOLID); }   /* the hills beyond the walls */
-        gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
-        gfx_bind(tx_road); gfx_draw_ex(m_road, &id, 1, 1, 1, 1, g_def->night ? 0.35f : 0.18f, 0, 0, 0);   /* a faint sheen on the road, wetter at night */
+        gfx_bump(3); gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
+        gfx_bump(4); gfx_bind(tx_road); gfx_draw_ex(m_road, &id, 1, 1, 1, 1, g_def->night ? 0.35f : 0.18f, 0, 0, 0);   /* a faint sheen on the road, wetter at night */
+        gfx_bump(0);
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_startline, &id, sr, sg, sb, 1); }
-        gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
-        gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1);
+        gfx_bump(3); gfx_bind(tx_wall); gfx_draw(m_wall, &id, sr, sg, sb, 1);
+        gfx_bind(tx_wall); gfx_draw(m_tunnel, &id, sr * 0.8f, sg * 0.8f, sb * 0.8f, 1); gfx_bump(0);
         if (g_def->bonus != 2) { gfx_bind(tx_flag); gfx_draw(m_arch, &id, sr, sg, sb, 1); }
         if (m_fallsw) { if (!tx_fallsw) tx_fallsw = make_tex(64, 128, 1, 0, px_waterfall);   /* the waterfalls: water sliding down, foam pulsing where it lands */
             gfx_state(ST_TRANSPARENT); gfx_bind(tx_fallsw); gfx_draw_ex(m_fallsw, &id, 1, 1, 1, 0.92f, 0.7f, 0, 0, -g_time * 1.6f);

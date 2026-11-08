@@ -87,6 +87,26 @@ static const char *PS_SRC =
     "  vec3 c = t.rgb;\n"
     "  if (v_v.w < 0.5 && u_light.w < 0.999) {\n"   /* lit things (the flat screen layer has full ambient: drawn as is) */
     "    vec3 N = normalize(v_n.xyz); float vl = length(v_v.xyz); vec3 V = vl > 0.0001 ? v_v.xyz / vl : N; vec3 L = normalize(u_light.xyz); float amb = u_light.w;\n"
+    /* bumps (Sean: the roads must have depth): v_n.w carries the specular strength plus 10 x a bump level. The picture's own
+       brightness is read as height - stone tops light, gaps dark - and tilts the surface toward the slopes, so the sun catches
+       every stone; the picture is also shifted a little by its height as you look across it (parallax), so stones stand up */
+    "    float bl = floor(v_n.w * 0.1 + 0.001); float spw = v_n.w - bl * 10.0;\n"
+    "    if (bl > 0.5) {\n"
+    "      vec3 dp1 = -dFdx(v_v.xyz); vec3 dp2 = -dFdy(v_v.xyz); vec2 du1 = dFdx(v_texcoord); vec2 du2 = dFdy(v_texcoord);\n"
+    "      vec3 d2p = cross(dp2, N); vec3 d1p = cross(N, dp1);\n"
+    "      vec3 T = d2p * du1.x + d1p * du2.x; vec3 B = d2p * du1.y + d1p * du2.y;\n"
+    "      float im = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-20)); T *= im; B *= im;\n"
+    "      vec3 lw = vec3(0.299, 0.587, 0.114);\n"
+    "      float h0 = dot(texture(u_tex, v_texcoord).rgb, lw);\n"
+    "      vec2 vts = vec2(dot(V, T), dot(V, B)) / max(dot(V, N), 0.3);\n"
+    "      vec2 uv = v_texcoord + vts * (h0 - 0.5) * 0.006 * bl;\n"
+    "      vec2 fw = max(fwidth(uv), vec2(1.0 / 512.0));\n"
+    "      float hc = dot(texture(u_tex, uv).rgb, lw);\n"
+    "      float hx = dot(texture(u_tex, uv + vec2(fw.x, 0.0)).rgb, lw) - hc;\n"
+    "      float hy = dot(texture(u_tex, uv + vec2(0.0, fw.y)).rgb, lw) - hc;\n"
+    "      N = normalize(N - (hx * T + hy * B) * bl * 1.6);\n"
+    "      t = texture(u_tex, uv) * v_color; c = t.rgb;\n"
+    "    }\n"
     "    float nl = dot(N, L);\n"
     "    float lit = 1.0;\n"
     "    if (v_shadow.w > 1.5) {\n"   /* in the sun's view: 4 soft samples of what is nearest the sun there */
@@ -102,7 +122,7 @@ static const char *PS_SRC =
     /* the rim: the sky's light catching the edges of things, stronger on the sunny side - it lifts every shape off its background */
     "    float fr = 1.0 - max(dot(N, V), 0.0); float rim = fr * fr * fr * u_grade.y;\n"
     "    light += mix(u_skyc.rgb, u_speccolor.rgb, 0.5 + 0.5 * clamp(nl, 0.0, 1.0)) * rim * (0.45 + 0.55 * lit);\n"
-    "    vec3 H = normalize(L + V + vec3(0.0, 0.0001, 0.0)); float sp = pow(max(dot(N, H), 0.0), 48.0) * v_n.w + pow(max(dot(N, H), 0.0), 8.0) * 0.04 * u_grade.x;\n"
+    "    vec3 H = normalize(L + V + vec3(0.0, 0.0001, 0.0)); float sp = pow(max(dot(N, H), 0.0), 48.0) * spw + pow(max(dot(N, H), 0.0), 8.0) * 0.04 * u_grade.x;\n"
     "    c = t.rgb * light + u_speccolor.rgb * sp * lit;\n"
     "  }\n"
     "  c = mix(c, u_fogcolor.rgb, v_fog);\n"
@@ -471,6 +491,8 @@ Texture *gfx_grab_ex(int src, int drc) {   /* src: which screen's picture (0 TV,
     GX2SetFetchShader(&g_shader.fetchShader); GX2SetVertexShader(g_shader.vertexShader); GX2SetPixelShader(g_shader.pixelShader); GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_BLOCK);
     g_flags = -1; g_bound = NULL; gfx_bind(g_white); bind_shadow_sampler();
     return t; }
+static int g_bump;
+void gfx_bump(int level) { g_bump = level < 0 ? 0 : level > 9 ? 9 : level; }
 void gfx_shadow_use(int on) { g_shadow_use = on; }
 Texture *gfx_shadow_texture(void) { static Texture t; if (!g_shadow_ok) return NULL; t.tex = g_shtex; t.smp = g_shsmp; return &t; }   /* for looking at the shadow map itself (tests) */
 void gfx_shadow_none(void) { g_shadow_have = 0; }
@@ -566,7 +588,7 @@ void gfx_draw(const Mesh *m, const Mat4 *model, float r, float g, float b, float
 void gfx_draw_ex(const Mesh *m, const Mat4 *model, float r, float g, float b, float a, float specular, int unlit, float scroll_u, float scroll_v) {
     if (!m || m->count == 0 || !g_framebuf) return;
     ObjectBlock ob; memcpy(ob.model, model->m, sizeof ob.model); ob.tint[0] = r; ob.tint[1] = g; ob.tint[2] = b; ob.tint[3] = a;
-    ob.params[0] = specular; ob.params[1] = unlit ? 1.0f : 0.0f; ob.params[2] = scroll_u; ob.params[3] = scroll_v;
+    ob.params[0] = specular + (unlit ? 0.0f : 10.0f * (float)g_bump); ob.params[1] = unlit ? 1.0f : 0.0f;   /* the bump level rides on the specular strength (see the pixel shader) */ ob.params[2] = scroll_u; ob.params[3] = scroll_v;
     void *obuf = pool_upload(&ob, sizeof ob);
     if (g_in_shadow) { GX2SetVertexUniformBlock(g_shloc_frame, sizeof(FrameBlock), g_framebuf); GX2SetVertexUniformBlock(g_shloc_object, sizeof(ObjectBlock), obuf); }
     else {
