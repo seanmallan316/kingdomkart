@@ -70,7 +70,8 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     if (autopilot && b->nd == 1) {    /* the demo David: fetch a stone, then drive at Goliath and sling it */
         kart_autopilot(k, t, &in, 0.8f);
         float tx, tz; int have = 0;
-        if (b->stones_held < 2) { float best = 1e9f; for (int i = 0; i < BATTLE_STONES; i++) { if (b->stone_respawn[i] > 0) continue; float ddx = b->stone_x[i] - k->x, ddz = b->stone_z[i] - k->z, d2 = ddx * ddx + ddz * ddz; if (d2 < best) { best = d2; tx = b->stone_x[i]; tz = b->stone_z[i]; have = 1; } } }
+        if (b->manna_on && b->dhits[0] > 0 && b->manna_y < 8.0f) { tx = b->manna_x; tz = b->manna_z; have = 1; }   /* hurt: go for the manna first */
+        else if (b->stones_held < 2) { float best = 1e9f; for (int i = 0; i < BATTLE_STONES; i++) { if (b->stone_respawn[i] > 0) continue; float ddx = b->stone_x[i] - k->x, ddz = b->stone_z[i] - k->z, d2 = ddx * ddx + ddz * ddz; if (d2 < best) { best = d2; tx = b->stone_x[i]; tz = b->stone_z[i]; have = 1; } } }
         else { tx = b->gx; tz = b->gz; have = 1; }
         if (have) { float err = wrap_pi(atan2f(tx - k->x, tz - k->z) - k->yaw); in.steer = err > 0 ? fminf(err * 2.5f, 1.0f) : fmaxf(err * 2.5f, -1.0f); in.gas = fabsf(err) < 1.0f || k->speed < 8.0f; in.brake = fabsf(err) > 1.8f && k->speed > 12.0f; in.drift = 0;
             float gd = sqrtf((b->gx - k->x) * (b->gx - k->x) + (b->gz - k->z) * (b->gz - k->z));
@@ -93,6 +94,20 @@ void battle_step(Battle *b, const KartInput *in_real, int autopilot, float dt) {
     if (r->state != RACE_RUNNING) return;
     b->t += dt; for (int d = 0; d < b->nd; d++) if (b->dinv[d] > 0) b->dinv[d] -= dt;
     if (b->quote_t > 0) { b->quote_t -= dt; if (b->quote_t <= 0) b->quote = -1; }
+    /* manna from heaven (Sean: some way to get health back): while any David has been hit, every so often a portion
+       comes down from the sky somewhere on the road; drive into it and it heals one hit and fills you with strength:
+       a burst of speed, a moment safe from harm, and a stone in the sling. "The LORD is my strength" - Exodus 15:2 */
+    { int hurt = 0; for (int d = 0; d < b->nd; d++) if (b->dhits[d] > 0 && !battle_out(b, d)) hurt = 1;
+      if (!b->manna_on) { if (hurt) b->manna_wait += dt; else b->manna_wait = fminf(b->manna_wait, 6.0f);
+          if (b->manna_wait > 14.0f && b->gstate != GOL_DOWN) { int idx = (int)(brand(b) * t->n) % t->n; float lat = (brand(b) - 0.5f) * t->s[idx].width * 0.6f;
+              float mx = t->s[idx].x + t->s[idx].nx * lat, mz = t->s[idx].z + t->s[idx].nz * lat, gd = (mx - b->gx) * (mx - b->gx) + (mz - b->gz) * (mz - b->gz);
+              if (gd > 25.0f * 25.0f) { b->manna_on = 1; b->manna_x = mx; b->manna_z = mz; b->manna_y = 22.0f; b->manna_life = 16.0f; b->manna_wait = 0; bev(b, BEV_MANNA_FALL); } } }
+      else { if (b->manna_y > 0) b->manna_y = fmaxf(0, b->manna_y - dt * 11.0f);
+          b->manna_life -= dt; if (b->manna_life <= 0) b->manna_on = 0;
+          for (int d = 0; d < b->nd && b->manna_on && b->manna_y < 1.5f; d++) { Kart *kd = &r->k[d]; float dx = kd->x - b->manna_x, dz = kd->z - b->manna_z;
+              if (battle_out(b, d) || dx * dx + dz * dz > 2.6f * 2.6f) continue;
+              if (b->dhits[d] > 0) { b->dhits[d]--; } b->dinv[d] = fmaxf(b->dinv[d], 2.0f); if (b->dstones[d] < 3) b->dstones[d]++;
+              kd->boost_t = fmaxf(kd->boost_t, 1.5f); kd->boost_mul = fmaxf(kd->boost_mul, 1.35f); b->manna_on = 0; bev(b, BEV_MANNA); } } }
     if (b->t > 0.5f) say(b, 0);
     if (b->t > 6.0f) say(b, 1);
     if (b->hits_on_goliath >= 2) say(b, 3);

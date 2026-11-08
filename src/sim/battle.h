@@ -10,7 +10,7 @@
 #define BATTLE_LIVES 3
 
 enum { GOL_STALK, GOL_WINDUP, GOL_CHARGE, GOL_THROW, GOL_STUNNED, GOL_DOWN, GOL_DAZED };   /* DAZED: reeling, head in his hands - the moment for the last stone */
-enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE, BEV_STEP, BEV_QUOTE, BEV_SHIELD, BEV_EMPTY, BEV_ARMOUR, BEV_DAZED, BEV_RECOVER, BEV_FOREHEAD };   /* ARMOUR: a stone glanced off his armour; DAZED: he reels; RECOVER: he shook it off; FOREHEAD: the last stone */   /* EMPTY: tried to sling with no stone */   /* SHIELD: the shield-bearer caught a stone */
+enum { BEV_NONE = 1, BEV_STONE_PICKED, BEV_STONE_THROWN, BEV_GOLIATH_HIT, BEV_DAVID_HIT, BEV_SPEAR, BEV_CHARGE, BEV_ROAR, BEV_WIN, BEV_LOSE, BEV_STEP, BEV_QUOTE, BEV_SHIELD, BEV_EMPTY, BEV_ARMOUR, BEV_DAZED, BEV_RECOVER, BEV_FOREHEAD, BEV_MANNA_FALL, BEV_MANNA };   /* ARMOUR: a stone glanced off his armour; DAZED: he reels; RECOVER: he shook it off; FOREHEAD: the last stone */   /* EMPTY: tried to sling with no stone */   /* SHIELD: the shield-bearer caught a stone */
 /* words from 1 Samuel 17 (King James Version), spoken during the fight */
 typedef struct { const char *who; const char *line; const char *ref; } BattleQuote;
 extern const BattleQuote BATTLE_QUOTES[];
@@ -42,6 +42,7 @@ typedef struct {
     int blocks;                      /* stones the shield-bearer caught (1 Samuel 17:41: he walks before Goliath; hit him from the side or behind) */
     float gy;                        /* the ground under Goliath */
     float gstate_t; int gprev;       /* seconds in the current state (for his animation), the state last step */
+    float manna_x, manna_z, manna_y, manna_life, manna_wait; int manna_on;   /* manna from heaven (Exodus 16:4): falls now and then, heals a David who has been hit and gives him strength */
     float sb_yaw;                    /* which way the shield-bearer stands from Goliath: he follows Goliath's turn, but slowly, so a quick kart can get round him */
 } Battle;
 

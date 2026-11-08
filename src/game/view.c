@@ -595,38 +595,32 @@ static void build_track_meshes(void) {
       p0.y += 0.03f; p1.y += 0.03f; p2.y += 0.03f; p3.y += 0.03f;
       batch_quad4(&g_b, p0, p1, p2, p3, v3(0, 1, 0), 0, 0, 4, 1, 1, 1, 1, 1); }
     m_startline = gfx_mesh_static(g_b.v, g_b.n);
-    /* boost pads (Sean): a raised, glowing golden Jesus fish - the ichthys, the early Christians' sign - its head pointing the
-       way the racers drive, on a pool of soft light. Three solid pieces: the body (the two arcs meeting at the tail) and the
-       two points of the tail where the arcs cross and carry on. */
+    /* boost pads: a raised golden dash plate with three solid chevrons pointing the way the racers drive (Sean: the Jesus
+       fish looked ridiculous). Every piece is a flat shape lifted into a solid block: a top, and sides lit from one side. */
     Batch keep_b = g_b; batch_init(&g_b, far_buf(), FAR_CAP); batch_clear(&g_b);   /* a road can have 30 of them: the big buffer */
     {
-      enum { DN = 3 }; static int dn[DN]; static float dp[DN][32][2];
-      { int n = 0; for (int k = 0; k <= 13; k++) { float u = (float)k / 13; dp[0][n][0] = 0.4f * sinf(3.14159265f * u); dp[0][n][1] = 1.0f - 1.42f * u; n++; }   /* one arc, head to tail */
-        for (int k = 12; k >= 1; k--) { float u = (float)k / 13; dp[0][n][0] = -0.4f * sinf(3.14159265f * u); dp[0][n][1] = 1.0f - 1.42f * u; n++; }   /* and back along the other */
-        dn[0] = n;
-        float tl[3][2] = {{0.0f, -0.42f}, {0.44f, -0.98f}, {0.16f, -0.86f}};
-        for (int q = 0; q < 3; q++) { dp[1][q][0] = tl[q][0]; dp[1][q][1] = tl[q][1]; dp[2][2 - q][0] = -tl[q][0]; dp[2][2 - q][1] = tl[q][1]; }
-        dn[1] = dn[2] = 3; }
+      enum { DN = 7 }; static int dn[DN]; static float dp[DN][24][2], dth[DN], dlift[DN], dcol[DN][3];
+      { int n = 0; const float cx[4] = {0.75f, -0.75f, -0.75f, 0.75f}, cz[4] = {0.8f, 0.8f, -0.8f, -0.8f}, a0[4] = {0, 1.5708f, 3.14159f, 4.71239f};   /* the plate: a rounded rectangle */
+        for (int c = 0; c < 4; c++) for (int q = 0; q < 4; q++) { float a = a0[c] + 1.5708f * q / 3; dp[0][n][0] = cx[c] + 0.2f * cosf(a); dp[0][n][1] = cz[c] + 0.2f * sinf(a); n++; }
+        dn[0] = n; dth[0] = 0.12f; dlift[0] = 0; dcol[0][0] = 0.95f; dcol[0][1] = 0.6f; dcol[0][2] = 0.12f;
+        for (int v = 0; v < 3; v++) { float c = -0.55f + 0.55f * v;   /* three chevrons, each two solid arms meeting at the point */
+            for (int side = 0; side < 2; side++) { int part = 1 + v * 2 + side; float sx = side ? 1.0f : -1.0f;
+                float P[4][2] = {{0, c + 0.32f}, {0.62f * sx, c - 0.2f}, {0.62f * sx, c - 0.44f}, {0, c + 0.08f}};
+                for (int q = 0; q < 4; q++) { int qq = side ? 3 - q : q; dp[part][q][0] = P[qq][0]; dp[part][q][1] = P[qq][1]; }
+                dn[part] = 4; dth[part] = 0.1f; dlift[part] = 0.12f; dcol[part][0] = 1.0f; dcol[part][1] = 0.97f; dcol[part][2] = 0.8f; } } }
       for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p]; if (pd->kind != PAD_BOOST) continue;
-        int ci = (pd->idx + 3) % t->n; const TrackSample *cs = &t->s[ci]; float spacing = t->length / (float)t->n, W = pd->halfw * 1.05f, F = pd->halfw * 1.25f;
+        int ci = (pd->idx + 3) % t->n; float spacing = t->length / (float)t->n, W = pd->halfw * 1.05f, F = pd->halfw * 1.25f;
         for (int part = 0; part < DN; part++) {
-            int pn = dn[part], wingp = 0, tailp = part > 0;
-            float th = part == 0 ? 0.38f : 0.26f;
-            Vec3 top[32], bot[32];
+            int pn = dn[part]; Vec3 top[24], bot[24];
             for (int k = 0; k < pn; k++) { float lx = dp[part][k][0], lz = dp[part][k][1];
                 float lat = pd->lateral + lx * W, fwd = lz * F; int si = (ci + (int)lroundf(fwd / spacing) + t->n) % t->n; const TrackSample *ss = &t->s[si];
                 float along = fwd - (float)lroundf(fwd / spacing) * spacing;
-                Vec3 base = road_point(t, si, lat); base.x += ss->tx * along; base.z += ss->tz * along; base.y += 0.06f;
-                float lift = 0; (void)wingp; (void)tailp;
-                float h = th * (part == 0 ? (0.55f + 0.45f * (1.0f - fabsf(lx) / 0.42f)) : 1.0f);   /* the body domed along its middle */
-                bot[k] = v3(base.x, base.y + lift * 0.5f, base.z); top[k] = v3(base.x, base.y + lift + h, base.z); }
-            (void)cs;
-            /* the top: bright white-gold */
+                Vec3 base = road_point(t, si, lat); base.x += ss->tx * along; base.z += ss->tz * along; base.y += 0.04f + dlift[part];
+                bot[k] = v3(base.x, base.y, base.z); top[k] = v3(base.x, base.y + dth[part], base.z); }
             Vec3 mid = v3(0, 0, 0); for (int k = 0; k < pn; k++) { mid.x += top[k].x / pn; mid.y += top[k].y / pn; mid.z += top[k].z / pn; }
-            for (int k = 0; k < pn; k++) { Vec3 tri[3] = {mid, top[k], top[(k + 1) % pn]}; for (int q = 0; q < 3; q++) far_vert(&g_b, tri[q], v3(0, 1, 0), 0.5f, 0.5f, 1.0f, 0.97f, 0.78f); }
-            /* the edges: deeper gold, lit from one side */
+            for (int k = 0; k < pn; k++) { Vec3 tri[3] = {mid, top[k], top[(k + 1) % pn]}; for (int q = 0; q < 3; q++) far_vert(&g_b, tri[q], v3(0, 1, 0), 0.5f, 0.5f, dcol[part][0], dcol[part][1], dcol[part][2]); }
             for (int k = 0; k < pn; k++) { int k2 = (k + 1) % pn; Vec3 e = v3_sub(top[k2], top[k]); Vec3 n = v3_norm(v3(e.z, 0, -e.x));
-                float sh = 0.7f + 0.3f * (n.x * 0.5f + n.z * 0.5f + 0.5f); batch_quad4(&g_b, bot[k], bot[k2], top[k2], top[k], n, 0, 0, 1, 1, 1.0f * sh, 0.72f * sh, 0.22f * sh, 1); }
+                float sh = 0.62f + 0.3f * (n.x * 0.5f + n.z * 0.5f + 0.5f); batch_quad4(&g_b, bot[k], bot[k2], top[k2], top[k], n, 0, 0, 1, 1, dcol[part][0] * sh, dcol[part][1] * 0.75f * sh, dcol[part][2] * 0.5f * sh, 1); }
         }
       } }
     m_boostpads = gfx_mesh_static(g_b.v, g_b.n); g_b = keep_b;
@@ -1818,7 +1812,8 @@ static void hud_gamepad(void) {     /* the GamePad shows the big map and the sta
     for (int p = r->nk - 1; p >= 0; p--) { int i = r->order[p]; Kart *q = &r->k[i]; const Character *c = &CHARACTERS[r->character[i]]; float sz = i == r->player ? 26 : 18;
         batch_rect(&g_b, mx + (q->x - map_x0) * sc - sz / 2, mz - (q->z - map_z0) * sc - sz / 2, sz, sz, c->r, c->g, c->b, 1);
         if (i == r->player) batch_rect(&g_b, mx + (q->x - map_x0) * sc - 6, mz - (q->z - map_z0) * sc - 6, 12, 12, 1, 1, 1, 1); }
-    if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; for (int i = 0; i < BATTLE_STONES; i++) if (b->stone_respawn[i] <= 0) batch_rect(&g_b, mx + (b->stone_x[i] - map_x0) * sc - 8, mz - (b->stone_z[i] - map_z0) * sc - 8, 16, 16, 1, 0.9f, 0.5f, 1); }
+    if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; for (int i = 0; i < BATTLE_STONES; i++) if (b->stone_respawn[i] <= 0) batch_rect(&g_b, mx + (b->stone_x[i] - map_x0) * sc - 8, mz - (b->stone_z[i] - map_z0) * sc - 8, 16, 16, 1, 0.9f, 0.5f, 1);
+        if (b->manna_on) { float pz = 11 + 3 * sinf(g_time * 6); batch_rect(&g_b, mx + (b->manna_x - map_x0) * sc - pz, mz - (b->manna_z - map_z0) * sc - pz, pz * 2, pz * 2, 1, 1, 0.92f, 1); } }   /* the manna on the map: a pulsing white square */
     if (g_mode == MODE_BATTLE) { Battle *b = &g_battle; batch_rect(&g_b, mx + (b->gx - map_x0) * sc - 20, mz - (b->gz - map_z0) * sc - 20, 40, 40, 0.9f, 0.2f, 0.15f, 1); batch_text(&g_b, "G", mx + (b->gx - map_x0) * sc - 8, mz - (b->gz - map_z0) * sc - 10, 20, 1, 1, 1, 1); }
     /* standings down the right side */
     batch_text(&g_b, g_mode == MODE_BATTLE ? "THE FIGHT" : "STANDINGS", 800, 80, 24, 1, 0.85f, 0.3f, 1);
@@ -3659,6 +3654,18 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
                   batch_quad(&g_b, v3(b->stone_x[i], 6.0f, b->stone_z[i]), v3(ax.x * 1.1f, 0, ax.z * 1.1f), v3(0, 6.0f, 0), v3(0, 1, 0), 0.3f, 0, 0.7f, 1, 1, 0.9f, 0.6f, 0.35f); }
               static Mesh *m_stoneglow = NULL; if (!m_stoneglow) m_stoneglow = gfx_mesh_dynamic(BATTLE_STONES * 12);
               gfx_mesh_update(m_stoneglow, g_b.v, g_b.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_stoneglow, &id, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); }
+            if (b->manna_on) {   /* manna from heaven: a pile of round white wafers in a golden dish, coming down in a pillar of light (Exodus 16:4) */
+                TrackHit h; track_locate(&g_track, b->manna_x, b->manna_z, -1, &h); float gy = h.height + b->manna_y, bob = b->manna_y <= 0 ? 0.15f * sinf(g_time * 3) : 0, sp = g_time * 1.2f;
+                float fade = clampf(b->manna_life / 2.0f, 0, 1);
+                Mat4 dish = m4_mul(m4_translate(b->manna_x, gy + 0.5f + bob, b->manna_z), m4_mul(m4_rotate_y(sp), m4_scale(1.5f, 0.35f, 1.5f))); gfx_draw_ex(m_pebble, &dish, 1.0f, 0.8f, 0.3f, 1, 1.2f, 0, 0, 0);
+                for (int w = 0; w < 7; w++) { float a = w * 0.9f + sp, rr2 = w ? 0.42f : 0, y2 = gy + 0.72f + bob + (w ? 0.08f * (w & 1) : 0.22f);
+                    Mat4 wm = m4_mul(m4_translate(b->manna_x + cosf(a) * rr2, y2, b->manna_z + sinf(a) * rr2), m4_mul(m4_rotate_y(a), m4_scale(0.55f, 0.16f, 0.55f))); gfx_draw_ex(m_pebble, &wm, 1.0f, 0.97f, 0.86f, 1, 0.5f, 0, 0, 0); }
+                batch_clear(&g_b); float pul = 1.0f + 0.2f * sinf(g_time * 5);
+                batch_quad(&g_b, v3(b->manna_x, h.height + 0.1f, b->manna_z), v3(3.0f * pul, 0, 0), v3(0, 0, -3.0f * pul), v3(0, 1, 0), 0, 0, 1, 1, 1, 0.95f, 0.75f, 0.9f * fade);
+                batch_quad(&g_b, v3(b->manna_x, h.height + 12.0f, b->manna_z), v3(ax.x * 1.6f, 0, ax.z * 1.6f), v3(0, 12.0f, 0), v3(0, 1, 0), 0.3f, 0, 0.7f, 1, 1, 0.97f, 0.8f, 0.5f * fade);
+                batch_quad(&g_b, v3(b->manna_x, gy + 0.8f + bob, b->manna_z), v3(ax.x * 1.8f, 0, ax.z * 1.8f), v3(0, 1.8f, 0), v3(0, 1, 0), 0, 0, 1, 1, 1, 0.95f, 0.75f, 0.55f * fade);
+                static Mesh *m_mannaglow = NULL; if (!m_mannaglow) m_mannaglow = gfx_mesh_dynamic(24);
+                gfx_mesh_update(m_mannaglow, g_b.v, g_b.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw(m_mannaglow, &id, 1, 1, 1, 1); gfx_state(ST_SOLID); gfx_bind(NULL); }
             for (int i = 0; i < BATTLE_SPEARS; i++) { Missile *ms = &b->stone[i]; if (!ms->alive) continue; Mat4 m = m4_mul(m4_translate(ms->x, ms->y, ms->z), m4_scale(0.9f, 0.9f, 0.9f)); gfx_draw(m_pebble, &m, 0.55f, 0.52f, 0.5f, 1); }
             if (!m_spear3d) {   /* a real spear: a long wooden shaft, a leather grip, a broad bronze head and a bronze butt-spike, pointing down +z */
                 batch_clear(&g_b); const int NS = 8;
@@ -4141,6 +4148,8 @@ void game_frame(const Pad *pads, int npads, float dt) {
                 case BEV_STONE_PICKED: sfx_play(SFX_PICKUP, 0.9f, 0); snprintf(g_msg, sizeof g_msg, "A SMOOTH STONE!"); snprintf(g_msg2, sizeof g_msg2, "PRESS ZL TO SLING IT - 1 SAMUEL 17:40"); g_msg_t = 1.2f; break;
                 case BEV_EMPTY: snprintf(g_msg, sizeof g_msg, "NO STONES!"); snprintf(g_msg2, sizeof g_msg2, "DRIVE TO THE GLOWING STONES IN THE BROOK"); g_msg_t = 1.4f; sfx_play(SFX_WRONG_WAY, 0.6f, 0); break;
                 case BEV_STONE_THROWN: sfx_play(SFX_THROW, 1, 0); break;
+                case BEV_MANNA_FALL: snprintf(g_msg, sizeof g_msg, "MANNA FROM HEAVEN!"); snprintf(g_msg2, sizeof g_msg2, "I WILL RAIN BREAD FROM HEAVEN - EXODUS 16:4"); g_msg_t = 2.0f; sfx_play(SFX_DOVE, 0.8f, 0); break;
+                case BEV_MANNA: snprintf(g_msg, sizeof g_msg, "STRENGTH FROM GOD!"); snprintf(g_msg2, sizeof g_msg2, "THE LORD IS MY STRENGTH - EXODUS 15:2"); g_msg_t = 2.0f; sfx_play(SFX_UNLOCK, 1, 0); platform_rumble(0.5f, 0.3f); break;
                 case BEV_SHIELD: snprintf(g_msg, sizeof g_msg, "THE SHIELD-BEARER!"); snprintf(g_msg2, sizeof g_msg2, "HIT HIM FROM THE SIDE - 1 SAMUEL 17:41"); g_msg_t = 1.2f; sfx_play(SFX_BLOCK, 1, 0); break;
                 case BEV_GOLIATH_HIT: snprintf(g_msg, sizeof g_msg, "RIGHT ON HIS HEAD!"); snprintf(g_msg2, sizeof g_msg2, "%d OF %d", g_battle.hits_on_goliath, battle_need(&g_battle)); g_msg_t = 0.9f; sfx_play(SFX_HIT, 1, 0); sfx_play(SFX_BUMP, 0.8f, 0); add_dust(v3(g_battle.gx, g_battle.gy + battle_head_y(&g_battle), g_battle.gz), 2, 2); break;
                 case BEV_ARMOUR: snprintf(g_msg, sizeof g_msg, "CLANG!"); snprintf(g_msg2, sizeof g_msg2, "HIS ARMOUR - AIM FOR HIS HEAD"); g_msg_t = 0.9f; sfx_play(SFX_BLOCK, 0.9f, 0); break;
