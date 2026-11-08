@@ -3240,7 +3240,8 @@ static const char *pick_music(void) {
         /* no song of their own: the one for their kind of story (5 shared moods) */
         static const char *MOOD[NCHARS] = {"heaven", "egypt", "hero", "babylon", "hero", "heaven", "babylon", "hero", "heaven", "egypt", "babylon",
             "fun", "heaven", "heaven", "fun", "hero", "fun", "hero", "heaven", "egypt", "egypt", "babylon"};
-        snprintf(sn, sizeof sn, "music_scene_%s", MOOD[g_sc_char]); if (music_available(sn)) return sn; }
+        snprintf(sn, sizeof sn, "music_scene_%s", MOOD[g_sc_char]); if (music_available(sn)) return sn;
+        if (!strcmp(MOOD[g_sc_char], "babylon") && music_available("music_scene_egypt")) return "music_scene_egypt"; }   /* until the Babylon song is made */
     if (g_screen == SCR_SCENE) return music_available("music_scene") ? "music_scene" : (music_available("music_credits") ? "music_credits" : "music_menu");   /* Sean can drop in content/music/music_scene.mp3 */
     if (g_screen == SCR_TROPHY) return music_available("music_trophy") ? "music_trophy" : (music_available("music_results") ? "music_results" : "music_menu");
     if (g_screen == SCR_GP) {
