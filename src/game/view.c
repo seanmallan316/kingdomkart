@@ -41,7 +41,7 @@ static Battle g_battle;            /* the battle holds the race; in the racing m
 #define ARENA_TRACK (NUM_TRACK_DEFS - 2)   /* the Valley of Elah sits just before the Test Loop */
 static int g_player_char = 0, g_difficulty = DIFF_NORMAL, g_demo_char = 1;   /* demo_char: who drives the title-screen demo */
 /* game flow */
-enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY, SCR_ONLINE };
+enum { SCR_TITLE, SCR_MAIN, SCR_CHAR, SCR_KART, SCR_TRACK, SCR_RACE, SCR_PAUSE, SCR_RESULTS, SCR_GP, SCR_CREDITS, SCR_OPTIONS, SCR_OPENER, SCR_JOIN, SCR_MCHAR, SCR_CUP, SCR_TROPHY, SCR_ONLINE, SCR_SCENE };
 /* the opener video: frames content/video/opener_NNN.jpg, decoded one at a time as they come up */
 static int g_op_frames = 0, g_op_fps = 12, g_op_cur = -1, g_op_w = 0, g_op_h = 0, g_op_vid = 0; static float g_op_buf = 0; static Texture *tx_op; static Mesh *m_op;   /* g_op_vid: the background decoder is running; g_op_buf: seconds spent filling it before the clock starts */
 static int g_multi = 0;   /* 2 to 4 people are playing together (any mode) */
@@ -2605,6 +2605,374 @@ static void draw_trophy_pictures(int drc) {
     gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(NULL);
 }
 
+/* ---- the cup winner's Bible story (Sean: "after the trophy ceremony you click the A button and then it automatically
+   starts a scene that centers around the winner of the cup. The scene should be biblical and a teaching of scripture.")
+   The winner's own 3D kart drives into a little 3D set of their story; the camera moves round them while the story is
+   told in five beats: the title, two lines of the story, the verse, and what it teaches us. A finishes the line being
+   typed, or moves on; the beats also move on by themselves. The words are in cupstory.h. ---- */
+#include "cupstory.h"
+typedef char sc_fourteen_stories[(NCHARS == 14) ? 1 : -1];
+enum { SB_TITLE, SB_STORY1, SB_STORY2, SB_VERSE, SB_LESSON, SB_COUNT };
+static int g_sc_char, g_sc_beat; static float g_sc_bt, g_sc_out, g_sc_roll;   /* who, which beat, seconds into it, the fade-out (0 = staying), how far the kart has rolled */
+static Vec3 g_sc_eye, g_sc_at, g_sc_eye0, g_sc_at0;                         /* the camera, and where it was when the beat changed */
+#define SC_TYPE 38.0f   /* letters a second as the words type themselves out */
+static const char *sc_text(int beat) { const CupStory *s = &CUP_STORIES[g_sc_char];
+    switch (beat) { case SB_TITLE: return s->place; case SB_STORY1: return s->story[0]; case SB_STORY2: return s->story[1]; case SB_VERSE: return s->verse; default: return s->lesson; } }
+static float sc_typed_t(int beat) { return beat == SB_TITLE ? 2.2f : 0.5f + (float)strlen(sc_text(beat)) / SC_TYPE; }
+static float sc_beat_len(int beat) {
+#ifdef KK_TOUR
+    return 4.0f;   /* the CI photos: every story goes by quickly */
+#endif
+    return beat == SB_TITLE ? 6.0f : sc_typed_t(beat) + (beat == SB_VERSE ? 5.0f : 4.0f); }
+typedef struct { float top[3], hor[3], gnd[3], sun[3], amb[3]; Vec3 focus; int night; } SetLook;
+static const SetLook SET_LOOK[SET_COUNT] = {
+    /* MOUNT */    {{0.22f, 0.45f, 0.85f}, {0.78f, 0.86f, 0.95f}, {0.36f, 0.58f, 0.26f}, {1.0f, 0.95f, 0.85f}, {0.65f, 0.72f, 0.85f}, {-7, 0.8f, 1.5f}, 0},
+    /* REDSEA */   {{0.12f, 0.10f, 0.30f}, {0.95f, 0.55f, 0.38f}, {0.80f, 0.66f, 0.44f}, {1.0f, 0.78f, 0.6f}, {0.55f, 0.5f, 0.7f}, {0, 3.5f, -18}, 0},
+    /* ELAH */     {{0.28f, 0.52f, 0.88f}, {0.86f, 0.86f, 0.80f}, {0.50f, 0.58f, 0.30f}, {1.0f, 0.95f, 0.85f}, {0.65f, 0.7f, 0.8f}, {-4.5f, 0.8f, -8}, 0},
+    /* PALACE */   {{0.10f, 0.04f, 0.14f}, {0.34f, 0.18f, 0.30f}, {0.86f, 0.82f, 0.74f}, {1.0f, 0.85f, 0.65f}, {0.6f, 0.45f, 0.55f}, {0, 2.2f, -10}, 0},
+    /* STORM */    {{0.02f, 0.03f, 0.07f}, {0.12f, 0.15f, 0.22f}, {0.10f, 0.20f, 0.30f}, {0.55f, 0.6f, 0.75f}, {0.3f, 0.35f, 0.5f}, {-4, 1.2f, -7}, 1},
+    /* NAZARETH */ {{0.14f, 0.18f, 0.42f}, {0.95f, 0.70f, 0.52f}, {0.70f, 0.60f, 0.43f}, {1.0f, 0.8f, 0.62f}, {0.55f, 0.55f, 0.72f}, {-3.5f, 1.8f, -5}, 0},
+    /* LIONS */    {{0.04f, 0.035f, 0.03f}, {0.20f, 0.15f, 0.10f}, {0.46f, 0.38f, 0.29f}, {1.0f, 0.9f, 0.7f}, {0.4f, 0.33f, 0.28f}, {3, 0.6f, -4}, 1},
+    /* TEMPLE */   {{0.18f, 0.13f, 0.10f}, {0.62f, 0.46f, 0.30f}, {0.60f, 0.55f, 0.47f}, {1.0f, 0.85f, 0.65f}, {0.55f, 0.45f, 0.4f}, {3.2f, 4, -2}, 0},
+    /* ARARAT */   {{0.34f, 0.54f, 0.85f}, {0.90f, 0.90f, 0.86f}, {0.35f, 0.55f, 0.30f}, {1.0f, 0.97f, 0.9f}, {0.65f, 0.72f, 0.85f}, {6, 4, -16}, 0},
+    /* EGYPT */    {{0.32f, 0.58f, 0.90f}, {0.98f, 0.88f, 0.66f}, {0.88f, 0.72f, 0.46f}, {1.0f, 0.92f, 0.75f}, {0.7f, 0.68f, 0.7f}, {-8, 4, -30}, 0},
+    /* SHORE */    {{0.30f, 0.55f, 0.86f}, {0.86f, 0.90f, 0.95f}, {0.86f, 0.78f, 0.58f}, {1.0f, 0.95f, 0.85f}, {0.65f, 0.72f, 0.85f}, {6, 1.5f, -15}, 0},
+    /* JORDAN */   {{0.30f, 0.55f, 0.90f}, {0.90f, 0.90f, 0.80f}, {0.52f, 0.55f, 0.34f}, {1.0f, 0.95f, 0.85f}, {0.65f, 0.72f, 0.85f}, {-3, 1.5f, -4}, 0},
+    /* HEAVEN */   {{0.50f, 0.62f, 0.95f}, {1.00f, 0.95f, 0.85f}, {0.95f, 0.93f, 0.90f}, {1.0f, 0.95f, 0.8f}, {0.85f, 0.85f, 0.9f}, {0, 8, -30}, 0},
+};
+/* where the guest stands (Jesus on the water, Gabriel over Nazareth, Mary...) and which way they face */
+static Vec3 sc_guest_pos(int set) { return set == SET_STORM ? v3(-4, 0, -7) : set == SET_JORDAN ? v3(-3.2f, 0, -4.5f) : v3(-3.5f, 0, -5); }
+static float sc_wave(float x, float z, float t, float amp) { return amp * (sinf(x * 0.55f + t * 1.3f) + 0.7f * sinf(z * 0.43f - t * 1.05f) + 0.3f * sinf((x + z) * 1.1f + t * 2.1f)); }
+static float sc_flash(void) { float ph = fmodf(g_time, 6.3f); return ph < 0.1f ? 1.0f : (ph > 0.2f && ph < 0.32f) ? 0.6f : 0.0f; }   /* lightning in the storm */
+static float sc_kart_h(void) { const Kart3D *k = &g_k3d[g_sc_char]; return k->ok ? clampf(k->hi.y, 0.8f, 3.0f) : 1.6f; }
+static float sc_smooth(float u) { u = clampf(u, 0, 1); return u * u * (3 - 2 * u); }
+static Vec3 sc_lerp(Vec3 a, Vec3 b, float u) { return v3(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u, a.z + (b.z - a.z) * u); }
+static void sc_shot(int beat, float u, Vec3 *eye, Vec3 *at) {   /* where the camera wants to be in each beat (u: 0..1 through it) */
+    float hy = sc_kart_h(); Vec3 F = SET_LOOK[CUP_STORIES[g_sc_char].set].focus;
+    switch (beat) {
+    case SB_TITLE: { float e = sc_smooth(u * 1.4f); *eye = sc_lerp(v3(0, 10, 30), v3(3.5f, 2.6f, 11), e); *at = v3(0, hy * 0.6f, 0); } break;
+    case SB_STORY1: { float a = 0.55f + 0.3f * u; *eye = v3(sinf(a) * 8.5f, 2.0f + 0.5f * u, cosf(a) * 8.5f); *at = v3(0, hy * 0.7f, 0); } break;
+    case SB_STORY2: { Vec3 d = v3_norm(v3(F.x, 0, F.z)), side = v3(-d.z, 0, d.x); if (side.x < 0) side = v3(-side.x, 0, -side.z);   /* over the kart's shoulder toward the guest or the prop */
+        float back = 7.5f - 1.5f * u; *eye = v3(-d.x * back + side.x * 3.0f, 2.6f + F.y * 0.25f, -d.z * back + side.z * 3.0f); *at = sc_lerp(v3(0, hy * 0.7f, 0), F, 0.6f); } break;
+    case SB_VERSE: *eye = v3(0.8f - 1.6f * u, 0.8f, 5.0f - 0.6f * u); *at = v3(0, hy + 0.3f, 0); break;   /* low, in front, looking up at them */
+    default: { float e = sc_smooth(u); *eye = sc_lerp(v3(0, 2.4f, 8), v3(0, 7.5f, 19), e); *at = v3(0, hy * 0.8f + 1.5f * e, 0); } break; } }
+static void scene_start(int ch) {
+    g_sc_char = ch >= 0 && ch < NCHARS ? ch : 0; g_sc_beat = SB_TITLE; g_sc_bt = 0; g_sc_out = 0; g_sc_roll = 0; g_screen = SCR_SCENE; g_screen_t = 0;
+    g_sc_eye = g_sc_eye0 = v3(0, 10, 30); g_sc_at = g_sc_at0 = v3(0, 1, 0);
+    if (CUP_STORIES[g_sc_char].set == SET_ELAH && !g_gol3d.ok) anim3d_load(&g_gol3d, "goliath");   /* the giant, fallen on his face */
+    gfx_log("cup story: %s (%s)", CHARACTERS[g_sc_char].name, CUP_STORIES[g_sc_char].title); }
+static void sc_next(void) {
+    g_sc_eye0 = g_sc_eye; g_sc_at0 = g_sc_at; g_sc_beat++; g_sc_bt = 0; int set = CUP_STORIES[g_sc_char].set;
+    if (g_sc_beat == SB_STORY2) { if (set == SET_JORDAN) sfx_play(SFX_DOVE, 0.8f, 0); else if (set == SET_SHORE) sfx_play(SFX_WHALE_ROAR, 0.6f, 0.3f); else if (set == SET_STORM || set == SET_REDSEA) sfx_play(SFX_SPLASH, 0.7f, 0); else if (set == SET_HEAVEN) sfx_play(SFX_SHOFAR, 0.6f, 0); }
+    if (g_sc_beat == SB_VERSE) sfx_play(SFX_UNLOCK, 0.55f, 0);
+    if (g_sc_beat == SB_LESSON) { int hv = g_voice[g_sc_char][VO_WIN]; if (hv >= 0) sfx_voice_play(hv, 1.0f, 0); } }
+static void scene_leave(void) {
+#ifdef KK_TOUR
+    scene_start((g_sc_char + 1) % NCHARS); return;   /* the CI photos: on to the next story */
+#endif
+    g_multi = 0; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
+static void scene_update(float dt, int pa) {
+    if (g_sc_out > 0) { g_sc_out += dt; if (g_sc_out > 0.7f) scene_leave(); return; }
+    g_sc_bt += dt; int last = g_sc_beat == SB_COUNT - 1;
+    if (g_sc_beat == SB_TITLE) { float u = clampf(g_sc_bt / 3.2f, 0, 1), z = -16.0f * (1 - u) * (1 - u); static float lastz; if (g_sc_bt < dt * 1.5f) lastz = -16; g_sc_roll += z - lastz; lastz = z; }
+    if (pa && g_screen_t > 0.6f) { sfx_play(SFX_MENU_OK, 0.5f, 0);
+        if (g_sc_beat != SB_TITLE && g_sc_bt < sc_typed_t(g_sc_beat)) g_sc_bt = sc_typed_t(g_sc_beat);   /* finish the line */
+        else if (last) g_sc_out = 0.001f; else sc_next(); }
+#ifdef KK_TOUR
+    else if (g_sc_bt > sc_beat_len(g_sc_beat)) { if (last) g_sc_out = 0.001f; else sc_next(); }
+#else
+    else if (!last && g_sc_bt > sc_beat_len(g_sc_beat)) sc_next();
+#endif
+    Vec3 e, a; sc_shot(g_sc_beat, clampf(g_sc_bt / sc_beat_len(g_sc_beat), 0, 1), &e, &a);
+    float bl = g_sc_beat == SB_TITLE ? 1.0f : sc_smooth(g_sc_bt / 1.5f); g_sc_eye = sc_lerp(g_sc_eye0, e, bl); g_sc_at = sc_lerp(g_sc_at0, a, bl); }
+
+/* ---- the little sets: boxes, domes and pillars ---- */
+static void sc_tri(Batch *b, Vec3 p0, Vec3 p1, Vec3 p2, float r, float g, float bl) { batch_quad4(b, p0, p1, p2, p2, face_normal(p0, p1, p2), 0, 0, 1, 1, r, g, bl, 1); }
+static void sc_disc(Batch *b, float y, float R, float r, float g, float bl) {   /* the ground: rings out to the fog */
+    float rr[4] = {0, 12, 40, R};
+    for (int k = 0; k < 3; k++) for (int q = 0; q < 40; q++) { float a0 = q * 0.15708f, a1 = a0 + 0.15708f, sh = 0.94f + 0.06f * ((q + k) & 1);
+        batch_quad4(b, v3(cosf(a0) * rr[k], y, sinf(a0) * rr[k]), v3(cosf(a0) * rr[k + 1], y, sinf(a0) * rr[k + 1]), v3(cosf(a1) * rr[k + 1], y, sinf(a1) * rr[k + 1]), v3(cosf(a1) * rr[k], y, sinf(a1) * rr[k]), v3(0, 1, 0), 0, 0, 1, 1, r * sh, g * sh, bl * sh, 1); } }
+static void sc_dome(Batch *b, float x, float z, float rad, float h, float r, float g, float bl) {   /* a hill */
+    for (int i = 0; i < 6; i++) for (int j = 0; j < 16; j++) { float t0 = i * 0.2618f, t1 = t0 + 0.2618f, p0 = j * 0.3927f, p1 = p0 + 0.3927f;
+        Vec3 q[4] = {v3(sinf(t0) * cosf(p0), cosf(t0), sinf(t0) * sinf(p0)), v3(sinf(t1) * cosf(p0), cosf(t1), sinf(t1) * sinf(p0)), v3(sinf(t1) * cosf(p1), cosf(t1), sinf(t1) * sinf(p1)), v3(sinf(t0) * cosf(p1), cosf(t0), sinf(t0) * sinf(p1))};
+        Vec3 n = v3_norm(v3(q[0].x + q[2].x, (q[0].y + q[2].y) * rad / h, q[0].z + q[2].z)); float sh = 0.9f + 0.1f * noise2(i + (int)x, j + (int)z);
+        batch_quad4(b, v3(x + q[0].x * rad, q[0].y * h, z + q[0].z * rad), v3(x + q[3].x * rad, q[3].y * h, z + q[3].z * rad), v3(x + q[2].x * rad, q[2].y * h, z + q[2].z * rad), v3(x + q[1].x * rad, q[1].y * h, z + q[1].z * rad), n, 0, 0, 1, 1, r * sh, g * sh, bl * sh, 1); } }
+static void sc_cyl(Batch *b, float x, float y0, float z, float rad, float h, float r, float g, float bl) {   /* a pillar, fluted */
+    for (int j = 0; j < 12; j++) { float a0 = j * 0.5236f, a1 = a0 + 0.5236f, am = a0 + 0.2618f, sh = (j & 1) ? 1.0f : 0.9f;
+        batch_quad4(b, v3(x + cosf(a0) * rad, y0, z + sinf(a0) * rad), v3(x + cosf(a1) * rad, y0, z + sinf(a1) * rad), v3(x + cosf(a1) * rad, y0 + h, z + sinf(a1) * rad), v3(x + cosf(a0) * rad, y0 + h, z + sinf(a0) * rad), v3(cosf(am), 0, sinf(am)), 0, 0, 1, 1, r * sh, g * sh, bl * sh, 1);
+        sc_tri(b, v3(x, y0 + h, z), v3(x + cosf(a1) * rad, y0 + h, z + sinf(a1) * rad), v3(x + cosf(a0) * rad, y0 + h, z + sinf(a0) * rad), r, g, bl); }
+    batch_box(b, v3(x, y0 + 0.15f, z), v3(rad * 1.3f, 0.15f, rad * 1.3f), r * 0.95f, g * 0.95f, bl * 0.95f); batch_box(b, v3(x, y0 + h - 0.15f, z), v3(rad * 1.3f, 0.15f, rad * 1.3f), r * 0.95f, g * 0.95f, bl * 0.95f); }
+static void sc_pyramid(Batch *b, float x, float z, float hw, float h, float r, float g, float bl) {
+    Vec3 c[4] = {v3(x - hw, 0, z - hw), v3(x + hw, 0, z - hw), v3(x + hw, 0, z + hw), v3(x - hw, 0, z + hw)}, top = v3(x, h, z);
+    for (int i = 0; i < 4; i++) { float sh = i == 2 ? 1.0f : i == 1 ? 0.85f : 0.72f; sc_tri(b, c[(i + 1) & 3], c[i], top, r * sh, g * sh, bl * sh); } }
+static void sc_person(Batch *b, float x, float z, float r, float g, float bl, float seat) {   /* a figure in a robe, sitting (seat 1) or standing (0) */
+    float h = seat > 0.5f ? 0.55f : 0.8f, y = seat > 0.5f ? 0.3f : 0;
+    batch_box(b, v3(x, y + h * 0.5f, z), v3(0.24f, h * 0.5f, 0.18f), r, g, bl);
+    if (seat > 0.5f) batch_box(b, v3(x, 0.15f, z + 0.18f), v3(0.24f, 0.15f, 0.28f), r * 0.85f, g * 0.85f, bl * 0.85f);
+    batch_box(b, v3(x, y + h + 0.16f, z), v3(0.13f, 0.15f, 0.13f), 0.78f, 0.58f, 0.42f);   /* head */
+    batch_box(b, v3(x, y + h + 0.3f, z - 0.02f), v3(0.15f, 0.05f, 0.16f), r * 0.8f + 0.2f, g * 0.8f + 0.2f, bl * 0.8f + 0.2f); }   /* head cloth */
+static void sc_palm(Batch *b, float x, float z, float h) {
+    for (int k = 0; k < 6; k++) batch_box(b, v3(x + k * 0.04f, h * (k + 0.5f) / 6, z), v3(0.13f - k * 0.01f, h / 12, 0.13f - k * 0.01f), 0.5f - k * 0.02f, 0.38f, 0.24f);
+    for (int k = 0; k < 7; k++) { float a = k * 0.8976f, cx = x + 0.24f, cy = h; Vec3 d = v3(cosf(a), 0, sinf(a)), s = v3(-d.z * 0.35f, 0, d.x * 0.35f);
+        batch_quad4(b, v3(cx - s.x, cy, z - s.z), v3(cx + s.x, cy, z + s.z), v3(cx + d.x * 2.0f + s.x * 0.3f, cy - 0.7f, z + d.z * 2.0f + s.z * 0.3f), v3(cx + d.x * 2.0f - s.x * 0.3f, cy - 0.7f, z + d.z * 2.0f - s.z * 0.3f), v3(0, 1, 0), 0, 0, 1, 1, 0.2f, 0.5f + 0.05f * (k & 1), 0.18f, 1); } }
+static void sc_olive(Batch *b, float x, float z) {
+    batch_box(b, v3(x, 0.8f, z), v3(0.14f, 0.8f, 0.14f), 0.42f, 0.32f, 0.22f);
+    for (int k = 0; k < 4; k++) batch_box(b, v3(x + (noise2(k, (int)(x * 3)) - 0.5f) * 1.2f, 1.9f + k * 0.18f, z + (noise2(k, (int)(z * 3)) - 0.5f) * 1.2f), v3(0.75f, 0.45f, 0.75f), 0.36f, 0.48f, 0.3f); }
+static void sc_house(Batch *b, float x, float z, float w, float d, float h) {
+    batch_box(b, v3(x, h / 2, z), v3(w / 2, h / 2, d / 2), 0.86f, 0.78f, 0.62f);
+    batch_box(b, v3(x, h + 0.08f, z), v3(w / 2 + 0.15f, 0.08f, d / 2 + 0.15f), 0.7f, 0.6f, 0.45f);
+    batch_quad(b, v3(x, 0.65f, z + d / 2 + 0.01f), v3(0.35f, 0, 0), v3(0, 0.65f, 0), v3(0, 0, 1), 0, 0, 1, 1, 0.25f, 0.17f, 0.1f, 1);   /* the door */
+    batch_quad(b, v3(x + w * 0.3f, h * 0.65f, z + d / 2 + 0.01f), v3(0.22f, 0, 0), v3(0, 0.22f, 0), v3(0, 0, 1), 0, 0, 1, 1, 1.0f, 0.75f, 0.35f, 1); }   /* a lit window */
+static void sc_lion(Batch *b, float x, float z, float dir) {   /* lying down, mouth shut (Daniel 6:22) */
+    float r = 0.78f, g = 0.6f, bl = 0.32f;
+    batch_box(b, v3(x, 0.45f, z), v3(0.85f, 0.38f, 0.42f), r, g, bl);
+    batch_box(b, v3(x + dir * 1.0f, 0.75f, z), v3(0.42f, 0.5f, 0.55f), 0.55f, 0.36f, 0.18f);   /* mane */
+    batch_box(b, v3(x + dir * 1.3f, 0.7f, z), v3(0.25f, 0.28f, 0.3f), r, g, bl);              /* face */
+    batch_box(b, v3(x + dir * 1.55f, 0.6f, z), v3(0.08f, 0.1f, 0.12f), 0.3f, 0.2f, 0.15f);    /* nose */
+    for (int s = -1; s <= 1; s += 2) { batch_box(b, v3(x + dir * 1.25f, 0.1f, z + s * 0.25f), v3(0.4f, 0.1f, 0.13f), r * 0.95f, g * 0.95f, bl * 0.95f); batch_box(b, v3(x - dir * 0.6f, 0.1f, z + s * 0.3f), v3(0.35f, 0.1f, 0.14f), r * 0.95f, g * 0.95f, bl * 0.95f); }
+    batch_box(b, v3(x - dir * 1.3f, 0.12f, z + 0.3f), v3(0.5f, 0.06f, 0.06f), r, g, bl); batch_box(b, v3(x - dir * 1.8f, 0.14f, z + 0.3f), v3(0.1f, 0.1f, 0.1f), 0.5f, 0.32f, 0.16f); }
+static void sc_sheep(Batch *b, float x, float z) {
+    batch_box(b, v3(x, 0.55f, z), v3(0.42f, 0.28f, 0.28f), 0.95f, 0.94f, 0.9f); batch_box(b, v3(x + 0.5f, 0.68f, z), v3(0.15f, 0.15f, 0.13f), 0.22f, 0.2f, 0.2f);
+    for (int k = 0; k < 4; k++) batch_box(b, v3(x + ((k & 1) ? 0.28f : -0.28f), 0.15f, z + ((k & 2) ? 0.16f : -0.16f)), v3(0.05f, 0.15f, 0.05f), 0.22f, 0.2f, 0.2f); }
+static void sc_ark(Batch *b, float x, float y, float z) {   /* Genesis 6:15-16: long, with a window and a door in the side */
+    for (int k = 0; k < 3; k++) batch_box(b, v3(x, y + 0.5f + k * 0.9f, z), v3(5.5f - (2 - k) * 0.9f, 0.45f, 1.5f - (2 - k) * 0.25f), 0.45f - k * 0.02f, 0.3f, 0.18f);
+    batch_box(b, v3(x, y + 3.4f, z), v3(3.5f, 0.6f, 1.1f), 0.5f, 0.36f, 0.22f); batch_box(b, v3(x, y + 4.15f, z), v3(3.8f, 0.15f, 1.3f), 0.35f, 0.24f, 0.15f);
+    batch_quad(b, v3(x + 1.5f, y + 1.8f, z + 1.51f), v3(0.6f, 0, 0), v3(0, 0.8f, 0), v3(0, 0, 1), 0, 0, 1, 1, 0.18f, 0.12f, 0.08f, 1); }
+static void sc_boat(Batch *b) {   /* the disciples' fishing boat (drawn at its own spot, rocking) */
+    batch_box(b, v3(0, 0.35f, 0), v3(2.2f, 0.35f, 0.8f), 0.45f, 0.3f, 0.18f); batch_box(b, v3(2.4f, 0.55f, 0), v3(0.35f, 0.3f, 0.5f), 0.42f, 0.28f, 0.17f); batch_box(b, v3(-2.4f, 0.55f, 0), v3(0.3f, 0.3f, 0.55f), 0.42f, 0.28f, 0.17f);
+    batch_box(b, v3(0.3f, 2.3f, 0), v3(0.07f, 1.9f, 0.07f), 0.4f, 0.3f, 0.2f);
+    batch_quad4(b, v3(0.35f, 0.9f, 0.02f), v3(1.9f, 0.9f, 0.02f), v3(0.35f, 4.0f, 0.02f), v3(0.35f, 4.0f, 0.02f), v3(0, 0, 1), 0, 0, 1, 1, 0.85f, 0.8f, 0.7f, 1);
+    for (int k = 0; k < 4; k++) sc_person(b, -1.4f + k * 0.85f, (k & 1) ? 0.3f : -0.3f, 0.5f + 0.1f * k, 0.4f, 0.35f + 0.08f * k, 1); }
+static void sc_build_set(Batch *b, int set) {
+    const SetLook *L = &SET_LOOK[set]; const float *G = L->gnd;
+    if (set != SET_STORM && set != SET_HEAVEN) sc_disc(b, 0, 170, G[0], G[1], G[2]); else if (set == SET_STORM) sc_disc(b, -1.5f, 170, 0.04f, 0.08f, 0.12f);
+    switch (set) {
+    case SET_MOUNT:   /* Jesus taught sitting on the mountain; the people sat on the grass round Him */
+        sc_dome(b, 0, -4, 16, 1.2f, G[0], G[1], G[2]); sc_dome(b, -30, -40, 26, 9, 0.32f, 0.5f, 0.26f); sc_dome(b, 25, -50, 30, 12, 0.3f, 0.48f, 0.27f); sc_dome(b, 0, -70, 40, 6, 0.38f, 0.5f, 0.35f);
+        for (int row = 0; row < 3; row++) for (int k = 0; k < 7; k++) { float h1 = noise2(k, row + 5);
+            sc_person(b, -5.0f - row * 1.5f - h1 * 0.4f, -3.5f + k * 1.25f + row * 0.4f, 0.4f + h1 * 0.5f, 0.3f + noise2(k, row + 9) * 0.4f, 0.25f + noise2(k, row + 13) * 0.45f, 1); }
+        sc_olive(b, 6, -5); sc_olive(b, 9, 2); sc_olive(b, -11, -6); sc_olive(b, 4, -12);
+        for (int k = 0; k < 6; k++) batch_box(b, v3(-25 + k * 3.0f, 9.5f + (k & 1) * 0.6f, -45), v3(1.2f, 0.8f + (k & 1) * 0.5f, 1.0f), 0.95f, 0.92f, 0.82f);   /* a city set on an hill (5:14) */
+        break;
+    case SET_REDSEA:
+        for (int k = 0; k < 30; k++) { float h1 = noise2(k, 31), z = -60 + k * 4.0f; batch_box(b, v3(-1.6f - h1 * 2.0f, 0.12f, z), v3(0.25f + h1 * 0.3f, 0.12f, 0.2f + h1 * 0.2f), 0.6f, 0.52f, 0.4f); batch_box(b, v3(2.0f + noise2(k, 32) * 2.0f, 0.1f, z + 1.5f), v3(0.2f, 0.1f, 0.25f), 0.62f, 0.5f, 0.38f); }
+        for (int k = 0; k < 12; k++) sc_person(b, ((k & 1) ? 2.4f : -2.4f) + (noise2(k, 33) - 0.5f) * 0.8f, -3.0f - (k / 2) * 1.5f, 0.6f + 0.05f * k, 0.45f, 0.3f + 0.04f * k, 0);   /* God's people walking through behind */
+        break;
+    case SET_ELAH:   /* the valley between two hills (1 Samuel 17:3), and the brook */
+        sc_dome(b, -40, -20, 30, 10, 0.45f, 0.52f, 0.3f); sc_dome(b, 40, -25, 32, 11, 0.43f, 0.5f, 0.28f);
+        batch_quad4(b, v3(4.5f, 0.03f, -40), v3(6.5f, 0.03f, -40), v3(6.5f, 0.03f, 30), v3(4.5f, 0.03f, 30), v3(0, 1, 0), 0, 0, 1, 1, 0.3f, 0.5f, 0.7f, 1);
+        for (int k = 0; k < 5; k++) batch_box(b, v3(4.2f + k * 0.12f, 0.08f, 2.0f + k * 0.5f), v3(0.13f, 0.08f, 0.11f), 0.75f, 0.73f, 0.7f);   /* five smooth stones */
+        sc_sheep(b, 9, -3); sc_sheep(b, 10.5f, -1); sc_sheep(b, 8, 1.5f); sc_sheep(b, 11, 3);
+        for (int k = 0; k < 6; k++) batch_box(b, v3(-36 + k * 1.2f, 10.4f, -14), v3(0.4f, 0.4f, 0.4f), 0.75f, 0.2f, 0.2f);   /* the Philistines' tents on their hill */
+        break;
+    case SET_PALACE: {
+        for (int i = -6; i < 6; i++) for (int j = -14; j < 6; j++) { int c = (i + j) & 1; batch_quad(b, v3(i * 2.0f + 1, 0.01f, j * 2.0f + 1), v3(1, 0, 0), v3(0, 0, -1), v3(0, 1, 0), 0, 0, 1, 1, c ? 0.92f : 0.52f, c ? 0.88f : 0.36f, c ? 0.8f : 0.5f, 1); }
+        for (int k = 0; k < 5; k++) for (int s = -1; s <= 1; s += 2) sc_cyl(b, s * 6.0f, 0, 6 - k * 5.0f, 0.5f, 9, 0.95f, 0.78f, 0.35f);
+        for (int k = 0; k < 5; k++) for (int s = -1; s <= 1; s += 2) batch_quad(b, v3(s * 8.5f, 5, 6 - k * 5.0f - 2.5f), v3(0, 0, 2.3f), v3(0, 5, 0), v3(-s, 0, 0), 0, 0, 1, 1, 0.45f, 0.12f, 0.5f, 1);   /* purple hangings (Esther 1:6) */
+        batch_box(b, v3(0, 0.3f, -10), v3(3, 0.3f, 2), 0.85f, 0.7f, 0.35f); batch_box(b, v3(0, 0.75f, -10), v3(2.2f, 0.15f, 1.5f), 0.9f, 0.75f, 0.35f);   /* the dais */
+        batch_box(b, v3(0, 1.6f, -10.3f), v3(0.9f, 0.7f, 0.6f), 0.55f, 0.15f, 0.55f); batch_box(b, v3(0, 3.0f, -10.8f), v3(0.95f, 1.5f, 0.15f), 0.95f, 0.78f, 0.3f);   /* the throne */
+        batch_box(b, v3(0, 9.2f, -4), v3(7, 0.2f, 12), 0.25f, 0.12f, 0.2f); } break;
+    case SET_STORM: break;   /* all water: drawn moving */
+    case SET_NAZARETH:
+        sc_house(b, 3.5f, -6, 3.2f, 3, 2.6f); sc_house(b, -7, -8, 3.5f, 3.2f, 2.8f); sc_house(b, 7.5f, -11, 3, 3, 3.2f); sc_house(b, -2, -14, 4, 3, 2.4f); sc_house(b, 11, -4, 2.8f, 2.6f, 2.5f); sc_house(b, -11, -2, 3, 2.6f, 2.4f);
+        sc_palm(b, 6, -2, 5); sc_palm(b, -9, -12, 6); sc_dome(b, 0, -45, 40, 8, 0.6f, 0.55f, 0.4f); break;
+    case SET_LIONS: {   /* a pit of stone, a little sky high above */
+        for (int k = 0; k < 28; k++) { float a = k * 0.2244f; if (sinf(a) > 0.55f) continue;   /* the den's mouth, open toward us */
+            for (int row = 0; row < 4; row++) { float R = 9.0f, sh = 0.75f + 0.25f * noise2(k, row);
+            batch_box(b, v3(cosf(a) * R, 1.0f + row * 2.0f, sinf(a) * R - 2), v3(1.0f, 0.95f, 1.0f), 0.5f * sh, 0.42f * sh, 0.34f * sh); } }
+        sc_lion(b, 3.2f, -4, -1); sc_lion(b, -4, -3.5f, 1); sc_lion(b, 5.5f, 1, -1); sc_lion(b, -2, -7.5f, 1);
+        for (int k = 0; k < 12; k++) batch_box(b, v3((noise2(k, 3) - 0.5f) * 12, 0.06f, (noise2(k, 4) - 0.5f) * 12 - 2), v3(0.2f, 0.06f, 0.15f), 0.55f, 0.5f, 0.42f); } break;
+    case SET_TEMPLE:
+        for (int i = -5; i < 5; i++) for (int j = -10; j < 5; j++) batch_quad(b, v3(i * 3.0f + 1.5f, 0.01f, j * 3.0f + 1.5f), v3(1.45f, 0, 0), v3(0, 0, -1.45f), v3(0, 1, 0), 0, 0, 1, 1, G[0] * (0.9f + 0.1f * ((i + j) & 1)), G[1] * (0.9f + 0.1f * ((i + j) & 1)), G[2], 1);
+        sc_cyl(b, -3.2f, 0, -2, 1.0f, 12, 0.75f, 0.68f, 0.55f); sc_cyl(b, 3.2f, 0, -2, 1.0f, 12, 0.75f, 0.68f, 0.55f);   /* the two middle pillars (Judges 16:29) */
+        for (int k = 0; k < 4; k++) for (int s = -1; s <= 1; s += 2) sc_cyl(b, s * 9.0f, 0, -2 - k * 7.0f, 0.8f, 11, 0.68f, 0.6f, 0.5f);
+        batch_box(b, v3(0, 12.6f, -10), v3(12, 0.6f, 16), 0.5f, 0.42f, 0.34f); break;
+    case SET_ARARAT:
+        sc_dome(b, 8, -22, 18, 4, 0.4f, 0.5f, 0.32f); sc_ark(b, 6, 3.2f, -18); sc_dome(b, -30, -60, 35, 22, 0.5f, 0.52f, 0.5f); sc_dome(b, 35, -70, 40, 28, 0.55f, 0.56f, 0.55f);
+        for (int k = 0; k < 6; k++) batch_quad(b, v3((noise2(k, 21) - 0.5f) * 16, 0.02f, (noise2(k, 22) - 0.5f) * 10), v3(0.9f + noise2(k, 23), 0, 0), v3(0, 0, 0.6f), v3(0, 1, 0), 0, 0, 1, 1, 0.55f, 0.7f, 0.85f, 1);   /* puddles */
+        sc_sheep(b, -5, -3); sc_sheep(b, -6.5f, -1.2f); break;
+    case SET_EGYPT:
+        sc_pyramid(b, -14, -40, 12, 15, 0.9f, 0.76f, 0.5f); sc_pyramid(b, 12, -55, 15, 19, 0.88f, 0.74f, 0.48f); sc_pyramid(b, 30, -38, 7, 9, 0.9f, 0.78f, 0.52f);
+        batch_quad4(b, v3(-80, 0.03f, -18), v3(80, 0.03f, -18), v3(80, 0.03f, -24), v3(-80, 0.03f, -24), v3(0, 1, 0), 0, 0, 1, 1, 0.25f, 0.5f, 0.65f, 1);   /* the Nile */
+        for (int k = 0; k < 9; k++) batch_box(b, v3(-4.5f + (k % 3) * 0.8f, 0.35f + (k / 3 == 2) * 0.6f, -4 + (k / 3) * 0.6f * ((k / 3) != 2)), v3(0.35f, 0.35f, 0.3f), 0.85f, 0.75f, 0.52f);   /* sacks of grain (Genesis 42:25) */
+        sc_palm(b, -9, -12, 6); sc_palm(b, 8, -14, 7); sc_palm(b, 13, -10, 5.5f); break;
+    case SET_SHORE:
+        for (int k = 0; k < 9; k++) batch_box(b, v3(-40 + k * 3.5f, 1.5f + (k & 1), -60), v3(1.5f, 1.5f + (k & 1), 1.5f), 0.8f, 0.7f, 0.55f);   /* Nineveh, far off */
+        sc_palm(b, -7, 2, 6); sc_palm(b, 9, 4, 5); break;
+    case SET_JORDAN:
+        for (int k = 0; k < 40; k++) { float x = -30 + k * 1.5f + noise2(k, 51); batch_box(b, v3(x, 0.6f, -6.2f - noise2(k, 52) * 0.6f), v3(0.04f, 0.6f + noise2(k, 53) * 0.4f, 0.04f), 0.4f, 0.55f, 0.25f); batch_box(b, v3(x + 0.6f, 0.5f, -12.3f + noise2(k, 54) * 0.6f), v3(0.04f, 0.5f, 0.04f), 0.4f, 0.55f, 0.25f); }
+        sc_dome(b, -35, -40, 30, 8, 0.6f, 0.55f, 0.38f); sc_dome(b, 30, -45, 32, 10, 0.62f, 0.56f, 0.4f);
+        for (int k = 0; k < 6; k++) sc_person(b, 3 + (k % 3) * 1.1f, -1 + (k / 3) * 1.3f, 0.55f + 0.05f * k, 0.45f, 0.35f, 0); break;
+    case SET_HEAVEN:
+        for (int k = 0; k < 12; k++) { float a = k * 0.5236f; sc_cyl(b, cosf(a) * 22, -1, sinf(a) * 22 - 12, 1.1f, 16, 1.0f, 0.88f, 0.55f); }   /* pillars of gold */
+        sc_cyl(b, 0, -1, -30, 4, 1.0f, 1.0f, 0.9f, 0.6f); break;
+    } }
+
+static Vertex g_scv[3][12000];   /* the moving parts: solid, see-through, glowing */
+static void draw_story_scene(int drc) {
+    const CupStory *S = &CUP_STORIES[g_sc_char]; int set = S->set; const SetLook *L = &SET_LOOK[set]; Mat4 id = m4_identity(); float t = g_time, fl = set == SET_STORM ? sc_flash() : 0;
+    static Mesh *m_sky[2], *m_set[SET_COUNT], *m_boat, *m_dyn[2][3];
+    if (!m_sky[drc]) { m_sky[drc] = gfx_mesh_dynamic(12 + 6 * 120); for (int k = 0; k < 3; k++) m_dyn[drc][k] = gfx_mesh_dynamic(12000); }
+    Batch sb; static Vertex skv[12 + 6 * 120]; batch_init(&sb, skv, 12 + 6 * 120);
+    { /* the sky behind it all: top colour to the horizon, stars at night */
+      const float *T = L->top, *H = L->hor; float f = fl * 0.6f, hy = 380;
+      Vertex q[12] = {{0, 0, 0, 0, 0, 1, 0, 0, T[0] + f, T[1] + f, T[2] + f, 1}, {1280, 0, 0, 0, 0, 1, 0, 0, T[0] + f, T[1] + f, T[2] + f, 1}, {1280, hy, 0, 0, 0, 1, 0, 0, H[0] + f, H[1] + f, H[2] + f, 1},
+                      {0, 0, 0, 0, 0, 1, 0, 0, T[0] + f, T[1] + f, T[2] + f, 1}, {1280, hy, 0, 0, 0, 1, 0, 0, H[0] + f, H[1] + f, H[2] + f, 1}, {0, hy, 0, 0, 0, 1, 0, 0, H[0] + f, H[1] + f, H[2] + f, 1},
+                      {0, hy, 0, 0, 0, 1, 0, 0, H[0], H[1], H[2], 1}, {1280, hy, 0, 0, 0, 1, 0, 0, H[0], H[1], H[2], 1}, {1280, 720, 0, 0, 0, 1, 0, 0, H[0] * 0.8f, H[1] * 0.8f, H[2] * 0.8f, 1},
+                      {0, hy, 0, 0, 0, 1, 0, 0, H[0], H[1], H[2], 1}, {1280, 720, 0, 0, 0, 1, 0, 0, H[0] * 0.8f, H[1] * 0.8f, H[2] * 0.8f, 1}, {0, 720, 0, 0, 0, 1, 0, 0, H[0] * 0.8f, H[1] * 0.8f, H[2] * 0.8f, 1}};
+      for (int i = 0; i < 12; i++) sb.v[sb.n++] = q[i];
+      if (set == SET_NAZARETH || (L->night && set != SET_STORM)) for (int k = 0; k < 110; k++) { float x = noise2(k, 91) * 1280, y = noise2(k, 92) * 300, s = 1.2f + noise2(k, 93) * 2.2f, tw = 0.5f + 0.5f * sinf(t * (1.5f + noise2(k, 94) * 2) + k);
+          batch_quad(&sb, v3(x, y, 0), v3(s, 0, 0), v3(0, s, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 0.9f, tw * (set == SET_NAZARETH ? clampf(1 - y / 260, 0, 1) : 1)); }
+      gfx_mesh_update(m_sky[drc], sb.v, sb.n); gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(NULL); gfx_draw_ex(m_sky[drc], &id, 1, 1, 1, 1, 0, 1, 0, 0); }
+    gfx_clear_depth(drc);
+    float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f; Vec3 eye = g_sc_eye, at = g_sc_at;
+    Mat4 vp = m4_mul(m4_perspective(0.8f, aspect, 0.3f, 400.0f), m4_look_at(eye, at, v3(0, 1, 0)));
+    float fb = 1 + fl * 1.5f;
+    gfx_light(v3(L->sun[0] * fb, L->sun[1] * fb, L->sun[2] * fb), v3(L->amb[0] * fb, L->amb[1] * fb, L->amb[2] * fb), v3(L->gnd[0] * 0.5f, L->gnd[1] * 0.5f, L->gnd[2] * 0.5f), eye);
+    gfx_camera(&vp, v3_norm(v3(0.4f, 0.85f, 0.5f)), L->night ? 0.42f : 0.55f, L->hor[0], L->hor[1], L->hor[2], set == SET_PALACE || set == SET_LIONS || set == SET_TEMPLE ? 30.0f : 45.0f, set == SET_PALACE || set == SET_LIONS ? 90.0f : 170.0f);
+    Vec3 R = v3_norm(v3_cross(v3(0, 1, 0), v3_norm(v3_sub(eye, at)))); R = v3_norm(v3(R.x, 0, R.z));
+    if (!m_set[set]) { Batch tb; batch_init(&tb, g_vtmp, 32768); sc_build_set(&tb, set); m_set[set] = gfx_mesh_static(tb.v, tb.n); }
+    if (!m_boat) { Batch tb; batch_init(&tb, g_vtmp, 32768); sc_boat(&tb); m_boat = gfx_mesh_static(tb.v, tb.n); }
+    gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); gfx_draw_ex(m_set[set], &id, 1, 1, 1, 1, 0.25f, 0, 0, 0);
+    /* the moving solid parts: water, the boat */
+    Batch db; batch_init(&db, g_scv[0], 12000);
+    if (set == SET_STORM || set == SET_SHORE || set == SET_JORDAN) {
+        float x0 = -60, x1 = 60, z0 = -90, z1 = 20, amp = set == SET_STORM ? 0.35f : set == SET_SHORE ? 0.1f : 0.05f; if (set == SET_SHORE) z1 = -4; if (set == SET_JORDAN) { z0 = -12.2f; z1 = -6.2f; }
+        int nx = 36, nz = set == SET_JORDAN ? 4 : 30; float wr = set == SET_STORM ? 0.08f : 0.22f, wg = set == SET_STORM ? 0.17f : 0.48f, wb = set == SET_STORM ? 0.26f : 0.68f;
+        for (int i = 0; i < nx; i++) for (int j = 0; j < nz; j++) {
+            float ax = x0 + (x1 - x0) * i / nx, bx = x0 + (x1 - x0) * (i + 1) / nx, az = z0 + (z1 - z0) * j / nz, bz = z0 + (z1 - z0) * (j + 1) / nz, y0 = set == SET_JORDAN ? 0.15f : set == SET_SHORE ? 0.25f : 0;
+            Vec3 p[4] = {v3(ax, y0 + sc_wave(ax, az, t, amp), az), v3(ax, y0 + sc_wave(ax, bz, t, amp), bz), v3(bx, y0 + sc_wave(bx, bz, t, amp), bz), v3(bx, y0 + sc_wave(bx, az, t, amp), az)};
+            Vec3 n = face_normal(p[0], p[1], p[2]); if (n.y < 0) n = v3(-n.x, -n.y, -n.z); float c = 0.85f + 0.3f * (p[2].y - y0) / (amp * 2 + 0.01f);
+            batch_quad4(&db, p[0], p[1], p[2], p[3], n, 0, 0, 1, 1, wr * c, wg * c, wb * c, 1); } }
+    if (db.n) { gfx_mesh_update(m_dyn[drc][0], db.v, db.n); gfx_draw_ex(m_dyn[drc][0], &id, 1, 1, 1, 1, 1.4f, 0, 0, 0); }
+    if (set == SET_STORM) { Mat4 bm = m4_mul(m4_translate(5.5f, -0.25f + sc_wave(5.5f, -10, t, 0.35f), -10), m4_mul(m4_rotate_y(0.5f), m4_rotate_z(0.12f * sinf(t * 1.3f)))); gfx_draw_ex(m_boat, &bm, 1, 1, 1, 1, 0.2f, 0, 0, 0); }
+    if (set == SET_ELAH && g_gol3d.ok && anim3d_clip(&g_gol3d, "fall") >= 0) { Mat4 gm = m4_mul(m4_translate(-4.5f, 0, -9), m4_rotate_y(1.9f)); anim3d_draw(&g_gol3d, anim3d_clip(&g_gol3d, "fall"), 99.0f, &gm, 1, 1, 1, 1); gfx_bind(NULL); }
+    if (set == SET_SHORE && m_whale) {   /* the great fish, at the edge of the sea, mouth open: it has just let Jonah go (Jonah 2:10) */
+        float jaw = 0.35f + 0.1f * sinf(t * 0.8f); Mat4 m = m4_mul(m4_translate(6, -1.2f + 0.15f * sinf(t * 0.7f), -14), m4_mul(m4_rotate_y(-2.3f), m4_scale(0.9f, 0.9f, 0.9f)));
+        gfx_bind(NULL); gfx_draw_ex(m_whale, &m, 1, 1, 1, 1, 0.8f, 0, 0, 0); Mat4 mj = m4_mul(m, m4_mul(m4_translate(0, -0.55f, -0.4f), m4_rotate_x(jaw))); gfx_draw_ex(m_whale_jaw, &mj, 1, 1, 1, 1, 0.6f, 0, 0, 0); }
+    if (set == SET_ELAH && m_pebble) for (int k = 0; k < 5; k++) { Mat4 pm = m4_mul(m4_translate(4.2f + k * 0.12f, 0.1f, 2.0f + k * 0.5f), m4_scale(0.4f, 0.4f, 0.4f)); gfx_draw_ex(m_pebble, &pm, 0.85f, 0.83f, 0.8f, 1, 0.9f, 0, 0, 0); }
+    /* the winner's kart: it drives in, stops, and the driver acts out the story */
+    float hy = sc_kart_h(), bt = g_sc_bt, ky = 0, kz = 0;
+    if (g_sc_beat == SB_TITLE) { float u = clampf(bt / 3.2f, 0, 1); kz = -16.0f * (1 - u) * (1 - u); }
+    if (set == SET_STORM) ky = sc_wave(0, kz, t, 0.35f) - 0.15f; else if (set == SET_HEAVEN) ky = 0.25f + 0.12f * sinf(t * 1.4f);
+    K3Pose P; memset(&P, 0, sizeof P); P.t = t; Vec3 F = L->focus;
+    float fyaw = clampf(atan2f(F.x, F.z), -1.4f, 1.4f), ramp = clampf(bt / 0.8f, 0, 1);
+    switch (g_sc_beat) {
+    case SB_TITLE: P.look_yaw = bt > 3.2f ? 0.6f * sinf((bt - 3.2f) * 0.9f) : 0; P.bob = 0.02f * sinf(t * 7); break;
+    case SB_STORY1: P.look_yaw = 0.35f * sinf(t * 0.6f); P.look_pitch = 0.08f * sinf(t * 1.7f); P.twist = 0.1f * sinf(t * 0.6f); P.lean = 0.04f * sinf(t * 0.8f); break;
+    case SB_STORY2: P.look_yaw = fyaw * ramp; P.twist = fyaw * 0.25f * ramp; P.look_pitch = clampf(atan2f(F.y - hy, sqrtf(F.x * F.x + F.z * F.z)), -0.3f, 0.5f) * ramp;
+        P.arm[F.x > 0 ? 0 : 1] = K3A_POINT; P.arm_w[F.x > 0 ? 0 : 1] = clampf((bt - 0.8f) / 0.6f, 0, 1) * (bt < 4.5f ? 1 : clampf(5.2f - bt, 0, 1)); break;
+    case SB_VERSE: P.look_pitch = 0.42f * ramp; P.bow = -0.08f * ramp; P.arm[0] = P.arm[1] = K3A_UP; P.arm_w[0] = P.arm_w[1] = clampf((bt - 0.4f) / 0.9f, 0, 1); P.bob = 0.015f * sinf(t * 2.0f); break;
+    default: { float ang = atan2f(eye.x, eye.z); P.look_yaw = clampf(ang, -1.2f, 1.2f); P.look_pitch = 0.1f; P.arm[1] = K3A_WAVE; P.arm_w[1] = ramp; P.bob = 0.03f * fabsf(sinf(t * 3.0f)); } break; }
+    Mat4 km = m4_translate(0, ky, kz);
+    if (set == SET_STORM) km = m4_mul(km, m4_rotate_z(0.05f * sinf(t * 1.1f)));
+    if (g_k3d[g_sc_char].ok) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(&g_k3d[g_sc_char], &km, g_sc_roll / 0.33f, 0, &P, 1, 1, 1, 1); }
+    else if (tx_char[g_sc_char]) { static Mesh *m_spr[2]; if (!m_spr[drc]) m_spr[drc] = gfx_mesh_dynamic(6); Vertex cv[6]; Batch cb; batch_init(&cb, cv, 6); float hh = 2.0f, ww = hh * g_char_aspect[g_sc_char];
+        batch_quad(&cb, v3(0, ky + hh / 2, kz), v3(R.x * ww / 2, 0, R.z * ww / 2), v3(0, hh / 2, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 1); gfx_mesh_update(m_spr[drc], cb.v, cb.n);
+        gfx_state(ST_TRANSPARENT | ST_DEPTH_WRITE); gfx_bind(tx_char[g_sc_char]); gfx_draw_ex(m_spr[drc], &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); }
+    /* the guest: Jesus on the water, Jesus coming to the Jordan, Gabriel over Nazareth, Mary looking up */
+    Vec3 gp = sc_guest_pos(set); int gu = S->guest;
+    if (gu >= 0 && gu < NCHARS && gu != g_sc_char && g_k3d[gu].ok) {
+        float gy = set == SET_STORM ? sc_wave(gp.x, gp.z, t, 0.35f) - 0.1f : (gu == 13 ? 1.6f + 0.15f * sinf(t * 1.6f) : 0), gz = gp.z;
+        if (set == SET_JORDAN && g_sc_beat < SB_STORY2) gz = gp.z - 5.0f + 5.0f * clampf((g_sc_beat == SB_STORY1 ? bt : 0) / 6.0f, 0, 1);   /* John 1:29: seeth Jesus coming unto him */
+        float yaw = atan2f(-gp.x, -gz); Mat4 gm = m4_mul(m4_translate(gp.x, gy, gz), m4_rotate_y(yaw));
+        K3Pose Q; memset(&Q, 0, sizeof Q); Q.t = t; Q.look_pitch = gu == 5 ? 0.3f : 0.05f;
+        if (g_sc_beat >= SB_STORY2) { Q.arm[gu == 0 ? 0 : 1] = gu == 0 ? K3A_POINT : K3A_UP; Q.arm_w[gu == 0 ? 0 : 1] = clampf(bt / 1.0f, 0, 1); if (g_sc_beat > SB_STORY2) Q.arm_w[gu == 0 ? 0 : 1] = 1; }
+        float gl = gu == 13 ? 1.25f : 1.0f; gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(&g_k3d[gu], &gm, 0, 0, &Q, gl, gl, gl, 1); }
+    /* see-through: the walls of water standing up on either side (Exodus 14:22), soft shadows */
+    batch_init(&db, g_scv[1], 12000);
+    { float sy = set == SET_STORM ? -0.3f : set == SET_HEAVEN ? -0.2f : 0.03f; batch_quad(&db, v3(0, ky + sy + (set == SET_STORM ? 0.2f : 0), kz), v3(1.6f, 0, 0), v3(0, 0, -2.0f), v3(0, 1, 0), 0, 0, 1, 1, 0, 0, 0, set == SET_STORM ? 0 : 0.45f); }
+    if (set == SET_REDSEA) for (int s = -1; s <= 1; s += 2) for (int k = 0; k < 40; k++) {
+        float z0 = -80 + k * 2.75f, z1 = z0 + 2.75f, x = s * 6.0f, h0 = 9 + 0.4f * sinf(z0 * 0.4f + t * 1.6f), h1 = 9 + 0.4f * sinf(z1 * 0.4f + t * 1.6f);
+        batch_quad4(&db, v3(x, 0, s < 0 ? z1 : z0), v3(x, 0, s < 0 ? z0 : z1), v3(x, s < 0 ? h0 : h1, s < 0 ? z0 : z1), v3(x, s < 0 ? h1 : h0, s < 0 ? z1 : z0), v3(-s, 0, 0), 0.5f, 0.5f, 0.5f, 0.5f, 0.15f, 0.42f, 0.7f, 0.78f);
+        batch_quad4(&db, v3(x, h0, z0), v3(x, h1, z1), v3(x + s * 30, h1 + 0.3f, z1), v3(x + s * 30, h0 + 0.3f, z0), v3(0, 1, 0), 0.5f, 0.5f, 0.5f, 0.5f, 0.12f, 0.35f, 0.6f, 0.9f); }
+    if (db.n) { gfx_mesh_update(m_dyn[drc][1], db.v, db.n); gfx_state(ST_TRANSPARENT); gfx_bind(tx_blob); gfx_draw_ex(m_dyn[drc][1], &id, 1, 1, 1, 1, 1.2f, set != SET_REDSEA, 0, 0); gfx_bind(NULL); }
+    /* light: rays from above, motes, the pillar of fire, the rainbow, rain, the dove, the angel's glow */
+    batch_init(&db, g_scv[2], 12000);
+    int rays = set == SET_MOUNT || set == SET_NAZARETH || set == SET_LIONS || set == SET_TEMPLE || set == SET_ARARAT || set == SET_HEAVEN || set == SET_JORDAN;
+    float rayv = g_sc_beat == SB_VERSE ? 1.6f : 1.0f;
+    if (rays) for (int k = 0; k < 7; k++) { float h1 = noise2(k, 71), x = (h1 - 0.5f) * (set == SET_LIONS ? 3 : 14), z = -2 - noise2(k, 72) * 6, a = 0.09f * rayv * (0.6f + 0.4f * sinf(t * (0.5f + h1) + k));
+        Vec3 top = v3(x + 4, 18, z - 3), bot = v3(x, 0, z + (set == SET_LIONS ? -1 : 0)), mid = v3((top.x + bot.x) / 2, (top.y + bot.y) / 2, (top.z + bot.z) / 2), ax = v3(R.x * (1.2f + h1), 0, R.z * (1.2f + h1)), ay = v3((top.x - bot.x) / 2, (top.y - bot.y) / 2, (top.z - bot.z) / 2);
+        batch_quad(&db, mid, ax, ay, v3(0, 0, 1), 0, 0, 1, 1, 1, 0.92f, 0.7f, a); }
+    if (g_sc_beat == SB_VERSE) { float a = clampf(bt / 1.2f, 0, 1); batch_quad(&db, v3(0, 9 + hy, 0), v3(R.x * 1.8f, 0, R.z * 1.8f), v3(0.0f, 9, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.9f, 0.6f, 0.35f * a); }   /* light on them while the verse is read */
+    for (int k = 0; k < 44; k++) { float h1 = noise2(k, 81), ph = fmodf(t * (0.12f + h1 * 0.1f) + h1, 1.0f), a = h1 * 6.283f + t * 0.2f, rr = 2.5f + noise2(k, 82) * 6, s = 0.05f + noise2(k, 83) * 0.06f;
+        batch_quad(&db, v3(cosf(a) * rr, ph * 7, sinf(a) * rr - 1), v3(R.x * s, 0, R.z * s), v3(0, s, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.9f, 0.6f, sinf(ph * 3.14159f) * (L->night ? 0.9f : 0.6f)); }
+    if (set == SET_REDSEA) for (int k = 0; k < 40; k++) { float h1 = noise2(k, 41), y = fmodf(t * (2 + h1 * 2) + h1 * 12, 12), s = 1.6f - y * 0.08f + 0.3f * sinf(t * 9 + k);   /* the pillar of fire behind them (Exodus 14:19-20) */
+        batch_quad(&db, v3((h1 - 0.5f) * 1.6f, y, -18 + (noise2(k, 42) - 0.5f)), v3(R.x * s, 0, R.z * s), v3(0, s * 1.3f, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.55f + 0.3f * h1, 0.15f, 0.55f * (1 - y / 12)); }
+    if (set == SET_ARARAT) for (int band = 0; band < 7; band++) {   /* the bow in the cloud (Genesis 9:13) */
+        static const float rc[7][3] = {{1, 0.2f, 0.2f}, {1, 0.55f, 0.15f}, {1, 0.95f, 0.2f}, {0.25f, 0.9f, 0.3f}, {0.25f, 0.5f, 1}, {0.35f, 0.25f, 0.85f}, {0.6f, 0.3f, 0.85f}};
+        float r0 = 46 - band * 1.6f, r1 = r0 - 1.6f, a = 0.3f * clampf(g_sc_beat >= SB_STORY2 ? 1 : (g_sc_beat == SB_STORY1 ? bt / 4 : 0.15f), 0, 1);
+        for (int q = 0; q < 28; q++) { float a0 = 3.14159f * q / 28, a1 = 3.14159f * (q + 1) / 28;
+            batch_quad4(&db, v3(cosf(a0) * r0, sinf(a0) * r0 - 14, -70), v3(cosf(a0) * r1, sinf(a0) * r1 - 14, -70), v3(cosf(a1) * r1, sinf(a1) * r1 - 14, -70), v3(cosf(a1) * r0, sinf(a1) * r0 - 14, -70), v3(0, 0, 1), 0.5f, 0.5f, 0.5f, 0.5f, rc[band][0], rc[band][1], rc[band][2], a); } }
+    if (set == SET_STORM) for (int k = 0; k < 180; k++) { float h1 = noise2(k, 61), x = eye.x + (h1 - 0.5f) * 30, z = eye.z - 2 - noise2(k, 62) * 24, y = 14 - fmodf(t * 16 + noise2(k, 63) * 14, 14);   /* rain */
+        batch_quad(&db, v3(x, y, z), v3(R.x * 0.03f, 0, R.z * 0.03f), v3(0.15f, 0.7f, 0), v3(0, 0, 1), 0, 0, 1, 1, 0.7f, 0.8f, 1, 0.35f); }
+    if (set == SET_JORDAN && g_sc_beat >= SB_STORY2) { float u = clampf(bt / 4.0f, 0, 1), dy = g_sc_beat == SB_STORY2 ? 12 - 8.5f * sc_smooth(u) : 3.5f, fl2 = sinf(t * 9) * 0.5f;   /* the Spirit like a dove, coming down on Him (Matthew 3:16) */
+        Vec3 c = v3(gp.x, dy + 0.15f * sinf(t * 2), gp.z); batch_quad(&db, c, v3(R.x * 2.2f, 0, R.z * 2.2f), v3(0, 2.2f, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.95f, 0.75f, 0.5f);
+        batch_quad(&db, c, v3(R.x * 0.3f, 0, R.z * 0.3f), v3(0, 0.22f, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 1);
+        for (int s = -1; s <= 1; s += 2) batch_quad(&db, v3(c.x + R.x * s * 0.45f, c.y + 0.1f + fl2 * 0.2f, c.z + R.z * s * 0.45f), v3(R.x * 0.4f, 0, R.z * 0.4f), v3(0, 0.12f + fl2 * 0.08f, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 1, 1, 0.95f); }
+    if (gu == 13 || set == SET_LIONS || (set == SET_STORM && gu == 0)) { Vec3 c = set == SET_LIONS ? v3(0, 3.0f, -5) : v3(gp.x, (gu == 13 ? 1.6f : 0.2f) + 1.2f, gp.z); float s = 2.6f + 0.3f * sinf(t * 2);   /* the angel's light; the light round Jesus in the dark */
+        batch_quad(&db, c, v3(R.x * s, 0, R.z * s), v3(0, s, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.92f, 0.7f, set == SET_LIONS ? 0.3f : 0.45f); }
+    if (set == SET_HEAVEN || set == SET_MOUNT || set == SET_EGYPT) { Vec3 c = set == SET_HEAVEN ? v3(0, 12, -30) : v3(-25, 40, -120); float s = set == SET_HEAVEN ? 14 : 22;   /* the light of heaven, the sun */
+        batch_quad(&db, c, v3(R.x * s, 0, R.z * s), v3(0, s, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.95f, 0.75f, set == SET_HEAVEN ? 0.7f : 0.45f); }
+    if (set == SET_HEAVEN) batch_quad(&db, v3(0, ky - 0.1f, kz), v3(3.2f, 0, 0), v3(0, 0, -2.6f), v3(0, 1, 0), 0, 0, 1, 1, 1, 0.95f, 0.85f, 0.6f);   /* the cloud under the kart */
+    if (set == SET_PALACE) for (int k = 0; k < 10; k++) { float x = (k & 1 ? 5.3f : -5.3f), z = 6 - (k / 2) * 5.0f, s = 0.5f + 0.06f * sinf(t * 11 + k);   /* lamps on the pillars */
+        batch_quad(&db, v3(x, 4.5f, z), v3(R.x * s, 0, R.z * s), v3(0, s, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.7f, 0.3f, 0.8f); }
+    if (set == SET_PALACE && g_sc_beat >= SB_STORY2) { float a = clampf(bt / 1.0f, 0, 1) * (0.7f + 0.3f * sinf(t * 3));   /* the golden sceptre held out (Esther 5:2) */
+        batch_quad(&db, v3(1.4f, 2.4f, -9.4f), v3(R.x * 0.9f, 0, R.z * 0.9f), v3(0, 0.9f, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.85f, 0.3f, a); }
+    if (db.n) { gfx_mesh_update(m_dyn[drc][2], db.v, db.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_dyn[drc][2], &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); }
+    if (set == SET_HEAVEN) {   /* the clouds they ride on, soft white, drawn last over the floor of light */
+        batch_init(&db, g_scv[1], 12000);
+        for (int k = 0; k < 160; k++) { float h1 = noise2(k, 101), a = h1 * 6.283f, rr = 4.0f + noise2(k, 102) * 40, s = 2.0f + noise2(k, 103) * 3.5f, x = cosf(a) * rr + sinf(t * 0.1f + k) * 0.5f, z = sinf(a) * rr - 6;
+            batch_quad(&db, v3(x, -1.1f + noise2(k, 104) * 0.4f, z), v3(R.x * s, 0, R.z * s), v3(0, s * 0.25f, 0), v3(0, 0, 1), 0, 0, 1, 1, 1, 0.98f, 0.95f, 0.85f); }
+        gfx_mesh_update(m_dyn[drc][1], db.v, db.n); gfx_state(ST_TRANSPARENT); gfx_bind(tx_blob); gfx_draw_ex(m_dyn[drc][1], &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); }
+    gfx_camera_2d(); gfx_state(ST_HUD); gfx_bind(NULL); }
+
+/* the words over the scene: film bars, the title, then each line typing itself out in the panel at the bottom */
+static int sc_wrap(const char *s, float size, float maxw, char out[5][140]) {
+    int n = 0, len = (int)strlen(s), i = 0; char line[140]; line[0] = 0;
+    while (i < len && n < 5) { int j = i; while (j < len && s[j] != ' ') j++; char word[140]; int wl = j - i < 139 ? j - i : 139; memcpy(word, s + i, (size_t)wl); word[wl] = 0;
+        char trial[300]; snprintf(trial, sizeof trial, line[0] ? "%s %s" : "%s%s", line, word);
+        if (line[0] && text_width(trial, size) > maxw) { snprintf(out[n++], 140, "%s", line); snprintf(line, sizeof line, "%s", word); } else snprintf(line, sizeof line, "%s", trial);
+        i = j + 1; }
+    if (line[0] && n < 5) snprintf(out[n++], 140, "%s", line);
+    return n; }
+static void hud_scene_top(void) {
+    const CupStory *S = &CUP_STORIES[g_sc_char]; float bt = g_sc_bt, st = g_screen_t, bars = sc_smooth(st / 0.9f);
+    if (S->set == SET_STORM) { float f = sc_flash(); if (f > 0) batch_rect(&g_b, 0, 0, 1280, 720, 0.8f, 0.85f, 1, 0.22f * f); }
+    batch_rect(&g_b, 0, 0, 1280, 54 * bars, 0, 0, 0, 0.92f);   /* the film bars */
+    float py = 720 - 176 * bars;
+    for (int k = 0; k < 8; k++) batch_rect(&g_b, 0, py - 24 + k * 3, 1280, 3, 0.02f, 0.02f, 0.05f, 0.1f * k);
+    batch_rect(&g_b, 0, py, 1280, 720 - py, 0.02f, 0.02f, 0.05f, 0.86f); batch_rect(&g_b, 0, py, 1280, 2, 1, 0.8f, 0.35f, 0.7f * bars);
+    { char buf[64]; snprintf(buf, sizeof buf, "%s - CHAMPION", CHARACTERS[g_sc_char].name); for (char *c = buf; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
+      batch_text(&g_b, buf, 24, 18, 16, 1, 0.85f, 0.4f, bars); }
+    for (int b = 0; b < SB_COUNT; b++) { float on = b == g_sc_beat ? 1 : b < g_sc_beat ? 0.6f : 0.2f, s = b == g_sc_beat ? 7 + sinf(g_time * 5) : 5;   /* where we are in the story */
+        batch_rect(&g_b, 1160 + b * 22 - s, 27 - s, s * 2, s * 2, 1, 0.85f, 0.4f, on * bars); }
+    if (g_sc_beat == SB_TITLE) {
+        if (bt > 1.0f) { fx_words(S->title, 640, 232, strlen(S->title) > 22 ? 40 : 48, bt - 1.0f, 99, 1, 1, 1, 1, 1); fx_line(S->place, 640, 300, 24, bt - 1.3f, 99, 1, 1, 1, 1); }
+        if (bt > 2.0f) { const char *cup = g_cup == 0 ? "A STORY FOR THE WINNER OF THE GOSPEL CUP" : "A STORY FOR THE WINNER OF THE GENESIS TO GLORY CUP"; fx_line(cup, 640, py + 70, 20, bt - 2.0f, 99, 0.85f, 0.9f, 1, 1); } }
+    else {
+        const char *hdr = g_sc_beat == SB_VERSE ? "THE BIBLE SAYS" : g_sc_beat == SB_LESSON ? "WHAT THIS TEACHES US" : S->title; float ha = clampf(bt * 3, 0, 1);
+        batch_text(&g_b, hdr, 40 + (1 - ha) * 30, py + 16, 18, 1, 0.82f, 0.38f, ha);
+        char lines[5][140]; float sz = g_sc_beat == SB_VERSE ? 26 : 24; int n = sc_wrap(sc_text(g_sc_beat), sz, 1180, lines), left = (int)((bt - 0.5f) * SC_TYPE);
+        float lh = sz + 8, y0 = py + 50 + (n < 3 ? (3 - n) * lh * 0.3f : 0);
+        float cr = g_sc_beat == SB_VERSE ? 1.0f : 1, cg = g_sc_beat == SB_VERSE ? 0.9f : 1, cb = g_sc_beat == SB_VERSE ? 0.6f : 1;
+        for (int i = 0; i < n && left > 0; i++) { char part[140]; int l = (int)strlen(lines[i]), sh = left < l ? left : l; memcpy(part, lines[i], (size_t)sh); part[sh] = 0; left -= l + 1;
+            float x = 640 - text_width(lines[i], sz) / 2; text3d(part, x, y0 + i * lh, sz, cr, cg, cb, 1, 0); }
+        float done = bt - sc_typed_t(g_sc_beat);
+        if (g_sc_beat == SB_VERSE && done > 0) { char rb[48]; snprintf(rb, sizeof rb, "- %s", S->ref); float a = clampf(done * 3, 0, 1); batch_text(&g_b, rb, 1240 - text_width(rb, 20) - (1 - a) * 30, 690, 20, 1, 0.82f, 0.38f, a); } }
+    { int last = g_sc_beat == SB_COUNT - 1; float done = bt - sc_typed_t(g_sc_beat);   /* the A prompt, once the words are all out */
+      if (done > 0.3f && g_sc_out <= 0) { const char *p = last ? "A: CONTINUE" : "A: NEXT"; float a = 0.55f + 0.45f * sinf(g_time * 4); batch_text(&g_b, p, (g_sc_beat == SB_VERSE ? 40 : 1240 - text_width(p, 16)), 694, 16, 0.9f, 0.95f, 1, a); } }
+    float fade = st < 0.8f ? 1 - st / 0.8f : 0; if (g_sc_out > 0) fade = clampf(g_sc_out / 0.6f, 0, 1);
+    if (fade > 0) batch_rect(&g_b, 0, 0, 1280, 720, 0, 0, 0, fade); }
+#ifdef KK_TOUR
+static void scene_check_words(void) {   /* the CI log: every story's lines fit the panel */
+    int worst = 0, who = -1; for (int c = 0; c < NCHARS; c++) { int keep = g_sc_char; g_sc_char = c;
+        for (int b = SB_STORY1; b < SB_COUNT; b++) { char l[5][140]; int n = sc_wrap(sc_text(b), b == SB_VERSE ? 26 : 24, 1180, l); if (n > worst) { worst = n; who = c; } }
+        if (text_width(CUP_STORIES[c].title, strlen(CUP_STORIES[c].title) > 22 ? 40 : 48) > 1240) gfx_log("cup story title too wide: %s", CUP_STORIES[c].title);
+        g_sc_char = keep; }
+    gfx_log("cup story words: at most %d lines (%s)%s", worst, who >= 0 ? CHARACTERS[who].name : "-", worst > 4 ? " TOO MANY" : ""); }
+#endif
+
 // ------------------------------------------------------------------ per-frame update
 #ifdef KK_TOUR
 /* CI tour: the game presses its own buttons on a timer so the emulator test can photograph every screen */
@@ -2613,8 +2981,10 @@ static void tour_pads(Pad *pads, float t) {
 #if KK_TOUR_ROAD == 11
         /* the Grand Prix: title, GRAND PRIX, the second cup (Genesis to Glory), character, kart, the first road (Eden), then the standings */
         {8, 'A'}, {11, 'A'}, {14, 'R'}, {16, 'A'}, {19, 'A'}, {22, 'A'}, {70, 'P'}, {84, 'P'}, {130, 'A'}, {133, 'A'},
+#elif KK_TOUR_ROAD == 13
+        {900, 'A'},                              /* the Bible stories run by themselves: no buttons */
 #elif KK_TOUR_ROAD == 12
-        {60, 'A'}, {70, 'A'},                    /* the trophy ceremony plays out, then A, A: back to the main menu */
+        {30, 'A'},                               /* the trophy ceremony plays out, then A: the winner's Bible story, which then runs through the stories by itself */
 #elif KK_TOUR_ROAD == 10
         /* the Walls of Jericho: title, menu (down five times), character, kart, race */
         {8, 'A'}, {11, 'D'}, {13, 'D'}, {15, 'D'}, {17, 'D'}, {19, 'D'}, {21, 'A'}, {24, 'A'}, {27, 'A'},
@@ -2700,6 +3070,7 @@ static const char *pick_music(void) {
         if (lost && music_available("music_lose")) return "music_lose";
         return music_available("music_results") ? "music_results" : "music_menu";
     }
+    if (g_screen == SCR_SCENE) return music_available("music_scene") ? "music_scene" : (music_available("music_credits") ? "music_credits" : "music_menu");   /* Sean can drop in content/music/music_scene.mp3 */
     if (g_screen == SCR_TROPHY) return music_available("music_trophy") ? "music_trophy" : (music_available("music_results") ? "music_results" : "music_menu");
     if (g_screen == SCR_GP) {
         if (g_gp_round >= NUM_GP_TRACKS) { int rank = gp_player_rank();
@@ -3359,7 +3730,10 @@ void game_frame(const Pad *pads, int npads, float dt) {
     { static int done = 0; if (!done && g_time > 2.0f) { done = 1;   /* CI: straight to a trophy ceremony, the field behind it is the demo race */
         g_mode = MODE_GP; g_cup = 0; g_gp_round = NUM_GP_TRACKS; memset(g_gp_points, 0, sizeof g_gp_points); memset(g_gp_kp, 0, sizeof g_gp_kp);
         for (int i = 0; i < g_race.nk; i++) g_gp_points[g_race.character[i]] = 60 - 7 * i;
-        g_player_char = g_race.character[1]; g_screen = SCR_TROPHY; g_screen_t = 0; } }
+        g_player_char = g_race.character[1]; g_screen = SCR_TROPHY; g_screen_t = 0; scene_check_words(); } }
+#endif
+#if defined(KK_TOUR) && KK_TOUR_ROAD == 13
+    { static int done = 0; if (!done && g_time > 2.0f) { done = 1; g_cup = 1; scene_check_words(); scene_start(7); } }   /* CI: straight into the cup winners' Bible stories, from Samson on */
 #endif
 #if defined(KK_TOUR) && KK_TOUR_ROAD == 1
     if (g_screen == SCR_RACE && g_track.water && g_race.state == RACE_RUNNING && g_time > 55.0f) {   /* CI: the great fish held mid-leap just ahead of the player, for the photos */
@@ -3426,7 +3800,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                     if (q->kind == TZ_LEFT) mx = -1; else if (q->kind == TZ_RIGHT) mx = 1;
                     else if (g_screen == SCR_MCHAR) pa_s[0] = 1; else pa = 1; }
                 sfx_play(SFX_MENU_MOVE, 0.6f, 0); }
-            else if (g_screen == SCR_TITLE || (g_screen == SCR_RESULTS && (g_mode == MODE_GP || g_mode == MODE_BATTLE || g_unl_bits)) || g_screen == SCR_GP || g_screen == SCR_TROPHY || g_screen == SCR_CREDITS || g_screen == SCR_OPENER) pa = 1;   /* a tap anywhere carries on */
+            else if (g_screen == SCR_TITLE || (g_screen == SCR_RESULTS && (g_mode == MODE_GP || g_mode == MODE_BATTLE || g_unl_bits)) || g_screen == SCR_GP || g_screen == SCR_TROPHY || g_screen == SCR_SCENE || g_screen == SCR_CREDITS || g_screen == SCR_OPENER) pa = 1;   /* a tap anywhere carries on */
         }
         memcpy(g_tz_prev, g_tz, sizeof g_tz); g_ntz_prev = g_ntz; g_ntz = 0;
     }
@@ -3610,13 +3984,14 @@ void game_frame(const Pad *pads, int npads, float dt) {
     case SCR_GP:
         if (pa) { if (g_gp_round >= NUM_GP_TRACKS) { g_screen = SCR_TROPHY; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
         break;
+    case SCR_SCENE: scene_update(dt, pa); break;
     case SCR_TROPHY: {
         static float last_t = 99, tick_t = 0; float t0 = last_t; last_t = g_screen_t; int ord[NKARTS]; cer_order(ord); float te = cer_lock_t(0, ord);
         for (int p = 0; p < 3; p++) { float lk = cer_lock_t(p, ord); if (t0 < lk && g_screen_t >= lk) sfx_play(p == 0 ? SFX_WIN : SFX_LAND, p == 0 ? 1.0f : 0.9f, 0); }
         if (t0 < te + 0.3f && g_screen_t >= te + 0.3f) { int hv = g_voice[ord[0]][VO_WIN]; if (hv >= 0) sfx_voice_play(hv, 1.0f, 0); }
         if (t0 < te + 1.6f && g_screen_t >= te + 1.6f) sfx_play(SFX_UNLOCK, 1, 0);
         if (g_screen_t > CER_T0 && g_screen_t < te && g_screen_t - tick_t > 0.09f) { tick_t = g_screen_t; sfx_play(SFX_COIN, 0.35f, 0); }   /* the points ticking up */
-        if (pa && g_screen_t > cer_end() + 3.0f) { g_multi = 0; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
+        if (pa && g_screen_t > cer_end() + 3.0f) scene_start(ord[0]);   /* on to the winner's Bible story */
         else if (pa && g_screen_t < 5.5f) g_screen_t = 5.5f; }   /* A skips ahead to the end of the show */
         break;
     }
@@ -3872,7 +4247,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         cv = &g_view[0];
         /* on the GamePad the menus sit on a plain background: drawing the 3D road behind them a second time halved the
            frame rate of every menu (the log from the real Wii U: 30 a second instead of 60) */
-        int plain_bg = drc && (g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP || g_screen == SCR_OPTIONS || g_screen == SCR_CREDITS || g_screen == SCR_GP);
+        int plain_bg = g_screen == SCR_SCENE || (drc && (g_screen == SCR_TITLE || g_screen == SCR_MAIN || g_screen == SCR_CHAR || g_screen == SCR_KART || g_screen == SCR_TRACK || g_screen == SCR_JOIN || g_screen == SCR_MCHAR || g_screen == SCR_CUP || g_screen == SCR_OPTIONS || g_screen == SCR_CREDITS || g_screen == SCR_GP));
         if (plain_bg) gfx_view_begin(drc, 0.06f, 0.09f, 0.24f); else gfx_view_begin(drc, g_def->sky_r, g_def->sky_g, g_def->sky_b);
         Mat4 id = m4_identity();
         if (!plain_bg) draw_scene(g_mode == MODE_BATTLE ? 0 : r->player, gfx_aspect(drc), 1.0f, 0);
@@ -3927,6 +4302,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (g_screen == SCR_MAIN && tx_title && m_logo_small) { gfx_bind(tx_title); gfx_draw(m_logo_small, &id, 1, 1, 1, 1); }
         if (g_screen == SCR_CHAR || g_screen == SCR_MCHAR) draw_portraits();
         if (g_screen == SCR_RESULTS && g_mode != MODE_TT && g_mode != MODE_BATTLE) draw_podium_karts();
+        if (g_screen == SCR_SCENE) { draw_story_scene(drc); static Mesh *m_sct[2]; if (!m_sct[drc]) m_sct[drc] = gfx_mesh_dynamic(16384); batch_clear(&g_b); hud_scene_top(); gfx_mesh_update(m_sct[drc], g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_sct[drc], &id, 1, 1, 1, 1); }
         if (g_screen == SCR_TROPHY) { draw_trophy_pictures(drc); static Mesh *m_top[2]; if (!m_top[drc]) m_top[drc] = gfx_mesh_dynamic(8192); batch_clear(&g_b); hud_trophy_top(); gfx_mesh_update(m_top[drc], g_b.v, g_b.n); gfx_bind(tx_font); gfx_draw(m_top[drc], &id, 1, 1, 1, 1); }
         if (g_screen == SCR_TRACK) for (int c2 = 0; c2 < ncards() && c2 < 8; c2++) { int d = card_track(c2); if (d >= 8 || !tx_card[d] || !track_unlocked(d)) continue;
             if (!m_card[c2]) m_card[c2] = gfx_mesh_dynamic(6);
