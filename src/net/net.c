@@ -48,11 +48,15 @@ static void make_player_id(void) {   /* Phase 1: new each time the game starts (
 
 static void lookup(void) {
     struct addrinfo hints, *res = NULL; memset(&hints, 0, sizeof hints); hints.ai_family = AF_INET; hints.ai_socktype = SOCK_DGRAM;
-    int ok = 0;
+    int ok = 0; struct in_addr lit;
+    if (inet_pton(AF_INET, g_lookup_host, &lit) == 1) { g_found_addr = lit.s_addr; g_found = 1; g_lookup_done = 1; g_lookup_busy = 0; return; }   /* already a number: nothing to look up */
     if (getaddrinfo(g_lookup_host, NULL, &hints, &res) == 0 && res) {
         for (struct addrinfo *a = res; a; a = a->ai_next) if (a->ai_family == AF_INET) { g_found_addr = ((struct sockaddr_in *)a->ai_addr)->sin_addr.s_addr; ok = 1; break; }
         freeaddrinfo(res); }
-    if (!ok) { struct hostent *h = gethostbyname(g_lookup_host); if (h && h->h_addrtype == AF_INET && h->h_addr_list[0]) { memcpy((void *)&g_found_addr, h->h_addr_list[0], 4); ok = 1; } }
+    /* (no gethostbyname fallback: the emulator crashes on it, and the Wii U's getaddrinfo is enough) */
+#ifdef KK_SERVER_IP
+    if (!ok && !strcmp(g_lookup_host, KK_SERVER_HOST) && inet_pton(AF_INET, KK_SERVER_IP, &lit) == 1) { g_found_addr = lit.s_addr; ok = 1; }   /* the server's own number, if the name can't be looked up */
+#endif
     g_found = ok; g_lookup_done = 1; g_lookup_busy = 0; }
 #ifdef __WIIU__
 static OSThread *g_thr; static void *g_stack;
