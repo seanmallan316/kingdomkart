@@ -59,6 +59,7 @@ static float g_track_wait = 0; static int g_loaded_track = -1;
 static int g_opt_sel = 0; static char g_pause_reason[48]; static float g_erase_hold = 0;
 static void apply_volumes(void) { music_set_volume(g_save.music_vol / 10.0f); sfx_set_volume(g_save.sfx_vol / 10.0f); }
 enum { MODE_GP, MODE_SINGLE, MODE_TT, MODE_BATTLE, MODE_VS, MODE_JERICHO };   /* VS: two to four people on a split screen; JERICHO: seven laps round the walls */
+static const int MENU_ORDER[10] = {6, 0, 1, 2, 3, 4, 5, 7, 8, 9};   /* the main menu top to bottom: STORY MODE first (Sean), then the rest (g_menu_sel keeps each item's own number) */
 static int g_screen = SCR_TITLE, g_mode = MODE_SINGLE, g_menu_sel = 0, g_pause_sel = 0, g_attract = 1;
 static int char_lock_bit(int c) { static const int bits[NCHARS] = {0, 0, 0, 0, 0, 0, 0, UNLOCK_SAMSON, UNLOCK_NOAH, UNLOCK_JOSEPH, UNLOCK_JONAH, UNLOCK_JOHN, UNLOCK_MICHAEL, UNLOCK_GABRIEL, UNLOCK_GOLIATH_RACER, UNLOCK_GIDEON, UNLOCK_ZACCHAEUS, UNLOCK_JACOB, UNLOCK_ISAAC, UNLOCK_ABRAHAM, UNLOCK_PHARAOH, UNLOCK_NEBUCHADNEZZAR}; return c >= 0 && c < NCHARS ? bits[c] : 0; }
 static int char_unlocked(int c) { return !CHARACTERS[c].bonus || (g_save.unlocks & char_lock_bit(c)); }
@@ -2000,10 +2001,10 @@ static void ui_backdrop(void) {   /* behind every menu: slow golden beams fannin
 static void hud_main(void) {
     static const char *dn[3] = {"EASY", "NORMAL", "HARD"}; char buf[64];
     snprintf(buf, sizeof buf, "DIFFICULTY: %s", dn[g_difficulty]);
-    const char *items[10] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", "BIBLE JOURNEYS", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
+    const char *items[10] = {"GRAND PRIX", "SINGLE RACE", "TIME TRIAL", "DAVID VS GOLIATH", "MULTIPLAYER 2-4", "THE WALLS OF JERICHO", "STORY MODE", buf, "OPTIONS AND RECORDS", "CREDITS"};   /* David vs Goliath is open from the start: it is one of the main stories */
     /* (online play is built but switched off for now - Sean: no paid server. The ONLINE TEST screen, SCR_ONLINE, src/net and
        server/ stay in the project for later; to bring it back, add "ONLINE" after THE WALLS OF JERICHO and open SCR_ONLINE.) */
-    for (int i = 0; i < 10; i++) { float y = 186 + i * 46; menu_item(items[i], y, g_menu_sel == i, i < 7 ? 26 : 21); tzone(400, y - 10, 480, 44, TZ_SEL, i); }
+    for (int pos = 0; pos < 10; pos++) { int i = MENU_ORDER[pos]; float y = 186 + pos * 46; menu_item(items[i], y, g_menu_sel == i, pos < 7 ? 26 : 21); tzone(400, y - 10, 480, 44, TZ_SEL, i); }
     text_c("A: CHOOSE   B: BACK   LEFT/RIGHT: CHANGE", 690, 14, 0.8f, 0.85f, 1, 1);
 }
 static void hud_online(void) {   /* the ONLINE TEST screen */
@@ -3161,8 +3162,8 @@ static void tour_pads(Pad *pads, float t) {
 #elif KK_TOUR_ROAD == 7
         {200, 0},                                /* the opener plays through, then the title screen */
 #elif KK_TOUR_ROAD == 6
-        {8, 'A'}, {11, 'U'}, {14, 'A'},          /* the credits, then (back at the title) options and records */
-        {88, 'B'}, {91, 'A'}, {94, 'U'}, {96, 'U'}, {98, 'A'},
+        {8, 'A'}, {11, 'U'}, {12, 'U'}, {14, 'A'},          /* the credits (up past STORY MODE), then (back at the title) options and records */
+        {88, 'B'}, {91, 'A'}, {93, 'U'}, {94, 'U'}, {96, 'U'}, {98, 'A'},
 #else
         {8, 'A'}, {11, 'D'}, {13, KK_TOUR_ROAD == 5 ? 'D' : 0}, {15, KK_TOUR_ROAD == 5 ? 'D' : 0}, {18, KK_TOUR_ROAD == 5 ? 'A' : 0}, {14, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {17, (KK_TOUR_ROAD == 5 || KK_TOUR_ROAD == 0) ? 0 : 'R'}, {22, KK_TOUR_ROAD == 5 ? 0 : 'A'}, {26, KK_TOUR_ROAD == 5 ? 0 : 'A'},
         {27, KK_TOUR_ROAD >= 1 ? 'R' : 0}, {29, KK_TOUR_ROAD >= 2 ? 'R' : 0}, {31, KK_TOUR_ROAD >= 3 ? 'R' : 0}, {33, KK_TOUR_ROAD >= 4 ? 'R' : 0}, {35, KK_TOUR_ROAD == 9 ? 'R' : 0}, {36, 'A'},   /* road 9: the Garden of Eden (sixth card) */
@@ -4126,7 +4127,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pa || pb || g_screen_t * CREDITS_SPEED > credits_height() + 760) { g_screen = SCR_TITLE; g_screen_t = 0; if (pa || pb) sfx_play(SFX_MENU_BACK, 1, 0); }
         break;
     case SCR_MAIN:
-        if (my) { g_menu_sel = (g_menu_sel - my + 10) % 10; sfx_play(SFX_MENU_MOVE, 1, 0); }
+        if (my) { int pos = 0; while (pos < 9 && MENU_ORDER[pos] != g_menu_sel) pos++; pos = (pos - my + 10) % 10; g_menu_sel = MENU_ORDER[pos]; sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (g_menu_sel == 7 && mx) g_difficulty = (g_difficulty + mx + 3) % 3;
         if (pa) {
             if (g_menu_sel == 9) { g_screen = SCR_CREDITS; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); }

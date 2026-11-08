@@ -400,13 +400,13 @@ static void hud_journey(float st, const UiLook *L) {   /* the journey views: who
         snprintf(buf, sizeof buf, s0 == 0 ? "START" : (s0 == g_sm_jn - 1 && sm_jdone()) ? "FINISH" : "STOP %d", s0 + 1); text3d(buf, 40, py + 14, 22, 1, 0.85f, 0.4f, 1, 1);
         { float sz = 24; while (sz > 13 && text_width(line, sz) > 1180) sz -= 1; text3d(line, 40, py + 50, sz, 1, 1, 1, 1, 0); }
         for (int i = 0; i < g_sm_jn; i++) { float s2 = i == s0 ? 9 : 6; ui_plaque(1236 - (g_sm_jn - 1 - i) * 24 - s2, py + 26 - s2, s2 * 2, s2 * 2, s2 * 0.9f, 5, i <= s0 ? &UI_GOLD : &UI_DIM, 1, i == s0 ? 0.5f : 0, -1); } }
-    text_c(g_sm_view == 1 ? "LEFT/RIGHT: CHARACTER   A: SKIP / REPLAY   Y: MY TRAVELS   B: BACK" : "A: SKIP / REPLAY   Y: RACE THE STOPS   B: BACK", 694, 13, 0.9f, 0.92f, 1, 0.85f); }
+    text_c(g_sm_view == 1 ? "LEFT/RIGHT: CHARACTER   A: SKIP / REPLAY   Y: MY TRAVELS   B: BACK" : "A: SKIP / REPLAY   Y: STORY MODE   B: BACK", 694, 13, 0.9f, 0.92f, 1, 0.85f); }
 static void hud_story(void) {
     static const UiLook UI_MAPW = {{0.2f, 0.3f, 0.62f}, {0.06f, 0.09f, 0.28f}, {0.95f, 0.76f, 0.32f}, {0.4f, 0.28f, 0.1f}};
     if (g_sm_t < SM_UNFOLD_END - 0.6f) { text_c("A: SKIP", 690, 14, 0.9f, 0.9f, 1, 0.6f); return; }
     float st = clampf((g_sm_t - (SM_UNFOLD_END - 0.6f)) / 0.6f, 0, 1); char buf[96];
     ui_plaque(-30, -40 - (1 - st) * 80, 1340, 100, 16, 18, &UI_MAPW, 0.95f, 0, -1);
-    text3d("BIBLE JOURNEYS", 26, 12, 22, 1, 0.85f, 0.4f, st, 1);
+    text3d(g_sm_view ? "BIBLE JOURNEYS" : "STORY MODE", 26, 12, 22, 1, 0.85f, 0.4f, st, 1);
     if (g_sm_view) { hud_journey(st, &UI_MAPW); return; }
     { const char *nm = CHARACTERS[g_player_char].name; int i = 0; for (; nm[i] && i < 60; i++) buf[i] = (char)(nm[i] >= 'a' && nm[i] <= 'z' ? nm[i] - 32 : nm[i]); buf[i] = 0; }
     text3d(buf, 640 - text_width(buf, 26) / 2, 14, 26, 1, 1, 1, st, 0);
@@ -421,7 +421,7 @@ static void hud_story(void) {
     const char *state = cl ? "CLEARED" : op ? (N->track == ARENA_TRACK || N->track == JERICHO_TRACK ? "WIN TO CLEAR IT" : "FINISH IN THE TOP 3 TO CLEAR IT") : "LOCKED - CLEAR THE STOPS BEFORE IT";
     batch_text(&g_b, state, 1240 - text_width(state, 16), py + 20, 16, cl ? 1 : op ? 0.6f : 0.75f, cl ? 0.85f : op ? 1 : 0.75f, cl ? 0.35f : op ? 0.6f : 0.8f, 1);
     if (op) { ui_plaque(1080, py + 46, 170, 48, 14, 10, &UI_GOLD, 1, 0.4f + 0.3f * sinf(g_time * 4), -1); text3d("A: RACE", 1165 - text_width("A: RACE", 22) / 2, py + 57, 22, 0.35f, 0.2f, 0.05f, 1, 0); tzone(1080, py + 46, 170, 48, TZ_A, 0); }
-    text_c("STICK: MOVE   A: RACE   X: CHARACTER   Y: JOURNEYS   +: WHOLE MAP   B: BACK", 694, 13, 0.9f, 0.92f, 1, 0.85f);
+    text_c("STICK: MOVE   A: RACE   X: CHARACTER   Y: BIBLE JOURNEYS   +: WHOLE MAP   B: BACK", 694, 13, 0.9f, 0.92f, 1, 0.85f);
     if (g_save.story >= SM_NODES) { float pu = 0.85f + 0.15f * sinf(g_time * 2.5f); text3d("STORY COMPLETE - GLORY!", 640 - text_width("STORY COMPLETE - GLORY!", 30) / 2, 92, 30, pu, pu * 0.85f, 0.35f, st, 1); }
     if (g_sm_cel > 0) { float a = clampf(g_sm_cel / 0.5f, 0, 1) * clampf((4.5f - g_sm_cel) / 0.3f, 0, 1); text3d("STOP CLEARED!", 640 - text_width("STOP CLEARED!", 50) / 2, 250, 50, 1, 0.9f, 0.35f, a, 1);
         if (g_save.story < SM_NODES && g_sm_cel < 2.4f) { snprintf(buf, sizeof buf, "NEXT: %s", SM_NODE[g_save.story].name); text3d(buf, 640 - text_width(buf, 26) / 2, 318, 26, 1, 1, 1, a, 0); } } }
