@@ -100,6 +100,9 @@ static float g_sm_cel;                /* > 0: a stop has just been cleared (the 
 static int g_sm_cel_node, g_sm_tapped;
 static float g_sm_scr[SM_NODES][3];   /* each stop on the screen (x, y, visible) */
 static Texture *tx_story; static int g_sm_tex_tried;
+enum { SMX_UNFOLD, SMX_RISE, SMX_PIN, SMX_SELECT, SMX_DRIVE, SMX_UNLOCK, SMX_STOP, SMX_DRAW, SMX_COUNT };   /* the map's own sounds: content/sfx/map_*.wav (tools/make_map_sfx.py) */
+static int g_smx[SMX_COUNT] = {-1, -1, -1, -1, -1, -1, -1, -1}; static int g_smx_loaded;
+static void smx(int i, float vol) { if (i >= 0 && i < SMX_COUNT && g_smx[i] >= 0) sfx_voice_play(g_smx[i], vol, 0); }
 #define SM_UNFOLD_END 4.8f
 
 static int sm_open(int i) { return i <= g_save.story && i < SM_NODES; }
@@ -180,7 +183,7 @@ static void sm_route_point(float d, float *px, float *py, float *dx, float *dy) 
     for (int i = 0; i + 1 < g_sm_nroute; i++) { float ax = g_sm_route[i][0], ay = g_sm_route[i][1], bx = g_sm_route[i + 1][0], by = g_sm_route[i + 1][1], l = sqrtf((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
         if (d <= l || i + 2 == g_sm_nroute) { float u = l > 0 ? clampf(d / l, 0, 1) : 1; *px = ax + (bx - ax) * u; *py = ay + (by - ay) * u; *dx = bx - ax; *dy = by - ay; return; } d -= l; }
     *px = SM_NODE[g_sm_at].px; *py = SM_NODE[g_sm_at].py; *dx = 0; *dy = 1; }
-static void sm_select(int i) { if (i < 0 || i >= SM_NODES || i == g_sm_sel) return; g_sm_sel = i; sfx_play(SFX_MENU_MOVE, 1, 0); if (sm_open(i)) sm_route_to(i); }
+static void sm_select(int i) { if (i < 0 || i >= SM_NODES || i == g_sm_sel) return; g_sm_sel = i; smx(SMX_SELECT, 0.9f); if (sm_open(i) && i != g_sm_at) { sm_route_to(i); smx(SMX_DRIVE, 0.8f); } }
 
 /* ---- a character's journey, or your own travels: a line that draws itself along the roads ---- */
 static float g_sm_jcum[1200];
@@ -218,6 +221,7 @@ static void sm_trail_add(int road, float meters) {
 /* ---- the screen ---- */
 static void story_enter(int unfold) {
     g_story = 1; g_screen = SCR_STORY; g_screen_t = unfold ? 0 : 1; if (unfold) { g_sm_t = 0; g_sm_cam_ok = 0; } else g_sm_t = 99;
+    if (!g_smx_loaded) { static const char *nm[SMX_COUNT] = {"map_unfold", "map_rise", "map_pin", "map_select", "map_drive", "map_unlock", "map_stop", "map_draw"}; g_smx_loaded = 1; for (int i = 0; i < SMX_COUNT; i++) g_smx[i] = sfx_voice_load(nm[i]); }
     sc_load_props(); if (!g_sm_tex_tried) { g_sm_tex_tried = 1; tx_story = asset_texture("story_map", 0, NULL, NULL); }
     int cur = g_save.story < SM_NODES ? g_save.story : SM_NODES - 1;
     if (unfold) { g_sm_sel = g_sm_at = cur; g_sm_driving = 0; } }
@@ -230,16 +234,21 @@ static void sm_nav(int mx, int my) {   /* the stick: the nearest stop that way *
 static void story_update(float dt, int pa, int pb, int mx, int my, int px_, int py_, int pplus) {
     g_sm_t += dt; g_sm_dt = dt;
     if (g_sm_t < SM_UNFOLD_END) {   /* the map coming out: the paper sounds; A skips it */
-        static float last; if ((last < 0.95f && g_sm_t >= 0.95f) || (last < 2.55f && g_sm_t >= 2.55f)) sfx_play(SFX_MENU_BACK, 0.8f, 0);
-        if (last < 3.75f && g_sm_t >= 3.75f) sfx_play(SFX_UNLOCK, 0.6f, 0); last = g_sm_t;
+        static float last; if (g_sm_t < last) last = 0;
+        if ((last < 0.9f && g_sm_t >= 0.9f) || (last < 2.5f && g_sm_t >= 2.5f)) smx(SMX_UNFOLD, 1.0f);   /* the paper opening out */
+        if (last < 3.7f && g_sm_t >= 3.7f) smx(SMX_RISE, 0.9f);                                          /* the land rising */
+        for (int i = 0; i < SM_NODES; i += 3) { float at = 3.7f + 0.4f + i * 0.03f; if (last < at && g_sm_t >= at) smx(SMX_PIN, 0.5f); }   /* the pins popping up */
+        last = g_sm_t;
         if (pa || pb) g_sm_t = SM_UNFOLD_END; return; }
     if (g_sm_driving) { g_sm_rpos += dt * 260.0f; if (g_sm_rpos >= g_sm_rlen) { g_sm_driving = 0; g_sm_rpos = g_sm_rlen; } }
     if (g_sm_cel > 0) { float was = g_sm_cel; g_sm_cel -= dt;
-        if (was > 1.6f && g_sm_cel <= 1.6f && g_save.story < SM_NODES) { sm_select(g_save.story); sfx_play(SFX_UNLOCK, 1, 0); }   /* the next stop opens and the kart drives there */
+        if (was > 1.6f && g_sm_cel <= 1.6f && g_save.story < SM_NODES) { sm_select(g_save.story); smx(SMX_UNLOCK, 1.0f); }   /* the next stop opens and the kart drives there */
         if (pa && g_sm_cel < 3.0f) g_sm_cel = 0; return; }
     if (py_) { sm_set_view((g_sm_view + 1) % 3); if (g_sm_view == 1) g_sm_jchar = g_player_char, sm_journey_build(); sfx_play(SFX_MENU_OK, 1, 0); return; }
     if (g_sm_view) {   /* a journey drawing itself: left / right another character, A to skip to the end or play it again */
-        g_sm_jt += dt;
+        { int s0a, mva; sm_jprog(&s0a, &mva); g_sm_jt += dt; int s0b, mvb; sm_jprog(&s0b, &mvb); static float scr;   /* a chime at each stop reached, a quill scratching while the line draws */
+          if (g_sm_jt > 1.0f && (s0b != s0a || (g_sm_jt - dt <= 1.0f))) smx(SMX_STOP, 0.8f);
+          if (mvb) { scr -= dt; if (scr <= 0) { smx(SMX_DRAW, 0.5f); scr = 0.75f; } } else scr = 0; }
         if (mx && g_sm_view == 1) { for (int k = 0; k < NCHARS; k++) { g_sm_jchar = (g_sm_jchar + mx + NCHARS) % NCHARS; if (char_unlocked(g_sm_jchar)) break; } sm_journey_build(); sfx_play(SFX_MENU_MOVE, 1, 0); }
         if (pa) { if (sm_jdone()) g_sm_jt = 0; else g_sm_jt = 1e4f; sfx_play(SFX_MENU_OK, 0.7f, 0); }
         if (pb) { g_story = 0; g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
