@@ -1303,11 +1303,12 @@ static void draw_item_window(int p, float x, float y, float size, float vw, floa
     for (int j = 0; j < 8; j++) if (!m_rou[p][j]) m_rou[p][j] = gfx_mesh_dynamic(64);
     draw_item_drum(p, x, y, size, vw, vh, g_nplayers > 1);
 }
+static float text3d(const char *str, float x, float y, float size, float r, float g, float b, float a, int gold);
 static void hud_item_window(int p, float x, float y, float size, int text_below) {   /* the frame and the name */
     Kart *k = &g_race.k[human_kart(p)];
     if (g_ui3d) ui_plaque(x - 8, y - 8, size + 16, size + 16, 16, 12, &UI_BLUE, 0.95f, g_proulette[p] > 0 ? 0.6f + 0.4f * sinf(g_time * 14) : 0.25f, g_proulette[p] > 0 ? fmodf(g_time * 1.6f, 1.4f) : -1);
     /* (split screen: the frame is drawn in 3D with the slot, see draw_item_drum) */
-    if (!k->item) { if (g_proulette[p] <= 0) { const char *h = "ZL"; float fs = size * 0.16f; if (fs < 9) fs = 9; batch_text(&g_b, h, x + size - text_width(h, fs) - 2, y + size - fs - 1, fs, 1, 0.9f, 0.55f, 0.85f); } return; }
+    if (!k->item) { if (g_proulette[p] <= 0) { const char *h = "ZL"; float fs = size * 0.16f; if (fs < 9) fs = 9; if (g_ui3d) batch_text(&g_b, h, x + size - text_width(h, fs) - 2, y + size - fs - 1, fs, 1, 0.9f, 0.55f, 0.85f); else text3d(h, x + size + 12, y + size * 0.5f - fs * 0.5f, fs * 1.2f, 1, 0.9f, 0.55f, 0.9f, 0); } return; }   /* split screen: beside the 3D frame, not behind it */
     if (g_proulette[p] > 0) return;
     const char *nm = item_name(k->item); float fs = size * 0.15f; if (fs < 11) fs = 11;
     if (text_below) { if (text_width(nm, fs) > size * 1.9f) fs *= 0.8f; batch_text(&g_b, nm, x + size / 2 - text_width(nm, fs) / 2, y + size + 10, fs, 1, 0.9f, 0.4f, 1);
@@ -1719,6 +1720,11 @@ static void fx_line(const char *s, float cx, float y, float size, float age, flo
     float x = cx - text_width(buf, size) / 2, e = clampf(t / 0.25f, 0, 1), a = amul * e * (left < 0.2f ? clampf(left / 0.2f, 0, 1) : 1);
     buf[show] = 0; batch_text(&g_b, buf, x, y + (1 - e) * 16, size, r, g, b, a); }
 /* how long a player's message has been showing: restarts when the words change or are shown again */
+/* HUD words with a solid 3D edge (a few darker copies stepping down-right), so they stand off the picture */
+static float text3d(const char *str, float x, float y, float size, float r, float g, float b, float a, int gold) {
+    int layers = size >= 40 ? 5 : size >= 24 ? 4 : 3;
+    for (int d = layers; d >= 1; d--) { float o = d * size * 0.022f; batch_text_g(&g_b, str, x + o * 0.6f, y + o, size, r * 0.18f + 0.05f, g * 0.14f + 0.03f, b * 0.12f + 0.06f, a, 0); }
+    return batch_text_g(&g_b, str, x, y, size, r, g, b, a, gold); }
 static float msg_age(int p) {
     static char last[MAX_HUMANS][40]; static float t0[MAX_HUMANS], prevleft[MAX_HUMANS];
     if (p < 0 || p >= MAX_HUMANS) return 1;
@@ -1824,8 +1830,8 @@ static const char *road_verse(const char *prefix, const char **ref) {
 static void hud_race(const Pad *pad) {
     Race *r = &g_race; Kart *k = &r->k[r->player]; char buf[64];
     int lap = k->lap < 1 ? 1 : (k->lap > g_track.laps ? g_track.laps : k->lap);
-    snprintf(buf, sizeof buf, "LAP %d/%d", lap, g_track.laps); batch_text(&g_b, buf, 40, 30, 36, 1, 1, 1, 1);
-    fmt_time(buf, sizeof buf, k->lap >= 1 ? k->lap_time : 0.0f); batch_text(&g_b, buf, 40, 72, 28, 1, 1, 0.6f, 1);
+    snprintf(buf, sizeof buf, "LAP %d/%d", lap, g_track.laps); text3d(buf, 40, 30, 36, 1, 1, 1, 1, 0);
+    fmt_time(buf, sizeof buf, k->lap >= 1 ? k->lap_time : 0.0f); text3d(buf, 40, 72, 28, 1, 1, 0.6f, 1, 0);
     if (k->best_lap > 0) { char tb[32]; fmt_time(tb, sizeof tb, k->best_lap); snprintf(buf, sizeof buf, "BEST %s", tb); batch_text(&g_b, buf, 40, 104, 20, 0.8f, 0.9f, 1, 1); }
     if (g_mode == MODE_TT) { fmt_time(buf, sizeof buf, k->total_time); batch_text(&g_b, buf, 1240 - text_width(buf, 40), 30, 40, 1, 0.9f, 0.3f, 1);
         if (g_ghost_n > 1) batch_text(&g_b, "VS YOUR BEST RUN", 1240 - text_width("VS YOUR BEST RUN", 14), 112, 14, 0.7f, 0.9f, 1, 0.9f);
@@ -1833,9 +1839,10 @@ static void hud_race(const Pad *pad) {
     else {
         int mypos = 0; for (int p = 0; p < r->nk; p++) if (r->order[p] == r->player) mypos = p + 1;
         if (k->finished && k->place) mypos = k->place;
-        batch_text(&g_b, place_name(mypos), 1240 - text_width(place_name(mypos), 64), 24, 64, 1, 0.9f, 0.3f, 1);
+        { static int lastpos = -1; static float pt0 = 0; if (mypos != lastpos) { lastpos = mypos; pt0 = g_time; }   /* the place jumps when it changes */
+          float pa = g_time - pt0, ps = 64 * (1 + 0.45f * expf(-pa * 7) * cosf(pa * 14)); text3d(place_name(mypos), 1240 - text_width(place_name(mypos), ps), 24 + (64 - ps) * 0.5f, ps, 1, 1, 1, 1, 1); }
     }
-    snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); batch_text(&g_b, buf, 1240 - text_width(buf, 24), 96, 24, 1, 1, 1, 1);
+    snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); text3d(buf, 1240 - text_width(buf, 24), 96, 24, 1, 1, 1, 1, 0);
     if (g_track.ncoin) { float cy2 = r->jericho ? 222 : 262, pop = 1.0f + 0.6f * fmaxf(g_coin_pop[0], 0) / 0.5f, cs2 = 22 * pop;   /* the coin counter grows for a moment on each pickup */
         batch_rect(&g_b, 44 - 1, cy2 - 1, cs2 + 2, cs2 + 2, 0.45f, 0.3f, 0.05f, 1); batch_rect(&g_b, 44, cy2, cs2, cs2, 1, 0.82f, 0.25f, 1); batch_rect(&g_b, 44 + cs2 * 0.25f, cy2 + cs2 * 0.2f, cs2 * 0.2f, cs2 * 0.6f, 1, 0.97f, 0.7f, 1);
         snprintf(buf, sizeof buf, k->coins >= 10 ? "x%d MAX" : "x%d", k->coins); batch_text(&g_b, buf, 44 + cs2 + 8, cy2 + 1, 22 * pop, 1, 0.9f, 0.5f, 1); }
@@ -3283,14 +3290,15 @@ static void hud_battle_split(int p, float vw, float vh) {   /* one David's corne
 static void hud_split(int p, float vw, float vh) {
     Race *r = &g_race; int vk = human_kart(p); Kart *k = &r->k[vk]; char buf[64]; float sc = vw < 1000 ? 0.75f : 1.0f;
     int lap = k->lap < 1 ? 1 : (k->lap > g_track.laps ? g_track.laps : k->lap);
-    snprintf(buf, sizeof buf, "LAP %d/%d", lap, g_track.laps); batch_text(&g_b, buf, 16, 12, 26 * sc, 1, 1, 1, 1);
-    fmt_time(buf, sizeof buf, k->lap >= 1 ? k->lap_time : 0.0f); batch_text(&g_b, buf, 16, 12 + 30 * sc, 18 * sc, 1, 1, 0.6f, 1);
+    snprintf(buf, sizeof buf, "LAP %d/%d", lap, g_track.laps); text3d(buf, 16, 12, 26 * sc, 1, 1, 1, 1, 0);
+    fmt_time(buf, sizeof buf, k->lap >= 1 ? k->lap_time : 0.0f); text3d(buf, 16, 12 + 30 * sc, 18 * sc, 1, 1, 0.6f, 1, 0);
     { char tag[8]; snprintf(tag, sizeof tag, "P%d", p + 1); float tw = text_width(tag, 18 * sc) + 12; batch_rect(&g_b, vw / 2 - tw / 2, 8, tw, 24 * sc, PLAYER_COL[p][0], PLAYER_COL[p][1], PLAYER_COL[p][2], 0.9f); batch_text(&g_b, tag, vw / 2 - tw / 2 + 6, 10, 18 * sc, 0.05f, 0.05f, 0.1f, 1);
       batch_text(&g_b, CHARACTERS[r->character[vk]].short_name, vw / 2 - text_width(CHARACTERS[r->character[vk]].short_name, 12 * sc) / 2, 12 + 26 * sc, 12 * sc, 1, 1, 1, 0.9f); }
     int mypos = 0; for (int q = 0; q < r->nk; q++) if (r->order[q] == vk) mypos = q + 1;
     if (k->finished && k->place) mypos = k->place;
-    batch_text(&g_b, place_name(mypos), vw - 16 - text_width(place_name(mypos), 48 * sc), 10, 48 * sc, 1, 0.9f, 0.3f, 1);
-    snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); batch_text(&g_b, buf, vw - 16 - text_width(buf, 16 * sc), 12 + 52 * sc, 16 * sc, 1, 1, 1, 1);
+    { static int lastpos[MAX_HUMANS] = {-1, -1, -1, -1}; static float pt0[MAX_HUMANS]; int pp = p < MAX_HUMANS ? p : 0; if (mypos != lastpos[pp]) { lastpos[pp] = mypos; pt0[pp] = g_time; }
+      float pa = g_time - pt0[pp], ps = 48 * sc * (1 + 0.45f * expf(-pa * 7) * cosf(pa * 14)); text3d(place_name(mypos), vw - 16 - text_width(place_name(mypos), ps), 10 + (48 * sc - ps) * 0.5f, ps, 1, 1, 1, 1, 1); }
+    snprintf(buf, sizeof buf, "%3.0f KM/H", fabsf(k->speed) * 3.6f); text3d(buf, vw - 16 - text_width(buf, 16 * sc), 12 + 52 * sc, 16 * sc, 1, 1, 1, 1, 0);
     /* the blessing slot, bottom left */
     { float bw = 120 * sc, bh = 44 * sc, bx = 16, by = vh - bh - 12;
       if (r->jericho) { batch_rect(&g_b, bx, by, bw, bh, 0.05f, 0.1f, 0.25f, 0.7f); batch_rect(&g_b, bx + 2, by + 2, bw - 4, bh - 4, 0.15f, 0.3f, 0.6f, 0.7f); }
