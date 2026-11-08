@@ -1416,13 +1416,18 @@ static void build_props(void) {
     batch_clear(&g_b);
     if (g_def->bonus != 2) for (int i = 0; i < g_track.n; i++) { int j = (i + 1) % g_track.n; const TrackSample *a = &g_track.s[i], *bq = &g_track.s[j];
         int stripe = (int)(a->dist / 3.0f) & 1; float cr = heaven ? 1.0f : (stripe ? 0.85f : 0.95f), cg = heaven ? (stripe ? 0.85f : 0.95f) : (stripe ? 0.2f : 0.95f), cb = heaven ? (stripe ? 0.4f : 0.9f) : (stripe ? 0.2f : 0.95f);
+        /* chunky blocks (Sean: depth everywhere): a bevel up from the road, a flat top, the outer face, and a dark joint between blocks */
+        int joint = (int)(a->dist / 3.0f) != (int)(bq->dist / 3.0f); float jk = joint ? 0.35f : 1.0f; cr *= jk; cg *= jk; cb *= jk;
         for (int sd = -1; sd <= 1; sd += 2) { float ha = a->width * 0.5f, hb = bq->width * 0.5f;
-            Vec3 i0 = road_point(&g_track, i, sd * (ha - 0.55f)), o0 = road_point(&g_track, i, sd * (ha + 0.05f)), i1 = road_point(&g_track, j, sd * (hb - 0.55f)), o1 = road_point(&g_track, j, sd * (hb + 0.05f));
-            float k = 0.16f; Vec3 ti0 = v3(i0.x, i0.y + 0.03f, i0.z), to0 = v3(o0.x, o0.y + k, o0.z), ti1 = v3(i1.x, i1.y + 0.03f, i1.z), to1 = v3(o1.x, o1.y + k, o1.z);
-            Vec3 n = v3(-a->nx * sd * 0.3f, 0.95f, -a->nz * sd * 0.3f);   /* the sloped top faces in toward the road */
-            if (sd > 0) batch_quad4(&g_b, ti0, to0, to1, ti1, n, 0, 0, 1, 1, cr, cg, cb, 1); else batch_quad4(&g_b, to0, ti0, ti1, to1, n, 0, 0, 1, 1, cr, cg, cb, 1);
-            Vec3 b0 = v3(o0.x, o0.y - 0.3f, o0.z), b1 = v3(o1.x, o1.y - 0.3f, o1.z), no = v3(a->nx * sd, 0, a->nz * sd);   /* its outer face, down to the shoulder */
-            if (sd > 0) batch_quad4(&g_b, b0, b1, to1, to0, no, 0, 0, 1, 1, cr * 0.7f, cg * 0.7f, cb * 0.7f, 1); else batch_quad4(&g_b, b1, b0, to0, to1, no, 0, 0, 1, 1, cr * 0.7f, cg * 0.7f, cb * 0.7f, 1); } }
+            #define KP(idx, h, lat, up) ({ Vec3 q_ = road_point(&g_track, idx, sd * ((h) + (lat))); v3(q_.x, q_.y + (up), q_.z); })
+            Vec3 f0 = KP(i, ha, -0.7f, 0.02f), f1 = KP(j, hb, -0.7f, 0.02f);       /* foot, on the road */
+            Vec3 e0 = KP(i, ha, -0.5f, 0.24f), e1 = KP(j, hb, -0.5f, 0.24f);       /* top of the bevel */
+            Vec3 t0 = KP(i, ha, 0.05f, 0.26f), t1 = KP(j, hb, 0.05f, 0.26f);       /* outer top edge */
+            Vec3 b0 = KP(i, ha, 0.05f, -0.3f), b1 = KP(j, hb, 0.05f, -0.3f);      /* down to the shoulder */
+            #undef KP
+            Vec3 nb = v3(-a->nx * sd * 0.7f, 0.7f, -a->nz * sd * 0.7f), nt = v3(-a->nx * sd * 0.08f, 1, -a->nz * sd * 0.08f), no = v3(a->nx * sd, 0, a->nz * sd);
+            if (sd > 0) { batch_quad4(&g_b, f0, e0, e1, f1, nb, 0, 0, 1, 1, cr * 0.82f, cg * 0.82f, cb * 0.82f, 1); batch_quad4(&g_b, e0, t0, t1, e1, nt, 0, 0, 1, 1, cr, cg, cb, 1); batch_quad4(&g_b, b0, b1, t1, t0, no, 0, 0, 1, 1, cr * 0.62f, cg * 0.62f, cb * 0.62f, 1); }
+            else        { batch_quad4(&g_b, e0, f0, f1, e1, nb, 0, 0, 1, 1, cr * 0.82f, cg * 0.82f, cb * 0.82f, 1); batch_quad4(&g_b, t0, e0, e1, t1, nt, 0, 0, 1, 1, cr, cg, cb, 1); batch_quad4(&g_b, b1, b0, t0, t1, no, 0, 0, 1, 1, cr * 0.62f, cg * 0.62f, cb * 0.62f, 1); } } }
     gfx_mesh_free(m_curbs); m_curbs = g_b.n ? gfx_mesh_static(g_b.v, g_b.n) : NULL;
     batch_init(&g_b, g_vtmp, 8192);
 }
@@ -2960,7 +2965,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         float sr = 1, sg = 1, sb = 1;    /* the sun's color is applied by the shader now */
         /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
         /* depth on every ground surface (Sean: "they need to be 3 dimensional"): bumps that catch the sun - see gfx_bump */
-        gfx_bind(tx_grass); if (g_def->water) gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); else { gfx_bump(2); gfx_draw(m_ground, &id, sr, sg, sb, 1); }
+        gfx_bind(tx_grass); if (g_def->water) { gfx_bump(2); gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); } else { gfx_bump(2); gfx_draw(m_ground, &id, sr, sg, sb, 1); }   /* the lake's ripples catch the sun as they move */
         gfx_bump(2); if (m_field) gfx_draw(m_field, &id, sr, sg, sb, 1);   /* the open land, same grass as the ground */
         if (m_hills) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_draw(m_hills, &id, sr, sg, sb, 1); gfx_state(ST_SOLID); }   /* the hills beyond the walls */
         gfx_bump(3); gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);

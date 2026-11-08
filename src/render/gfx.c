@@ -384,7 +384,7 @@ Texture *gfx_texture_rgba_ex(const uint32_t *pixels, int w, int h, int repeat, i
     GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tx->surface.image, tx->surface.imageSize);
     GX2InitSampler(&t->smp, repeat ? GX2_TEX_CLAMP_MODE_WRAP : GX2_TEX_CLAMP_MODE_CLAMP, nearest ? GX2_TEX_XY_FILTER_MODE_POINT : GX2_TEX_XY_FILTER_MODE_LINEAR);
     if (levels > 1) {
-        GX2InitSamplerXYFilter(&t->smp, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_4_TO_1);
+        GX2InitSamplerXYFilter(&t->smp, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_8_TO_1);   /* roads stay sharp far ahead */
         GX2InitSamplerZMFilter(&t->smp, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_LINEAR);
         GX2InitSamplerLOD(&t->smp, 0.0f, (float)(levels - 1), 0.0f);
     }
