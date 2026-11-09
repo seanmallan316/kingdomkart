@@ -82,7 +82,7 @@ static Texture *tx_kartview[NCHARS][5]; static float g_kartview_aspect[NCHARS][5
 static Texture *tx_ride[NCHARS][5]; static float g_ride_aspect[NCHARS][5];
 /* spinning wheels: the wheel discs cut from each picture (content/img/wheels_<picture>.png) and where they sit */
 static const WheelDef *g_ride_wd[NCHARS][5], *g_view_wd[NCHARS][5]; static Texture *g_ride_wtex[NCHARS][5], *g_view_wtex[NCHARS][5];
-static float g_wheel_ang[NKARTS], g_tread_ph[NKARTS]; static Mesh *m_wheel_spr[NKARTS];
+static float g_wheel_ang[NKARTS], g_wheel_step[NKARTS], g_tread_ph[NKARTS]; static Mesh *m_wheel_spr[NKARTS];
 static const TreadDef *g_ride_td[NCHARS][5]; static Texture *tx_tread, *tx_trophy, *tx_qbox; static void px_trophy(int x, int y, uint32_t *o); static void px_qbox(int x, int y, uint32_t *o); static Mesh *m_qface, *m_qframe; static Mesh *m_tread_spr[NKARTS];
 static const TreadDef *tread_def(const char *picture) { for (int i = 0; i < NUM_TREAD_DEFS; i++) if (!strcmp(TREAD_DEFS[i].picture, picture)) return &TREAD_DEFS[i]; return NULL; }
 static const WheelDef *wheel_def(const char *picture) { for (int i = 0; i < NUM_WHEEL_DEFS; i++) if (!strcmp(WHEEL_DEFS[i].picture, picture)) return &WHEEL_DEFS[i]; return NULL; }
@@ -2660,12 +2660,14 @@ static void draw_trophy_pictures(int drc) {
    typed, or moves on; the beats also move on by themselves. The words are in cupstory.h. ---- */
 #include "cupstory.h"
 static void sc_load_props(void);
-typedef char sc_one_story_each[(NCHARS == (int)(sizeof CUP_STORIES / sizeof CUP_STORIES[0])) ? 1 : -1];
+typedef char sc_one_story_each[(NCHARS == (int)(sizeof CUP_STORIES / sizeof CUP_STORIES[0]) && NCHARS == (int)(sizeof GLORY_STORIES / sizeof GLORY_STORIES[0])) ? 1 : -1];
+static int g_sc_glory;   /* 1: the STORY MODE finale (GLORY_STORIES) rather than a cup winner's story */
+#define SC_STORY (g_sc_glory ? GLORY_STORIES : CUP_STORIES)
 enum { SB_TITLE, SB_STORY1, SB_STORY2, SB_VERSE, SB_LESSON, SB_COUNT };
 static int g_sc_char, g_sc_beat; static float g_sc_bt, g_sc_out, g_sc_roll;   /* who, which beat, seconds into it, the fade-out (0 = staying), how far the kart has rolled */
 static Vec3 g_sc_eye, g_sc_at, g_sc_eye0, g_sc_at0;                         /* the camera, and where it was when the beat changed */
 #define SC_TYPE 38.0f   /* letters a second as the words type themselves out */
-static const char *sc_text(int beat) { const CupStory *s = &CUP_STORIES[g_sc_char];
+static const char *sc_text(int beat) { const CupStory *s = &SC_STORY[g_sc_char];
     switch (beat) { case SB_TITLE: return s->place; case SB_STORY1: return s->story[0]; case SB_STORY2: return s->story[1]; case SB_VERSE: return s->verse; default: return s->lesson; } }
 static float sc_typed_t(int beat) { return beat == SB_TITLE ? 2.2f : 0.25f + (float)strlen(sc_text(beat)) / SC_TYPE; }
 static float sc_beat_len(int beat) {
@@ -2702,7 +2704,7 @@ static float sc_kart_h(void) { const Kart3D *k = &g_k3d[g_sc_char]; return k->ok
 static float sc_smooth(float u) { u = clampf(u, 0, 1); return u * u * (3 - 2 * u); }
 static Vec3 sc_lerp(Vec3 a, Vec3 b, float u) { return v3(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u, a.z + (b.z - a.z) * u); }
 static void sc_shot(int beat, float u, Vec3 *eye, Vec3 *at) {   /* where the camera wants to be in each beat (u: 0..1 through it) */
-    float hy = sc_kart_h(); Vec3 F = SET_LOOK[CUP_STORIES[g_sc_char].set].focus;
+    float hy = sc_kart_h(); Vec3 F = SET_LOOK[SC_STORY[g_sc_char].set].focus;
     switch (beat) {
     case SB_TITLE: { float e = sc_smooth(u * 1.4f); *eye = sc_lerp(v3(0, 10, 30), v3(3.5f, 2.6f, 11), e); *at = v3(0, hy * 0.6f, 0); } break;
     case SB_STORY1: { float a = 0.55f + 0.3f * u; *eye = v3(sinf(a) * 8.5f, 2.0f + 0.5f * u, cosf(a) * 8.5f); *at = v3(0, hy * 0.7f, 0); } break;
@@ -2715,10 +2717,10 @@ static void scene_start(int ch) {
     g_sc_char = ch >= 0 && ch < NCHARS ? ch : 0; g_sc_beat = SB_TITLE; g_sc_bt = 0; g_sc_out = 0; g_sc_roll = 0; g_screen = SCR_SCENE; g_screen_t = 0;
     g_sc_eye = g_sc_eye0 = v3(0, 10, 30); g_sc_at = g_sc_at0 = v3(0, 1, 0);
     sc_load_props();
-    if (CUP_STORIES[g_sc_char].set == SET_ELAH && !g_gol3d.ok) anim3d_load(&g_gol3d, "goliath");   /* the giant, fallen on his face */
-    gfx_log("cup story: %s (%s)", CHARACTERS[g_sc_char].name, CUP_STORIES[g_sc_char].title); }
+    if (SC_STORY[g_sc_char].set == SET_ELAH && !g_gol3d.ok) anim3d_load(&g_gol3d, "goliath");   /* the giant, fallen on his face */
+    gfx_log("cup story: %s (%s)", CHARACTERS[g_sc_char].name, SC_STORY[g_sc_char].title); }
 static void sc_next(void) {
-    g_sc_eye0 = g_sc_eye; g_sc_at0 = g_sc_at; g_sc_beat++; g_sc_bt = 0; int set = CUP_STORIES[g_sc_char].set;
+    g_sc_eye0 = g_sc_eye; g_sc_at0 = g_sc_at; g_sc_beat++; g_sc_bt = 0; int set = SC_STORY[g_sc_char].set;
     if (g_sc_beat == SB_STORY2) { if (set == SET_JORDAN) sfx_play(SFX_DOVE, 0.8f, 0); else if (set == SET_SHORE) sfx_play(SFX_WHALE_ROAR, 0.6f, 0.3f); else if (set == SET_STORM || set == SET_REDSEA) sfx_play(SFX_SPLASH, 0.7f, 0); else if (set == SET_HEAVEN) sfx_play(SFX_SHOFAR, 0.6f, 0); }
     if (g_sc_beat == SB_VERSE) sfx_play(SFX_UNLOCK, 0.55f, 0);
     if (g_sc_beat == SB_LESSON) { int hv = g_voice[g_sc_char][VO_WIN]; if (hv >= 0) sfx_voice_play(hv, 1.0f, 0); } }
@@ -2726,6 +2728,7 @@ static void scene_leave(void) {
 #ifdef KK_TOUR
     scene_start((g_sc_char + 1) % NCHARS); return;   /* the CI photos: on to the next story */
 #endif
+    if (g_sc_glory) { g_sc_glory = 0; g_multi = 0; start_race(1); story_enter(0); return; }   /* the finale: back to the finished map */
     g_multi = 0; start_race(1); g_screen = SCR_MAIN; g_screen_t = 0; }
 static void scene_update(float dt, int pa) {
     if (g_sc_out > 0) { g_sc_out += dt; if (g_sc_out > 0.7f) scene_leave(); return; }
@@ -2833,7 +2836,7 @@ static int sc_places(int set, Place *o) {   /* where every model stands in each 
     return n; }
 
 static void sc_keep_clear(Vec3 *eye, Vec3 at) {   /* slide the camera in toward what it looks at until it is out of every big model */
-    Place pl[96]; int set = CUP_STORIES[g_sc_char].set, np = sc_places(set, pl);
+    Place pl[96]; int set = SC_STORY[g_sc_char].set, np = sc_places(set, pl);
     for (int step = 0; step < 20; step++) { int hit = 0;
         for (int i = 0; i < np && !hit; i++) { Place *q = &pl[i]; const Kart3D *k = &g_prop[q->p]; if (!k->ok || q->p == PR_CLOUD || q->p == PR_VSIT || q->p == PR_VSTAND || q->p == PR_SHEEP || q->p == PR_DOVE) continue;
             float r = 0.5f * fmaxf(k->hi.x - k->lo.x, k->hi.z - k->lo.z) * q->s + 0.7f, top = q->y + (k->hi.y - k->lo.y) * q->s + 0.5f, dx = eye->x - q->x, dz = eye->z - q->z;
@@ -2954,7 +2957,7 @@ static Vertex g_scv[3][12000];   /* the moving parts: solid, see-through, glowin
 static void sc_draw_prop(int p, float x, float y, float z, float yaw, float s, float r, float g, float b) {
     if (p < 0 || p >= PR_COUNT || !g_prop[p].ok) return; Mat4 m = m4_mul(m4_translate(x, y, z), m4_mul(m4_rotate_y(yaw), m4_scale(s, s, s))); kart3d_draw(&g_prop[p], &m, 0, 0, r, g, b, 1); }
 static void draw_story_scene(int drc) {
-    const CupStory *S = &CUP_STORIES[g_sc_char]; int set = S->set; const SetLook *L = &SET_LOOK[set]; Mat4 id = m4_identity(); float t = g_time, fl = set == SET_STORM ? sc_flash() : 0;
+    const CupStory *S = &SC_STORY[g_sc_char]; int set = S->set; const SetLook *L = &SET_LOOK[set]; Mat4 id = m4_identity(); float t = g_time, fl = set == SET_STORM ? sc_flash() : 0;
     static Mesh *m_sky[SET_COUNT], *m_gnd[SET_COUNT], *m_solid[SET_COUNT], *m_rainbow, *m_ball, *m_cone, *m_dyn[2][3]; static Texture *tx_gnd[SET_COUNT]; static int gtried[SET_COUNT];
     if (!m_dyn[drc][0]) for (int k = 0; k < 3; k++) m_dyn[drc][k] = gfx_mesh_dynamic(12000);
     if (!m_sky[set]) { Batch tb; batch_init(&tb, g_vtmp, 32768); sc_build_sky(&tb, set); m_sky[set] = gfx_mesh_static(tb.v, tb.n);
@@ -3028,6 +3031,12 @@ static void draw_story_scene(int drc) {
     default: { float ang = atan2f(eye.x, eye.z); P.look_yaw = clampf(ang, -1.2f, 1.2f); P.look_pitch = 0.1f; P.arm[1] = K3A_WAVE; P.arm_w[1] = ramp; P.bob = 0.03f * fabsf(sinf(t * 3.0f)); } break; }
     Mat4 km = m4_translate(0, ky, kz); if (set == SET_STORM) km = m4_mul(km, m4_rotate_z(0.05f * sinf(t * 1.1f)));
     if (g_k3d[g_sc_char].ok) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(&g_k3d[g_sc_char], &km, g_sc_roll / 0.33f, 0, &P, 1, 1, 1, 1); }
+    if (g_sc_glory) {   /* the finale: every other racer lines the golden street, cheering the champion home */
+        int slot = 0; for (int c = 0; c < NCHARS; c++) { if (c == g_sc_char || c == S->guest || !g_k3d[c].ok) continue;
+            int side = slot & 1, row = slot / 2; slot++; float x = side ? 6.8f : -6.8f, z = 2.0f - row * 3.4f, yaw = side ? -1.25f : 1.25f;
+            K3Pose C; memset(&C, 0, sizeof C); C.t = t + c; float ph = t * 3.2f + c * 1.7f; C.arm[0] = C.arm[1] = (c & 1) ? K3A_UP : K3A_WAVE; C.arm_w[0] = C.arm_w[1] = 0.7f + 0.3f * sinf(ph);
+            C.bob = 0.04f * fabsf(sinf(ph)); C.look_yaw = -0.4f * (side ? -1 : 1); Mat4 cm = m4_mul(m4_translate(x, 0.05f * fabsf(sinf(ph * 0.5f)), z), m4_rotate_y(yaw));
+            const Kart3D *ck = row > 3 && g_k3d_lo[c].ok ? &g_k3d_lo[c] : &g_k3d[c]; gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(ck, &cm, 0, 0, &C, 1, 1, 1, 1); } }
     /* the guest: Jesus on the water, Jesus coming to the Jordan, Gabriel over Nazareth, Mary looking up */
     Vec3 gp = sc_guest_pos(set); int gu = S->guest; Mat4 gmx = id; K3Pose Q; memset(&Q, 0, sizeof Q); int guest_on = gu >= 0 && gu < NCHARS && gu != g_sc_char && g_k3d[gu].ok;
     float gy = set == SET_STORM ? sc_wave(gp.x, gp.z, t, 0.35f) - 0.1f : (gu == 13 ? 1.6f + 0.15f * sinf(t * 1.6f) : 0), gz = gp.z;
@@ -3100,7 +3109,7 @@ static int sc_wrap(const char *s, float size, float maxw, char out[5][140]) {
     if (line[0] && n < 5) snprintf(out[n++], 140, "%s", line);
     return n; }
 static void hud_scene_top(void) {
-    const CupStory *S = &CUP_STORIES[g_sc_char]; float bt = g_sc_bt, st = g_screen_t, bars = sc_smooth(st / 0.9f);
+    const CupStory *S = &SC_STORY[g_sc_char]; float bt = g_sc_bt, st = g_screen_t, bars = sc_smooth(st / 0.9f);
     if (S->set == SET_STORM) { float f = sc_flash(); if (f > 0) batch_rect(&g_b, 0, 0, 1280, 720, 0.8f, 0.85f, 1, 0.22f * f); }
     static const UiLook UI_SCENE = {{0.17f, 0.14f, 0.24f}, {0.05f, 0.04f, 0.09f}, {0.95f, 0.76f, 0.32f}, {0.36f, 0.25f, 0.1f}};
     ui_plaque(-30, -40 - (1 - bars) * 70, 1340, 98, 16, 20, &UI_SCENE, 0.96f, 0, -1);   /* the bar along the top, a solid slab with a gold edge */
@@ -3131,6 +3140,7 @@ static void hud_scene_top(void) {
 static void scene_check_words(void) {   /* the CI log: every story's lines fit the panel */
     int worst = 0, who = -1; for (int c = 0; c < NCHARS; c++) { int keep = g_sc_char; g_sc_char = c;
         for (int b = SB_STORY1; b < SB_COUNT; b++) { char l[5][140]; int n = sc_wrap(sc_text(b), b == SB_VERSE ? 26 : 24, 1180, l); if (n > worst) { worst = n; who = c; } }
+        if (text_width(GLORY_STORIES[c].title, strlen(GLORY_STORIES[c].title) > 22 ? 40 : 48) > 1240) gfx_log("finale title too wide: %s", GLORY_STORIES[c].title);
         if (text_width(CUP_STORIES[c].title, strlen(CUP_STORIES[c].title) > 22 ? 40 : 48) > 1240) gfx_log("cup story title too wide: %s", CUP_STORIES[c].title);
         g_sc_char = keep; }
     gfx_log("cup story words: at most %d lines (%s)%s", worst, who >= 0 ? CHARACTERS[who].name : "-", worst > 4 ? " TOO MANY" : ""); }
@@ -3236,6 +3246,7 @@ static const char *pick_music(void) {
         return music_available("music_results") ? "music_results" : "music_menu";
     }
     if (g_screen == SCR_STORY) return music_available("music_story") ? "music_story" : (music_available("music_map") ? "music_map" : "music_select");
+    if (g_screen == SCR_SCENE && g_sc_glory) { if (music_available("music_glory")) return "music_glory"; if (music_available("music_scene_heaven")) return "music_scene_heaven"; }
     if (g_screen == SCR_SCENE && g_sc_char >= 0 && g_sc_char < NCHARS) {   /* each character's own scene song: content/music/music_scene_<name>.mp3 (Sean makes them) */
         static char sn[48]; const char *nm = CHARACTERS[g_sc_char].name; int k = snprintf(sn, sizeof sn, "music_scene_");
         for (int i = 0; nm[i] && k < 46; i++) if (nm[i] != ' ' && nm[i] != '\'') sn[k++] = (char)(nm[i] >= 'A' && nm[i] <= 'Z' ? nm[i] + 32 : nm[i]); sn[k] = 0;
@@ -3727,7 +3738,9 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             if (g_k3d[r->character[i]].ok) {   /* a real 3D kart: body and driver, wheels that roll and steer, and its shadow on the road */
                 const Kart3D *k3 = &g_k3d[r->character[i]], *k3lo = g_k3d_lo[r->character[i]].ok ? &g_k3d_lo[r->character[i]] : k3; float st = q->stun > 0 ? 0.6f : 1.0f;
                 if (i != vk && (kd2 > 24.0f * 24.0f || (g_nplayers >= 3 && kd2 > 10.0f * 10.0f) || (g_nplayers == 2 && kd2 > 16.0f * 16.0f))) k3 = k3lo;   /* far away, or small in a split screen: the low-detail kart */
+                { float rate = fabsf(q->speed) / 0.42f; g_kart3d_wheel_blur = k3 == k3lo ? 0 : clampf((rate - 10.0f) / 30.0f, 0, 1); g_kart3d_wheel_step = g_wheel_step[i] * 1.6f; }
                 gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(k3, &m, g_wheel_ang[i], -q->steer_vis * 0.42f, &g_drv[i].p, sr * st, sg * st, sb * st, 1);
+                g_kart3d_wheel_blur = 0;
                 if (!q->air || q->hop < 2.5f) {   /* the shadow: the kart squashed flat onto the road along the sun */
                     float gy = q->hit.height + 0.04f, lx = ldir.x, ly = ldir.y < 0.25f ? 0.25f : ldir.y, lz = ldir.z;
                     Mat4 sh = m4_identity(); sh.m[4] = -lx / ly; sh.m[5] = 0.0f; sh.m[6] = -lz / ly; sh.m[12] = lx / ly * gy; sh.m[13] = gy; sh.m[14] = lz / ly * gy;
@@ -4006,7 +4019,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
           case 3: g_sm_over = 1; break;
           case 4: g_sm_over = 0; break;
           case 5: g_sm_raced = 1; g_sm_won = 1; g_sm_sel = 6; story_back_from_race(); break;
-          case 6: g_save.story = 16; g_sm_over = 1; story_enter(0); break; }
+          case 6: g_save.story = 15; g_sm_sel = 15; g_sm_raced = 1; g_sm_won = 1; story_back_from_race(); break; }   /* the last stop cleared: the finale, then (CI) every racer's finale in turn */
         step++; } }
 #elif defined(KK_TOUR) && KK_TOUR_ROAD == 28
     { static int step = -1; static const float at[6] = {2, 30, 55, 78, 98, 1e9f}; static const int who[5] = {19, 1, 0, 6, -1};   /* CI: BIBLE JOURNEYS - Abraham, Moses, Jesus, Daniel, then MY TRAVELS */
@@ -4031,8 +4044,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (rate > cap) rate = cap; if (rate < -cap) rate = -cap; g_tread_ph[i] += rate; if (g_tread_ph[i] > 1000.0f) g_tread_ph[i] -= 1000.0f;
         /* the wheels seen from the side: the real turn rate (ten turns a second at speed) strobes on a 60 Hz screen and the
            hubcaps whirl like a cartoon, so they turn with the kart's speed but never more than about two turns a second */
-        float wr = g_race.k[i].speed / 0.42f * dt, wcap = 12.0f * dt; if (wr > wcap) wr = wcap; if (wr < -wcap) wr = -wcap;
-        g_wheel_ang[i] += wr; if (g_wheel_ang[i] > 6283.0f) g_wheel_ang[i] -= 6283.1853f; }
+        /* (Sean: the tires spinning looked bad and clunky) the 3D wheels now turn at nearly their real rate and blur when fast */
+        float wr = g_race.k[i].speed / 0.42f * dt, wcap = 50.0f * dt; if (wr > wcap) wr = wcap; if (wr < -wcap) wr = -wcap;
+        g_wheel_step[i] = wr; g_wheel_ang[i] += wr; if (g_wheel_ang[i] > 6283.0f) g_wheel_ang[i] -= 6283.1853f; }
     if (g_screen == SCR_RACE || g_screen == SCR_RESULTS) drivers_update(&g_race, dt);
     blur_update(dt);
     { /* speed report for the log file (the real Wii U's frame rate is only visible here): every 10 seconds */
@@ -4055,9 +4069,9 @@ void game_frame(const Pad *pads, int npads, float dt) {
     int pnx = (g_prev.sx > 0.5f) - (g_prev.sx < -0.5f), pny = (g_prev.sy > 0.5f) - (g_prev.sy < -0.5f);
     int mx = 0, my = 0;
     if (nx != pnx || ny != pny) { mx = nx; my = ny; g_nav_t = 0; } else if (nx || ny) { g_nav_t += dt; if (g_nav_t > 0.35f) { mx = nx; my = ny; g_nav_t = 0.22f; } }
-    int px_ = pad->x && !g_prev.x, pye_ = pad->y && !g_prev.y;   /* X / Y: the map */
+    int px_ = pad->x && !g_prev.x, pye_ = pad->y && !g_prev.y, pzl_ = pad->zl && !g_prev.zl;   /* X / Y: the map */
     g_prev = *pad;
-    if (g_screen_t < 0.3f) { pa = pb = 0; mx = my = 0; px_ = pye_ = 0; }      /* ignore presses right after a screen change */
+    if (g_screen_t < 0.3f) { pa = pb = 0; mx = my = 0; px_ = pye_ = pzl_ = 0; }      /* ignore presses right after a screen change */
     {   /* the GamePad touch screen */
         static int was_touch = 0, tz_screen = -1; const Pad *gp = npads > 0 ? &pads[0] : NULL; int tap = gp && gp->touch && !was_touch; was_touch = gp && gp->touch;
         if (tz_screen != g_screen) { g_ntz_prev = 0; tz_screen = g_screen; }   /* buttons from the screen before do not count */
@@ -4279,7 +4293,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (pa) { if (g_gp_round >= NUM_GP_TRACKS) { g_screen = SCR_TROPHY; g_screen_t = 0; } else { begin_player_race(); g_screen_t = 0; } }
         break;
     case SCR_SCENE: scene_update(dt, pa); break;
-    case SCR_STORY: story_update(dt, pa, pb, mx, my, px_, pye_, pplus); break;
+    case SCR_STORY: story_update(dt, pa, pb, mx, my, px_, pye_, pplus, pzl_); break;
     case SCR_TROPHY: {
         static float last_t = 99, tick_t = 0; float t0 = last_t; last_t = g_screen_t; int ord[NKARTS]; cer_order(ord); float te = cer_lock_t(0, ord);
         for (int p = 0; p < 3; p++) { float lk = cer_lock_t(p, ord); if (t0 < lk && g_screen_t >= lk) sfx_play(p == 0 ? SFX_WIN : SFX_LAND, p == 0 ? 1.0f : 0.9f, 0); }

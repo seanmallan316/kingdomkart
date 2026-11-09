@@ -231,7 +231,7 @@ static void sm_nav(int mx, int my) {   /* the stick: the nearest stop that way *
     for (int i = 0; i < SM_NODES; i++) { if (i == g_sm_sel) continue; float dx = SM_NODE[i].px - bx, dy = SM_NODE[i].py - by, d = sqrtf(dx * dx + dy * dy); if (d < 1) continue;
         float along = (dx * mx + dy * my) / d; if (along < 0.45f) continue; float score = d * (2.0f - along); if (score < bs) { bs = score; best = i; } }
     if (best >= 0) sm_select(best); }
-static void story_update(float dt, int pa, int pb, int mx, int my, int px_, int py_, int pplus) {
+static void story_update(float dt, int pa, int pb, int mx, int my, int px_, int py_, int pplus, int pzl) {
     g_sm_t += dt; g_sm_dt = dt;
     if (g_sm_t < SM_UNFOLD_END) {   /* the map coming out: the paper sounds; A skips it */
         static float last; if (g_sm_t < last) last = 0;
@@ -253,6 +253,7 @@ static void story_update(float dt, int pa, int pb, int mx, int my, int px_, int 
         if (pa) { if (sm_jdone()) g_sm_jt = 0; else g_sm_jt = 1e4f; sfx_play(SFX_MENU_OK, 0.7f, 0); }
         if (pb) { g_story = 0; g_screen = SCR_MAIN; g_screen_t = 0; sfx_play(SFX_MENU_BACK, 1, 0); }
         return; }
+    if (pzl && g_save.story >= SM_NODES) { sfx_play(SFX_MENU_OK, 1, 0); g_sc_glory = 1; scene_start(g_player_char); return; }   /* the story is finished: ZL watches the ending again */
     if (mx || my) sm_nav(mx, my);
     if (pplus) { g_sm_over = !g_sm_over; sfx_play(SFX_MENU_MOVE, 1, 0); }
     if (px_) { g_screen = SCR_CHAR; g_screen_t = 0; sfx_play(SFX_MENU_OK, 1, 0); return; }
@@ -272,7 +273,8 @@ static void story_back_from_race(void) {
     int cleared_new = g_sm_raced && g_sm_won && g_sm_sel == g_save.story && g_save.story < SM_NODES;
     if (cleared_new) { g_save.story++; g_save.dirty = 1; g_sm_cel = 4.5f; g_sm_cel_node = g_sm_sel; sfx_play(SFX_WIN, 1, 0); }
     set_track(0); g_mode = MODE_SINGLE; g_multi = 0; start_race(1);
-    story_enter(0); g_sm_raced = 0; }
+    story_enter(0); g_sm_raced = 0;
+    if (cleared_new && g_save.story >= SM_NODES) { g_sm_cel = 0; g_sc_glory = 1; scene_start(g_player_char); } }   /* all 16 stops: the finale at Heaven's gates */
 
 static void sm_draw_model(const Kart3D *k, Vec3 at, float yaw, float want, float r, float g, float b, float a) {   /* a model scaled so its biggest side is 'want' units */
     if (!k || !k->ok) return; float ext = fmaxf(fmaxf(k->hi.x - k->lo.x, k->hi.y - k->lo.y), k->hi.z - k->lo.z); if (ext < 1e-4f) return; float s = want / ext;
@@ -422,7 +424,7 @@ static void hud_story(void) {
     batch_text(&g_b, state, 1240 - text_width(state, 16), py + 20, 16, cl ? 1 : op ? 0.6f : 0.75f, cl ? 0.85f : op ? 1 : 0.75f, cl ? 0.35f : op ? 0.6f : 0.8f, 1);
     if (op) { ui_plaque(1080, py + 46, 170, 48, 14, 10, &UI_GOLD, 1, 0.4f + 0.3f * sinf(g_time * 4), -1); text3d("A: RACE", 1165 - text_width("A: RACE", 22) / 2, py + 57, 22, 0.35f, 0.2f, 0.05f, 1, 0); tzone(1080, py + 46, 170, 48, TZ_A, 0); }
     text_c("STICK: MOVE   A: RACE   X: CHARACTER   Y: BIBLE JOURNEYS   +: WHOLE MAP   B: BACK", 694, 13, 0.9f, 0.92f, 1, 0.85f);
-    if (g_save.story >= SM_NODES) { float pu = 0.85f + 0.15f * sinf(g_time * 2.5f); text3d("STORY COMPLETE - GLORY!", 640 - text_width("STORY COMPLETE - GLORY!", 30) / 2, 92, 30, pu, pu * 0.85f, 0.35f, st, 1); }
+    if (g_save.story >= SM_NODES) { float pu = 0.85f + 0.15f * sinf(g_time * 2.5f); text3d("STORY COMPLETE - GLORY!", 640 - text_width("STORY COMPLETE - GLORY!", 30) / 2, 92, 30, pu, pu * 0.85f, 0.35f, st, 1); text_c("ZL: WATCH THE ENDING AGAIN", 132, 16, 1, 0.92f, 0.7f, st); }
     if (g_sm_cel > 0) { float a = clampf(g_sm_cel / 0.5f, 0, 1) * clampf((4.5f - g_sm_cel) / 0.3f, 0, 1); text3d("STOP CLEARED!", 640 - text_width("STOP CLEARED!", 50) / 2, 250, 50, 1, 0.9f, 0.35f, a, 1);
         if (g_save.story < SM_NODES && g_sm_cel < 2.4f) { snprintf(buf, sizeof buf, "NEXT: %s", SM_NODE[g_save.story].name); text3d(buf, 640 - text_width(buf, 26) / 2, 318, 26, 1, 1, 1, a, 0); } } }
 #endif

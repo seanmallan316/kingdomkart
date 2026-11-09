@@ -71,7 +71,7 @@ static void race_setup(Race *r, const Track *t, const int *chars_in, const int *
     if (g_field_on) for (int i = 0; i < NKARTS; i++) if (!r->human[i] && g_field[i] >= 0 && g_field[i] < NCHARS) r->character[i] = g_field[i];
     if (r->player < 0) r->player = 0;
     for (int i = 0; i < NKARTS; i++) r->order[i] = i;
-    float base = difficulty == DIFF_EASY ? 0.62f : (difficulty == DIFF_NORMAL ? 0.84f : 0.95f);   /* (Sean: not difficult enough; then: I can lap them twice even on hard) */
+    float base = difficulty == DIFF_EASY ? 0.70f : (difficulty == DIFF_NORMAL ? 0.90f : 1.0f);   /* (Sean: not difficult enough; then: I can lap them twice even on hard) */
     for (int i = 0; i < r->nk; i++) {
         Kart *k = &r->k[i];
         memset(k, 0, sizeof *k);
@@ -270,10 +270,11 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
         if (ai) {
             float skill = r->human[i] ? 0.9f : r->ai_skill[i];
             /* keep the race close without cheating: a little braver when far behind the people, a little more careful when far ahead */
-            if (!r->human[i]) { float gap = k->dist - best_human; if (gap < -60) skill += 0.08f; else if (gap > 70) skill -= 0.08f; skill = fminf(skill, 0.97f);   /* the computer never drives a perfect line */
+            if (!r->human[i]) { float gap = k->dist - best_human; if (gap < -60) skill += 0.08f; else if (gap > 70) skill -= 0.08f; skill = fminf(skill, r->difficulty == DIFF_HARD ? 1.04f : 0.97f);   /* the computer never drives a perfect line (except on Hard) */
                 /* and a computer driver left behind finds a little extra speed, more on Hard, so the person always has a race on their hands */
                 float most = r->difficulty == DIFF_EASY ? 0.06f : r->difficulty == DIFF_NORMAL ? 0.16f : 0.26f, want = gap < -15.0f ? clampf((-gap - 15.0f) / 140.0f, 0, 1) * most : 0;
                 if (gap > 40.0f) want = -0.04f * clampf((gap - 40.0f) / 100.0f, 0, 1) * (r->difficulty == DIFF_HARD ? 0.3f : 1.0f);   /* way out in front: ease off a touch */
+                if (r->difficulty == DIFF_HARD) want += 0.04f;   /* Hard: the computer drivers are a touch faster than anyone at top speed */
                 k->catchup += (want - k->catchup) * fminf(1.0f, dt * 0.8f); }
             kart_autopilot(k, t, &in, clampf(skill, 0.3f, 1.0f));
             r->ai_wobble[i] += dt * 0.7f;
@@ -281,6 +282,12 @@ void race_step_multi(Race *r, const KartInput *hin, int all_auto, float dt) {
             /* good drivers do a trick off big jumps */
             if (k->air && k->air_t > 0.2f && k->hop <= 0 && !k->trick && skill > 0.4f && rr(r) < 0.08f) in.drift = 1;
             else in.steer += 0.06f * sinf(r->ai_wobble[i]) * (1.0f - skill);      /* human-like imperfection */
+            /* good drivers line up the boost pads ahead (Sean: the computer has to put up a race) */
+            if (!k->air && skill > 0.6f) { for (int p = 0; p < t->npad; p++) { const RoadPad *pd = &t->pad[p];
+                int ahead = pd->idx - k->hit.idx; if (ahead < 0) ahead += t->n; float dist = (float)ahead * (t->length / (float)t->n);
+                if (dist < 3.0f || dist > 70.0f) continue; float gap = pd->lateral - k->hit.lateral;
+                if (fabsf(gap) > 18.0f || fabsf(pd->lateral) > t->s[pd->idx].width * 0.5f) continue;
+                if (fabsf(gap) > pd->halfw * 0.5f) in.steer = clampf(in.steer - (gap > 0 ? 1.0f : -1.0f) * 0.6f * fminf(fabsf(gap) * 0.3f, 1.0f), -1.0f, 1.0f); break; } }
             /* drift toward a coin just ahead (only a nudge, so the racing line still wins) */
             if (k->coins < 10 && !k->air) { for (int c = 0; c < t->ncoin; c++) { if (r->coin_respawn[c] > 0) continue;
                 int ahead = t->coin[c].idx - k->hit.idx; if (ahead < 0) ahead += t->n; float dist = (float)ahead * (t->length / (float)t->n);

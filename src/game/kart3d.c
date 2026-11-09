@@ -10,6 +10,7 @@ static uint32_t be32(uint32_t v) {   /* the file is in the Wii U's byte order (b
     return g_little ? ((v >> 24) | ((v >> 8) & 0xFF00u) | ((v << 8) & 0xFF0000u) | (v << 24)) : v; }
 static void be_words(void *p, size_t n) { uint32_t *w = p; for (size_t i = 0; i < n; i++) w[i] = be32(w[i]); }
 Texture *g_kart3d_tex_override;
+float g_kart3d_wheel_blur, g_kart3d_wheel_step;
 int kart3d_load(Kart3D *k, const char *name) {
     memset(k, 0, sizeof *k); char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "models/%s.kkm", name);
     FILE *f = fopen(path, "rb"); if (!f) return 0;
@@ -38,7 +39,11 @@ static void draw_body(const Kart3D *k, const Mat4 *base, float wheel_ang, float 
     for (int w = K3_FL; w <= K3_BR; w++) { if (!k->m[w]) continue;
         Mat4 m = m4_mul(*base, m4_translate(k->piv[w].x, k->piv[w].y, k->piv[w].z));
         if (w == K3_FL || w == K3_FR) m = m4_mul(m, m4_rotate_y(steer));
-        m = m4_mul(m, m4_rotate_x(wheel_ang)); gfx_draw_ex(k->m[w], &m, r, g, b, a, 0.05f, 0, 0, 0); } }
+        Mat4 mw = m4_mul(m, m4_rotate_x(wheel_ang)); gfx_draw_ex(k->m[w], &mw, r, g, b, a, 0.05f, 0, 0, 0);
+        if (g_kart3d_wheel_blur > 0.05f && a > 0.99f) {   /* a fast wheel: see-through copies trailing behind it smear into a motion blur */
+            gfx_state(ST_TRANSPARENT);
+            for (int j = 1; j <= 3; j++) { Mat4 mg = m4_mul(m, m4_rotate_x(wheel_ang - g_kart3d_wheel_step * j / 3.0f)); gfx_draw_ex(k->m[w], &mg, r * 0.9f, g * 0.9f, b * 0.9f, 0.32f * g_kart3d_wheel_blur, 0, 0, 0, 0); }
+            gfx_state(ST_DEPTH | ST_DEPTH_WRITE); } } }
 /* ---- the moving driver: every piece is solid; joints turn it about the hips, neck, shoulders and elbows ---- */
 static Vec3 v3_add(Vec3 a, Vec3 b) { return v3(a.x + b.x, a.y + b.y, a.z + b.z); }
 static Vec3 v3_mulf(Vec3 a, float f) { return v3(a.x * f, a.y * f, a.z * f); }

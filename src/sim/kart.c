@@ -173,7 +173,10 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     if (!k->air && k->pad_cd <= 0 && k->stun <= 0) {
         for (int p = 0; p < t->npad; p++) {
             const RoadPad *pd = &t->pad[p]; int d = k->hit.idx - pd->idx; if (d > t->n / 2) d -= t->n; if (d < -t->n / 2) d += t->n;
-            if (d < -1 || d > 1 || fabsf(k->hit.lateral - pd->lateral) > pd->halfw) continue;
+            int span = (k->hit.idx - prev_idx + t->n) % t->n, at = (pd->idx - prev_idx + t->n) % t->n;   /* a fast kart can cross several samples in one step: a pad it passed over counts */
+            int crossed = span < t->n / 2 && at <= span + 1;
+            if ((d < -1 || d > 1) && !crossed) continue;
+            if (fabsf(k->hit.lateral - pd->lateral) > pd->halfw) continue;
             k->pad_cd = 0.6f; k->pad_flag = pd->kind;
             if (pd->kind == PAD_BOOST) { k->boost_t = fmaxf(k->boost_t, 1.3f); k->boost_mul = fmaxf(k->boost_mul, 1.4f); k->speed = fmaxf(k->speed, BASE_TOP * st->top_speed * 1.05f); }
             else if (pd->kind == PAD_BOUNCE) { k->air = 1; k->air_t = 0; k->vy = 12.0f; k->drifting = 0; }
@@ -199,6 +202,7 @@ void kart_step(Kart *k, const Track *t, const KartInput *in_real, float dt) {
     (void)ox; (void)oz;
 }
 
+float g_ai_corner = 1.0f;   /* scales how much the computer slows for a bend (tests try other values) */
 void kart_autopilot(const Kart *k, const Track *t, KartInput *in, float skill) {
     memset(in, 0, sizeof *in);
     float dsc = t->def_scale > 0 ? t->def_scale : 1.0f; int look = (int)((5 + k->speed * 0.35f) * dsc);   /* in samples: more of them on the finer-sampled roads */
@@ -217,7 +221,7 @@ void kart_autopilot(const Kart *k, const Track *t, KartInput *in, float skill) {
        nearly straight through) does not look like two hairpins */
     float net = wrap_pi(ang_b - ang_h), net_far = wrap_pi(ang_c - ang_a);
     float sharp = fmaxf(fminf(fabsf(curve), fabsf(net) * 0.6f + 0.15f), fminf(fabsf(curve_far), fabsf(net_far) * 0.6f + 0.15f) * 0.7f);
-    float limit = BASE_TOP * k->st.top_speed * (1.0f + k->catchup) * (1.2f - 0.95f * clampf1(sharp * 1.3f, 0, 1)) * (0.60f + 0.40f * skill);   /* lower skill = never quite flat out */
+    float limit = BASE_TOP * k->st.top_speed * (1.0f + k->catchup) * (1.2f - g_ai_corner * (1.0f - 0.55f * skill) * clampf1(sharp * 1.3f, 0, 1))   /* (Sean: the computer is too easy - it braked far too much for bends: good drivers now carry their speed) */ * (0.60f + 0.40f * skill);   /* lower skill = never quite flat out */
     in->gas = k->speed < limit;
     in->brake = k->speed > limit * 1.3f && !k->air;
     /* drift through real corners (press hard into the turn so the drift starts), let go when it straightens so the mini-turbo fires */
