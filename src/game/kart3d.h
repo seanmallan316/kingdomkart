@@ -19,9 +19,11 @@ typedef struct {
     float t;                              /* seconds, drives the waving */
 } K3Pose;
 typedef struct { int ok, rig; Mesh *m[K3_PARTS]; Vec3 piv[K3_PARTS]; float rad[K3_PARTS];   /* rad: a wheel's radius; for the head, how far it may turn (0 = no limit of its own) */
-                Texture *tex; Vec3 lo, hi; } Kart3D;
+                Texture *tex; Vec3 lo, hi;
+                int face; Mesh *fm, *fe[2]; float skin[3]; } Kart3D;   /* face: a sheet over the mouth and one over each eye (<name>.face, tools/model3d/face_spots.py) */
 extern Texture *g_kart3d_tex_override;
-extern float g_kart3d_wheel_blur, g_kart3d_wheel_step;   /* set before drawing a kart: how blurred its wheels are (0..1) and how far they turn in a frame */   /* set while loading a low-detail copy: it shares the full kart's picture */
+extern float g_kart3d_wheel_blur, g_kart3d_wheel_step;
+extern float g_kart3d_mouth; extern int g_kart3d_mouth_round;   /* set before drawing a racer who is talking: how open the mouth is (0..1), round lips; used up by the next draw */   /* set before drawing a kart: how blurred its wheels are (0..1) and how far they turn in a frame */   /* set while loading a low-detail copy: it shares the full kart's picture */
 int kart3d_load(Kart3D *k, const char *name);   /* 1 if this racer has a 3D kart */
 /* draws it: 'base' places the kart (its ground point, facing +z); wheel_ang = how far the wheels have rolled, steer = front-wheel turn */
 void kart3d_draw(const Kart3D *k, const Mat4 *base, float wheel_ang, float steer, float r, float g, float b, float a);

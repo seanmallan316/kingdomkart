@@ -377,7 +377,7 @@ static void draw_story_map(int drc) {
             K3Pose P; memset(&P, 0, sizeof P); P.t = t; if (!driving) { P.arm[1] = K3A_WAVE; P.arm_w[1] = 1; P.look_yaw = 0.4f * sinf(t * 0.7f); } else P.bob = 0.03f * fabsf(sinf(t * 9));
             if (g_sm_cel > 0) { P.arm[0] = P.arm[1] = K3A_UP; P.arm_w[0] = P.arm_w[1] = 1; }
             float s = 3.4f * pop; (void)ah; Mat4 m = m4_mul(m4_translate(p.x, p.y + 0.1f + (driving ? 0.15f * fabsf(sinf(t * 11)) : 0), p.z), m4_mul(m4_rotate_y(yaw), m4_scale(s, s, s)));
-            gfx_state(ST_DEPTH | ST_DEPTH_WRITE); kart3d_draw_pose(&g_k3d[ch], &m, driving ? t * 12 : 0, 0, &P, 1, 1, 1, 1);
+            gfx_state(ST_DEPTH | ST_DEPTH_WRITE); talk_apply(ch); kart3d_draw_pose(&g_k3d[ch], &m, driving ? t * 12 : 0, 0, &P, 1, 1, 1, 1);
             if (driving) for (int k = 0; k < 6; k++) { float ph = fmodf(t * 3 + k / 6.0f, 1.0f); SM_GLOW(v3(p.x - sinf(yaw) * (1.5f + ph * 3), p.y + 0.5f + ph, p.z - cosf(yaw) * (1.5f + ph * 3)), 0.7f + ph, 0.9f, 0.8f, 0.6f, 0.5f * (1 - ph)); } } }
         if (gb.n) { gfx_mesh_update(m_glow[drc], gb.v, gb.n); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_glow[drc], &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); }
     }

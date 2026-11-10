@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 static int g_little = -1;
 static uint32_t be32(uint32_t v) {   /* the file is in the Wii U's byte order (big-endian): turn it round on a little-endian computer (the tests) */
     if (g_little < 0) { uint16_t one = 1; g_little = *(uint8_t *)&one == 1; }
@@ -11,6 +12,25 @@ static uint32_t be32(uint32_t v) {   /* the file is in the Wii U's byte order (b
 static void be_words(void *p, size_t n) { uint32_t *w = p; for (size_t i = 0; i < n; i++) w[i] = be32(w[i]); }
 Texture *g_kart3d_tex_override;
 float g_kart3d_wheel_blur, g_kart3d_wheel_step;
+float g_kart3d_mouth; int g_kart3d_mouth_round;
+static Texture *g_face_tex[2]; static int g_face_tex_tried;   /* face_mouth.png: 8 openings, wide and round; face_lid.png: 8 steps of an eyelid closing */
+static Mesh *face_sheet(FILE *f, int nx, int ny, float u_scale, float v_scale) {   /* a grid of points lying on the face, made into triangles */
+    if (nx < 2 || ny < 2 || nx > 16 || ny > 16) return NULL; Vertex g[256]; Vertex tri[15 * 15 * 6]; int n = 0;
+    for (int i = 0; i < nx * ny; i++) { float x, y, z, a, b, c, u, v; if (fscanf(f, "%f %f %f %f %f %f %f %f", &x, &y, &z, &a, &b, &c, &u, &v) != 8) return NULL;
+        Vertex q = {x, y, z, a, b, c, u * u_scale, v * v_scale, 1, 1, 1, 1}; g[i] = q; }
+    for (int j = 0; j + 1 < ny; j++) for (int i = 0; i + 1 < nx; i++) { int a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; tri[n++] = g[a]; tri[n++] = g[c]; tri[n++] = g[b]; tri[n++] = g[b]; tri[n++] = g[c]; tri[n++] = g[d]; }
+    return gfx_mesh_static(tri, n); }
+static void face_load(Kart3D *k, const char *name) {
+    char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "models/%s.face", name); FILE *f = fopen(path, "rb"); if (!f) return;
+    char word[32]; int eyes = 0; k->skin[0] = 0.95f; k->skin[1] = 0.65f; k->skin[2] = 0.5f;
+    while (fscanf(f, "%31s", word) == 1) {
+        int nx, ny; float a, b, c;
+        if (!strcmp(word, "mouthpatch") && fscanf(f, "%d %d", &nx, &ny) == 2) k->fm = face_sheet(f, nx, ny, 1.0f / 8, 0.5f);
+        else if (!strcmp(word, "eyepatch") && fscanf(f, "%d %d", &nx, &ny) == 2) { Mesh *m = face_sheet(f, nx, ny, 1.0f / 8, 1.0f); if (eyes < 2) k->fe[eyes++] = m; }
+        else if (!strcmp(word, "skin") && fscanf(f, "%f %f %f", &a, &b, &c) == 3) { k->skin[0] = a; k->skin[1] = b; k->skin[2] = c; }
+        else { int ch; while ((ch = fgetc(f)) != EOF && ch != '\n') {} } }
+    fclose(f); k->face = k->fm && eyes == 2;
+    if (k->face && !g_face_tex_tried) { g_face_tex_tried = 1; int w, h; g_face_tex[0] = asset_texture("face_mouth", 0, &w, &h); g_face_tex[1] = asset_texture("face_lid", 0, &w, &h); } }
 int kart3d_load(Kart3D *k, const char *name) {
     memset(k, 0, sizeof *k); char path[256]; snprintf(path, sizeof path, KK_CONTENT_DIR "models/%s.kkm", name);
     FILE *f = fopen(path, "rb"); if (!f) return 0;
@@ -29,7 +49,8 @@ int kart3d_load(Kart3D *k, const char *name) {
     fclose(f);
     if (good && k->m[K3_BODY]) { if (g_kart3d_tex_override) k->tex = g_kart3d_tex_override; else { snprintf(path, sizeof path, "models/%s.png", name); int w, h; k->tex = asset_texture_file(path, 1, &w, &h); } }
     k->ok = good && k->m[K3_BODY] && k->tex;
-    k->rig = k->ok && k->m[K3_HEAD];   /* the torso, the arms and the steering wheel are optional: a driver may only turn the head */
+    k->rig = k->ok && k->m[K3_HEAD];
+    if (k->rig && !g_kart3d_tex_override) face_load(k, name);   /* (the torso, the arms and the steering wheel are optional: a driver may only turn the head */
     gfx_log("3D kart %s: %s%s", name, k->ok ? "loaded" : (good ? "picture missing" : "model file unreadable"), k->rig ? " (driver moves)" : "");
     if (!k->ok) { for (int i = 0; i < K3_PARTS; i++) { gfx_mesh_free(k->m[i]); k->m[i] = NULL; } }
     return k->ok; }
@@ -119,11 +140,18 @@ static void draw_driver(const Kart3D *k, const Mat4 *base, float steer, const K3
     Mat4 pm[K3_PARTS]; pose_driver(k, steer, pose, pm);
     for (int i = K3_TORSO; i <= K3_SWHEEL; i++) { if (!k->m[i]) continue;
         Mat4 m = m4_mul(*base, m4_mul(pm[i], m4_translate(k->piv[i].x, k->piv[i].y, k->piv[i].z)));   /* the piece is stored round its own joint */
-        gfx_draw_ex(k->m[i], &m, r, g, b, a, unlit ? 0 : (i == K3_SWHEEL ? 0.3f : spec), unlit, 0, 0); } }
+        gfx_draw_ex(k->m[i], &m, r, g, b, a, unlit ? 0 : (i == K3_SWHEEL ? 0.3f : spec), unlit, 0, 0);
+        if (i == K3_HEAD && !unlit && k->face && a > 0.99f && g_face_tex[0] && g_face_tex[1]) {   /* the face comes alive: the mouth opens with the voice, the eyes blink */
+            float mo = g_kart3d_mouth, bl = 0; if (pose && pose->t != 0) { float ph = fmodf(pose->t + (float)(((uintptr_t)k >> 4) % 97) * 0.37f, 4.3f); bl = ph < 0.16f ? sinf(ph / 0.16f * 3.14159f) : 0; }
+            if (mo > 0.06f || bl > 0.06f) { gfx_state(ST_TRANSPARENT);
+                if (mo > 0.06f) { int fr = 1 + (int)(clampf(mo, 0, 1) * 6.99f); gfx_bind(g_face_tex[0]); gfx_draw_ex(k->fm, &m, r, g, b, 1, 0.25f, 0, fr / 8.0f, g_kart3d_mouth_round ? 0.5f : 0); }
+                if (bl > 0.06f) { int fr = 1 + (int)(clampf(bl, 0, 1) * 6.99f); gfx_bind(g_face_tex[1]); for (int e = 0; e < 2; e++) gfx_draw_ex(k->fe[e], &m, k->skin[0] * r, k->skin[1] * g, k->skin[2] * b, 1, 0.05f, 0, fr / 8.0f, 0); }
+                gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(k->tex); } } } }
 void kart3d_draw(const Kart3D *k, const Mat4 *base, float wheel_ang, float steer, float r, float g, float b, float a) { kart3d_draw_pose(k, base, wheel_ang, steer, NULL, r, g, b, a); }
 void kart3d_draw_pose(const Kart3D *k, const Mat4 *base, float wheel_ang, float steer, const K3Pose *pose, float r, float g, float b, float a) {
     draw_body(k, base, wheel_ang, steer, r, g, b, a);
-    if (k->ok && k->rig) draw_driver(k, base, steer, pose, r, g, b, a, 0.12f, 0); }
+    if (k->ok && k->rig) draw_driver(k, base, steer, pose, r, g, b, a, 0.12f, 0);
+    g_kart3d_mouth = 0; g_kart3d_mouth_round = 0; }
 void kart3d_draw_flat(const Kart3D *k, const Mat4 *base, float wheel_ang, float steer, const K3Pose *pose, float r, float g, float b, float a) {
     if (!k->ok) return;
     gfx_draw_ex(k->m[K3_BODY], base, r, g, b, a, 0, 1, 0, 0);
