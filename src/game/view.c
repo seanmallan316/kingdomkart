@@ -3133,7 +3133,7 @@ static void draw_story_scene(int drc) {
     gfx_bind(NULL); gfx_camera_2d(); gfx_state(ST_HUD); }
 /* the lens: everything but the champion softly out of focus (strongest in the close-up), and darker corners */
 static void sc_post(int drc) {
-    Texture *tx = gfx_grab(drc); gfx_viewport(drc, 0, 0, 1, 1); gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id = m4_identity();
+    gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id = m4_identity();
     static Mesh *m_post[2][2]; static Vertex pv[2][24 * 14 * 6]; if (!m_post[drc][0]) { m_post[drc][0] = gfx_mesh_dynamic(24 * 14 * 6); m_post[drc][1] = gfx_mesh_dynamic(24 * 14 * 6); }
     float close = g_sc_beat == SB_LESSON && g_sc_bt < sc_talk_len() + 0.9f ? 1.0f : g_sc_beat == SB_TITLE ? 0.0f : 0.45f;
     static float cs; cs += (close - cs) * 0.06f; float fx = g_sc_focus[0], fy = g_sc_focus[1];
@@ -3143,8 +3143,7 @@ static void sc_post(int drc) {
                 float a = pass == 0 ? clampf((d - 0.16f) / 0.42f, 0, 1) : clampf(((u - 0.5f) * (u - 0.5f) * 1.78f + (v - 0.5f) * (v - 0.5f)) * 1.9f - 0.12f, 0, 0.55f);
                 Vertex q = {u * 1280, v * 720, 0, 0, 0, 1, u, v, pass ? 0 : 1, pass ? 0 : 1, pass ? 0 : 1, a}; pv[pass][n++] = q; } }
         gfx_mesh_update(m_post[drc][pass], pv[pass], n); }
-    if (tx && cs > 0.02f) { gfx_bind(tx); float o = 1.6f + 2.2f * cs; static const float off[4][2] = {{1, 0.3f}, {-1, -0.3f}, {0.3f, -1}, {-0.3f, 1}};
-        for (int k = 0; k < 4; k++) gfx_draw_ex(m_post[drc][0], &id, 1, 1, 1, 0.5f * cs + 0.12f, 0, 1, off[k][0] * o / 1280.0f, off[k][1] * o / 720.0f); }
+    (void)cs;   /* (a soft-focus copy of the picture was tried here; the screen copy did not line up, so only the darker corners remain) */
     gfx_bind(NULL); gfx_draw_ex(m_post[drc][1], &id, 1, 1, 1, 1, 0, 1, 0, 0); }
 
 /* the words over the scene: film bars, the title, then each line typing itself out in the panel at the bottom */
@@ -4058,7 +4057,10 @@ void game_frame(const Pad *pads, int npads, float dt) {
         for (int i = 0; i < g_race.nk; i++) g_gp_points[g_race.character[i]] = 60 - 7 * i;
         g_player_char = g_race.character[1]; scene_check_words(); scene_start(0); } }   /* CI: the trophy screen is unchanged; photograph the Bible stories from Jesus on (tour 13 goes from Samson) */
 #endif
-#if defined(KK_TOUR) && KK_TOUR_ROAD == 29
+#if defined(KK_TOUR) && KK_TOUR_ROAD == 30
+    { static float next = 3; static int who = 0; static const int voiced[9] = {0, 1, 2, 3, 4, 5, 6, 7, 8};   /* CI: the champions speaking, close up (lip-sync, blinking) */
+      if (g_time > next) { next = g_time + 4.0f; scene_start(voiced[who % 9]); g_sc_beat = SB_LESSON - 1; sc_next(); g_sc_eye0 = g_sc_eye = v3(0.5f, 1.5f, 2.6f); who++; } }
+#elif defined(KK_TOUR) && KK_TOUR_ROAD == 29
     { static int step = 0; static const float at[8] = {2, 16, 24, 32, 42, 47, 70, 1e9f};   /* CI: STORY MODE - the map unfolding, the kart driving, the whole map, a stop cleared, the finished map */
       while (g_time > at[step]) { switch (step) {
           case 0: g_save.story = 6; g_player_char = 0; story_enter(1); break;
