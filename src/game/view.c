@@ -2273,7 +2273,7 @@ static void draw_unlock(const Mat4 *id, int drc) {
             gfx_mesh_free(m_frame[drc]); m_frame[drc] = gfx_mesh_static(tb.v, tb.n); frame_bit[drc] = bit; }
         gfx_clear_depth(drc);   /* nothing of the race behind may cut into it */
         float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f; Mat4 vp = m4_mul(m4_perspective(0.62f, aspect, 0.5f, 60.0f), m4_look_at(v3(0, 0, 7.5f), v3(0, 0, 0), v3(0, 1, 0)));
-        gfx_camera(&vp, v3(0.35f, 0.55f, 0.75f), 0.5f, 0, 0, 0, 1e6f, 2e6f);
+        gfx_shadow_use(0); gfx_camera(&vp, v3(0.35f, 0.55f, 0.75f), 0.5f, 0, 0, 0, 1e6f, 2e6f);
         float spin = (1 - e3) * 5.0f * 3.14159265f + sinf(t * 1.3f) * 0.18f * e3, scale = 0.3f + 0.7f * e3, yy = -0.32f + (1 - e3) * -2.5f + 0.05f * sinf(t * 2.0f);
         Mat4 m = m4_mul(m4_translate(0, yy, 0), m4_mul(m4_rotate_y(spin), m4_mul(m4_rotate_x(0.12f * sinf(t * 1.7f)), m4_scale(scale * 1.25f, scale * 1.25f, scale * 1.25f))));
         gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); gfx_draw_ex(m_frame[drc], &m, 1, 1, 1, 1, 0.9f, 0, 0, 0);
@@ -2626,7 +2626,7 @@ static void draw_trophy_pictures(int drc) {
     float orbit = sinf(t * 0.22f) * 0.38f * clampf(t - 1.0f, 0, 1), dist = 13.0f + 9.0f * (1 - swe), ey = 3.0f + 3.0f * (1 - swe);
     Vec3 eye = v3(sinf(orbit) * dist, ey, cosf(orbit) * dist), at = v3(0, 2.6f, 0);
     Mat4 vp = m4_mul(m4_perspective(0.72f, aspect, 0.3f, 200.0f), m4_look_at(eye, at, v3(0, 1, 0)));
-    gfx_camera(&vp, v3(0.3f, 0.8f, 0.55f), 0.55f, 0, 0, 0, 1e6f, 2e6f);
+    gfx_shadow_use(0); gfx_camera(&vp, v3(0.3f, 0.8f, 0.55f), 0.55f, 0, 0, 0, 1e6f, 2e6f);
     Vec3 R = v3_norm(v3(eye.z, 0, -eye.x)); if (eye.z < 0) R = v3(-R.x, 0, -R.z); R = v3_norm(v3_cross(v3(0, 1, 0), v3_norm(v3_sub(eye, at)))); R = v3(R.x, 0, R.z);
     gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL); gfx_draw(m_floor, &id, 1, 1, 1, 1);
     static const float col[3][3] = {{1, 0.8f, 0.3f}, {0.8f, 0.83f, 0.92f}, {0.85f, 0.5f, 0.25f}};
@@ -2998,6 +2998,7 @@ static void draw_story_scene(int drc) {
     Mat4 vp = m4_mul(m4_perspective(0.8f, aspect, 0.3f, 400.0f), m4_look_at(eye, at, v3(0, 1, 0)));
     { Mat4 lift = m4_identity(); lift.m[13] = 0.2f; vp = m4_mul(lift, vp); }   /* the picture sits above the panel the words are on */
     float fb = 1 + fl * 1.5f; Vec3 ldir = v3_norm(v3(0.4f, 0.85f, 0.5f));
+    gfx_shadow_use(0);   /* (the race in the background left the sun's shadows on: they darkened a corner of the picture) */
     gfx_grade(1.35f, 0.72f, 0.42f, 1.22f);   /* the film look for the stories: stronger rim light round the characters, richer color, softer highlights */
     gfx_light(v3(L->sun[0] * fb, L->sun[1] * fb, L->sun[2] * fb), v3(L->amb[0] * fb, L->amb[1] * fb, L->amb[2] * fb), v3(L->gnd[0] * 0.5f, L->gnd[1] * 0.5f, L->gnd[2] * 0.5f), eye);
     /* the sky: the dome, the sun, the clouds far off, all without fog, behind everything */
@@ -4708,7 +4709,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
                     /* the turntable sits in the window between the title and the cards: shift the picture up to it */
                     Mat4 shift = m4_identity(); shift.m[13] = 0.36f; vp = m4_mul(shift, vp);
                     gfx_light(v3(0.85f, 0.82f, 0.78f), v3(0.75f, 0.8f, 0.9f), v3(0.45f, 0.4f, 0.38f), v3(0, 3.6f, 15.5f));   /* plain studio light, not the road's */
-                    gfx_camera(&vp, v3(0.4f, 0.8f, 0.6f), 0.55f, 0, 0, 0, 1e6f, 2e6f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
+                    gfx_shadow_use(0); gfx_camera(&vp, v3(0.4f, 0.8f, 0.6f), 0.55f, 0, 0, 0, 1e6f, 2e6f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE);
                     Mat4 m = m4_mul(m4_translate(0, 0.35f + 0.05f * sinf(g_time * 2.2f), 0), m4_mul(m4_rotate_y(g_time * 0.8f), m4_scale(0.9f, 0.9f, 0.9f)));   /* up clear of the words under it */
                     { K3Pose tp; memset(&tp, 0, sizeof tp); tp.t = g_time;   /* the driver looks at you and waves as the stand turns round */
                       float ang = fmodf(-g_time * 0.8f, 6.2831853f); if (ang < -3.14159f) ang += 6.2831853f; if (ang > 3.14159f) ang -= 6.2831853f;

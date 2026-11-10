@@ -297,7 +297,7 @@ static void draw_story_map(int drc) {
     float aspect = drc ? 854.0f / 480.0f : 1280.0f / 720.0f;
     Mat4 vp = m4_mul(m4_perspective(0.75f, aspect, 1.0f, 2000.0f), m4_look_at(g_sm_eye, g_sm_look, v3(0, 1, 0)));
     { Mat4 lift = m4_identity(); lift.m[13] = 0.1f; vp = m4_mul(lift, vp); }
-    gfx_clear_depth(drc);
+    gfx_clear_depth(drc); gfx_shadow_use(0);
     gfx_light(v3(1.05f, 0.98f, 0.88f), v3(0.62f, 0.62f, 0.66f), v3(0.36f, 0.3f, 0.24f), g_sm_eye);
     gfx_camera(&vp, v3_norm(v3(-0.35f, 0.85f, 0.4f)), 0.6f, 0.14f, 0.09f, 0.06f, 3000.0f, 6000.0f);
     gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_bind(NULL);
