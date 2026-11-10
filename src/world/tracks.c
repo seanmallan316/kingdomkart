@@ -916,7 +916,7 @@ void track_from_def(Track *t, const TrackDef *d) {
     /* scenery that stands out in the open land (not past its wall) is solid: a kart bumps into it (Sean: you could drive
        straight through waterfalls and the like). The size it blocks follows the kind of thing it is. */
     t->widen = wd; t->nobst = 0;
-    for (int i = 0; i < d->nscenery && t->nobst < MAX_OBST; i++) { const Scenery *sc = &d->scenery[i]; if (sc->img[0] != '#') continue;
+    for (int i = 0; i < d->nscenery && t->nobst < MAX_OBST; i++) { const Scenery *sc = &d->scenery[i]; if (sc->img[0] != '#' && sc->img[0] != '@') continue;   /* the 3D models too (Sean: you could drive right through the crocodiles) */
         int idx = DI(sc->idx) % t->n; float r = track_scenery_radius(sc->img, sc->height); if (r <= 0) continue;
         if (!strcmp(sc->img, "#jwall") || !strcmp(sc->img, "#jtower") || !strcmp(sc->img, "#rahab")) continue;   /* Jericho's walls have their own rules */
         float lat = track_scenery_lat(t, idx, sc->side, r); const TrackSample *s2 = &t->s[idx];
@@ -927,7 +927,7 @@ void track_from_def(Track *t, const TrackDef *d) {
 float track_scenery_radius(const char *k, float h) {
     if (k[0] == '@') {   /* the Meshy models: how much ground each one stands on */
         static const struct { const char *n; float f; } R[] = {{"@pyramid", 0.55f}, {"@sphinx", 0.8f}, {"@colossus", 0.25f}, {"@pylon", 0.5f}, {"@obelisk", 0.12f}, {"@camel", 0.45f}, {"@stall", 0.45f},
-            {"@brazier", 0.15f}, {"@crocodile", 1.2f}, {"@palm", 0.1f}, {"@house", 0.5f}, {"@boulder", 0.5f}, {"@sheep", 0.6f}, {"@villager", 0.25f}, {"@lion", 0.6f},
+            {"@brazier", 0.15f}, {"@crocodile", 1.9f}, {"@palm", 0.1f}, {"@house", 0.5f}, {"@boulder", 0.5f}, {"@sheep", 0.6f}, {"@villager", 0.25f}, {"@lion", 0.6f},
             {"@lamassu", 0.4f}, {"@ziggurat", 0.55f}, {"@gold_statue", 0.2f}, {"@lion_roar", 0.6f}, {"@fire_pillar", 0.15f}, {"@ishtar_gate", 0.5f}, {"@garden_terrace", 0.6f}};
         for (unsigned i = 0; i < sizeof R / sizeof R[0]; i++) if (!strcmp(k, R[i].n)) { float r = h * R[i].f; return r < 0.6f ? 0.6f : r > 40.0f ? 40.0f : r; }
         return 0; }
