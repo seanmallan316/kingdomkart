@@ -4678,7 +4678,11 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (g_screen == SCR_MAIN && tx_title && m_logo_small) { gfx_bind(tx_title); gfx_draw(m_logo_small, &id, 1, 1, 1, 1); }
         if (g_screen == SCR_CHAR || g_screen == SCR_MCHAR) draw_portraits();
         if (g_screen == SCR_RESULTS && g_mode != MODE_TT && g_mode != MODE_BATTLE) draw_podium_karts();
-        if (g_screen == SCR_SCENE) { draw_story_scene(drc); sc_post(drc); static Mesh *m_sct[2]; if (!m_sct[drc]) m_sct[drc] = gfx_mesh_dynamic(16384);   /* the words on solid 3D slabs */
+        if (g_screen == SCR_SCENE) { draw_story_scene(drc);
+#if defined(KK_TOUR) && KK_TOUR_ROAD == 30
+            if (((int)(g_time / 10)) % 2 == 0)   /* CI: every other 10 seconds without the darker corners, to compare */
+#endif
+            sc_post(drc); static Mesh *m_sct[2]; if (!m_sct[drc]) m_sct[drc] = gfx_mesh_dynamic(16384);   /* the words on solid 3D slabs */
             batch_clear(&g_b); g_ui3d = 1; g_ui_conv = 0; hud_scene_top(); ui_flush(); g_ui3d = 0; gfx_mesh_update(m_sct[drc], g_b.v, g_b.n);
             gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m_sct[drc], &id, 1, 1, 1, 1); gfx_camera_2d(); }
         if (g_screen == SCR_STORY) { draw_story_map(drc); static Mesh *m_smt[2]; if (!m_smt[drc]) m_smt[drc] = gfx_mesh_dynamic(16384);   /* the panels on 3D slabs */
