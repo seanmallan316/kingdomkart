@@ -1,0 +1,2 @@
+
+(AppRun.wrapped:3894): dbind-WARNING **: 22:17:05.562: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
