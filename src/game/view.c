@@ -3525,6 +3525,7 @@ static float eg_dark(const Kart *k) {   /* 0..1: how deep into the darkness this
     if (!g_def || strcmp(g_def->prefix, "plag")) return 0;
     int a = track_def_idx(&g_track, 214), b = track_def_idx(&g_track, 258), i = k->hit.idx; if (i < a || i > b) return 0;
     float u = (float)(i - a) / (float)(b - a); return clampf(fminf(u, 1 - u) * 5.0f, 0, 1); }
+static Texture *water_tex(void) { static Texture *t; static int tried; if (!tried) { tried = 1; int w, h; t = asset_texture("water_tile", 1, &w, &h); } return t; }   /* (Sean: the water was just blue blocks) tools/make_water.py */
 static void draw_egypt_fx(Vec3 eye, Vec3 ax, int vk) {
     if (!g_def) return; int rsea = !strcmp(g_def->prefix, "rsea"), plag = !strcmp(g_def->prefix, "plag"), fur = !strcmp(g_def->prefix, "fur"), den = !strcmp(g_def->prefix, "den");
     if (fur || den) {   /* the furnace: embers drifting up everywhere; the den: shafts of light from the openings above (Sean's art) */
@@ -3544,12 +3545,13 @@ static void draw_egypt_fx(Vec3 eye, Vec3 ax, int vk) {
                 float l0 = sd * (track_bound(&g_track, i, sd) + 1.0f), l1 = sd * (track_bound(&g_track, i + 1, sd) + 1.0f), u = (float)(i - a) / (float)(e - a), H = 26.0f * fminf(fminf(u, 1 - u) * 8.0f, 1.0f) + 2.0f;
                 Vec3 p0 = v3(s0->x + s0->nx * l0, s0->y - 2, s0->z + s0->nz * l0), p1 = v3(s1->x + s1->nx * l1, s1->y - 2, s1->z + s1->nz * l1); Vec3 n = v3(-s0->nx * sd, 0, -s0->nz * sd);
                 for (int r = 0; r < 5; r++) { float y0 = H * r / 5, y1 = H * (r + 1) / 5, c0 = (float)r / 5, c1 = (float)(r + 1) / 5, bulge0 = sinf(c0 * 3.0f) * 2.0f * sd, bulge1 = sinf(c1 * 3.0f) * 2.0f * sd;
-                    Vertex q[6] = {{p0.x + s0->nx * bulge0, p0.y + y0, p0.z + s0->nz * bulge0, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
-                                   {p1.x + s1->nx * bulge0, p1.y + y0, p1.z + s1->nz * bulge0, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
-                                   {p1.x + s1->nx * bulge1, p1.y + y1, p1.z + s1->nz * bulge1, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f},
-                                   {p0.x + s0->nx * bulge0, p0.y + y0, p0.z + s0->nz * bulge0, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
-                                   {p1.x + s1->nx * bulge1, p1.y + y1, p1.z + s1->nz * bulge1, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f},
-                                   {p0.x + s0->nx * bulge1, p0.y + y1, p0.z + s0->nz * bulge1, n.x, n.y, n.z, 0.5f, 0.5f, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f}};
+                    float ua = i * (g_track.length / g_track.n) / 14.0f, ub = (i + 1) * (g_track.length / g_track.n) / 14.0f, v0 = y0 / 14.0f, v1 = y1 / 14.0f;
+                    Vertex q[6] = {{p0.x + s0->nx * bulge0, p0.y + y0, p0.z + s0->nz * bulge0, n.x, n.y, n.z, ua, v0, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
+                                   {p1.x + s1->nx * bulge0, p1.y + y0, p1.z + s1->nz * bulge0, n.x, n.y, n.z, ub, v0, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
+                                   {p1.x + s1->nx * bulge1, p1.y + y1, p1.z + s1->nz * bulge1, n.x, n.y, n.z, ub, v1, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f},
+                                   {p0.x + s0->nx * bulge0, p0.y + y0, p0.z + s0->nz * bulge0, n.x, n.y, n.z, ua, v0, 0.05f + 0.2f * c0, 0.25f + 0.45f * c0, 0.5f + 0.35f * c0, 0.8f},
+                                   {p1.x + s1->nx * bulge1, p1.y + y1, p1.z + s1->nz * bulge1, n.x, n.y, n.z, ub, v1, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f},
+                                   {p0.x + s0->nx * bulge1, p0.y + y1, p0.z + s0->nz * bulge1, n.x, n.y, n.z, ua, v1, 0.05f + 0.2f * c1, 0.25f + 0.45f * c1, 0.5f + 0.35f * c1, 0.8f}};
                     for (int k = 0; k < 6 && b.n < b.cap; k++) b.v[b.n++] = q[k]; } }
             m_walls = b.n ? gfx_mesh_static(b.v, b.n) : NULL; }
         if (plag) { batch_clear(&b); int a = track_def_idx(&g_track, 150), e = track_def_idx(&g_track, 206);   /* the river turned to blood (Exodus 7:20), along the left of the road */
@@ -3560,7 +3562,18 @@ static void draw_egypt_fx(Vec3 eye, Vec3 ax, int vk) {
             m_blood = b.n ? gfx_mesh_static(b.v, b.n) : NULL; } }
     gfx_bind(NULL);
     if (m_blood) { float sh = 0.85f + 0.15f * sinf(t * 1.7f); gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_draw_ex(m_blood, &id, sh, sh, sh, 1, 1.6f, 0, 0, 0); }
-    if (m_walls) { gfx_state(ST_TRANSPARENT); gfx_draw_ex(m_walls, &id, 1, 1, 1, 1, 1.4f, 0, 0, 0); }
+    if (m_walls) {   /* the walls of water: a rippling water picture rolling slowly up them, a second layer drifting the other way for the shimmer */
+        Texture *wt = water_tex(); gfx_state(ST_TRANSPARENT); gfx_bind(wt); gfx_draw_ex(m_walls, &id, 1.25f, 1.3f, 1.35f, 1, 1.4f, 0, t * 0.02f, -t * 0.09f);
+        if (wt) { gfx_state(ST_TRANSPARENT | ST_ADD); gfx_draw_ex(m_walls, &id, 0.35f, 0.45f, 0.5f, 0.6f, 0, 1, -t * 0.035f + 0.37f, -t * 0.05f + 0.21f); }
+        gfx_bind(NULL);
+        /* fish swimming inside the walls (Sean: like real water) */
+        static Mesh *m_fish; static Vertex fsv[600]; if (!m_fish) m_fish = gfx_mesh_dynamic(600); Batch fsb; batch_init(&fsb, fsv, 600); const Kart *kk = &g_race.k[vk];
+        if (eg_in(kk->hit.idx, 30, 200)) for (int n = 0; n < 40; n++) { float h1 = noise2(n, 51), h2 = noise2(n, 52), side = (n & 1) ? 1.0f : -1.0f; float sw = fmodf(t * (2 + h2 * 3) + h1 * 80, 80) - 20;
+            int i = (kk->hit.idx + (int)sw + g_track.n) % g_track.n; if (!eg_in(i, 44, 188)) continue; const TrackSample *ts = &g_track.s[i];
+            float l = side * (track_bound(&g_track, i, (int)side) + 2.6f + h2 * 3), y = ts->y + 3 + h1 * 16 + sinf(t * 1.3f + n) * 0.8f, fl = 0.7f + h2 * 0.8f, wag = sinf(t * 8 + n) * 0.15f;
+            Vec3 c = v3(ts->x + ts->nx * l, y, ts->z + ts->nz * l); Vec3 d = v3(ts->nz * fl, wag * fl, -ts->nx * fl);
+            batch_quad(&fsb, c, d, v3(0, fl * 0.35f, 0), v3(-ts->nx * side, 0, -ts->nz * side), 0, 0, 1, 1, 0.03f, 0.1f, 0.2f, 0.55f); }
+        if (fsb.n) { gfx_mesh_update(m_fish, fsb.v, fsb.n); gfx_state(ST_TRANSPARENT); gfx_bind(tx_blob); gfx_draw_ex(m_fish, &id, 1, 1, 1, 1, 0, 1, 0, 0); gfx_bind(NULL); } }
     /* the moving parts near the camera: foam on the wall tops, locusts, hail and fire */
     static Mesh *m_fx; static Vertex fv[2400]; if (!m_fx) m_fx = gfx_mesh_dynamic(2400); Batch fb; batch_init(&fb, fv, 2400);
     const Kart *k = &g_race.k[vk]; int ki = k->hit.idx;
@@ -3622,7 +3635,8 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
         float sr = 1, sg = 1, sb = 1;    /* the sun's color is applied by the shader now */
         /* the "grass" plane is the sea on a water road: it glints in the sun and drifts slowly */
         /* depth on every ground surface (Sean: "they need to be 3 dimensional"): bumps that catch the sun - see gfx_bump */
-        gfx_bind(tx_grass); if (g_def->water) { gfx_bump(2); gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f); } else { gfx_bump(2); gfx_draw(m_ground, &id, sr, sg, sb, 1); }   /* the lake's ripples catch the sun as they move */
+        gfx_bind(tx_grass); if (g_def->water) { gfx_bump(2); gfx_draw_ex(m_ground, &id, 1, 1, 1, 1, 0.9f, 0, g_time * 0.012f, g_time * 0.008f);
+            if (water_tex()) { gfx_bump(0); gfx_bind(water_tex()); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_draw_ex(m_ground, &id, 0.3f, 0.38f, 0.42f, 0.7f, 0, 1, -g_time * 0.017f, g_time * 0.011f); gfx_state(ST_SOLID); gfx_bind(tx_grass); }   /* (Sean: the water should move) a second layer of ripples drifting across the first */ } else { gfx_bump(2); gfx_draw(m_ground, &id, sr, sg, sb, 1); }   /* the lake's ripples catch the sun as they move */
         gfx_bump(2); if (m_field) gfx_draw(m_field, &id, sr, sg, sb, 1);   /* the open land, same grass as the ground */
         if (m_hills) { gfx_state(ST_DEPTH | ST_DEPTH_WRITE); gfx_draw(m_hills, &id, sr, sg, sb, 1); gfx_state(ST_SOLID); }   /* the hills beyond the walls */
         gfx_bump(3); gfx_bind(tx_dirt); gfx_draw(m_shoulder, &id, sr, sg, sb, 1);
@@ -3636,7 +3650,7 @@ static void draw_scene(int vk, float aspect, float fov_mul, int lite) {
             gfx_state(ST_TRANSPARENT); gfx_bind(tx_fallsw); gfx_draw_ex(m_fallsw, &id, 1, 1, 1, 0.92f, 0.7f, 0, 0, -g_time * 1.6f);
             if (m_foam) { float fp = 0.8f + 0.2f * sinf(g_time * 7.0f); gfx_state(ST_TRANSPARENT | ST_ADD); gfx_bind(tx_blob); gfx_draw_ex(m_foam, &id, fp, fp, fp, 1, 0, 1, 0, 0); }
             gfx_state(ST_SOLID); }
-        if (g_def->bonus == 2 && m_brook) { static Texture *tx_brook = NULL; if (!tx_brook) tx_brook = make_tex(128, 128, 1, 0, px_water); gfx_state(ST_TRANSPARENT); gfx_bind(tx_brook);
+        if (g_def->bonus == 2 && m_brook) { static Texture *tx_brook = NULL; if (!tx_brook) tx_brook = water_tex() ? water_tex() : make_tex(128, 128, 1, 0, px_water); gfx_state(ST_TRANSPARENT); gfx_bind(tx_brook);
             Mat4 flow = m4_translate(sinf(g_time * 2.0f) * 0.3f, 0, 0); gfx_draw_ex(m_brook, &flow, 1, 1, 1, 0.75f, 0.8f, 0, g_time * 0.05f, 0); gfx_state(ST_SOLID); }
         { float pulse = 0.75f + 0.25f * sinf(g_time * 6.0f);
           if (!tx_padglow) tx_padglow = make_tex(64, 64, 0, 0, px_padglow);
