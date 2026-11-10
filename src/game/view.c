@@ -3132,20 +3132,7 @@ static void draw_story_scene(int drc) {
       if (cw > 0.1f) { g_sc_focus[0] = clampf(cx / cw * 0.5f + 0.5f, 0.1f, 0.9f); g_sc_focus[1] = clampf(1 - (cy / cw * 0.5f + 0.5f), 0.1f, 0.9f); } }   /* where the champion's face is on screen: the focus */
     gfx_grade(1.0f, 0.38f, 0.32f, 1.14f);
     gfx_bind(NULL); gfx_camera_2d(); gfx_state(ST_HUD); }
-/* the lens: everything but the champion softly out of focus (strongest in the close-up), and darker corners */
-static void sc_post(int drc) {
-    gfx_camera_2d(); gfx_state(ST_HUD); Mat4 id = m4_identity();
-    static Mesh *m_post[2][2]; static Vertex pv[2][24 * 14 * 6]; if (!m_post[drc][0]) { m_post[drc][0] = gfx_mesh_dynamic(24 * 14 * 6); m_post[drc][1] = gfx_mesh_dynamic(24 * 14 * 6); }
-    float close = g_sc_beat == SB_LESSON && g_sc_bt < sc_talk_len() + 0.9f ? 1.0f : g_sc_beat == SB_TITLE ? 0.0f : 0.45f;
-    static float cs; cs += (close - cs) * 0.06f; float fx = g_sc_focus[0], fy = g_sc_focus[1];
-    for (int pass = 0; pass < 2; pass++) { int n = 0;   /* 0: how blurred each spot is; 1: how dark the corners are */
-        for (int j = 0; j < 14; j++) for (int i = 0; i < 24; i++) { int ci[6][2] = {{i, j}, {i, j + 1}, {i + 1, j + 1}, {i, j}, {i + 1, j + 1}, {i + 1, j}};
-            for (int c = 0; c < 6; c++) { float u = ci[c][0] / 24.0f, v = ci[c][1] / 14.0f, dx = (u - fx) * 1.78f, dy = v - fy, d = sqrtf(dx * dx + dy * dy);
-                float a = pass == 0 ? clampf((d - 0.16f) / 0.42f, 0, 1) : clampf(((u - 0.5f) * (u - 0.5f) * 1.78f + (v - 0.5f) * (v - 0.5f)) * 1.9f - 0.12f, 0, 0.55f);
-                Vertex q = {u * 1280, v * 720, 0, 0, 0, 1, u, v, pass ? 0 : 1, pass ? 0 : 1, pass ? 0 : 1, a}; pv[pass][n++] = q; } }
-        gfx_mesh_update(m_post[drc][pass], pv[pass], n); }
-    (void)cs;   /* (a soft-focus copy of the picture was tried here; the screen copy did not line up, so only the darker corners remain) */
-    gfx_bind(NULL); gfx_draw_ex(m_post[drc][1], &id, 1, 1, 1, 1, 0, 1, 0, 0); }
+
 
 /* the words over the scene: film bars, the title, then each line typing itself out in the panel at the bottom */
 static int sc_wrap(const char *s, float size, float maxw, char out[5][140]) {
@@ -3160,6 +3147,8 @@ static void hud_scene_top(void) {
     const CupStory *S = &SC_STORY[g_sc_char]; float bt = g_sc_bt, st = g_screen_t, bars = sc_smooth(st / 0.9f);
     if (S->set == SET_STORM) { float f = sc_flash(); if (f > 0) batch_rect(&g_b, 0, 0, 1280, 720, 0.8f, 0.85f, 1, 0.22f * f); }
     static const UiLook UI_SCENE = {{0.17f, 0.14f, 0.24f}, {0.05f, 0.04f, 0.09f}, {0.95f, 0.76f, 0.32f}, {0.36f, 0.25f, 0.1f}};
+    for (int k = 0; k < 8; k++) { float w = 22.0f * (k + 1), al = 0.045f * bars;   /* a soft darkening toward the edges of the picture (a film vignette), built from nested bands */
+        batch_rect(&g_b, 0, 0, w * 1.3f, 720, 0, 0, 0, al); batch_rect(&g_b, 1280 - w * 1.3f, 0, w * 1.3f, 720, 0, 0, 0, al); batch_rect(&g_b, w * 1.3f, 0, 1280 - w * 2.6f, w * 0.7f, 0, 0, 0, al); }
     ui_plaque(-30, -40 - (1 - bars) * 70, 1340, 98, 16, 20, &UI_SCENE, 0.96f, 0, -1);   /* the bar along the top, a solid slab with a gold edge */
     float py = 720 - 176 * bars;
     ui_plaque(14, py, 1252, 720 - py + 30, 22, 26, &UI_SCENE, 0.95f, 0.25f, -1);         /* the panel the words stand on */
@@ -4678,11 +4667,7 @@ void game_frame(const Pad *pads, int npads, float dt) {
         if (g_screen == SCR_MAIN && tx_title && m_logo_small) { gfx_bind(tx_title); gfx_draw(m_logo_small, &id, 1, 1, 1, 1); }
         if (g_screen == SCR_CHAR || g_screen == SCR_MCHAR) draw_portraits();
         if (g_screen == SCR_RESULTS && g_mode != MODE_TT && g_mode != MODE_BATTLE) draw_podium_karts();
-        if (g_screen == SCR_SCENE) { draw_story_scene(drc);
-#if defined(KK_TOUR) && KK_TOUR_ROAD == 30
-            if (((int)(g_time / 10)) % 2 == 0)   /* CI: every other 10 seconds without the darker corners, to compare */
-#endif
-            sc_post(drc); static Mesh *m_sct[2]; if (!m_sct[drc]) m_sct[drc] = gfx_mesh_dynamic(16384);   /* the words on solid 3D slabs */
+        if (g_screen == SCR_SCENE) { draw_story_scene(drc); static Mesh *m_sct[2]; if (!m_sct[drc]) m_sct[drc] = gfx_mesh_dynamic(16384);   /* the words on solid 3D slabs */
             batch_clear(&g_b); g_ui3d = 1; g_ui_conv = 0; hud_scene_top(); ui_flush(); g_ui3d = 0; gfx_mesh_update(m_sct[drc], g_b.v, g_b.n);
             gfx_camera_ui3d(UI_EYE); gfx_state(ST_HUD); gfx_bind(tx_font); gfx_draw(m_sct[drc], &id, 1, 1, 1, 1); gfx_camera_2d(); }
         if (g_screen == SCR_STORY) { draw_story_map(drc); static Mesh *m_smt[2]; if (!m_smt[drc]) m_smt[drc] = gfx_mesh_dynamic(16384);   /* the panels on 3D slabs */
