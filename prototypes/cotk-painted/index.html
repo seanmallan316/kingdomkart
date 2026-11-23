@@ -24,6 +24,7 @@
   #title button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
   #stick { position: fixed; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; border: 3px solid rgba(243,234,216,.5); display: none; pointer-events: none; }
   #knob { position: absolute; left: 35px; top: 35px; width: 40px; height: 40px; border-radius: 50%; background: rgba(243,234,216,.7); }
+  #toast { position: fixed; left: 16px; right: 16px; bottom: max(90px, 14vh); text-align: center; pointer-events: none; color: var(--paper); font: 700 18px Georgia, serif; text-shadow: 0 2px 0 var(--ink), 0 0 12px rgba(0,0,0,.8); }
   .hide { display: none !important; }
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
@@ -31,17 +32,18 @@
 <body>
 <div id="grade"></div>
 <div id="hud" class="hide"><div class="row" id="hearts"></div><div class="row" id="sparks"></div></div>
+<div id="toast" class="hide"></div>
 <div id="stick"><div id="knob"></div></div>
 <div id="title">
   <h1>Colors of the King</h1>
-  <p id="sub">Find the three amber sparks hidden around the glen and carry them to the beacon. Keep away from the Veil wraiths.</p>
+  <p id="sub">Find three amber sparks and carry them to the beacon to free the glen, then take the road south to the loch and do it again. Keep away from the Veil wraiths.</p>
   <p>Move: WASD / arrows, or drag anywhere on the screen</p>
   <button id="go">Play</button>
 </div>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OBJECTS, LAYOUT, PATHS, SQUARE_R, BOUNDS, VIEW_DIR } from './world.js';
+import { W, buildObject, OBJECT_IDS, LAYOUT, PATHS, BOUNDS, VIEW_DIR } from './world.js';
 
 const Q = new URLSearchParams(location.search);
 let seed = Number(Q.get('seed') || 1) >>> 0 || 1;
@@ -162,13 +164,15 @@ void main(){
 
 // Ground: painted procedurally in the same ink-and-flat-colour style (sharp at any zoom).
 function groundMaterial() {
-  const segs = PATHS.map(([a, b]) => new THREE.Vector4(a[0], a[1], b[0], b[1]));
+  const segs = PATHS.map(a => new THREE.Vector4(...a));
+  const sq = W.squares.map(a => new THREE.Vector3(...a));
   return new THREE.ShaderMaterial({
     lights: true,
-    uniforms: litUniforms({ uSeg: { value: segs }, uGrass: { value: groundTex.grass }, uDirt: { value: groundTex.dirt }, uCob: { value: groundTex.cobbles } }),
+    uniforms: litUniforms({ uSeg: { value: segs }, uSq: { value: sq }, uGrass: { value: groundTex.grass }, uDirt: { value: groundTex.dirt }, uCob: { value: groundTex.cobbles } }),
     vertexShader: VERT,
     fragmentShader: FRAG_HEAD + /* glsl */`
 uniform vec4 uSeg[${segs.length}];
+uniform vec3 uSq[${sq.length}];
 float sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h); }
 vec2 h22(vec2 p){ return vec2(h21(p), h21(p+17.17)); }
 vec3 toSRGBin(vec3 c){ return pow(c, vec3(2.2)); }
@@ -186,9 +190,10 @@ void main(){
   vec2 c2 = floor(p*3.), l2 = fract(p*3.) - .5;
   float dot2 = step(length(l2 - (h22(c2)-.5)*.5), .12) * step(.66, hz) * step(.4, h21(c2));
   col = mix(col, toSRGBin(vec3(.62,.42,.66)), dot2);
-  // moor beyond the village edge
+  // moor beyond the edge of the map
   float f = vnoise(p*.22);
-  float edgeD = max(abs(p.x), abs(p.y)) - ${BOUNDS.toFixed(1)};
+  vec2 bc = vec2(${((BOUNDS.x0 + BOUNDS.x1) / 2).toFixed(2)}, ${((BOUNDS.z0 + BOUNDS.z1) / 2).toFixed(2)}), bh = vec2(${((BOUNDS.x1 - BOUNDS.x0) / 2).toFixed(2)}, ${((BOUNDS.z1 - BOUNDS.z0) / 2).toFixed(2)});
+  float edgeD = max(abs(p.x - bc.x) - bh.x, abs(p.y - bc.y) - bh.y);
   col *= mix(1., .7 + f * .15, smoothstep(-.5, 2.5, edgeD));
   // dirt paths with an ink edge
   float d = 1e3;
@@ -196,12 +201,27 @@ void main(){
   float w = 1.0 + (vnoise(p*1.3)-.5)*.45;
   if (d < w) col = tile(uDirt, p, 3.5);
   if (abs(d - w) < .055) col = toSRGBin(vec3(.24,.18,.14));
-  // cobbled square with an ink rim
-  float rs = length(p);
-  if (rs < ${SQUARE_R.toFixed(2)} + .1) {
-    col = texture2D(uCob, p / 3.2).rgb;
-    if (rs > ${SQUARE_R.toFixed(2)} - .05) col = toSRGBin(vec3(.24,.18,.14));
+  // cobbled circles with an ink rim
+  for (int i=0;i<${sq.length};i++) {
+    float rs = length(p - uSq[i].xy);
+    if (rs < uSq[i].z + .1) {
+      col = texture2D(uCob, p / 3.2).rgb;
+      if (rs > uSq[i].z - .05) col = toSRGBin(vec3(.24,.18,.14));
+    }
   }
+  // water: the burn across the map and the loch to the south, flat blues with drawn ripples
+  float wob = (vnoise(p*.6)-.5)*.9;
+  float dB = abs(p.y - ${W.burn.z.toFixed(1)} - wob*.5) - ${W.burn.half.toFixed(2)};
+  float dL = ${W.loch_z.toFixed(1)} + wob - p.y;
+  float dW = min(dB, dL);
+  if (dW < 0.) {
+    float rip = fract(p.y*1.1 + vnoise(p*vec2(.5,1.6))*2.2 + uTime*.12);
+    vec3 wc = mix(vec3(.24,.47,.62), vec3(.33,.58,.7), step(.5, vnoise(p*.4 + uTime*.03)));
+    wc = mix(wc, vec3(.78,.9,.93), step(.93, rip) * step(.35, vnoise(p*1.7)));
+    wc = mix(wc, vec3(.16,.33,.48), smoothstep(-.5, 0., dW) * .5);
+    col = toSRGBin(wc);
+  }
+  if (abs(dW) < .06) col = toSRGBin(vec3(.18,.15,.14));
   col = veil(col, p) * mix(${SHADOW_TINT}, vec3(1.), getShadowMask());
   gl_FragColor = vec4(col, 1.);
   #include <colorspace_fragment>
@@ -215,14 +235,14 @@ const loadTex = url => new Promise(res => loader.load(url, t => { t.colorSpace =
 const meta = await (await fetch('assets/paint/paint.json')).json();
 const solids = []; // xz boxes the hero cannot walk through
 const textures = {};
-for (const id of Object.keys(OBJECTS)) {
-  const m = meta[id];
+for (const id of OBJECT_IDS) {
+  const m = meta[id] || (meta[id] = { matrix: (await (await fetch('assets/blockout/projectors.json')).json())[id].matrix });
   textures[id] = (m.file && await loadTex('assets/paint/' + m.file)) || await loadTex('assets/blockout/' + id + '.png');
 }
 for (const L of LAYOUT) {
   const m = meta[L.id];
-  const g = OBJECTS[L.id]();
-  const mat = paintedMaterial(textures[L.id], m.matrix, m.xf || [1, 1, 0, 0], m.file && ['pine', 'well', 'beacon', 'awning'].includes(L.id));
+  const g = buildObject(L.id);
+  const mat = paintedMaterial(textures[L.id], m.matrix, m.xf || [1, 1, 0, 0], m.file && W.cutout.includes(L.id));
   g.updateMatrixWorld(true);
   g.traverse(o => {
     if (!o.isMesh) return;
@@ -236,7 +256,7 @@ for (const L of LAYOUT) {
   g.traverse(o => {
     if (o.isMesh && o.userData.solid) {
       const b = new THREE.Box3().setFromObject(o);
-      if (b.max.y > 0.3 && b.min.y < 1.5) solids.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z, round: L.id === 'pine' || L.id === 'well' || L.id === 'beacon' });
+      if (b.max.y > 0.3 && b.min.y < 1.5) solids.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z, round: ['pine', 'well', 'beacon', 'haystack', 'oak'].includes(L.id) });
     }
   });
 }
@@ -246,7 +266,8 @@ for (const n of ['grass', 'dirt', 'cobbles']) {
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true;
   groundTex[n] = t;
 }
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90).rotateX(-Math.PI / 2), groundMaterial());
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(130, 150).rotateX(-Math.PI / 2), groundMaterial());
+ground.position.z = 16;
 ground.receiveShadow = true; scene.add(ground);
 
 // ---------- characters (real 3D, toon shaded, always in full colour) ----------
@@ -354,11 +375,10 @@ function heroPlay(name, fade = .2) {
 }
 { const gl = glowSprite('rgba(255,190,90,.8)', 1.1); gl.position.set(.36, .82, .05); hero.add(gl); }
 
-// Spark hiding places: behind the tower, behind a cottage, under the stall awning, and others.
-const SPOTS = [[3.9, -9.6], [-7.2, -8.4], [6.9, 2.2], [-11.6, 5.2], [10.5, -9.5], [-4.8, 1.2], [11.2, 5.5]];
+// Two stages: the glen, then the Lochside to the south. Each has three sparks, wraiths and a beacon.
 const sparks = [];
-function placeSparks() {
-  const pool = SPOTS.slice(); const pick = [pool.splice(0, 1)[0]]; // always one behind the tower
+function placeSparks(stage) {
+  const pool = W.stages[stage].sparks.slice(); const pick = [pool.splice(0, 1)[0]]; // the first spot is always used
   while (pick.length < 3) pick.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
   for (const s of sparks) scene.remove(s.obj);
   sparks.length = 0;
@@ -371,20 +391,25 @@ function placeSparks() {
   }
 }
 const wraiths = [];
-function placeWraiths() {
-  for (const w of wraiths) scene.remove(w.obj);
-  wraiths.length = 0;
-  for (const [x, z] of [[-9, -1], [9, -3], [9, 9.5]]) {
+function placeWraiths(stage) {
+  for (const w of wraiths) if (stage === 0 || w.fade <= 0) scene.remove(w.obj);
+  if (stage === 0) wraiths.length = 0;
+  for (const [x, z] of W.stages[stage].wraiths) {
     const o = makeWraith(); o.position.set(x, 0, z); scene.add(o);
-    wraiths.push({ obj: o, home: new THREE.Vector2(x, z), a: rnd() * 6.28, fade: 1 });
+    wraiths.push({ obj: o, home: new THREE.Vector2(x, z), a: rnd() * 6.28, fade: 1, stage });
   }
 }
-// beacon fire
-const fire = new THREE.Group(); fire.position.set(0, 2.1, 0); fire.visible = false; scene.add(fire);
-fire.add(glowSprite('rgba(255,160,50,1)', 4.5));
-const flames = [];
-for (let i = 0; i < 7; i++) { const f = new THREE.Mesh(new THREE.ConeGeometry(.22, .9, 6), new THREE.MeshBasicMaterial({ color: i % 2 ? '#ffcf5a' : '#ff8a2a' })); fire.add(f); flames.push(f); }
-
+// beacon fires, one per stage
+const fires = W.stages.map(st => {
+  const f = new THREE.Group(); f.position.set(st.beacon[0], 2.1, st.beacon[1]); f.visible = false; scene.add(f);
+  f.add(glowSprite('rgba(255,160,50,1)', 4.5));
+  f.userData = { t: 0, flames: [] };
+  for (let i = 0; i < 7; i++) { const fl = new THREE.Mesh(new THREE.ConeGeometry(.22, .9, 6), new THREE.MeshBasicMaterial({ color: i % 2 ? '#ffcf5a' : '#ff8a2a' })); f.add(fl); f.userData.flames.push(fl); }
+  return f;
+});
+// the Veil bars the road south until the glen is freed
+const gate = new THREE.Group(); scene.add(gate);
+for (let x = -13; x <= 13; x += 2) for (const y of [1, 2.6]) { const sp = glowSprite('rgba(205,205,222,.55)', 4.2); sp.material.blending = THREE.NormalBlending; sp.position.set(x, y, W.gate_z + .4); gate.add(sp); }
 // ---------- input ----------
 const keys = new Set();
 addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Enter' || e.code === 'Space') onAction(); });
@@ -409,7 +434,7 @@ addEventListener('pointerup', endStick); addEventListener('pointercancel', endSt
 const SCR_R = new THREE.Vector3(1, 0, -1).normalize(), SCR_U = new THREE.Vector3(-1, 0, -1).normalize();
 
 // ---------- game state ----------
-const G = window.__game = { state: 'title', hearts: 3, carried: 0, t: 0, reveal: 0, hits: 0, auto: false, autoInput: null, frames: 0, x: 0, z: 0 };
+const G = window.__game = { state: 'title', stage: 0, hearts: 3, carried: 0, t: 0, reveal: 0, hits: 0, auto: false, autoInput: null, frames: 0, x: 0, z: 0 };
 const titleEl = document.getElementById('title'), hudEl = document.getElementById('hud');
 const heartsEl = document.getElementById('hearts'), sparksEl = document.getElementById('sparks');
 function hud() {
@@ -420,15 +445,17 @@ const vel = new THREE.Vector2();
 let invuln = 0, winT = 0;
 function start() {
   G.state = 'play'; G.hearts = 3; G.carried = 0; G.t = 0; G.reveal = 0; G.hits = 0; winT = 0; invuln = 0;
-  hero.position.set(0.5, 0, 6.5); vel.set(0, 0);
+  G.stage = 0;
+  hero.position.set(...[W.stages[0].spawn[0], 0, W.stages[0].spawn[1]]); vel.set(0, 0);
   shared.uReveal.value.forEach(v => v.set(0, 0, 0, 0));
-  fire.visible = false; placeSparks(); placeWraiths();
+  fires.forEach(f => { f.visible = false; f.userData.t = 0; }); gate.visible = true; gate.children.forEach(c => c.material.opacity = 1);
+  placeSparks(0); placeWraiths(0);
   titleEl.classList.add('hide'); hudEl.classList.remove('hide'); hud();
 }
 function end(won) {
   G.state = won ? 'won' : 'lost';
   setTimeout(() => {
-    titleEl.querySelector('h1').textContent = won ? 'The glen has its colour back' : 'The Veil took you';
+    titleEl.querySelector('h1').textContent = won ? 'Glen and loch have their colour back' : 'The Veil took you';
     document.getElementById('sub').textContent = won ? 'Every street you walked is painted again.' : 'Try again. The wraiths drift, they do not run.';
     titleEl.querySelector('button').textContent = 'Play again';
     titleEl.classList.remove('hide');
@@ -437,15 +464,22 @@ function end(won) {
 function onAction() { if (G.state !== 'play' && !titleEl.classList.contains('hide')) start(); }
 document.getElementById('go').addEventListener('click', start);
 
+function toast(text) {
+  const el = document.getElementById('toast'); el.textContent = text; el.classList.remove('hide');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.add('hide'), 4500);
+}
 function blocked(x, z, r) {
-  if (Math.abs(x) > BOUNDS || Math.abs(z) > BOUNDS) return true;
+  if (x < BOUNDS.x0 || x > BOUNDS.x1 || z < BOUNDS.z0) return true;
+  if (z > W.gate_z && !fires[0].visible) return true;                                  // the Veil wall
+  if (Math.abs(z - W.burn.z) < W.burn.half + .1 && Math.abs(x) > W.burn.bridge_half - r) return true; // the burn; cross at the bridge
+  if (z > W.loch_z - .1 && !(Math.abs(x) < W.jetty.half - r * .5 && z < W.jetty.z1)) return true;     // the loch; the jetty runs out into it
   for (const b of solids) {
     if (b.round) { const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, rr = (b.x1 - b.x0) / 2 + r; if ((x - cx) ** 2 + (z - cz) ** 2 < rr * rr) return true; }
     else if (x > b.x0 - r && x < b.x1 + r && z > b.z0 - r && z < b.z1 + r) return true;
   }
   return false;
 }
-G.blocked = blocked; G.hero = hero; G.sparks = sparks; G.wraiths = wraiths;
+G.blocked = blocked; G.hero = hero; G.sparks = sparks; G.wraiths = wraiths; G.W = W;
 
 // ---------- loop ----------
 const clock = new THREE.Clock();
@@ -501,20 +535,29 @@ function tick() {
     }
   });
   for (let i = 1; i < 4; i++) { const v = shared.uReveal.value[i]; if (v.z > 0 && v.z < 3.2) v.z = Math.min(3.2, v.z + dt * 4); else if (v.z >= 3.2) v.w = Math.max(.35, v.w - dt); }
-  // beacon
-  if (G.state === 'play' && G.carried === 3 && Math.hypot(hero.position.x, hero.position.z) < 2.5) {
-    fire.visible = true; end(true);
+  // beacon of this stage
+  const st = W.stages[G.stage];
+  if (G.state === 'play' && G.carried === 3 && !fires[G.stage].visible && Math.hypot(hero.position.x - st.beacon[0], hero.position.z - st.beacon[1]) < 2.5) {
+    fires[G.stage].visible = true;
+    if (G.stage === W.stages.length - 1) end(true);
+    else {
+      toast('The glen is free. The road south is open.');
+      setTimeout(() => { if (G.state !== 'play') return; G.stage++; G.carried = 0; for (let i = 1; i < 4; i++) shared.uReveal.value[i].set(0, 0, 0, 0); placeSparks(G.stage); placeWraiths(G.stage); hud(); }, 3500);
+    }
   }
-  if (fire.visible) {
-    winT += dt;
-    G.reveal = Math.min(40, winT * winT * 3.5 + winT * 2);
-    shared.uReveal.value[0].set(0, 0, G.reveal, 1);
-    flames.forEach((f, i) => { const a = i / flames.length * 6.28 + T; f.position.set(Math.cos(a) * .28, Math.sin(T * 9 + i) * .1, Math.sin(a) * .28); f.scale.y = 1 + Math.sin(T * 13 + i * 2) * .3; });
-  }
+  fires.forEach((f, n) => {
+    if (!f.visible) return;
+    const u = f.userData; u.t += dt;
+    G.reveal = Math.min(W.stages[n].flood, u.t * u.t * 3.5 + u.t * 2);
+    shared.uReveal.value[n === 0 ? 0 : 4].set(W.stages[n].beacon[0], W.stages[n].beacon[1], G.reveal, 1);
+    u.flames.forEach((fl, i) => { const a = i / u.flames.length * 6.28 + T; fl.position.set(Math.cos(a) * .28, Math.sin(T * 9 + i) * .1, Math.sin(a) * .28); fl.scale.y = 1 + Math.sin(T * 13 + i * 2) * .3; });
+  });
+  if (fires[0].visible && gate.visible) { let o = 0; gate.children.forEach(c => { c.material.opacity = Math.max(0, c.material.opacity - dt * .6); o += c.material.opacity; }); if (o <= 0) gate.visible = false; }
+  gate.children.forEach((c, i) => c.position.y = (i % 2 ? 2.6 : 1) + Math.sin(T * .8 + i) * .25);
   // wraiths
   for (const w of wraiths) {
     const o = w.obj;
-    if (fire.visible) { w.fade = Math.max(0, w.fade - dt * .7); o.scale.setScalar(w.fade + .001); o.position.y += dt * 1.5; continue; }
+    if (fires[w.stage].visible) { w.fade = Math.max(0, w.fade - dt * .7); o.scale.setScalar(w.fade + .001); o.position.y += dt * 1.5; continue; }
     const dx = hero.position.x - o.position.x, dz = hero.position.z - o.position.z, d = Math.hypot(dx, dz);
     let tx, tz, spd;
     if (G.state === 'play' && d < 5.5 && G.t > 2) { tx = dx / d; tz = dz / d; spd = 2.6; }

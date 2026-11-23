@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 const NM = process.env.THREE_NM;
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.webp': 'image/webp' };
+const types = { '.json': 'application/json',  '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.webp': 'image/webp' };
 export async function open(rel, { width = 1024, height = 1024, mobile = false } = {}) {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, hasTouch: mobile, isMobile: mobile });
