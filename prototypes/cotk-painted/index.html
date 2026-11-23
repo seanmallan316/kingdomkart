@@ -26,7 +26,7 @@
   #knob { position: absolute; left: 35px; top: 35px; width: 40px; height: 40px; border-radius: 50%; background: rgba(243,234,216,.7); }
   .hide { display: none !important; }
 </style>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
 <div id="grade"></div>
@@ -40,6 +40,7 @@
 </div>
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJECTS, LAYOUT, PATHS, SQUARE_R, BOUNDS, VIEW_DIR } from './world.js';
 
 const Q = new URLSearchParams(location.search);
@@ -251,6 +252,7 @@ ground.receiveShadow = true; scene.add(ground);
 // ---------- characters (real 3D, toon shaded, always in full colour) ----------
 const grad = new THREE.DataTexture(new Uint8Array([90, 170, 255]), 3, 1, THREE.RedFormat);
 grad.needsUpdate = true;
+const gradLight = new THREE.DataTexture(new Uint8Array([150, 210, 255]), 3, 1, THREE.RedFormat); gradLight.needsUpdate = true;
 const toon = c => new THREE.MeshToonMaterial({ color: c, gradientMap: grad });
 const inkMat = new THREE.MeshBasicMaterial({ color: '#241a16', side: THREE.BackSide });
 function tartan() {
@@ -262,7 +264,8 @@ function tartan() {
   return t;
 }
 function addInk(mesh, s = 1.07) { const o = new THREE.Mesh(mesh.geometry, inkMat); o.scale.setScalar(s); mesh.add(o); }
-const xrayMat = new THREE.MeshBasicMaterial({ color: '#f2c37a', transparent: true, opacity: .55, depthFunc: THREE.GreaterDepth, depthWrite: false });
+// drawn just before the hero, only where something stands in front of him
+const xrayMat = new THREE.MeshBasicMaterial({ color: '#e9b86a', depthFunc: THREE.GreaterDepth, depthWrite: false });
 function makeHero() {
   const g = new THREE.Group(), parts = {};
   const add = (name, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; addInk(m); g.add(m); parts[name] = m;
@@ -303,6 +306,47 @@ function glowSprite(color, size) {
 }
 
 const hero = makeHero(); scene.add(hero);
+// The real Tavin from Colors of the King, if his model is here (it is kept out of the public repo).
+// Toon shaded, with an ink outline and a see-through outline when he walks behind buildings.
+async function loadTavin() {
+  let gltf;
+  try { gltf = await new GLTFLoader().loadAsync('assets/private/tavin.glb'); } catch (e) { return; }
+  for (const k of Object.keys(hero.userData.parts)) if (k !== 'lamp') hero.userData.parts[k].visible = false;
+  hero.children.filter(c => c.isMesh && c.geometry.type === 'SphereGeometry').forEach(c => c.visible = false); // stand-in eyes
+  const model = gltf.scene;
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model, true);
+  G.tavinBox = [box.min.y, box.max.y];
+  model.scale.setScalar(1.75 / (box.max.y - box.min.y));
+  const push = m => { m.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed += normalize(objectNormal) * 0.018;'); }; return m; };
+  const ink = push(new THREE.MeshBasicMaterial({ color: '#241a16', side: THREE.BackSide }));
+  const extra = [];
+  model.traverse(o => {
+    if (!o.isSkinnedMesh) return;
+    const old = o.material;
+    o.material = new THREE.MeshToonMaterial({ map: old.map || null, color: old.map ? 0xffffff : old.color, gradientMap: gradLight });
+    o.castShadow = true; o.frustumCulled = false; o.renderOrder = 6;
+    for (const mat of [ink, xrayMat]) {
+      const c = new THREE.SkinnedMesh(o.geometry, mat); c.bind(o.skeleton, o.bindMatrix); c.frustumCulled = false;
+      c.renderOrder = mat === xrayMat ? 5 : 6;
+      extra.push([o.parent, c]);
+    }
+  });
+  extra.forEach(([p, c]) => p.add(c));
+  hero.add(model);
+  const mixer = new THREE.AnimationMixer(model), acts = {};
+  for (const clip of gltf.animations) acts[clip.name] = mixer.clipAction(clip);
+  for (const n of ['Hit_Knockback', 'Yes']) if (acts[n]) { acts[n].setLoop(THREE.LoopOnce); acts[n].clampWhenFinished = true; }
+  hero.userData.mixer = mixer; hero.userData.acts = acts; hero.userData.cur = null;
+  hero.userData.parts.lamp.position.set(.3, .95, .1);
+  G.tavin = true;
+}
+function heroPlay(name, fade = .2) {
+  const u = hero.userData; if (!u.acts || !u.acts[name] || u.cur === name) return;
+  const a = u.acts[name]; a.reset().fadeIn(fade).play();
+  if (u.cur && u.acts[u.cur]) u.acts[u.cur].fadeOut(fade);
+  u.cur = name;
+}
 { const gl = glowSprite('rgba(255,190,90,.8)', 1.1); gl.position.set(.36, .82, .05); hero.add(gl); }
 
 // Spark hiding places: behind the tower, behind a cottage, under the stall awning, and others.
@@ -427,9 +471,18 @@ function tick() {
   G.x = hero.position.x; G.z = hero.position.z;
   const sp = vel.length();
   if (sp > .3) hero.rotation.y = Math.atan2(vel.x, vel.y);
-  const P = hero.userData.parts, sw = Math.sin(T * 11) * Math.min(1, sp / speed);
-  P.legL.rotation.x = sw * .7; P.legR.rotation.x = -sw * .7; P.armL.rotation.x = -sw * .6; P.armR.rotation.x = sw * .6;
-  hero.position.y = Math.abs(Math.sin(T * 11)) * .06 * Math.min(1, sp / speed);
+  if (hero.userData.mixer) {
+    const u = hero.userData;
+    if (G.state === 'won') heroPlay('Yes', .3);
+    else if (u.hitT > 0) u.hitT -= dt;
+    else heroPlay(sp > .6 ? 'Jog_Fwd_Loop' : 'Idle_Loop');
+    if (u.cur === 'Jog_Fwd_Loop') u.acts.Jog_Fwd_Loop.timeScale = Math.max(.6, sp / speed * 1.15);
+    u.mixer.update(dt);
+  } else {
+    const P = hero.userData.parts, sw = Math.sin(T * 11) * Math.min(1, sp / speed);
+    P.legL.rotation.x = sw * .7; P.legR.rotation.x = -sw * .7; P.armL.rotation.x = -sw * .6; P.armR.rotation.x = sw * .6;
+    hero.position.y = Math.abs(Math.sin(T * 11)) * .06 * Math.min(1, sp / speed);
+  }
   hero.visible = invuln <= 0 || Math.floor(T * 14) % 2 === 0;
   invuln -= dt;
 
@@ -465,7 +518,7 @@ function tick() {
     o.position.y = .15 + Math.sin(T * 2 + w.home.x) * .12;
     o.rotation.y = Math.atan2(tx, tz);
     if (G.state === 'play' && d < .85 && invuln <= 0) {
-      G.hearts--; G.hits++; invuln = 1.4; hud();
+      G.hearts--; G.hits++; invuln = 1.4; hud(); if (hero.userData.mixer) { hero.userData.cur = null; heroPlay('Hit_Knockback', .08); hero.userData.hitT = .6; }
       vel.set(dx / d * 9, dz / d * 9);
       if (G.hearts <= 0) end(false);
     }
@@ -479,6 +532,7 @@ function tick() {
   G.frames++;
   requestAnimationFrame(tick);
 }
+await loadTavin();
 G.ready = true;
 if (Q.has('autostart')) start();
 tick();
