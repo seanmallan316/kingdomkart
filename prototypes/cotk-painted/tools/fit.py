@@ -30,7 +30,9 @@ for oid, m in proj.items():
     src = raw and os.path.join(raw, oid + '.png')
     if src and os.path.exists(src):
         b0 = bbox(os.path.join(HERE, 'assets/blockout', oid + '.png'))
-        b1 = bbox(src)
+        # '<id>_fit.png', if present, is a cleaned copy used only to measure the shape (the painting itself stays untouched)
+        fit_src = os.path.join(raw, oid + '_fit.png')
+        b1 = bbox(fit_src if os.path.exists(fit_src) else src)
         sx = (b1[1] - b1[0]) / (b0[1] - b0[0]); sy = (b1[3] - b1[2]) / (b0[3] - b0[2])
         ox = b1[0] - b0[0] * sx; oy = b1[2] - b0[2] * sy
         entry['xf'] = [round(float(v), 5) for v in (sx, sy, ox, oy)]
