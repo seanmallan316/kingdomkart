@@ -10,17 +10,19 @@ for (const [name, w, h, mob] of [['phone', 412, 860, true], ['pc', 1280, 720, fa
   const collect = async () => { for (const s of await page.evaluate(() => window.__game.sparks.map(s => [s.x, s.z]))) { await tp(...s); await page.waitForTimeout(350); } };
   await shot('start');
   await park();
-  const gateBlocked = await page.evaluate(() => window.__game.blocked(0, 17, .3));
+  const gateBlocked = await page.evaluate(() => window.__game.blocked(0, window.__game.W.gate_z + 1.5, .3));
   await tp(4.6, -9.2); await page.waitForTimeout(2000); await shot('behind');
   await collect(); await tp(1.6, 1.6); await page.waitForTimeout(2200); await shot('reveal');
   await page.waitForTimeout(3000);                                   // stage 2 begins
-  const s1 = await page.evaluate(() => ({ stage: window.__game.stage, gateOpen: !window.__game.blocked(0, 17, .3), burn: window.__game.blocked(5, 20, .3), bridge: !window.__game.blocked(0, 20, .3), loch: window.__game.blocked(5, 43, .3), jetty: !window.__game.blocked(0, 43, .3) }));
+  const W = await page.evaluate(() => window.__game.W);
+  const BZ = W.burn.z, LZ = W.loch_z, B2 = W.stages[1].beacon;
+  const s1 = await page.evaluate(([BZ, LZ, GZ]) => ({ stage: window.__game.stage, gateOpen: !window.__game.blocked(0, GZ + 1.5, .3), burn: window.__game.blocked(5, BZ, .3), bridge: !window.__game.blocked(0, BZ, .3), loch: window.__game.blocked(5, LZ + 2.5, .3), jetty: !window.__game.blocked(0, LZ + 2.5, .3) }), [BZ, LZ, W.gate_z]);
   await park();
-  await tp(0.5, 24); await page.waitForTimeout(2500); await shot('loch_veiled');
-  await tp(0, 37.5); await page.waitForTimeout(2500); await shot('shore_veiled');
-  await collect(); await tp(1.4, 35); await page.waitForTimeout(5000); await shot('shore_color');
+  await tp(0.5, BZ + 4); await page.waitForTimeout(2500); await shot('loch_veiled');
+  await tp(0, LZ - 3); await page.waitForTimeout(2500); await shot('shore_veiled');
+  await collect(); await tp(B2[0] + 1.4, B2[1] + 2); await page.waitForTimeout(5000); await shot('shore_color');
   await page.evaluate(() => document.getElementById('title').classList.add('hide'));
-  await tp(0.5, 24.5); await page.waitForTimeout(2600);
+  await tp(0.5, BZ + 4.5); await page.waitForTimeout(2600);
   await page.evaluate(() => document.getElementById('title').classList.add('hide'));
   await shot('loch_color');
   const st = await page.evaluate(() => ({ state: window.__game.state, stage: window.__game.stage, carried: window.__game.carried, tavin: !!window.__game.tavin }));

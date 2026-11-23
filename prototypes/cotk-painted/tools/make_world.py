@@ -83,5 +83,51 @@ world = {
          "sparks": [[-8.5, 33.8], [10.4, 17.4], [0, 44.2], [-11.4, 26.6], [11.5, 34.5], [-2.2, 22.2], [5.2, 39.3]],
          "wraiths": [[-6, 24], [7, 28], [-8, 38], [8, 37]]}],
 }
+# ---- story places for the Painted Coast (Godot): written in the same small-map coordinates as above ----
+world["places"] = {
+    "start": [4.6, 38.4], "kessa": [-2.6, 30.6], "oak": [-9.6, 25.4], "brisa": [-9.2, 23.4], "fennick": [-1.6, 5.2],
+    "spire": [6.5, -7.0], "door": [6.5, -4.6], "joran_wait": [1.6, 1.4],
+    "messages": [[-8.5, 34.0], [10.8, 16.5], [-7.2, -8.6]],
+    "guards": [[1.2, 24.6, "road"], [-1.6, 22.8, "road"], [-4.5, 9.5, "village"], [10.0, 1.5, "village"], [4.4, -3.6, "spire"], [8.6, -3.8, "spire"]],
+    "boss_spots": [[6.5, -3.2], [2.8, -4.6], [10.2, -2.6], [5.0, -0.6]],
+}
+
+# ---- stretch the coast south of the glen so the walk has room for the story: twice as long, a little wider ----
+def st(x, z):
+    return (round(x * 1.25, 2), round(14 + (z - 14) * 2.0, 2)) if z > 14 else (x, z)
+for L_ in world["layout"]: L_["x"], L_["z"] = st(L_["x"], L_["z"])
+world["paths"] = [[*st(a, b), *st(c, d)] for a, b, c, d in world["paths"]]
+world["squares"] = [[*st(x, z), r] for x, z, r in world["squares"]]
+for stg in world["stages"]:
+    for k in ("beacon", "spawn"):
+        if k in stg: stg[k] = list(st(*stg[k]))
+    for k in ("sparks", "wraiths"): stg[k] = [list(st(*q)) for q in stg[k]]
+pl = world["places"]
+for k in ("start", "kessa", "oak", "brisa", "fennick", "spire", "door", "joran_wait"): pl[k] = list(st(*pl[k]))
+pl["messages"] = [list(st(*q)) for q in pl["messages"]]
+pl["boss_spots"] = [list(st(*q)) for q in pl["boss_spots"]]
+pl["guards"] = [[*st(x, z), g] for x, z, g in pl["guards"]]
+world["burn"]["z"] = st(0, world["burn"]["z"])[1]
+world["loch_z"] = st(0, world["loch_z"])[1]
+world["gate_z"] = st(0, world["gate_z"])[1]
+world["bounds"] = {"x0": -17.5, "x1": 17.5, "z0": -13.5, "z1": 77.0}
+# pieces that must sit against something keep their fit after the stretch
+BZ, LZ = world["burn"]["z"], world["loch_z"]
+for L_ in world["layout"]:
+    if L_["id"] == "mill": L_["z"] = round(BZ - 3.3, 2)                 # its wheel dips in the burn
+    if L_["id"] == "jetty": L_["z"] = round(LZ + 2.0, 2)                # from the shore out into the loch
+    if L_["id"] == "wall_x" and L_["z"] > LZ - 1: L_["z"] = round(LZ - 1.7, 2)
+world["jetty"]["z1"] = round(LZ + 4.3, 2)
+pl["jetty_shore"] = [0.0, round(LZ - 0.6, 2)]; pl["jetty_end"] = [0.0, round(LZ + 3.8, 2)]
+world["paths"] = [q for q in world["paths"] if not (abs(q[1] - q[3]) < 0.01 and q[2] > 4 and q[1] < BZ)]   # the old mill path
+world["paths"] += [[0, BZ - 3.4, 5.4, BZ - 3.4], [0, 48, 6.2, 48.4], [0, 55, -8.2, 55.2], [0, 40, 0, 52], [0, 52, 0, LZ - 1]]
+# ---- more to see along the longer road (existing paintings) ----
+more = [("pine", -15, 20), ("pine", 14.5, 30), ("pine", -6, 44), ("pine", 15, 44.5), ("pine", -15.5, 50.5), ("pine", 4.5, 57),
+        ("pine", -15.5, 62.5), ("pine", 15.5, 56), ("pine", 12, 40), ("pine", -4, 56.5), ("pine", 6.5, 33), ("pine", -8, 30.5),
+        ("haystack", 9, 53), ("haystack", 12.2, 54), ("haystack", -6.5, 49.5), ("cottage", -11.5, 54),
+        ("wall_x", 10.6, 44.4), ("wall_x", -10.5, 57.6), ("wall_z", -16.4, 43), ("wall_x", 9.5, 36.2), ("well", 5.4, 50.6),
+        ("haystack", 12.5, 33.5)]
+world["layout"] += [L(i, x, z) for i, x, z in more]
+print("layout", len(world["layout"]), "paths", len(world["paths"]), "burn", BZ, "loch", LZ)
 json.dump(world, open(os.path.join(HERE, "world.json"), "w"), indent=1)
 print("objects", len(O), "layout", len(layout))
