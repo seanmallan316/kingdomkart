@@ -28,7 +28,8 @@ A small playable test of the "hand-drawn art beamed onto simple 3D blocks" metho
 
 The pine, well, beacon and awning are drawn as cut-outs: leftover white background is see-through,
 so their outline follows the painting rather than the plainer block.
-| ground | procedural shader in `index.html` | done |
+| ground textures (grass, dirt, cobbles) | cobbles: FLUX.1 [dev] text-to-image, middle cut out and made seamless (`tools/flux_tile.py`, `tools/seamless.py`). Grass and dirt: an even pattern from `tools/pattern.py`, repainted by FLUX Kontext, made seamless, then calmed (`tools/calm.py`) | done |
+| ground layout (paths, ink edges, square rim, heather) | shader in `index.html` | done |
 | characters | three.js shapes, toon shading | done |
 
 Prompt pattern: "Paint over this 3D block-out render. Keep the EXACT same shape, silhouette,

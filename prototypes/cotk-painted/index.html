@@ -164,56 +164,43 @@ function groundMaterial() {
   const segs = PATHS.map(([a, b]) => new THREE.Vector4(a[0], a[1], b[0], b[1]));
   return new THREE.ShaderMaterial({
     lights: true,
-    uniforms: litUniforms({ uSeg: { value: segs } }),
+    uniforms: litUniforms({ uSeg: { value: segs }, uGrass: { value: groundTex.grass }, uDirt: { value: groundTex.dirt }, uCob: { value: groundTex.cobbles } }),
     vertexShader: VERT,
     fragmentShader: FRAG_HEAD + /* glsl */`
 uniform vec4 uSeg[${segs.length}];
 float sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h); }
 vec2 h22(vec2 p){ return vec2(h21(p), h21(p+17.17)); }
 vec3 toSRGBin(vec3 c){ return pow(c, vec3(2.2)); }
+uniform sampler2D uGrass, uDirt, uCob;
+// a texture repeated every s metres, mixed with a turned copy where the noise says, to hide the repeat
+vec3 tile(sampler2D t, vec2 p, float s){
+  vec2 q = p / s; float m = smoothstep(.3, .7, vnoise(p * .09));
+  return mix(texture2D(t, q).rgb, texture2D(t, vec2(q.y, -q.x) * 1.13 + .37).rgb, m);
+}
 void main(){
   vec2 p = vWorld.xz;
-  float f = vnoise(p*.22)*.6 + vnoise(p*.6)*.3 + vnoise(p*2.)*.1;
-  // grass in three flat tones, like cel shading
-  vec3 g1 = vec3(.56,.69,.35), g2 = vec3(.47,.62,.3), g3 = vec3(.64,.74,.4);
-  vec3 col = f < .42 ? g2 : (f > .62 ? g3 : g1);
-  // hand-drawn tufts: tiny ink ticks scattered on a jittered grid
-  vec2 cell = floor(p*1.6), lp = fract(p*1.6) - h22(cell)*.6 - .2;
-  float tick = step(abs(lp.x + lp.y*.35), .025) * step(abs(lp.y), .12) * step(.55, h21(cell+3.1));
-  col = mix(col, vec3(.24,.36,.18), tick*.85);
-  // heather patches
+  vec3 col = tile(uGrass, p, 5.);                       // painted turf (already linear: sRGB texture)
+  // heather patches on top
   float hz = vnoise(p*.35 + 7.);
   vec2 c2 = floor(p*3.), l2 = fract(p*3.) - .5;
-  float dot2 = step(length(l2 - (h22(c2)-.5)*.5), .13) * step(.62, hz) * step(.35, h21(c2));
-  col = mix(col, vec3(.62,.42,.66), dot2);
+  float dot2 = step(length(l2 - (h22(c2)-.5)*.5), .12) * step(.66, hz) * step(.4, h21(c2));
+  col = mix(col, toSRGBin(vec3(.62,.42,.66)), dot2);
   // moor beyond the village edge
+  float f = vnoise(p*.22);
   float edgeD = max(abs(p.x), abs(p.y)) - ${BOUNDS.toFixed(1)};
-  col = mix(col, vec3(.42,.5,.3)*(.85+f*.2), smoothstep(-.5, 2.5, edgeD));
+  col *= mix(1., .7 + f * .15, smoothstep(-.5, 2.5, edgeD));
   // dirt paths with an ink edge
   float d = 1e3;
   for (int i=0;i<${segs.length};i++) d = min(d, sdSeg(p, uSeg[i].xy, uSeg[i].zw));
   float w = 1.0 + (vnoise(p*1.3)-.5)*.45;
-  vec3 dirt = mix(vec3(.84,.71,.52), vec3(.78,.64,.45), step(.5, vnoise(p*4.)));
-  float peb = step(length(fract(p*2.3)-.5 - (h22(floor(p*2.3))-.5)*.5), .07) * step(.6, h21(floor(p*2.3)+9.));
-  dirt = mix(dirt, vec3(.55,.45,.36), peb);
-  if (d < w) col = dirt;
-  if (abs(d - w) < .055) col = vec3(.24,.18,.14);
-  // cobbled square: voronoi stones with ink mortar
+  if (d < w) col = tile(uDirt, p, 3.5);
+  if (abs(d - w) < .055) col = toSRGBin(vec3(.24,.18,.14));
+  // cobbled square with an ink rim
   float rs = length(p);
   if (rs < ${SQUARE_R.toFixed(2)} + .1) {
-    vec2 q = p*1.5, iq = floor(q), fq = fract(q);
-    float F1 = 8., F2 = 8.; vec2 id = vec2(0);
-    for (int y=-1;y<=1;y++) for (int x=-1;x<=1;x++){
-      vec2 o = vec2(x,y), r = o + h22(iq+o)*.8 + .1 - fq; float dd = dot(r,r);
-      if (dd < F1){ F2 = F1; F1 = dd; id = iq+o; } else if (dd < F2) F2 = dd;
-    }
-    float e = sqrt(F2) - sqrt(F1);
-    vec3 stone = mix(vec3(.74,.69,.61), vec3(.64,.6,.56), h21(id));
-    stone = mix(stone, vec3(.8,.74,.64), step(.8, h21(id+2.)));
-    col = e < .07 ? vec3(.3,.26,.24) : stone;
-    if (rs > ${SQUARE_R.toFixed(2)} - .05) col = vec3(.24,.18,.14);
+    col = texture2D(uCob, p / 3.2).rgb;
+    if (rs > ${SQUARE_R.toFixed(2)} - .05) col = toSRGBin(vec3(.24,.18,.14));
   }
-  col = toSRGBin(col);
   col = veil(col, p) * mix(${SHADOW_TINT}, vec3(1.), getShadowMask());
   gl_FragColor = vec4(col, 1.);
   #include <colorspace_fragment>
@@ -251,6 +238,12 @@ for (const L of LAYOUT) {
       if (b.max.y > 0.3 && b.min.y < 1.5) solids.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z, round: L.id === 'pine' || L.id === 'well' || L.id === 'beacon' });
     }
   });
+}
+const groundTex = {};
+for (const n of ['grass', 'dirt', 'cobbles']) {
+  const t = await loadTex('assets/ground/' + n + '.png');
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true;
+  groundTex[n] = t;
 }
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90).rotateX(-Math.PI / 2), groundMaterial());
 ground.receiveShadow = true; scene.add(ground);
