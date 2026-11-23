@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+</head><body style="margin:0;background:#fff">
+<script type="module">
+import * as THREE from 'three';
+import { OBJECTS, projectorFor } from '../world.js';
+const S = 1024;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(S, S); r.setClearColor(0xffffff, 1);
+r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+window.bake = () => {
+  const out = {};
+  for (const id of Object.keys(OBJECTS)) {
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a9a9a, 1.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-3, 8, 5); scene.add(sun);
+    const g = OBJECTS[id]();
+    g.traverse(o => {
+      if (!o.isMesh) return;
+      o.material = new THREE.MeshLambertMaterial({ color: o.userData.hint, flatShading: true });
+      const e = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25), new THREE.LineBasicMaterial({ color: 0x111111 }));
+      o.add(e);
+    });
+    scene.add(g);
+    const p = projectorFor(g);
+    r.render(scene, p.cam);
+    out[id] = { png: r.domElement.toDataURL('image/png'), matrix: p.matrix };
+  }
+  return out;
+};
+window.ready = true;
+</script></body></html>
