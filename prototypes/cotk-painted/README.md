@@ -24,7 +24,10 @@ A small playable test of the "hand-drawn art beamed onto simple 3D blocks" metho
 | Object | Tool | Status |
 |---|---|---|
 | cottage, tower, stall | ElevenLabs gpt-image-2.5-sunburst, paint-over of the block-out | done |
-| awning, well, pine, beacon | same | waiting (free-plan daily image limit) |
+| awning, well, pine, beacon | FLUX.1 Kontext [dev] through Hugging Face Inference Providers (fal), same prompt style; pine re-run at guidance 4 and its ground patch erased | done |
+
+The pine, well, beacon and awning are drawn as cut-outs: leftover white background is see-through,
+so their outline follows the painting rather than the plainer block.
 | ground | procedural shader in `index.html` | done |
 | characters | three.js shapes, toon shading | done |
 

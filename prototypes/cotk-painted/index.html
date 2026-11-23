@@ -137,17 +137,19 @@ function litUniforms(extra) {
 }
 
 // Painting beamed from the game camera direction, in the object's own space ("movie projector").
-function paintedMaterial(tex, matrix, xf) {
+function paintedMaterial(tex, matrix, xf, cut) {
   return new THREE.ShaderMaterial({
     lights: true,
-    uniforms: litUniforms({ map: { value: tex }, uProj: { value: new THREE.Matrix4().fromArray(matrix) }, uXf: { value: new THREE.Vector4(...xf) } }),
+    uniforms: litUniforms({ map: { value: tex }, uProj: { value: new THREE.Matrix4().fromArray(matrix) }, uXf: { value: new THREE.Vector4(...xf) }, uCut: { value: cut ? 1 : 0 } }),
     vertexShader: VERT,
     fragmentShader: FRAG_HEAD + /* glsl */`
-uniform sampler2D map; uniform mat4 uProj; uniform vec4 uXf;
+uniform sampler2D map; uniform mat4 uProj; uniform vec4 uXf; uniform float uCut;
 void main(){
   vec4 c = uProj * vec4(vLocal, 1.);
   vec2 uv = (c.xy * .5 + .5) * uXf.xy + uXf.zw;
   vec3 col = texture2D(map, uv).rgb;
+  // cut-out objects: leftover white background is see-through, so the outline follows the painting
+  if (uCut > .5 && (min(col.r, min(col.g, col.b)) > .8 || uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.)) discard;
   // background the painter left at the very edge of the shape reads as an ink outline
   if (min(col.r, min(col.g, col.b)) > .955) col = vec3(.16,.12,.1);
   col = veil(col, vWorld.xz) * mix(${SHADOW_TINT}, vec3(1.), getShadowMask());
@@ -232,7 +234,7 @@ for (const id of Object.keys(OBJECTS)) {
 for (const L of LAYOUT) {
   const m = meta[L.id];
   const g = OBJECTS[L.id]();
-  const mat = paintedMaterial(textures[L.id], m.matrix, m.xf || [1, 1, 0, 0]);
+  const mat = paintedMaterial(textures[L.id], m.matrix, m.xf || [1, 1, 0, 0], m.file && ['pine', 'well', 'beacon', 'awning'].includes(L.id));
   g.updateMatrixWorld(true);
   g.traverse(o => {
     if (!o.isMesh) return;
