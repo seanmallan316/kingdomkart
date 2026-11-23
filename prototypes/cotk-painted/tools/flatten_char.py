@@ -81,6 +81,47 @@ flat = pal[best]
 
 # painted-in shade: surfaces that turn away from the light take the purple shade, with a crisp edge
 lit = np.clip((n_s @ LIGHT - 0.02) / 0.10, 0, 1)[:, None]
+
+# ---- the face: keep the fine detail and ink in the eyes, brows and mouth so they read from far away ----
+top = p[:, 1].max()
+head = (p[:, 1] > top - 0.30) & (nn[:, 2] > 0.05)             # the front of the head (models face +z)
+if head.sum() > 1000:
+    fc = 0.0022                                                # 2 mm cells, head only
+    hp = p[head]; hlo = hp.min(axis=0) - fc * 8
+    hf = (hp - hlo) / fc; hi = np.floor(hf).astype(int); hd = hi.max(axis=0) + 9
+    hacc = np.zeros((*hd, 3), np.float32); hcnt = np.zeros(hd, np.float32)
+    hx = (hi[:, 0], hi[:, 1], hi[:, 2])
+    np.add.at(hacc, hx, col[head]); np.add.at(hcnt, hx, 1)
+    lum_acc = hacc @ np.array([.299, .587, .114], np.float32)
+    fine = np.stack([ndimage.gaussian_filter(hacc[..., c], 0.9) for c in range(3)], axis=-1)
+    fcnt = ndimage.gaussian_filter(hcnt, 0.9)
+    fine /= np.maximum(fcnt, 1e-6)[..., None]
+    # how much darker a spot is than the skin around it (about 1.2 cm around): eyes, brows, lips, nostrils
+    wide = ndimage.gaussian_filter(lum_acc, 5.5) / np.maximum(ndimage.gaussian_filter(hcnt, 5.5), 1e-6)
+    near = ndimage.gaussian_filter(lum_acc, 1.1) / np.maximum(ndimage.gaussian_filter(hcnt, 1.1), 1e-6)
+    dark = np.clip((wide - near - 14.0) / 16.0, 0, 1)          # 0 = skin, 1 = a clear dark feature
+    hc = (hf - 0.5).T
+    f_s = np.stack([ndimage.map_coordinates(fine[..., c], hc, order=1, mode='nearest') for c in range(3)], axis=1)
+    d_s = ndimage.map_coordinates(dark, hc, order=1, mode='nearest')
+    # lift and lightly flatten the face colours on their own palette
+    fstrip = Image.fromarray(np.clip(f_s, 0, 255).astype(np.uint8).reshape(-1, 1, 3))
+    fstrip = ImageEnhance.Color(fstrip).enhance(1.2); fstrip = ImageEnhance.Brightness(fstrip).enhance(1.2); fstrip = ImageEnhance.Contrast(fstrip).enhance(1.15)
+    fpal_img = fstrip.resize((1, 120000), Image.NEAREST).quantize(colors=40, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    fpal = np.asarray(fpal_img.getpalette()[:120], np.float32).reshape(-1, 3)
+    fcs = np.asarray(fstrip, np.float32).reshape(-1, 3)
+    fb = np.zeros(len(fcs), int); fd = np.full(len(fcs), 1e12, np.float32)
+    for k in range(len(fpal)):
+        dd = ((fcs - fpal[k]) ** 2).sum(axis=1)
+        m = dd < fd; fb[m] = k; fd[m] = dd[m]
+    face = fpal[fb]
+    ink = np.array([34.0, 22.0, 20.0])
+    face = face * (1 - d_s[:, None] * 0.82) + ink * (d_s[:, None] * 0.82)      # ink in the dark features
+    # blend into the rest of the head over the last few centimetres so there is no seam
+    w = np.clip((p[head, 1] - (top - 0.30)) / 0.04, 0, 1) * np.clip((nn[head, 2] - 0.05) / 0.25, 0, 1)
+    flat[head] = flat[head] * (1 - w[:, None]) + face * w[:, None]
+    lit[head] = np.maximum(lit[head], (w * 0.75)[:, None])    # keep the face mostly in the light
+    print('face samples', int(head.sum()), 'inked %.1f%%' % (100 * (d_s > 0.5).mean()))
+
 flat = flat * (SHADE + (1 - SHADE) * lit)
 
 # write into the UV layout and fill the gaps between islands with the nearest colour
