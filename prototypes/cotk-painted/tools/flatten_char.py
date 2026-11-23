@@ -14,9 +14,9 @@ from scipy import ndimage
 
 src, out = sys.argv[1], sys.argv[2]
 cell = float(sys.argv[3]) / 100 if len(sys.argv) > 3 else 0.005
-ncol = int(sys.argv[4]) if len(sys.argv) > 4 else 48
-soft = float(sys.argv[5]) if len(sys.argv) > 5 else 1.0
-S = 1024
+ncol = int(sys.argv[4]) if len(sys.argv) > 4 else 96
+soft = float(sys.argv[5]) if len(sys.argv) > 5 else 0.7
+S = 1536
 SHADE = np.array([0.60, 0.58, 0.78])          # same purple-blue shade as the scenery
 LIGHT = np.array([-0.25, 1.0, 0.35]); LIGHT /= np.linalg.norm(LIGHT)   # from above, a little in front
 
@@ -78,6 +78,14 @@ for k in range(len(pal)):
     d = ((cs - pal[k]) ** 2).sum(axis=1)
     m = d < bd; best[m] = k; bd[m] = d[m]
 flat = pal[best]
+
+# clothing detail: spots clearly darker than what surrounds them (seams, folds, straps, pattern lines) are inked a little
+lum_g = acc @ np.array([.299, .587, .114], np.float32)
+wide_g = ndimage.gaussian_filter(lum_g, 0.012 / cell) / np.maximum(ndimage.gaussian_filter(cnt_c, 0.012 / cell), 1e-6)
+near_g = ndimage.gaussian_filter(lum_g, 0.6) / np.maximum(ndimage.gaussian_filter(cnt_c, 0.6), 1e-6)
+dark_g = np.clip((wide_g - near_g - 12.0) / 22.0, 0, 1)
+db = ndimage.map_coordinates(dark_g, coords, order=1, mode='nearest')[:, None]
+flat = flat * (1 - db * 0.55) + np.array([34.0, 22.0, 20.0]) * (db * 0.55)
 
 # painted-in shade: surfaces that turn away from the light take the purple shade, with a crisp edge
 lit = np.clip((n_s @ LIGHT - 0.02) / 0.10, 0, 1)[:, None]
