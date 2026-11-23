@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Painted Glen</title>
+<style>
+  :root { --ink: #2a1f1a; --paper: #f3ead8; --amber: #f2a33a; --bg: #1d1a22; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; }
+  #grade { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 55%, rgba(40,20,60,.38) 100%); }
+  #hud { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; justify-content: space-between; pointer-events: none; font: 700 15px/1 Georgia, serif; color: var(--paper); }
+  .row { display: flex; gap: 6px; }
+  .ico { width: 22px; height: 22px; border: 2px solid var(--ink); border-radius: 50%; background: #5d5866; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .ico.spark { transform: rotate(45deg); border-radius: 3px; width: 17px; height: 17px; margin: 2px; }
+  .ico.on.spark { background: var(--amber); }
+  .ico.heart { background: #c0453c; }
+  .ico.heart.off { background: #5d5866; }
+  #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--paper); font-family: Georgia, serif; background: rgba(20,16,26,.55); padding: 16px; }
+  #title h1 { font-size: clamp(30px, 8vw, 56px); margin: 0 0 10px; letter-spacing: .02em; text-shadow: 0 3px 0 var(--ink), 0 0 24px rgba(242,163,58,.5); }
+  #title p { margin: 4px 0; font-size: 15px; opacity: .9; max-width: 30em; }
+  #title button { margin-top: 18px; font: 700 18px Georgia, serif; color: var(--ink); background: var(--amber); border: 3px solid var(--ink); border-radius: 10px; padding: 10px 26px; box-shadow: 0 4px 0 var(--ink); }
+  #title button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+  #stick { position: fixed; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; border: 3px solid rgba(243,234,216,.5); display: none; pointer-events: none; }
+  #knob { position: absolute; left: 35px; top: 35px; width: 40px; height: 40px; border-radius: 50%; background: rgba(243,234,216,.7); }
+  .hide { display: none !important; }
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+</head>
+<body>
+<div id="grade"></div>
+<div id="hud" class="hide"><div class="row" id="hearts"></div><div class="row" id="sparks"></div></div>
+<div id="stick"><div id="knob"></div></div>
+<div id="title">
+  <h1>Colors of the King</h1>
+  <p id="sub">Find the three amber sparks hidden around the glen and carry them to the beacon. Keep away from the Veil wraiths.</p>
+  <p>Move: WASD / arrows, or drag anywhere on the screen</p>
+  <button id="go">Play</button>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OBJECTS, LAYOUT, PATHS, SQUARE_R, BOUNDS, VIEW_DIR } from './world.js';
+
+const Q = new URLSearchParams(location.search);
+let seed = Number(Q.get('seed') || 1) >>> 0 || 1;
+const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+// ---------- renderer, camera, light ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#2b2d3a');
+const camera = new THREE.PerspectiveCamera(24, 1, 1, 200);
+const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 18, bottom: -18, near: 1, far: 70 });
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
+sun.position.set(-9, 20, 6); // upper left on screen, like the painted light
+scene.add(sun, sun.target);
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x6a6478, 1.1));
+let viewDist = 40;
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h;
+  // show about 13 m across the narrow side of the screen
+  const span = 13 / Math.min(1, camera.aspect) * (camera.aspect > 1 ? 1.25 : 1);
+  const fovRad = camera.fov * Math.PI / 180;
+  viewDist = Math.max(span / camera.aspect, span) / (2 * Math.tan(fovRad / 2)) * (camera.aspect < 1 ? camera.aspect : 1 / Math.max(1, camera.aspect / 1.6));
+  viewDist = Math.min(Math.max(viewDist, 26), 60);
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+// ---------- shared painted-surface shader bits ----------
+const shared = {
+  uReveal: { value: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+  uTime: { value: 0 },
+};
+const VEIL_GLSL = /* glsl */`
+uniform vec4 uReveal[6];
+uniform float uTime;
+float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(h21(i),h21(i+vec2(1,0)),f.x), mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x), f.y); }
+// The Veil: lines stay ink, colour drains to grey paper. Revealed circles bring the colour back,
+// with a warm amber edge where the colour is filling in.
+vec3 veil(vec3 col, vec2 w){
+  vec3 sc = pow(max(col, 0.), vec3(1./2.2));  // judge in screen colour, not linear light
+  float lum = dot(sc, vec3(.299,.587,.114));
+  vec3 grey = mix(vec3(lum), vec3(.70,.70,.75), .38);
+  grey = lum < .2 ? sc*.6 : grey;             // keep the ink lines
+  grey = pow(grey, vec3(2.2));
+  float r = 0., edge = 0.;
+  float wob = (vnoise(w*1.7)-.5)*1.4 + (vnoise(w*6.)-.5)*.35;
+  for (int i=0;i<6;i++){
+    float rad = uReveal[i].z; if (rad <= 0.) continue;
+    float d = length(w - uReveal[i].xy) + wob;
+    r = max(r, smoothstep(rad, rad - .9, d));
+    edge = max(edge, smoothstep(.9, 0., abs(d - rad + .45)) * uReveal[i].w);
+  }
+  return mix(grey, col, r) + vec3(1.,.62,.18) * edge * .55;
+}`;
+const SHADOW_TINT = 'vec3(.56,.55,.74)'; // purple-blue shade like the reference clip
+
+const VERT = /* glsl */`
+#include <common>
+#include <shadowmap_pars_vertex>
+varying vec3 vLocal; varying vec3 vWorld;
+void main(){
+  #include <beginnormal_vertex>
+  #include <defaultnormal_vertex>
+  #include <begin_vertex>
+  #include <project_vertex>
+  #include <worldpos_vertex>
+  #include <shadowmap_vertex>
+  vLocal = position; vWorld = (modelMatrix * vec4(position,1.)).xyz;
+}`;
+const FRAG_HEAD = /* glsl */`
+#include <common>
+#include <packing>
+#include <lights_pars_begin>
+#include <shadowmap_pars_fragment>
+#include <shadowmask_pars_fragment>
+varying vec3 vLocal; varying vec3 vWorld;
+${VEIL_GLSL}`;
+
+function litUniforms(extra) {
+  const u = THREE.UniformsUtils.merge([THREE.UniformsLib.lights, extra]);
+  Object.assign(u, extra, shared); // keep the shared ones shared (merge clones)
+  return u;
+}
+
+// Painting beamed from the game camera direction, in the object's own space ("movie projector").
+function paintedMaterial(tex, matrix, xf) {
+  return new THREE.ShaderMaterial({
+    lights: true,
+    uniforms: litUniforms({ map: { value: tex }, uProj: { value: new THREE.Matrix4().fromArray(matrix) }, uXf: { value: new THREE.Vector4(...xf) } }),
+    vertexShader: VERT,
+    fragmentShader: FRAG_HEAD + /* glsl */`
+uniform sampler2D map; uniform mat4 uProj; uniform vec4 uXf;
+void main(){
+  vec4 c = uProj * vec4(vLocal, 1.);
+  vec2 uv = (c.xy * .5 + .5) * uXf.xy + uXf.zw;
+  vec3 col = texture2D(map, uv).rgb;
+  // background the painter left at the very edge of the shape reads as an ink outline
+  if (min(col.r, min(col.g, col.b)) > .955) col = vec3(.16,.12,.1);
+  col = veil(col, vWorld.xz) * mix(${SHADOW_TINT}, vec3(1.), getShadowMask());
+  gl_FragColor = vec4(col, 1.);
+  #include <colorspace_fragment>
+}`,
+  });
+}
+
+// Ground: painted procedurally in the same ink-and-flat-colour style (sharp at any zoom).
+function groundMaterial() {
+  const segs = PATHS.map(([a, b]) => new THREE.Vector4(a[0], a[1], b[0], b[1]));
+  return new THREE.ShaderMaterial({
+    lights: true,
+    uniforms: litUniforms({ uSeg: { value: segs } }),
+    vertexShader: VERT,
+    fragmentShader: FRAG_HEAD + /* glsl */`
+uniform vec4 uSeg[${segs.length}];
+float sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h); }
+vec2 h22(vec2 p){ return vec2(h21(p), h21(p+17.17)); }
+vec3 toSRGBin(vec3 c){ return pow(c, vec3(2.2)); }
+void main(){
+  vec2 p = vWorld.xz;
+  float f = vnoise(p*.22)*.6 + vnoise(p*.6)*.3 + vnoise(p*2.)*.1;
+  // grass in three flat tones, like cel shading
+  vec3 g1 = vec3(.56,.69,.35), g2 = vec3(.47,.62,.3), g3 = vec3(.64,.74,.4);
+  vec3 col = f < .42 ? g2 : (f > .62 ? g3 : g1);
+  // hand-drawn tufts: tiny ink ticks scattered on a jittered grid
+  vec2 cell = floor(p*1.6), lp = fract(p*1.6) - h22(cell)*.6 - .2;
+  float tick = step(abs(lp.x + lp.y*.35), .025) * step(abs(lp.y), .12) * step(.55, h21(cell+3.1));
+  col = mix(col, vec3(.24,.36,.18), tick*.85);
+  // heather patches
+  float hz = vnoise(p*.35 + 7.);
+  vec2 c2 = floor(p*3.), l2 = fract(p*3.) - .5;
+  float dot2 = step(length(l2 - (h22(c2)-.5)*.5), .13) * step(.62, hz) * step(.35, h21(c2));
+  col = mix(col, vec3(.62,.42,.66), dot2);
+  // moor beyond the village edge
+  float edgeD = max(abs(p.x), abs(p.y)) - ${BOUNDS.toFixed(1)};
+  col = mix(col, vec3(.42,.5,.3)*(.85+f*.2), smoothstep(-.5, 2.5, edgeD));
+  // dirt paths with an ink edge
+  float d = 1e3;
+  for (int i=0;i<${segs.length};i++) d = min(d, sdSeg(p, uSeg[i].xy, uSeg[i].zw));
+  float w = 1.0 + (vnoise(p*1.3)-.5)*.45;
+  vec3 dirt = mix(vec3(.84,.71,.52), vec3(.78,.64,.45), step(.5, vnoise(p*4.)));
+  float peb = step(length(fract(p*2.3)-.5 - (h22(floor(p*2.3))-.5)*.5), .07) * step(.6, h21(floor(p*2.3)+9.));
+  dirt = mix(dirt, vec3(.55,.45,.36), peb);
+  if (d < w) col = dirt;
+  if (abs(d - w) < .055) col = vec3(.24,.18,.14);
+  // cobbled square: voronoi stones with ink mortar
+  float rs = length(p);
+  if (rs < ${SQUARE_R.toFixed(2)} + .1) {
+    vec2 q = p*1.5, iq = floor(q), fq = fract(q);
+    float F1 = 8., F2 = 8.; vec2 id = vec2(0);
+    for (int y=-1;y<=1;y++) for (int x=-1;x<=1;x++){
+      vec2 o = vec2(x,y), r = o + h22(iq+o)*.8 + .1 - fq; float dd = dot(r,r);
+      if (dd < F1){ F2 = F1; F1 = dd; id = iq+o; } else if (dd < F2) F2 = dd;
+    }
+    float e = sqrt(F2) - sqrt(F1);
+    vec3 stone = mix(vec3(.74,.69,.61), vec3(.64,.6,.56), h21(id));
+    stone = mix(stone, vec3(.8,.74,.64), step(.8, h21(id+2.)));
+    col = e < .07 ? vec3(.3,.26,.24) : stone;
+    if (rs > ${SQUARE_R.toFixed(2)} - .05) col = vec3(.24,.18,.14);
+  }
+  col = toSRGBin(col);
+  col = veil(col, p) * mix(${SHADOW_TINT}, vec3(1.), getShadowMask());
+  gl_FragColor = vec4(col, 1.);
+  #include <colorspace_fragment>
+}`,
+  });
+}
+
+// ---------- load paintings and build the village ----------
+const loader = new THREE.TextureLoader();
+const loadTex = url => new Promise(res => loader.load(url, t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; res(t); }, undefined, () => res(null)));
+const meta = await (await fetch('assets/paint/paint.json')).json();
+const solids = []; // xz boxes the hero cannot walk through
+const textures = {};
+for (const id of Object.keys(OBJECTS)) {
+  const m = meta[id];
+  textures[id] = (m.file && await loadTex('assets/paint/' + m.file)) || await loadTex('assets/blockout/' + id + '.png');
+}
+for (const L of LAYOUT) {
+  const m = meta[L.id];
+  const g = OBJECTS[L.id]();
+  const mat = paintedMaterial(textures[L.id], m.matrix, m.xf || [1, 1, 0, 0]);
+  g.updateMatrixWorld(true);
+  g.traverse(o => {
+    if (!o.isMesh) return;
+    o.geometry = o.geometry.clone().applyMatrix4(o.matrix); // bake into object space
+    o.position.set(0, 0, 0); o.rotation.set(0, 0, 0); o.scale.set(1, 1, 1);
+    o.material = mat; o.castShadow = true; o.receiveShadow = true;
+  });
+  g.position.set(L.x, L.y || 0, L.z);
+  scene.add(g);
+  g.updateMatrixWorld(true);
+  g.traverse(o => {
+    if (o.isMesh && o.userData.solid) {
+      const b = new THREE.Box3().setFromObject(o);
+      if (b.max.y > 0.3 && b.min.y < 1.5) solids.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z, round: L.id === 'pine' || L.id === 'well' || L.id === 'beacon' });
+    }
+  });
+}
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90).rotateX(-Math.PI / 2), groundMaterial());
+ground.receiveShadow = true; scene.add(ground);
+
+// ---------- characters (real 3D, toon shaded, always in full colour) ----------
+const grad = new THREE.DataTexture(new Uint8Array([90, 170, 255]), 3, 1, THREE.RedFormat);
+grad.needsUpdate = true;
+const toon = c => new THREE.MeshToonMaterial({ color: c, gradientMap: grad });
+const inkMat = new THREE.MeshBasicMaterial({ color: '#241a16', side: THREE.BackSide });
+function tartan() {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  x.fillStyle = '#2f5a3c'; x.fillRect(0, 0, 64, 64);
+  x.fillStyle = 'rgba(30,40,80,.8)'; x.fillRect(16, 0, 14, 64); x.fillRect(0, 16, 64, 14);
+  x.fillStyle = 'rgba(190,50,45,.9)'; x.fillRect(40, 0, 3, 64); x.fillRect(0, 40, 64, 3);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 1); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function addInk(mesh, s = 1.07) { const o = new THREE.Mesh(mesh.geometry, inkMat); o.scale.setScalar(s); mesh.add(o); }
+const xrayMat = new THREE.MeshBasicMaterial({ color: '#f2c37a', transparent: true, opacity: .55, depthFunc: THREE.GreaterDepth, depthWrite: false });
+function makeHero() {
+  const g = new THREE.Group(), parts = {};
+  const add = (name, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; addInk(m); g.add(m); parts[name] = m;
+    const xr = new THREE.Mesh(geo, xrayMat); xr.renderOrder = 10; m.add(xr); return m; };
+  add('legL', new THREE.CylinderGeometry(.09, .08, .45, 8).translate(0, -.22, 0), toon('#e0c09a'), -.12, .5, 0);
+  add('legR', new THREE.CylinderGeometry(.09, .08, .45, 8).translate(0, -.22, 0), toon('#e0c09a'), .12, .5, 0);
+  const kilt = toon('#ffffff'); kilt.map = tartan();
+  add('kilt', new THREE.CylinderGeometry(.26, .36, .34, 12), kilt, 0, .6, 0);
+  add('body', new THREE.CylinderGeometry(.24, .26, .42, 12), toon('#e8dcc0'), 0, .95, 0);
+  add('sash', new THREE.BoxGeometry(.1, .5, .5), kilt, 0, 1.0, 0).rotation.x = .6;
+  add('head', new THREE.SphereGeometry(.27, 16, 12), toon('#f0c7a0'), 0, 1.42, 0);
+  add('hair', new THREE.SphereGeometry(.29, 16, 10, 0, Math.PI * 2, 0, 1.4), toon('#c0602a'), 0, 1.47, -.03);
+  add('armL', new THREE.CylinderGeometry(.07, .06, .4, 8).translate(0, -.18, 0), toon('#e8dcc0'), -.32, 1.12, 0);
+  add('armR', new THREE.CylinderGeometry(.07, .06, .4, 8).translate(0, -.18, 0), toon('#e8dcc0'), .32, 1.12, 0);
+  const eyeM = new THREE.MeshBasicMaterial({ color: '#241a16' });
+  for (const x of [-.09, .09]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.035, 8, 6), eyeM); e.position.set(x, 1.45, .245); g.add(e); }
+  const lamp = new THREE.Mesh(new THREE.OctahedronGeometry(.11), new THREE.MeshBasicMaterial({ color: '#ffcf6a' }));
+  lamp.position.set(.36, .82, .05); g.add(lamp); parts.lamp = lamp;
+  g.userData.parts = parts;
+  return g;
+}
+function makeWraith() {
+  const g = new THREE.Group();
+  const cloak = new THREE.MeshToonMaterial({ color: '#9c9aa8', gradientMap: grad, transparent: true, opacity: .88 });
+  const body = new THREE.Mesh(new THREE.ConeGeometry(.55, 1.6, 12, 1, true), cloak); body.position.y = .95; addInk(body, 1.05); g.add(body);
+  const hood = new THREE.Mesh(new THREE.SphereGeometry(.36, 14, 10), cloak); hood.position.y = 1.75; addInk(hood); g.add(hood);
+  const eyeM = new THREE.MeshBasicMaterial({ color: '#dff4ff' });
+  for (const x of [-.12, .12]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), eyeM); e.position.set(x, 1.75, .3); g.add(e); }
+  body.castShadow = hood.castShadow = true;
+  return g;
+}
+function glowSprite(color, size) {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  s.scale.setScalar(size); return s;
+}
+
+const hero = makeHero(); scene.add(hero);
+{ const gl = glowSprite('rgba(255,190,90,.8)', 1.1); gl.position.set(.36, .82, .05); hero.add(gl); }
+
+// Spark hiding places: behind the tower, behind a cottage, under the stall awning, and others.
+const SPOTS = [[3.9, -9.6], [-7.2, -8.4], [6.9, 2.2], [-11.6, 5.2], [10.5, -9.5], [-4.8, 1.2], [11.2, 5.5]];
+const sparks = [];
+function placeSparks() {
+  const pool = SPOTS.slice(); const pick = [pool.splice(0, 1)[0]]; // always one behind the tower
+  while (pick.length < 3) pick.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  for (const s of sparks) scene.remove(s.obj);
+  sparks.length = 0;
+  for (const [x, z] of pick) {
+    const o = new THREE.Group();
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.28), new THREE.MeshBasicMaterial({ color: '#ffb340' }));
+    addInk(gem, 1.12); o.add(gem); o.add(glowSprite('rgba(255,170,60,.9)', 2.2));
+    o.position.set(x, .9, z); scene.add(o);
+    sparks.push({ obj: o, x, z, got: false });
+  }
+}
+const wraiths = [];
+function placeWraiths() {
+  for (const w of wraiths) scene.remove(w.obj);
+  wraiths.length = 0;
+  for (const [x, z] of [[-9, -1], [9, -3], [9, 9.5]]) {
+    const o = makeWraith(); o.position.set(x, 0, z); scene.add(o);
+    wraiths.push({ obj: o, home: new THREE.Vector2(x, z), a: rnd() * 6.28, fade: 1 });
+  }
+}
+// beacon fire
+const fire = new THREE.Group(); fire.position.set(0, 2.1, 0); fire.visible = false; scene.add(fire);
+fire.add(glowSprite('rgba(255,160,50,1)', 4.5));
+const flames = [];
+for (let i = 0; i < 7; i++) { const f = new THREE.Mesh(new THREE.ConeGeometry(.22, .9, 6), new THREE.MeshBasicMaterial({ color: i % 2 ? '#ffcf5a' : '#ff8a2a' })); fire.add(f); flames.push(f); }
+
+// ---------- input ----------
+const keys = new Set();
+addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Enter' || e.code === 'Space') onAction(); });
+addEventListener('keyup', e => keys.delete(e.code));
+const stick = { on: false, ox: 0, oy: 0, x: 0, y: 0, id: null };
+const stickEl = document.getElementById('stick'), knob = document.getElementById('knob');
+renderer.domElement.addEventListener('pointerdown', e => {
+  if (G.state !== 'play') return;
+  Object.assign(stick, { on: true, ox: e.clientX, oy: e.clientY, x: 0, y: 0, id: e.pointerId });
+  stickEl.style.display = 'block'; stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px';
+});
+addEventListener('pointermove', e => {
+  if (!stick.on || e.pointerId !== stick.id) return;
+  let dx = e.clientX - stick.ox, dy = e.clientY - stick.oy; const l = Math.hypot(dx, dy), m = 45;
+  if (l > m) { dx *= m / l; dy *= m / l; }
+  stick.x = dx / m; stick.y = dy / m; knob.style.transform = `translate(${dx}px,${dy}px)`;
+});
+const endStick = e => { if (e.pointerId !== stick.id) return; stick.on = false; stick.x = stick.y = 0; stickEl.style.display = 'none'; knob.style.transform = ''; };
+addEventListener('pointerup', endStick); addEventListener('pointercancel', endStick);
+
+// screen directions on the ground (camera never turns, so these are fixed)
+const SCR_R = new THREE.Vector3(1, 0, -1).normalize(), SCR_U = new THREE.Vector3(-1, 0, -1).normalize();
+
+// ---------- game state ----------
+const G = window.__game = { state: 'title', hearts: 3, carried: 0, t: 0, reveal: 0, hits: 0, auto: false, autoInput: null, frames: 0, x: 0, z: 0 };
+const titleEl = document.getElementById('title'), hudEl = document.getElementById('hud');
+const heartsEl = document.getElementById('hearts'), sparksEl = document.getElementById('sparks');
+function hud() {
+  heartsEl.innerHTML = [0, 1, 2].map(i => `<div class="ico heart ${i < G.hearts ? '' : 'off'}"></div>`).join('');
+  sparksEl.innerHTML = [0, 1, 2].map(i => `<div class="ico spark ${i < G.carried ? 'on' : ''}"></div>`).join('');
+}
+const vel = new THREE.Vector2();
+let invuln = 0, winT = 0;
+function start() {
+  G.state = 'play'; G.hearts = 3; G.carried = 0; G.t = 0; G.reveal = 0; G.hits = 0; winT = 0; invuln = 0;
+  hero.position.set(0.5, 0, 6.5); vel.set(0, 0);
+  shared.uReveal.value.forEach(v => v.set(0, 0, 0, 0));
+  fire.visible = false; placeSparks(); placeWraiths();
+  titleEl.classList.add('hide'); hudEl.classList.remove('hide'); hud();
+}
+function end(won) {
+  G.state = won ? 'won' : 'lost';
+  setTimeout(() => {
+    titleEl.querySelector('h1').textContent = won ? 'The glen has its colour back' : 'The Veil took you';
+    document.getElementById('sub').textContent = won ? 'Every street you walked is painted again.' : 'Try again. The wraiths drift, they do not run.';
+    titleEl.querySelector('button').textContent = 'Play again';
+    titleEl.classList.remove('hide');
+  }, won ? 4200 : 900);
+}
+function onAction() { if (G.state !== 'play' && !titleEl.classList.contains('hide')) start(); }
+document.getElementById('go').addEventListener('click', start);
+
+function blocked(x, z, r) {
+  if (Math.abs(x) > BOUNDS || Math.abs(z) > BOUNDS) return true;
+  for (const b of solids) {
+    if (b.round) { const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, rr = (b.x1 - b.x0) / 2 + r; if ((x - cx) ** 2 + (z - cz) ** 2 < rr * rr) return true; }
+    else if (x > b.x0 - r && x < b.x1 + r && z > b.z0 - r && z < b.z1 + r) return true;
+  }
+  return false;
+}
+G.blocked = blocked; G.hero = hero; G.sparks = sparks; G.wraiths = wraiths;
+
+// ---------- loop ----------
+const clock = new THREE.Clock();
+const camTarget = new THREE.Vector3(0, 0, 4);
+function tick() {
+  const dt = Math.min(clock.getDelta(), 1 / 20);
+  shared.uTime.value += dt;
+  const T = shared.uTime.value;
+  if (G.state === 'play' || G.state === 'won') G.t += dt;
+  // move hero
+  let ix = 0, iy = 0;
+  if (G.state === 'play') {
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) ix -= 1;
+    if (keys.has('KeyD') || keys.has('ArrowRight')) ix += 1;
+    if (keys.has('KeyW') || keys.has('ArrowUp')) iy += 1;
+    if (keys.has('KeyS') || keys.has('ArrowDown')) iy -= 1;
+    if (stick.on) { ix = stick.x; iy = -stick.y; }
+    if (G.autoInput) { ix = G.autoInput[0]; iy = G.autoInput[1]; }
+  }
+  const dir = new THREE.Vector3().addScaledVector(SCR_R, ix).addScaledVector(SCR_U, iy);
+  if (dir.lengthSq() > 1) dir.normalize();
+  const speed = 5.2;
+  vel.lerp(new THREE.Vector2(dir.x * speed, dir.z * speed), 1 - Math.exp(-dt * 12));
+  const r = .32;
+  const nx = hero.position.x + vel.x * dt, nz = hero.position.z + vel.y * dt;
+  if (!blocked(nx, hero.position.z, r)) hero.position.x = nx; else vel.x = 0;
+  if (!blocked(hero.position.x, nz, r)) hero.position.z = nz; else vel.y = 0;
+  G.x = hero.position.x; G.z = hero.position.z;
+  const sp = vel.length();
+  if (sp > .3) hero.rotation.y = Math.atan2(vel.x, vel.y);
+  const P = hero.userData.parts, sw = Math.sin(T * 11) * Math.min(1, sp / speed);
+  P.legL.rotation.x = sw * .7; P.legR.rotation.x = -sw * .7; P.armL.rotation.x = -sw * .6; P.armR.rotation.x = sw * .6;
+  hero.position.y = Math.abs(Math.sin(T * 11)) * .06 * Math.min(1, sp / speed);
+  hero.visible = invuln <= 0 || Math.floor(T * 14) % 2 === 0;
+  invuln -= dt;
+
+  // sparks
+  sparks.forEach((s, i) => {
+    if (s.got) return;
+    s.obj.position.y = .9 + Math.sin(T * 2.5 + i) * .15; s.obj.rotation.y = T * 1.6;
+    if (G.state === 'play' && Math.hypot(s.x - hero.position.x, s.z - hero.position.z) < .9) {
+      s.got = true; scene.remove(s.obj); G.carried++; hud();
+      shared.uReveal.value[1 + i].set(s.x, s.z, .01, 1); // a little circle of colour where it was
+    }
+  });
+  for (let i = 1; i < 4; i++) { const v = shared.uReveal.value[i]; if (v.z > 0 && v.z < 3.2) v.z = Math.min(3.2, v.z + dt * 4); else if (v.z >= 3.2) v.w = Math.max(.35, v.w - dt); }
+  // beacon
+  if (G.state === 'play' && G.carried === 3 && Math.hypot(hero.position.x, hero.position.z) < 2.5) {
+    fire.visible = true; end(true);
+  }
+  if (fire.visible) {
+    winT += dt;
+    G.reveal = Math.min(40, winT * winT * 3.5 + winT * 2);
+    shared.uReveal.value[0].set(0, 0, G.reveal, 1);
+    flames.forEach((f, i) => { const a = i / flames.length * 6.28 + T; f.position.set(Math.cos(a) * .28, Math.sin(T * 9 + i) * .1, Math.sin(a) * .28); f.scale.y = 1 + Math.sin(T * 13 + i * 2) * .3; });
+  }
+  // wraiths
+  for (const w of wraiths) {
+    const o = w.obj;
+    if (fire.visible) { w.fade = Math.max(0, w.fade - dt * .7); o.scale.setScalar(w.fade + .001); o.position.y += dt * 1.5; continue; }
+    const dx = hero.position.x - o.position.x, dz = hero.position.z - o.position.z, d = Math.hypot(dx, dz);
+    let tx, tz, spd;
+    if (G.state === 'play' && d < 5.5 && G.t > 2) { tx = dx / d; tz = dz / d; spd = 2.6; }
+    else { w.a += dt * .5; const gx = w.home.x + Math.cos(w.a) * 3 - o.position.x, gz = w.home.y + Math.sin(w.a * 1.3) * 3 - o.position.z, gl = Math.hypot(gx, gz) || 1; tx = gx / gl; tz = gz / gl; spd = 1.4; }
+    o.position.x += tx * spd * dt; o.position.z += tz * spd * dt;
+    o.position.y = .15 + Math.sin(T * 2 + w.home.x) * .12;
+    o.rotation.y = Math.atan2(tx, tz);
+    if (G.state === 'play' && d < .85 && invuln <= 0) {
+      G.hearts--; G.hits++; invuln = 1.4; hud();
+      vel.set(dx / d * 9, dz / d * 9);
+      if (G.hearts <= 0) end(false);
+    }
+  }
+  // camera: follows the hero, never turns
+  camTarget.lerp(new THREE.Vector3(hero.position.x, 0, hero.position.z), 1 - Math.exp(-dt * 4));
+  camera.position.copy(camTarget).addScaledVector(VIEW_DIR, viewDist);
+  camera.lookAt(camTarget.x, .8, camTarget.z);
+  sun.target.position.copy(camTarget); sun.position.copy(camTarget).add(new THREE.Vector3(-9, 20, 6));
+  renderer.render(scene, camera);
+  G.frames++;
+  requestAnimationFrame(tick);
+}
+G.ready = true;
+if (Q.has('autostart')) start();
+tick();
+</script>
+</body>
+</html>
