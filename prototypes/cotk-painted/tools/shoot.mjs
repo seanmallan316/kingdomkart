@@ -23,7 +23,7 @@ for (const [name, w, h, mob] of [['phone', 412, 860, true], ['pc', 1280, 720, fa
   await page.evaluate(() => document.getElementById('title').classList.add('hide'));
   await page.screenshot({ path: `${out}/${name}_color.png` });
   await page.waitForTimeout(1500);
-  const st = await page.evaluate(() => ({ state: window.__game.state, carried: window.__game.carried, reveal: window.__game.reveal, frames: window.__game.frames }));
+  const st = await page.evaluate(() => ({ state: window.__game.state, carried: window.__game.carried, reveal: window.__game.reveal, frames: window.__game.frames, tavin: !!window.__game.tavin }));
   await page.screenshot({ path: `${out}/${name}_won.png` });
   console.log(name, JSON.stringify(st), 'errors:', errors);
   await browser.close();

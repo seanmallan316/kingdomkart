@@ -310,7 +310,12 @@ const hero = makeHero(); scene.add(hero);
 // Toon shaded, with an ink outline and a see-through outline when he walks behind buildings.
 async function loadTavin() {
   let gltf;
-  try { gltf = await new GLTFLoader().loadAsync('assets/private/tavin.glb'); } catch (e) { return; }
+  // carried as base64 text (the artifact host does not serve .glb files); kept out of the public repo
+  try {
+    const res = await fetch('assets/private/tavin.json'); if (!res.ok) return;
+    const bin = Uint8Array.from(atob((await res.json()).glb), c => c.charCodeAt(0));
+    gltf = await new GLTFLoader().parseAsync(bin.buffer, '');
+  } catch (e) { return; }
   for (const k of Object.keys(hero.userData.parts)) if (k !== 'lamp') hero.userData.parts[k].visible = false;
   hero.children.filter(c => c.isMesh && c.geometry.type === 'SphereGeometry').forEach(c => c.visible = false); // stand-in eyes
   const model = gltf.scene;
