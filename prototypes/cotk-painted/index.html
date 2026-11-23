@@ -388,7 +388,7 @@ function end(won) {
     document.getElementById('sub').textContent = won ? 'Every street you walked is painted again.' : 'Try again. The wraiths drift, they do not run.';
     titleEl.querySelector('button').textContent = 'Play again';
     titleEl.classList.remove('hide');
-  }, won ? 4200 : 900);
+  }, won ? 6500 : 900);
 }
 function onAction() { if (G.state !== 'play' && !titleEl.classList.contains('hide')) start(); }
 document.getElementById('go').addEventListener('click', start);

@@ -17,7 +17,9 @@ for (const [name, w, h, mob] of [['phone', 412, 860, true], ['pc', 1280, 720, fa
   await page.evaluate(() => window.__game.hero.position.set(1.6, 0, 1.6));
   await page.waitForTimeout(2200);
   await page.screenshot({ path: `${out}/${name}_reveal.png` });
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${out}/${name}_color.png` });
+  await page.waitForTimeout(1500);
   const st = await page.evaluate(() => ({ state: window.__game.state, carried: window.__game.carried, reveal: window.__game.reveal, frames: window.__game.frames }));
   await page.screenshot({ path: `${out}/${name}_won.png` });
   console.log(name, JSON.stringify(st), 'errors:', errors);

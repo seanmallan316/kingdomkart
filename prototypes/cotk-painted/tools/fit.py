@@ -15,8 +15,12 @@ proj = json.load(open(os.path.join(HERE, 'assets/blockout/projectors.json')))
 def bbox(path):
     a = np.asarray(Image.open(path).convert('RGB')).astype(int)
     mask = (a.min(axis=2) < 235)
-    ys, xs = np.nonzero(mask)
     h, w = mask.shape
+    # ignore thin spikes (a finial, a flagpole) the painter may add: a row or column only
+    # counts once it holds a real amount of the shape
+    rows = np.nonzero(mask.sum(axis=1) >= max(12, w // 90))[0]
+    cols = np.nonzero(mask.sum(axis=0) >= max(4, h // 160))[0]
+    ys, xs = rows, cols
     # in UV space (0..1, v up)
     return xs.min() / w, xs.max() / w, 1 - ys.max() / h, 1 - ys.min() / h, w, h
 
@@ -29,7 +33,7 @@ for oid, m in proj.items():
         b1 = bbox(src)
         sx = (b1[1] - b1[0]) / (b0[1] - b0[0]); sy = (b1[3] - b1[2]) / (b0[3] - b0[2])
         ox = b1[0] - b0[0] * sx; oy = b1[2] - b0[2] * sy
-        entry['xf'] = [round(sx, 5), round(sy, 5), round(ox, 5), round(oy, 5)]
+        entry['xf'] = [round(float(v), 5) for v in (sx, sy, ox, oy)]
         im = Image.open(src).convert('RGB')
         # keep it light for phones
         if max(im.size) > 1280: im.thumbnail((1280, 1280))

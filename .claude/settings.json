@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl * https://elevenlabsusercontent.com/*)",
+      "Bash(curl * \"https://elevenlabsusercontent.com/*\")"
+    ]
+  }
+}
