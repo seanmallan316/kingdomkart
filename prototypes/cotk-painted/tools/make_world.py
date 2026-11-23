@@ -52,6 +52,24 @@ O["haystack"] = [P("cyl", [0.9, 1.2, 1.2, 12], [0, 0.6, 0], "#d2b45c"), P("cyl",
 O["oak"] = [P("cyl", [0.7, 1.0, 2.6, 10], [0, 1.3, 0], "#6a4c33"), P("ball", [2.6], [0, 4.4, 0], "#4f7d3c"),
     P("ball", [1.8], [-1.9, 3.6, 0.6], "#5a8a44"), P("ball", [1.7], [1.8, 3.9, -0.4], "#467236"),
     P("box", [0.7, 1.2, 0.1], [0.1, 0.8, 0.95], "#2a1c14", False)]                     # the hollow
+# ---- two cut-away rooms for the prologue: a floor and the two far walls, seen from the game camera ----
+O["room_house"] = [P("box", [7.0, 0.2, 6.0], [0, 0.1, 0], "#9a7650", False),                 # plank floor
+    P("box", [7.0, 3.0, 0.3], [0, 1.5, -3.0], "#e4dfd0"), P("box", [0.3, 3.0, 6.0], [-3.5, 1.5, 0], "#d8d2c2"),   # far walls
+    P("box", [1.8, 1.7, 0.6], [1.2, 0.95, -2.6], "#8a8478"),                                  # hearth
+    P("box", [0.9, 1.5, 0.08], [-1.9, 0.95, -2.82], "#5a3b2a", False),                         # back door
+    P("box", [1.7, 0.8, 1.0], [0.6, 0.6, 0.3], "#8a5a35"),                                    # table
+    P("box", [0.35, 0.3, 0.14], [0.2, 1.15, 0.2], "#c9a24a", False),                           # the toy horse on it
+    P("cyl", [0.22, 0.22, 0.45, 8], [0.4, 0.42, 1.3], "#6b4a30"), P("cyl", [0.22, 0.22, 0.45, 8], [1.9, 0.42, 0.2], "#6b4a30"),
+    P("box", [1.0, 0.5, 2.0], [-2.75, 0.45, -1.6], "#3f6f8f"), P("box", [1.0, 0.45, 1.5], [-2.75, 0.42, 1.2], "#b23a3a")]   # beds
+O["room_hall"] = [P("box", [9.0, 0.2, 8.0], [0, 0.1, 0], "#5c5a60", False),                   # stone floor
+    P("box", [9.0, 4.0, 0.35], [0, 2.0, -4.0], "#77747c"), P("box", [0.35, 4.0, 8.0], [-4.5, 2.0, 0], "#6c6971"),
+    P("box", [1.2, 2.6, 0.06], [-1.8, 2.3, -3.8], "#b9c8e0", False), P("box", [1.2, 2.6, 0.06], [1.8, 2.3, -3.8], "#b9c8e0", False),   # banners
+    P("box", [0.06, 2.6, 1.2], [-4.3, 2.3, 0.5], "#b9c8e0", False),
+    P("box", [3.2, 0.9, 2.0], [0.2, 0.65, -0.6], "#6b4a30"),                                  # the war table
+    P("box", [2.8, 0.06, 1.6], [0.2, 1.13, -0.6], "#c9b98a", False),                           # its map
+    P("cyl", [0.12, 0.14, 0.3, 6], [-0.5, 1.3, -0.8], "#3a3a3a", False), P("cyl", [0.12, 0.14, 0.3, 6], [0.9, 1.3, -0.3], "#e9e4d6", False),
+    P("cyl", [0.4, 0.25, 1.1, 8], [-3.6, 0.75, -3.2], "#3a3a3a"), P("cyl", [0.4, 0.25, 1.1, 8], [3.6, 0.75, -3.2], "#3a3a3a"),          # braziers
+    P("box", [0.9, 1.5, 0.9], [0.2, 0.95, -2.9], "#4e3a2c")]                                  # the high seat
 O["wall_x"] = [P("box", [5.0, 0.9, 0.55], [0, 0.45, 0], "#8d887c")]
 O["wall_z"] = [P("box", [0.55, 0.9, 5.0], [0, 0.45, 0], "#8d887c")]
 
@@ -128,6 +146,9 @@ more = [("pine", -15, 20), ("pine", 14.5, 30), ("pine", -6, 44), ("pine", 15, 44
         ("wall_x", 10.6, 44.4), ("wall_x", -10.5, 57.6), ("wall_z", -16.4, 43), ("wall_x", 9.5, 36.2), ("well", 5.4, 50.6),
         ("haystack", 12.5, 33.5)]
 world["layout"] += [L(i, x, z) for i, x, z in more]
+# the prologue rooms stand far off the map, on their own patch of darkness
+world["layout"] += [L("room_house", 70.0, 0.0, -0.2), L("room_hall", 70.0, 30.0, -0.2)]      # sunk so the floor top is at ground level
+world["places"]["room_house"] = [70.0, 0.0]; world["places"]["room_hall"] = [70.0, 30.0]
 print("layout", len(world["layout"]), "paths", len(world["paths"]), "burn", BZ, "loch", LZ)
 json.dump(world, open(os.path.join(HERE, "world.json"), "w"), indent=1)
 print("objects", len(O), "layout", len(layout))
