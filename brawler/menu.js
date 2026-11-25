@@ -248,6 +248,9 @@
   requestAnimationFrame(flames);
 
   // ---------------------------------------------------------------- options
+  const toggleFull = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); };
+  el('optFull').onclick = () => { Sfx.blip(); toggleFull(); };
+  addEventListener('keydown', e => { if (e.code === 'KeyF' && G.mode !== 'fight' && !e.repeat) toggleFull(); });
   const vol = el('optVol'); vol.value = save.get('vol', 100); Sfx.volume = vol.value / 100;
   vol.oninput = () => { Sfx.init(); Sfx.setVolume(vol.value / 100); save.set('vol', +vol.value); Sfx.blip(); };
   G.fxLow = !!save.get('fxLow', false);

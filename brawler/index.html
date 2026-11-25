@@ -230,6 +230,7 @@
   <div class="card">
     <h3>OPTIONS</h3>
     <div class="optrow"><label for="optVol">Sound volume</label><input type="range" id="optVol" min="0" max="100" value="100"></div>
+    <div class="optrow"><span>Fullscreen <small style="color:var(--dim)">(F11 or F)</small></span><div class="row"><button id="optFull">TOGGLE</button></div></div>
     <div class="optrow"><span>Glow effects</span><div class="row" id="optFx"><button data-q="0" class="on">FULL</button><button data-q="1">LIGHT</button></div></div>
     <div class="optrow" style="display:block;border:0"><p style="font-size:13px;text-align:left;margin:0">
       <b>P1</b> A/D/W/S move · Space jump · J attack · K special · I smash · L shield · U grab<br>
@@ -284,7 +285,15 @@
 </div>
 
 <script src="vendor/three-bundle.js"></script>
-<script src="models.js"></script>
+<script src="modeljs/ray.js"></script>
+<script src="modeljs/ollie.js"></script>
+<script src="modeljs/norah.js"></script>
+<script src="modeljs/tyler.js"></script>
+<script src="modeljs/violet.js"></script>
+<script src="modeljs/layne.js"></script>
+<script src="modeljs/dad.js"></script>
+<script src="modeljs/mom.js"></script>
+<script src="modeljs/jayson.js"></script>
 <script src="anims.js"></script>
 <script src="render3d.js"></script>
 <script src="game.js"></script>

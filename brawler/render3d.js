@@ -21,7 +21,7 @@ const R3 = (() => {
     sc.add(new THREE.HemisphereLight(0xe6eeff, 0x4a3d55, 2.1));
     const d = new THREE.DirectionalLight(0xfff1dc, 2.6); d.position.set(-420, 900, 700);
     if (forStage) {
-      d.castShadow = true; d.shadow.mapSize.set(1024, 1024);
+      d.castShadow = true; d.shadow.mapSize.set(4096, 4096); d.shadow.radius = 3;
       const c = d.shadow.camera; c.left = -800; c.right = 800; c.top = 800; c.bottom = -400; c.near = 100; c.far = 3000;
       d.shadow.bias = -0.0015; d.shadow.normalBias = 2;
     }
@@ -35,6 +35,7 @@ const R3 = (() => {
     try {
       renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true, alpha: true });
     } catch (e) { console.warn('WebGL not available', e); return false; }
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.98; // filmic contrast for the PC build
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(FOV, 1, 20, 9000);
@@ -45,7 +46,7 @@ const R3 = (() => {
   }
   function resize() {
     if (!ok) return;
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(2.5, window.devicePixelRatio || 1));
     renderer.setSize(innerWidth, innerHeight, false);
   }
   addEventListener('resize', resize);
@@ -238,7 +239,7 @@ const R3 = (() => {
   function buildGlbRig(def) {
     const model = THREE.SkeletonUtils.clone(MODELS[def.id]);
     const rig = { def, glb: true, turnY: TURN, blades: [], look: { mats: [] } };
-    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); o.material.side = THREE.FrontSide; o.material.metalness = 0; o.material.roughness = 0.85; rig.look.mats.push(o.material); } });
+    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); o.material.side = THREE.FrontSide; o.material.metalness = 0; o.material.roughness = 0.85; if (o.material.map && renderer) o.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy(); rig.look.mats.push(o.material); } });
     model.updateMatrixWorld(true);
     const bones = {}, order = [];
     model.traverse(o => { if (o.isBone) { bones[o.name] = o; order.push(o); } });

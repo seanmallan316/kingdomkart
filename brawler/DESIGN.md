@@ -186,3 +186,11 @@ A short-screen layout (under 520 px tall) keeps everything on screen on a phone 
 - `intro.webm`: the supplied start animation (logo zooms in and bursts), converted to a transparent VP9 video with its
   sound. Pressing Play runs it over the title screen; the main menu appears at the burst (2.95 s). If the video cannot
   play, a built-in zoom-and-flame transition runs instead. Reduced-motion settings skip both.
+
+## PC build
+The game now targets PC first (it still runs in a phone browser, but quality is no longer held back for phones).
+- Fighter textures are the scans' full 2048 px (was 1024), with anisotropic filtering.
+- Renderer: filmic (ACES) tone mapping, 4096 px soft shadows, pixel ratio up to 2.5.
+- Fullscreen: F on the menus, F11, or Options.
+- Models are packed one file per fighter in `modeljs/` (built by `build_models.py`); `models.js` is gone.
+- To play on a PC: unzip the download and open `index.html` in Chrome or Edge. No install or internet needed.
