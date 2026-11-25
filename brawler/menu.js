@@ -4,7 +4,7 @@
   const el = id => document.getElementById(id);
   const save = { get(k, d) { try { const v = localStorage.getItem('clash_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('clash_' + k, JSON.stringify(v)); } catch (e) { /* storage can be blocked; the game still works */ } } };
   const idx = id => FIGHTERS.findIndex(f => f.id === id);
-  const KIDS = ['ray', 'norah', 'ollie'];
+  const KIDS = ['ray', 'norah', 'ollie', 'tyler', 'violet', 'layne', 'jayson', 'mom', 'dad'];
 
   // ---------------------------------------------------------------- story: The Golden Clog (original)
   // {sib1}/{sib2} are the two siblings the player did not pick.
@@ -26,7 +26,8 @@
   const ENDING = 'Big Brick tumbles off the stage and the Golden Clog drops into your hands. Back home it goes on the shelf, with one new rule: whoever wins the next family match gets to hold it.';
   let hero = save.get('hero', 'ray');
   const prog = () => save.get('story', {});
-  const cast = () => { const o = KIDS.filter(k => k !== hero); return { sib1: o[0], sib2: o[1] }; };
+  // the rival and the ally are the next two family members after the hero in the list
+  const cast = () => { const i = KIDS.indexOf(hero), n = KIDS.length; return { sib1: KIDS[(i + 1) % n], sib2: KIDS[(i + 2) % n] }; };
   const fill = t => { const c = cast(); return t.replace('{sib1}', FIGHTERS[idx(c.sib1)].name).replace('{sib2}', FIGHTERS[idx(c.sib2)].name); };
   const nameOf = f => (f.def ? f.def.name : FIGHTERS[idx(f.id)].name);
 

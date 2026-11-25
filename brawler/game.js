@@ -359,6 +359,36 @@ const FIGHTERS = [
     scale: 0.78, power: 0.86, speed: 0.82, reach: 1.2, sp: { n: 'whirl', s: 'dashStrike', u: 'spiral', d: 'counter' },
   },
   {
+    id: 'tyler', name: 'TYLER', blurb: 'Strong all-rounder. Charge punch, dash strike, counter.', color: '#4a6fd6', dark: '#2c3f66', accent: '#9fd0ff', acc: 'kid',
+    weight: 106, walk: 4.0, run: 8.6, air: 4.7, airAcc: 0.5, grav: 0.46, fall: 7.2, ff: 10.2, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
+    scale: 1.1, power: 1.08, speed: 1.0, reach: 1.08, sp: { n: 'chargePunch', s: 'dashStrike', u: 'rocket', d: 'counter' },
+  },
+  {
+    id: 'violet', name: 'VIOLET', blurb: 'Quick and graceful. Blaster, dash, teleport, counter.', color: '#9b6bff', dark: '#4b3d6b', accent: '#e3c8ff', acc: 'kid',
+    weight: 92, walk: 4.3, run: 9.0, air: 5.2, airAcc: 0.56, grav: 0.42, fall: 6.8, ff: 9.8, jump: 12.4, hop: 7.8, djump: 12.0, jumps: 2,
+    scale: 1.02, power: 0.96, speed: 0.9, reach: 1.02, sp: { n: 'blaster', s: 'dashStrike', u: 'teleport', d: 'counter' },
+  },
+  {
+    id: 'layne', name: 'LAYNE', blurb: 'Heavy bruiser. Charge punch, armoured charge, quake.', color: '#3f5f9e', dark: '#1d2740', accent: '#ffd27a', acc: 'kid',
+    weight: 124, walk: 3.5, run: 7.4, air: 4.1, airAcc: 0.42, grav: 0.53, fall: 8.0, ff: 11.2, jump: 12.8, hop: 8.2, djump: 12.4, jumps: 2,
+    scale: 1.12, power: 1.14, speed: 1.1, reach: 1.06, sp: { n: 'chargePunch', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
+  },
+  {
+    id: 'dad', name: 'DAD', blurb: 'The powerhouse. Shockwave, armoured charge, quake.', color: '#5a6072', dark: '#2a3a5c', accent: '#ffb347', acc: 'kid',
+    weight: 132, walk: 3.6, run: 7.6, air: 4.1, airAcc: 0.42, grav: 0.54, fall: 8.2, ff: 11.4, jump: 13.0, hop: 8.3, djump: 12.6, jumps: 2,
+    scale: 1.16, power: 1.2, speed: 1.12, reach: 1.08, sp: { n: 'waveSlash', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
+  },
+  {
+    id: 'mom', name: 'MOM', blurb: 'Sharp and technical. Charge shot, bombs, counter.', color: '#b9783f', dark: '#2f4468', accent: '#ffe0a8', acc: 'kid',
+    weight: 94, walk: 4.1, run: 8.4, air: 4.9, airAcc: 0.54, grav: 0.43, fall: 6.9, ff: 9.9, jump: 12.2, hop: 7.7, djump: 11.8, jumps: 2,
+    scale: 1.01, power: 1.0, speed: 0.94, reach: 1.0, sp: { n: 'chargeShot', s: 'bomb', u: 'rocket', d: 'counter' },
+  },
+  {
+    id: 'jayson', name: 'JAYSON', blurb: 'Fast, agile brawler. Blaster, cannonball, dive kick.', color: '#8fa0b8', dark: '#20242e', accent: '#ff7a6b', acc: 'kid',
+    weight: 98, walk: 4.3, run: 9.2, air: 5.0, airAcc: 0.56, grav: 0.46, fall: 7.2, ff: 10.4, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
+    scale: 1.06, power: 1.0, speed: 0.92, reach: 1.04, sp: { n: 'blaster', s: 'cannonball', u: 'rocket', d: 'diveKick' },
+  },
+  {
     id: 'vex', name: 'VEX', blurb: 'Light and fast. Triple jump, dive kick.', color: '#38d6ff', dark: '#0d5874', accent: '#fff36b', acc: 'scarf',
     weight: 82, walk: 4.2, run: 9.6, air: 5.0, airAcc: 0.55, grav: 0.46, fall: 7.2, ff: 10.5, jump: 12.6, hop: 8.0, djump: 12.0, jumps: 3,
     scale: 0.92, power: 0.92, speed: 0.9, reach: 1.0, sp: { n: 'blaster', s: 'dashStrike', u: 'rocket', d: 'diveKick' },
@@ -1627,7 +1657,7 @@ const $ = id => document.getElementById(id);
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); if (id) $('touch').classList.remove('on'); }
 const cfg = {
   stage: 'skyforge', stocks: 3,
-  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 1, level: 5 }, { type: 'cpu', fighter: 2, level: 5 }, { type: 'off', fighter: 4, level: 5 }],
+  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 6, level: 5 }, { type: 'cpu', fighter: 7, level: 5 }, { type: 'off', fighter: 3, level: 5 }],
 };
 function buildSelect() {
   const wrap = $('slots'); wrap.innerHTML = '';
@@ -1662,7 +1692,7 @@ function drawPortrait(c, def) { R3.portrait(c, def); }
 $('bPlay').onclick = () => { Sfx.init(); Sfx.blip(); showScreen('hub'); };
 function startDemo() {
   Sfx.init(); startMatch({ stage: ['skyforge', 'driftway', 'proving'][Math.floor(Math.random() * 3)], stocks: 3,
-    slots: [0, 1, 2, 3].map(i => ({ type: 'cpu', fighter: (i + Math.floor(Math.random() * 7)) % 7, level: 6 + (i % 3) })) });
+    slots: [0, 1, 2, 3].map(i => ({ type: 'cpu', fighter: Math.floor(Math.random() * 9), level: 6 + (i % 3) })) });
 }
 $('bBack').onclick = () => { Sfx.blip(); showScreen('hub'); G.mode = 'title'; };
 $('bFight').onclick = () => {

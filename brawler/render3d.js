@@ -316,6 +316,12 @@ const R3 = (() => {
   const CHAR_CLIP = {
     ray: { nspec: 'kick', uspec: 'jump', dspec: 'slam' },
     norah: { nspec: 'pitch', sspec: 'airpunch', uspec: 'jump', dspec: 'kick', run: 'sprint' },
+    tyler: { nspec: 'smash', sspec: 'airpunch', uspec: 'jump', dspec: 'block' },
+    violet: { nspec: 'cast', sspec: 'airpunch', uspec: 'cast', dspec: 'block', jab3: 'highkick', fsmash: 'round' },
+    layne: { nspec: 'smash', sspec: 'airpunch', uspec: 'jump', dspec: 'slam' },
+    dad: { nspec: 'cast', sspec: 'airpunch', uspec: 'jump', dspec: 'slam' },
+    mom: { nspec: 'cast', sspec: 'pitch', uspec: 'jump', dspec: 'block' },
+    jayson: { nspec: 'cast', uspec: 'jump', dspec: 'kick' },
     ollie: { jab1: 'slash', jab2: 'attack', jab3: 'thrust', ftilt: 'slash', utilt: 'upslash', dash: 'thrust', fsmash: 'attack', usmash: 'upslash', nair: 'bladespin', fair: 'slash', uair: 'upslash',
       nspec: 'bladespin', sspec: 'thrust', uspec: 'bladespin', dspec: 'block', counterStrike: 'attack' },
   };

@@ -126,3 +126,19 @@ Original effects and sound; nothing is sampled from another game.
   heavier, 2 stocks). Progress per fighter is kept in the browser.
 - **Teams:** fighters on the same team cannot hit each other and CPUs do not target team-mates; a match ends when one side is left.
 - **Training:** a fighter who stands still, 99 stocks, no match end.
+
+## The family roster (9 scanned fighters)
+| Fighter | Role | Specials (neutral / side / up / down) |
+|---|---|---|
+| Ray | small, floaty, five jumps | Clog Toss / Cannonball / Hoodie Hop / Belly Flop |
+| Norah | fastest runner, sparkle effects | Star Toss / Sparkle Dash / Rocket / Dive Kick |
+| Ollie | fast foam sword, five jumps | Whirl / Dash Strike / Spiral / Counter |
+| Tyler | strong all-rounder | Charge Punch / Dash Strike / Rocket / Counter |
+| Violet | quick and graceful | Blaster / Dash Strike / Teleport / Counter |
+| Layne | heavy bruiser | Charge Punch / Armoured Charge / Rocket / Quake |
+| Dad | the powerhouse, heaviest | Shockwave / Armoured Charge / Rocket / Quake |
+| Mom | sharp and technical | Charge Shot / Bomb / Rocket / Counter |
+| Jayson | fast, agile brawler | Blaster / Cannonball / Rocket / Dive Kick |
+
+Tyler and Jayson were built from their front photo only, because their photos mixed outfits; the brand logo on Jayson's
+T-shirt was removed first. Vex, Brick, Nova and Kai stay as the story's Shadow Squad. Any family member can be the story hero.
