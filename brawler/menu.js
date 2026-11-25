@@ -13,7 +13,7 @@
   function setScene(id, extra) {
     sceneId = id; sceneExtra = extra || null; if (!has3D()) return;
     const c = cast(), wide = innerWidth > innerHeight * 1.2;
-    if (id === 'title' && wide) R3.menuSet(KIDS.map((k, i) => ({ id: k, x: (i - 4) * 82, z: (i % 2) * -55, face: (4 - i) * 0.07 })), { x: 0, y: 200, d: 1120, lx: 0, ly: 205 });
+    if (id === 'title' && wide) R3.menuSet(KIDS.map((k, i) => ({ id: k, x: (i - 4) * 82, z: (i % 2) * -55, face: (4 - i) * 0.07 })), { x: 0, y: 150, d: 1120, lx: 0, ly: 150 });
     else if (id === 'title') R3.menuSet(KIDS.map((k, i) => (i < 5 ? { id: k, x: (i - 2) * 86, z: 45, face: (2 - i) * 0.1 } : { id: k, x: (i - 6.5) * 92, z: -70, face: (6.5 - i) * 0.1, scale: 1.05 })), { x: 0, y: 270, d: 2150, lx: 0, ly: 215 });  // portrait: two rows
     else if ((id === 'hub' || id === 'options') && wide) R3.menuSet([{ id: hero, x: 122, face: -0.4, scale: 1.12 }, { id: c.sib1, x: 222, z: -95, face: -0.55 }, { id: c.sib2, x: 28, z: -115, face: -0.15 }], { x: -30, y: 92, d: 520, lx: -30, ly: 60 });
     else if (id === 'hub' || id === 'options') { // portrait: the family lined up in the ring under the tiles

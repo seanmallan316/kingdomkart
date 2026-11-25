@@ -67,6 +67,14 @@ off-screen. A bottom card for each player shows damage % (white → yellow → r
 Overdrive meter. Screens: Title → Fighter select (P1–P4: Player / CPU / Off, CPU level), stage and stocks → 3-2-1-GO →
 GAME! → results (place, KOs, falls, damage dealt).
 
+## Family banner on the opening screen (`fam.js`, `fam/`, `famjs.js`)
+The family's banner photo (supplied by the family) is cut into nine panels (`fam/*.webp`, packed into `famjs.js` by
+`tools/build_fam.py`) and shown as leaning photo cards along the bottom of the title screen, behind the logo and Play:
+- cards rise in one by one, a light glint sweeps across each, and a spotlight ripples through them while idle;
+- pointing at a card grows it, shows the person's name on a gold plate and dims the others; cards lean toward the pointer;
+- choosing a card (click, tap or controller) bursts, plays that fighter's cheer or battle cry, and their 3D self on
+  stage celebrates. The full controls list moved to Options to make room.
+
 ## Controllers and 8 players (`pads.js`)
 - **Up to 8 fighters** (any mix of players and CPUs): 8 slots on the fighter select (off slots fold down), 8 player
   colours, and the match HUD wraps to two rows of four on narrower screens (`hudLayout` in game.js).

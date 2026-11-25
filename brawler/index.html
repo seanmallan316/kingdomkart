@@ -244,6 +244,40 @@
   table.res tr:nth-child(2) td { background:linear-gradient(90deg, rgba(255,200,80,0), rgba(255,200,80,.18), rgba(255,200,80,0)); }
   #resTitle { background:linear-gradient(100deg,#fff 0%,#ffe08a 30%,#e3a738 50%,#ffe08a 70%,#fff 100%) !important; background-size:200% 100% !important; -webkit-background-clip:text !important; background-clip:text !important; animation:shimmer 3s linear infinite; }
   @media (prefers-reduced-motion: reduce) { #luxsel, button.big::after { animation:none; } }
+
+  /* ================= the family banner along the bottom of the opening screen (fam.js) ================= */
+  #title > *:not(.famstrip) { position:relative; z-index:2; }
+  #title .help { display:none; }
+  .famstrip { position:absolute; left:0; right:0; bottom:0; z-index:1; height:clamp(150px, 34vh, 380px); display:flex; align-items:flex-end; gap:clamp(4px, .8vw, 10px);
+    padding:0 clamp(8px, 2vw, 28px); perspective:900px; pointer-events:auto;
+    -webkit-mask-image:linear-gradient(180deg, #000 0%, #000 78%, transparent 100%); mask-image:linear-gradient(180deg, #000 0%, #000 78%, transparent 100%); }
+  .famstrip::before { content:""; position:absolute; inset:auto 0 0 0; height:70%; background:linear-gradient(180deg, rgba(10,12,24,0), rgba(10,12,24,.65)); pointer-events:none; }
+  .fam { position:relative; flex:1 1 0; min-width:0; height:100%; padding:0; border:0; cursor:pointer; background:none; font:inherit; color:#fff;
+    transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(var(--lift,0px)) skewX(-7deg); transform-origin:50% 100%;
+    transition:flex-grow .45s cubic-bezier(.2,.9,.3,1.15), transform .35s cubic-bezier(.2,.9,.3,1.2), filter .3s;
+    animation:famIn .7s calc(.25s + var(--i) * .07s) cubic-bezier(.2,.9,.3,1.25) both; }
+  @keyframes famIn { from { opacity:0; translate:0 70%; } to { opacity:1; translate:0 0; } }
+  .fam .ph { position:absolute; inset:0; border-radius:16px; overflow:hidden; background:var(--fc);
+    box-shadow:inset 0 0 0 2px rgba(255,236,180,.75), 0 14px 30px rgba(0,0,0,.45), 0 0 0 rgba(0,0,0,0); transition:box-shadow .3s; }
+  .fam img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 6%; transform:translateX(var(--px,0px)) skewX(7deg) scale(1.12); transform-origin:50% 0%; transition:transform .35s cubic-bezier(.2,.9,.3,1.2), filter .3s; user-select:none; }
+  .fam .ph::after { content:""; position:absolute; inset:-10% -60%; background:linear-gradient(100deg, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%); transform:translateX(-70%); animation:famShine 6s calc(var(--i) * .35s) ease-in-out infinite; mix-blend-mode:screen; }
+  @keyframes famShine { 0%,78% { transform:translateX(-70%); } 100% { transform:translateX(70%); } }
+  .fam .glow { position:absolute; inset:-14px -10px -6px; border-radius:24px; background:radial-gradient(60% 50% at 50% 70%, var(--fc), transparent 70%); opacity:0; filter:blur(14px); z-index:-1; transition:opacity .3s; }
+  .fam .nm { position:absolute; left:50%; bottom:22%; transform:translate(-50%, 30%) skewX(7deg); opacity:0; white-space:nowrap; font-weight:900; font-style:italic; letter-spacing:2px;
+    font-size:clamp(13px, 2vw, 26px); padding:4px 14px; border-radius:8px; color:#2a1a00; background:var(--gold); box-shadow:0 6px 18px rgba(0,0,0,.45), 0 0 18px var(--fc);
+    transition:opacity .25s, transform .35s cubic-bezier(.2,.9,.3,1.4); pointer-events:none; }
+  .famstrip:hover .fam:not(:hover):not(:focus-visible) { filter:saturate(.55) brightness(.72); }
+  .fam:hover, .fam:focus-visible, .fam.lit { flex-grow:1.7; --lift:-14px; z-index:3; outline:none; }
+  .fam:hover .ph, .fam:focus-visible .ph, .fam.lit .ph { box-shadow:inset 0 0 0 3px #fff1c4, 0 20px 40px rgba(0,0,0,.5), 0 0 34px var(--fc); }
+  .fam:hover .glow, .fam:focus-visible .glow, .fam.lit .glow { opacity:.9; }
+  .fam:hover img, .fam:focus-visible img, .fam.lit img { object-position:50% 0%; transform:translateX(var(--px,0px)) skewX(7deg) scale(1.06); }
+  .fam:hover .nm, .fam:focus-visible .nm, .fam.lit .nm { opacity:1; transform:translate(-50%, 0) skewX(7deg); }
+  .fam.lit:not(:hover) { flex-grow:1.35; --lift:-8px; }
+  .fam.pop .ph { animation:famPop .6s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes famPop { 0% { scale:1; } 30% { scale:1.12 .9; } 55% { scale:.94 1.08; } 100% { scale:1; } }
+  @media (max-aspect-ratio: 6/5) { .famstrip { height:clamp(130px, 30vh, 320px); gap:3px; padding:0 6px; } .fam .ph { border-radius:10px; } .fam:hover, .fam:focus-visible, .fam.lit { flex-grow:3; } }
+  @media (max-height:520px) { .famstrip { height:42vh; } }
+  @media (prefers-reduced-motion: reduce) { .fam, .fam .ph::after { animation:none; } }
 </style>
 </head>
 <body>
@@ -372,5 +406,7 @@
 <script src="menu.js"></script>
 <script src="lux.js"></script>
 <script src="pads.js"></script>
+<script src="famjs.js"></script>
+<script src="fam.js"></script>
 </body>
 </html>
