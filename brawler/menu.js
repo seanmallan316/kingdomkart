@@ -199,6 +199,34 @@
   el('bMenu').onclick = () => openHub();
   el('bOptBack').onclick = () => { Sfx.blip(); openHub(); };
 
+  // ---------------------------------------------------------------- logo flames (drawn in code)
+  const flameSets = [...document.querySelectorAll('.logo')].map(logo => {
+    const cv = document.createElement('canvas'); cv.className = 'flames'; cv.width = 420; cv.height = 240; logo.prepend(cv);
+    return { logo, cv, g: cv.getContext('2d'), ps: [] };
+  });
+  const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function flames() {
+    requestAnimationFrame(flames);
+    if (G.mode === 'fight') return;
+    for (const f of flameSets) {
+      if (!f.logo.offsetParent) continue; // only the logo on the visible screen
+      const { g, cv, ps } = f, W = cv.width, H = cv.height;
+      // fire rises from behind the whole name, taller toward the right-hand end
+      for (let i = 0; i < (still ? 0 : 10); i++) { const u = Math.random(), tall = 0.75 + u * 0.6; ps.push({ x: W * (0.13 + u * 0.72), y: H * (0.5 + Math.random() * 0.14), vx: (Math.random() - 0.4) * 1.1, vy: -(1.3 + Math.random() * 2.4) * tall, r: 13 + Math.random() * 17, t: 0, life: (24 + Math.random() * 26) * tall, spark: Math.random() < 0.14 }); }
+      g.clearRect(0, 0, W, H); g.globalCompositeOperation = 'lighter';
+      for (const p of ps) {
+        p.t++; p.x += p.vx + Math.sin((p.t + p.r) * 0.2) * 0.7; p.y += p.vy; p.vy *= 0.985;
+        const k = 1 - p.t / p.life; if (k <= 0) continue;
+        if (p.spark) { g.fillStyle = 'rgba(255,230,150,' + k + ')'; g.beginPath(); g.arc(p.x + Math.sin(p.t * 0.3 + p.r) * 6, p.y - p.t * 1.1, 1.4, 0, 6.283); g.fill(); continue; }
+        const r = p.r * (0.35 + k * 0.8), gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+        gr.addColorStop(0, 'rgba(255,' + Math.round(160 + 95 * k) + ',' + Math.round(40 + 150 * k * k) + ',' + 0.62 * k + ')'); gr.addColorStop(0.45, 'rgba(255,' + Math.round(70 + 80 * k) + ',18,' + 0.34 * k + ')'); gr.addColorStop(1, 'rgba(190,25,10,0)');
+        g.fillStyle = gr; g.beginPath(); g.ellipse(p.x, p.y, r * 0.55, r * 1.5, 0, 0, 6.283); g.fill();
+      }
+      f.ps = ps.filter(p => p.t < p.life);
+    }
+  }
+  requestAnimationFrame(flames);
+
   // ---------------------------------------------------------------- options
   const vol = el('optVol'); vol.value = save.get('vol', 100); Sfx.volume = vol.value / 100;
   vol.oninput = () => { Sfx.init(); Sfx.setVolume(vol.value / 100); save.set('vol', +vol.value); Sfx.blip(); };

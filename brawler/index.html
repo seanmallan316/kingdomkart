@@ -112,12 +112,15 @@
   .tile .prog { position:absolute; left:18px; bottom:14px; font-size:12px; font-weight:800; letter-spacing:1px; background:rgba(0,0,0,.35); padding:3px 9px; border-radius:20px; }
   /* ---- arena look: original logo, glass tiles ---- */
   .logo { position:relative; display:inline-flex; flex-direction:column; align-items:flex-start; transform:skewX(-8deg) rotate(-2deg); font-style:italic; font-weight:900; line-height:.86; padding:0 58px 14px 6px; animation:rise .6s cubic-bezier(.2,.9,.3,1.3) both; filter:drop-shadow(0 8px 0 rgba(0,0,0,.45)); }
-  .logo .l1 { font-size:clamp(20px, 4.6vw, 44px); letter-spacing:6px; margin-left:8px; background:linear-gradient(180deg,#fff 20%,#cfe3ff 55%,#7fa8ff 100%); -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-stroke:1.5px #0a1030; paint-order:stroke fill; }
-  .logo .l2 { font-size:clamp(34px, 8.6vw, 88px); letter-spacing:1px; white-space:nowrap; background:linear-gradient(180deg,#fffbe0 8%,#ffd23f 42%,#ff8a1e 70%,#e23b2e 100%); background-size:100% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-stroke:2px #1a0f2e; paint-order:stroke fill; }
-  .logo .swoosh { position:absolute; left:0; right:14px; bottom:0; height:11px; background:linear-gradient(90deg,#fff,#ffd23f 30%,#ff5ea8 65%,#7a5cff); clip-path:polygon(0 40%, 100% 0, 96% 100%, 0 75%); }
+  .logo .l1, .logo .l2 { position:relative; }
+  .logo .l1::before, .logo .l2::before { content:attr(data-t); position:absolute; left:0; top:0; z-index:-1; color:#0b0820; -webkit-text-stroke:var(--ow) #0b0820; text-shadow:0 0 18px rgba(255,140,40,.55); }
+  .logo .l1 { --ow:7px; font-size:clamp(20px, 4.6vw, 44px); letter-spacing:6px; margin-left:8px; background:linear-gradient(180deg,#ffffff 0%,#dfeaff 34%,#8ea2c8 50%,#3b4668 52%,#c9b08a 64%,#fff3d6 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .logo .l2 { --ow:11px; font-size:clamp(34px, 8.6vw, 88px); letter-spacing:1px; white-space:nowrap; background:linear-gradient(180deg,#ffffff 0%,#e6efff 30%,#9db0d4 47%,#2d3654 50%,#a8794a 58%,#ffd9a0 78%,#fff8e8 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .logo canvas.flames { position:absolute; left:-14%; top:-95%; width:128%; height:230%; z-index:-2; pointer-events:none; }
+  .logo .swoosh { display:none; }
   .logo .star { position:absolute; right:-30px; top:-34%; width:clamp(34px, 8vw, 78px); fill:#ffd23f; stroke:#1a0f2e; stroke-width:5; filter:drop-shadow(0 0 14px #ff9a3d); animation:spin 9s linear infinite; }
-  .logo::before { content:""; position:absolute; right:-30px; top:-20px; width:46%; height:120%; background:conic-gradient(from 200deg, #ff5ea8, #ffb347, #ffe66b, #6cf0ff, #7a5cff, #ff5ea8); filter:blur(26px); opacity:.55; z-index:-1; border-radius:50%; }
-  .logo.small .l1 { font-size:clamp(14px, 3vw, 26px); } .logo.small .l2 { font-size:clamp(24px, 5.4vw, 50px); } .logo.small { margin-bottom:max(10px, 2vh); padding-bottom:10px; }
+  .logo::before { content:""; position:absolute; left:8%; right:4%; top:10%; height:90%; background:radial-gradient(ellipse, rgba(255,150,40,.5), rgba(255,80,20,0) 70%); filter:blur(22px); z-index:-3; }
+  .logo.small .l1 { --ow:5px; font-size:clamp(14px, 3vw, 26px); } .logo.small .l2 { --ow:7px; font-size:clamp(24px, 5.4vw, 50px); } .logo.small { margin-bottom:max(10px, 2vh); padding-bottom:10px; }
   @keyframes spin { to { transform:rotate(360deg); } }
   #hub .tile { border-radius:20px; transform:perspective(700px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) skewX(-2deg);
     background:linear-gradient(155deg, color-mix(in srgb, var(--c1) 88%, #fff) 0%, var(--c1) 30%, var(--c2) 100%);
@@ -179,7 +182,7 @@
 <canvas id="c"></canvas>
 
 <div id="title" class="screen on">
-  <div class="logo"><span class="l1">SUPER</span><span class="l2">FAMILY SMASH</span><i class="swoosh"></i><svg class="star" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2 61 36 97 38 68 59 78 95 50 74 22 95 32 59 3 38 39 36Z"/></svg></div>
+  <div class="logo"><span class="l1" data-t="SUPER">SUPER</span><span class="l2" data-t="FAMILY SMASH">FAMILY SMASH</span><i class="swoosh"></i><svg class="star" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2 61 36 97 38 68 59 78 95 50 74 22 95 32 59 3 38 39 36Z"/></svg></div>
   <div class="sub">family platform fighter</div>
   <button class="big" id="bPlay">PLAY</button>
   <div class="tap">tap anywhere to wake the family up</div>
@@ -192,7 +195,7 @@
 </div>
 
 <div id="hub" class="screen">
-  <div class="logo small"><span class="l1">SUPER</span><span class="l2">FAMILY SMASH</span><i class="swoosh"></i><svg class="star" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2 61 36 97 38 68 59 78 95 50 74 22 95 32 59 3 38 39 36Z"/></svg></div>
+  <div class="logo small"><span class="l1" data-t="SUPER">SUPER</span><span class="l2" data-t="FAMILY SMASH">FAMILY SMASH</span><i class="swoosh"></i><svg class="star" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2 61 36 97 38 68 59 78 95 50 74 22 95 32 59 3 38 39 36Z"/></svg></div>
   <div class="tiles">
     <button class="tile tall" data-mode="story" style="--c1:#7a3df0;--c2:#e0368f"><canvas class="art hero" width="400" height="240"></canvas><b>STORY</b><small>The Golden Clog has been swiped. Fight through six chapters to bring it home.</small><span class="prog" id="storyProg"></span><i>★</i></button>
     <button class="tile" data-mode="versus" style="--c1:#e8590c;--c2:#f59f00"><canvas class="art sil a" width="400" height="240"></canvas><canvas class="art sil b" width="400" height="240"></canvas><b>VERSUS</b><small>2 to 4 fighters, players or CPUs. Your rules.</small><i>⚔</i></button>
