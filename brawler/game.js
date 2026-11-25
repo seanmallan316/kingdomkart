@@ -314,6 +314,20 @@ function spec(kind) {
         else f.vx *= 0.8;
       },
     });
+    case 'starToss': return M({ // flicks a spinning glitter star
+      len: 24, pose: 'cast', special: true, drift: 0.7, landLag: 4,
+      onFrame: (f, t) => { if (!f.grounded && t < 10) f.vy = Math.min(f.vy, 1.5); if (t === 7) { spawnProj(f, { type: 'star', x: 28, y: -44, vx: 13.5, r: 10, d: 4, a: 361, b: 10, g: 25, life: 46 }); Sfx.zap(); } },
+    });
+    case 'sparkleDash': return M({ // a streak of glitter: very fast, goes a long way
+      len: 36, pose: 'dashkick', special: true, landLag: 9, noLandCancel: true,
+      hb: [H(5, 16, 22, -36, 21, 8, 42, 45, 68)],
+      onStart: f => { f.dashUsedNow = !f.grounded && f.sideB; if (!f.grounded) f.sideB = true; },
+      onFrame: (f, t) => {
+        if (t < 5) { f.vx *= 0.4; if (!f.grounded && !f.dashUsedNow) f.vy = 0; }
+        else if (t < 17) { f.vx = f.facing * 16.5; if (!f.grounded && !f.dashUsedNow) f.vy = 0; fx.spark(f.x - f.facing * 10, f.y - rand(10, 60), t % 2 ? '#ff6ad5' : '#a65fe0', 2, 3); }
+        else f.vx *= 0.78;
+      },
+    });
     case 'whirl': return M({ // spins with the sword out; can drift while spinning
       len: 52, pose: 'nair', twirl: true, special: true, drift: 1, landLag: 8, noLandCancel: true,
       hb: [H(6, 38, 0, -34, 34, 1.5, 80, 30, 15, { rehit: 5 }), H(40, 43, 0, -40, 38, 4, 60, 50, 95)],
@@ -333,6 +347,11 @@ const FIGHTERS = [
     id: 'ray', name: 'RAY', blurb: 'Small and floaty. Five jumps, clog toss, cannonball.', color: '#2f55e8', dark: '#27304a', accent: '#2fc4c0', acc: 'kid',
     weight: 76, walk: 3.6, run: 7.4, air: 4.6, airAcc: 0.5, grav: 0.33, fall: 5.4, ff: 8.6, jump: 11.0, hop: 7.0, djump: 8.6, jumps: 5,
     scale: 0.8, power: 0.9, speed: 0.92, reach: 0.95, sp: { n: 'clogToss', s: 'cannonball', u: 'hop', d: 'quake' },
+  },
+  {
+    id: 'norah', name: 'NORAH', blurb: 'The fastest runner. Sparkle dash, star toss, dive kick.', color: '#f08bb4', dark: '#a65fe0', accent: '#ff6ad5', acc: 'kid', trail: ['#ff6ad5', '#a65fe0'],
+    weight: 88, walk: 4.6, run: 11.6, air: 5.2, airAcc: 0.55, grav: 0.48, fall: 7.4, ff: 10.8, jump: 12.4, hop: 7.8, djump: 11.8, jumps: 2,
+    scale: 0.93, power: 0.9, speed: 0.88, reach: 1.0, sp: { n: 'starToss', s: 'sparkleDash', u: 'rocket', d: 'diveKick' },
   },
   {
     id: 'ollie', name: 'OLLIE', blurb: 'Lightning-fast foam sword. Five jumps, whirl, counter.', color: '#e3271d', dark: '#5d7fb3', accent: '#ffd23f', acc: 'kid',
@@ -562,6 +581,7 @@ function groundMove(f) {
     if (wantRun) {
       if (f.state !== 'run') { setState(f, 'run'); fx.smoke(f.x - dir * 10, f.y, 2); f.vx = dir * d.run * 0.7 * sp; }
       f.facing = dir; f.vx = approach(f.vx, dir * d.run * sp, 1.1);
+      if (d.trail && G.frame % 2 === 0) fx.spark(f.x - dir * 14, f.y - rand(4, 50) * f.sc, d.trail[(G.frame >> 1) % 2], 1, 2);
     } else {
       if (f.state !== 'walk') setState(f, 'walk');
       f.facing = dir; f.vx = approach(f.vx, i.x * d.walk * sp * (i.analog ? 1 : 1), 0.8);
@@ -1161,7 +1181,7 @@ function aiPoll(f) {
       else o.y = -1;
       return o;
     }
-    if (f.def.sp.s === 'dashStrike' && !f.sideB && dx > 200 && below < 0 && Math.random() < 0.05) { o.special = true; o.x = toward; return o; }
+    if (['dashStrike', 'sparkleDash'].includes(f.def.sp.s) && !f.sideB && dx > 200 && below < 0 && Math.random() < 0.05) { o.special = true; o.x = toward; return o; }
     return o;
   }
   if (!tgt) return o;
@@ -1183,7 +1203,7 @@ function aiPoll(f) {
     return o;
   }
   // projectile at range
-  const hasProj = ['blaster', 'chargeShot', 'waveSlash'].includes(f.def.sp.n);
+  const hasProj = ['blaster', 'chargeShot', 'waveSlash', 'starToss', 'clogToss'].includes(f.def.sp.n);
   if (hasProj && adx > 260 && Math.abs(dy) < 120 && Math.random() < 0.02 + lvl * 0.004) {
     if (f.facing !== sgn(dx)) { o.x = sgn(dx); return o; }
     o.special = true; if (f.def.sp.n === 'chargeShot') a.holdSpecial = Math.floor(rand(5, 60));
@@ -1205,7 +1225,7 @@ function aiPoll(f) {
     o.x = sgn(dx);
     if (dy < -110 && f.grounded && Math.random() < 0.04 + lvl * 0.005) { a.holdJump = Math.random() < 0.5 ? 6 : 2; o.jump = true; }
     if (!f.grounded && dy < -60 && f.airJumps > 0 && f.vy > 0 && Math.random() < 0.05) o.jump = true;
-    if (f.grounded && adx > 140 && adx < 220 && Math.random() < 0.015 && f.def.sp.s === 'dashStrike') { o.special = true; a.cool = react; }
+    if (f.grounded && adx > 140 && adx < 220 && Math.random() < 0.015 && ['dashStrike', 'sparkleDash'].includes(f.def.sp.s)) { o.special = true; a.cool = react; }
     a.mx = o.x;
     return edgeSafe(f, o);
   }
@@ -1405,6 +1425,10 @@ function drawProj(p) {
   } else if (p.type === 'wave') {
     ctx.strokeStyle = c; ctx.lineWidth = 5; ctx.shadowColor = c; ctx.shadowBlur = 12;
     ctx.beginPath(); ctx.arc(-sgn(p.vx) * 10, 0, p.r, sgn(p.vx) > 0 ? -1.2 : Math.PI - 1.2 + 0.4, sgn(p.vx) > 0 ? 1.2 : Math.PI + 1.2 - 0.4); ctx.stroke();
+  } else if (p.type === 'star') {
+    ctx.rotate(p.t * 0.5); ctx.shadowColor = '#a65fe0'; ctx.shadowBlur = 16; ctx.fillStyle = '#ff6ad5';
+    ctx.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? p.r * 0.45 : p.r * 1.2, a = i * Math.PI / 5; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, p.r * 0.3, 0, Math.PI * 2); ctx.fill();
   } else if (p.type === 'clog') {
     ctx.rotate(p.t * 0.4 * sgn(p.vx)); ctx.fillStyle = '#0e5f5e'; ctx.beginPath(); ctx.ellipse(0, 0, p.r * 1.25, p.r * 0.72, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#1f9c9a'; ctx.beginPath(); ctx.ellipse(0, -1, p.r * 1.1, p.r * 0.58, 0, 0, Math.PI * 2); ctx.fill();
@@ -1599,7 +1623,7 @@ const $ = id => document.getElementById(id);
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); if (id) $('touch').classList.remove('on'); }
 const cfg = {
   stage: 'skyforge', stocks: 3,
-  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 1, level: 5 }, { type: 'off', fighter: 3, level: 5 }, { type: 'off', fighter: 5, level: 5 }],
+  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 1, level: 5 }, { type: 'cpu', fighter: 2, level: 5 }, { type: 'off', fighter: 4, level: 5 }],
 };
 function buildSelect() {
   const wrap = $('slots'); wrap.innerHTML = '';
@@ -1634,7 +1658,7 @@ function drawPortrait(c, def) { R3.portrait(c, def); }
 $('bPlay').onclick = () => { Sfx.init(); Sfx.blip(); buildSelect(); showScreen('select'); };
 $('bDemo').onclick = () => {
   Sfx.init(); startMatch({ stage: ['skyforge', 'driftway', 'proving'][Math.floor(Math.random() * 3)], stocks: 3,
-    slots: [0, 1, 2, 3].map(i => ({ type: 'cpu', fighter: (i + Math.floor(Math.random() * 6)) % 6, level: 6 + (i % 3) })) });
+    slots: [0, 1, 2, 3].map(i => ({ type: 'cpu', fighter: (i + Math.floor(Math.random() * 7)) % 7, level: 6 + (i % 3) })) });
 };
 $('bBack').onclick = () => { Sfx.blip(); showScreen('title'); G.mode = 'title'; };
 $('bFight').onclick = () => {

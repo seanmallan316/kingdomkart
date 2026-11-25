@@ -88,3 +88,5 @@ Family fighters, modelled by hand from reference photos (no photo is stored in t
   Hoodie Hop (short rising recovery), Belly Flop (ground slam, or a plunge from the air).
 - **Ollie**: very fast with a foam sword and five jumps. Specials: Whirl (spinning multi-hit, hold Special to float),
   Dash Strike, Spiral (rising recovery), Counter.
+- **Norah**: the big sister and the fastest runner, with pink and purple sparkle effects. Specials: Star Toss (a quick
+  spinning star), Sparkle Dash (a very fast, long streak), Rocket (rising recovery), Dive Kick. She stands taller than the twins.

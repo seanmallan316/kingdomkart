@@ -130,21 +130,26 @@ const R3 = (() => {
       g.fillStyle = navy; g.fillRect(30, 124, 196, 50); star(52, 149); star(204, 149); g.fillStyle = '#ff5a4f'; g.fillText('AND', 128, 151);
       g.fillStyle = navy; g.fillText('COOL', 128, 208);
     }
+    else if (kind === 'gold') {
+      g.font = '700 21px Arial, Helvetica, sans-serif'; g.fillStyle = '#b08a3a'; g.fillText('MAKE HEAVEN CROWDED', 128, 70);
+    }
+    if (kind === 'gold') { const t0 = new THREE.CanvasTexture(c); t0.colorSpace = THREE.SRGBColorSpace; return t0; }
     g.globalCompositeOperation = 'destination-out'; // worn print
     for (let k = 0; k < 300; k++) { g.fillStyle = 'rgba(0,0,0,' + (0.3 + Math.random() * 0.6) + ')'; g.fillRect(Math.random() * 256, Math.random() * 256, 1.5 + Math.random() * 2, 1.5 + Math.random() * 2); }
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
   const KIDS = {
     ray: { shirt: '#1c3fd6', shirtDk: '#1733b0', jeans: '#27304a', clog: '#1f9c9a', hole: '#0e5f5e', hair: '#4a3424', hoodie: true, print: 'varsity', sock: true },
+    norah: { shirt: '#efe9dc', shirtDk: '#ddd5c4', jeans: '#f1c3cf', clog: '#ee7fa6', hole: '#ffffff', hair: '#b98a52', hoodie: true, print: 'gold', long: true, strand: '#a65fe0', sneaker: true, teeth: 'full', legR: 6.2, eye: '#4a2f1c' },
     ollie: { shirt: '#e3271d', shirtDk: '#bd1d15', jeans: '#5d7fb3', clog: '#2b3566', hole: '#161c3d', hair: '#54402f', hoodie: false, print: 'stars', sword: true },
   };
   function lookKid(def) {
     const o = KIDS[def.id];
     const skin = std('#e9b792', { roughness: 0.6 }), hair = std(o.hair, { roughness: 0.95 }), shirt = std(o.shirt, { roughness: 0.9 }),
       shirtDk = std(o.shirtDk, { roughness: 0.95 }), jeans = std(o.jeans, { roughness: 0.9 }), clog = std(o.clog, { roughness: 0.5 }),
-      dark = std('#2a1c16'), white = std('#fbfbf6', { roughness: 0.4 }), lip = std('#b9584f'), blush = std('#f0a08c', { transparent: true, opacity: 0.35 });
+      dark = std(o.eye || '#2a1c16'), white = std('#fbfbf6', { roughness: 0.4 }), lip = std('#b9584f'), blush = std('#f0a08c', { transparent: true, opacity: 0.35 });
     return {
-      mats: [skin, hair, shirt, shirtDk, jeans, clog], sleeve: shirt, fore: o.hoodie ? shirt : skin, hand: skin, thigh: jeans, shin: jeans, armR: o.hoodie ? 4.8 : 4.1, legR: 5.2,
+      mats: [skin, hair, shirt, shirtDk, jeans, clog], sleeve: shirt, fore: o.hoodie ? shirt : skin, hand: skin, thigh: jeans, shin: jeans, armR: o.hoodie ? 4.8 : 4.1, legR: o.legR || 5.2,
       head(g) {
         const R = 14.5, cy = 14;
         g.add(sphere(R, skin, 0, cy, 0, 1, 1.04, 1));
@@ -158,7 +163,13 @@ const R3 = (() => {
         }
         g.add(sphere(1.6, skin, 0, cy - 1.2, 14.5));
         const smile = mesh(new THREE.TorusGeometry(3.6, 0.6, 6, 16, Math.PI), lip, 0, cy - 4.6, 13.2); smile.rotation.z = Math.PI; smile.castShadow = false; g.add(smile);
-        g.add(box(2, 1.6, 0.8, white, -1.5, cy - 5.6, 13.5), box(2, 1.6, 0.8, white, 1.5, cy - 5.6, 13.5)); // front teeth with a gap
+        if (o.teeth === 'full') g.add(box(5.2, 1.5, 0.8, white, 0, cy - 5.5, 13.4));
+        else g.add(box(2, 1.6, 0.8, white, -1.5, cy - 5.6, 13.5), box(2, 1.6, 0.8, white, 1.5, cy - 5.6, 13.5)); // front teeth with a gap
+        if (o.long) { // long straight hair with a centre parting, and one sparkly coloured strand
+          g.add(box(25, 36, 7, hair, 0, cy - 14, -10.5));
+          for (const sd of [-1, 1]) { const lock = box(5.5, 34, 9, hair, sd * 13.2, cy - 12, -1.5); lock.rotation.z = sd * 0.05; g.add(lock); const fr = box(4, 26, 4, hair, sd * 11.6, cy - 7, 6.5); fr.rotation.z = sd * 0.1; g.add(fr); }
+          g.add(box(1.6, 36, 1.6, std(o.strand, { emissive: o.strand, emissiveIntensity: 0.5, metalness: 0.4, roughness: 0.3 }), 13.4, cy - 13, 4));
+        }
         g.add(sphere(4.2, skin, 0, 1.5, 0, 1, 1.2, 1)); // neck
       },
       torso(g) {
@@ -174,9 +185,16 @@ const R3 = (() => {
         const collar = mesh(new THREE.TorusGeometry(o.hoodie ? 6.4 : 5.2, o.hoodie ? 2.2 : 1.1, 8, 18), o.hoodie ? shirt : shirtDk, 0, T - 0.5, 1); collar.rotation.x = Math.PI / 2 - 0.35; g.add(collar);
         const lm = new THREE.MeshStandardMaterial({ map: shirtPrint(o.print), transparent: true, roughness: 0.9, alphaTest: 0.25 });
         const ph = o.print === 'varsity' ? 15 : 15.5;
+        if (o.hoodie && o.print === 'gold') for (const sd of [-1, 1]) g.add(mesh(new THREE.CylinderGeometry(0.6, 0.6, 11, 6), shirtDk, sd * 2.6, T - 9, R * 0.86 + 0.6)); // drawstrings
         const letters = mesh(new THREE.CylinderGeometry(R + 0.45, R + 0.45, ph, 16, 1, true, -0.8, 1.6), lm, 0, o.print === 'varsity' ? 17.5 : 14.5, 0); letters.scale.z = 0.86; letters.castShadow = false; g.add(letters);
       },
       foot(g) {
+        if (o.sneaker) { // pink and white trainers
+          const wh = std('#fbfbf8', { roughness: 0.5 });
+          g.add(box(9.4, 1.8, 18, wh, 0, -L - 2.9, 4.2)); g.add(sphere(5.6, clog, 0, -L + 0.6, 3.6, 0.95, 0.82, 1.7));
+          g.add(sphere(4.4, wh, 0, -L + 0.4, 10.5, 1, 0.7, 1)); g.add(box(4.4, 1, 7, wh, 0, -L + 4.6, 4.5));
+          return;
+        }
         g.add(sphere(5.6, clog, 0, -L + 0.6, 4.2, 1.08, 0.78, 1.85));
         const strap = mesh(new THREE.TorusGeometry(5.3, 1.1, 6, 14, Math.PI), clog, 0, -L + 1.5, -1.5); strap.rotation.y = Math.PI / 2; strap.rotation.x = -0.5; g.add(strap);
         const hole = std(o.hole);
@@ -197,7 +215,7 @@ const R3 = (() => {
       extras() {},
     };
   }
-  const LOOKS = { ray: lookKid, ollie: lookKid };
+  const LOOKS = { ray: lookKid, ollie: lookKid, norah: lookKid };
 
   function buildRig(def) {
     const look = (LOOKS[def.id] || lookGeneric)(def);
