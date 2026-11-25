@@ -70,28 +70,29 @@
   el('title').addEventListener('pointerdown', e => { if (e.target.closest('button')) return; Sfx.init(); react(KIDS[Math.floor(Math.random() * KIDS.length)], null, true); });
 
   // ---------------------------------------------------------------- story: The Golden Clog (original)
-  // {sib1}/{sib2} are the two siblings the player did not pick.
-  const bigBrick = () => Object.assign({}, FIGHTERS[idx('brick')], { id: 'brick', name: 'BIG BRICK', scale: 1.62 * FIGHTER_SIZE * 0.9, weight: 170, power: 1.3, speed: 1.2, run: 6.4, jump: 13.6, djump: 13.2 });
+  // {sib1}..{sib6} are the next six family members after the one the player picked.
+  // the final boss: the last sibling in the cast, supersized by a whole carton of Grow Juice
+  const giant = id => { const d = FIGHTERS[idx(id)]; return Object.assign({}, d, { name: 'GIANT ' + d.name, scale: d.scale * 1.45, weight: 170, power: 1.3, run: d.run * 0.7, jump: d.jump * 1.05, djump: d.djump * 1.05 }); };
   const CHAPTERS = [
     { title: 'Warm-Up', text: 'The Golden Clog, the family trophy, is gone from the shelf. Before the search starts, {sib1} wants to check you are ready.', stage: 'proving',
       foes: h => [{ id: h.sib1, level: 3 }] },
     { title: 'My Turn!', text: '{sib2} says a trophy hunt needs the best fighter in the house, and reckons that is not you. Settle it.', stage: 'bunk',
       foes: h => [{ id: h.sib2, level: 4 }] },
-    { title: 'The Quickstep', text: 'Muddy footprints lead up to the sky platforms. Vex, the fastest of the Shadow Squad, is waiting, and he is not handing anything over.', stage: 'driftway',
-      foes: () => [{ id: 'vex', level: 5 }] },
-    { title: 'Light Show', text: 'Vex points the way to Nova, who has been using the Golden Clog as a lamp. She fights from far away, so get in close.', stage: 'skyforge',
-      foes: () => [{ id: 'nova', level: 6 }] },
-    { title: 'Double Trouble', text: 'Kai and Vex team up to block the road. Good thing {sib1} just caught up with you. Two against two!', stage: 'proving',
-      foes: () => [{ id: 'kai', level: 5 }, { id: 'vex', level: 5 }], ally: h => ({ id: h.sib1, level: 6 }) },
-    { title: 'Big Brick', text: 'The boss of the Shadow Squad has the Golden Clog on a chain around his neck. He is huge, slow and very hard to launch. Wear him down.', stage: 'skyforge',
-      foes: () => [{ def: bigBrick(), level: 8, stocks: 2 }], boss: true },
+    { title: 'The Quickstep', text: 'Muddy footprints lead up to the treehouse. {sib3} was seen running up the rope ladder with something shiny, and is not coming down without a fight.', stage: 'skyforge',
+      foes: h => [{ id: h.sib3, level: 5 }] },
+    { title: 'Light Show', text: '{sib3} swears {sib4} has it. Sure enough, {sib4} has been using the Golden Clog as a lamp on the kitchen table. Go get it back.', stage: 'driftway',
+      foes: h => [{ id: h.sib4, level: 6 }] },
+    { title: 'Double Trouble', text: '{sib4} and {sib5} team up to block the driveway. Good thing {sib1} just caught up with you. Two against two!', stage: 'proving',
+      foes: h => [{ id: h.sib4, level: 6 }, { id: h.sib5, level: 6 }], ally: h => ({ id: h.sib1, level: 6 }) },
+    { title: 'Giant Showdown', text: '{sib6} drank a whole carton of Grow Juice and is wearing the Golden Clog on a chain. Huge, slow and very hard to launch. Wear them down.', stage: 'skyforge',
+      foes: h => [{ def: giant(h.sib6), level: 8, stocks: 2 }], boss: true },
   ];
-  const ENDING = 'Big Brick tumbles off the stage and the Golden Clog drops into your hands. Back home it goes on the shelf, with one new rule: whoever wins the next family match gets to hold it.';
+  const ENDING = '{sib6} shrinks back to normal size and the Golden Clog drops into your hands. Back home it goes on the shelf, with one new rule: whoever wins the next family match gets to hold it.';
   let hero = save.get('hero', 'ray');
   const prog = () => save.get('story', {});
   // the rival and the ally are the next two family members after the hero in the list
-  const cast = () => { const i = KIDS.indexOf(hero), n = KIDS.length; return { sib1: KIDS[(i + 1) % n], sib2: KIDS[(i + 2) % n] }; };
-  const fill = t => { const c = cast(); return t.replace('{sib1}', FIGHTERS[idx(c.sib1)].name).replace('{sib2}', FIGHTERS[idx(c.sib2)].name); };
+  const cast = () => { const i = KIDS.indexOf(hero), n = KIDS.length, c = {}; for (let k = 1; k <= 6; k++) c['sib' + k] = KIDS[(i + k) % n]; return c; };
+  const fill = t => { const c = cast(); return t.replace(/\{(sib\d)\}/g, (_, k) => FIGHTERS[idx(c[k])].name); };
   const nameOf = f => (f.def ? f.def.name : FIGHTERS[idx(f.id)].name);
 
   function dots(now, done) { return '<div class="dots">' + CHAPTERS.map((c, i) => `<u class="${i < done ? 'done' : ''} ${i === now ? 'now' : ''}"></u>`).join('') + '</div>'; }
@@ -127,7 +128,7 @@
     if (won) { const p = prog(); p[hero] = Math.max(p[hero] || 0, i + 1); save.set('story', p); }
     const last = i === CHAPTERS.length - 1;
     el('storyCard').innerHTML = won
-      ? (last ? `<div class="chap">The end</div><h3>THE CLOG COMES HOME</h3>${dots(-1, CHAPTERS.length)}<p>${ENDING}</p><div><button class="big" data-act="hub">MAIN MENU</button></div>`
+      ? (last ? `<div class="chap">The end</div><h3>THE CLOG COMES HOME</h3>${dots(-1, CHAPTERS.length)}<p>${fill(ENDING)}</p><div><button class="big" data-act="hub">MAIN MENU</button></div>`
         : `<div class="chap">Chapter ${i + 1} cleared</div><h3>VICTORY!</h3>${dots(i + 1, i + 1)}<p>${me.stats.kos} KO${me.stats.kos === 1 ? '' : 's'}, ${me.stats.dealt.toFixed(0)}% damage dealt, ${me.stocks} stock${me.stocks === 1 ? '' : 's'} left.</p><div><button class="big alt" data-act="hub">MAIN MENU</button><button class="big" data-act="chapter" data-i="${i + 1}">NEXT CHAPTER</button></div>`)
       : `<div class="chap">Chapter ${i + 1}</div><h3>SO CLOSE</h3>${dots(i, i)}<p>${CHAPTERS[i].boss ? 'Big Brick is heavy, so he takes a lot of damage before he flies. Stay out of reach of his charge and hit him after he misses.' : 'Shake it off and go again. Use your shield, and save your smash attacks for when their damage is high.'}</p><div><button class="big alt" data-act="hub">MAIN MENU</button><button class="big" data-act="fight" data-i="${i}">TRY AGAIN</button></div>`;
     showScreen('story'); setScene('story'); if (won) react(hero, 'victory', true);

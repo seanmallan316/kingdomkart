@@ -26,7 +26,7 @@ Keyboard: hold a direction to walk, and after a moment you break into a run (or 
 Analog sticks: push hard to run, flick + Attack = smash attack.
 
 ## Movement numbers (60 fps; 1 fighter ≈ 80 px tall)
-| | Light (Vex) | Mid (Kai) | Heavy (Brick) | Floaty (Nova) |
+| | Light | Mid | Heavy | Floaty |  (archetypes from the first prototype) |
 |---|---|---|---|---|
 | Weight | 82 | 100 | 128 | 92 |
 | Run px/f | 9.6 | 8.4 | 7.2 | 7.6 |
@@ -70,7 +70,7 @@ GAME! → results (place, KOs, falls, damage dealt).
 ## Fighter select (`buildSelect` in game.js)
 Laid out like a classic platform-fighter select screen, in the game's own style:
 - **Roster grid** on top: a face close-up tile for every family fighter (cut from the family banner, `fam/face_*.webp`),
-  3D renders for the Shadow Squad, **10 locked tiles** reserved for unlockable fighters (`UNLOCKS` in game.js), and a
+  **10 locked tiles** reserved for unlockable fighters (`UNLOCKS` in game.js), and a
   RANDOM tile. Coloured P-tokens on each tile show which players picked it.
 - **Player cards** below: one per active player (up to 8) with the fighter's photo, a P-badge in the player colour, the
   fighter's name, and a PLAYER n / CPU pill (tap to switch; −/+ sets CPU level); ✕ removes a player, "+ ADD FIGHTER" adds one.
@@ -173,7 +173,7 @@ Original effects and sound; nothing is sampled from another game.
 ## Menus and modes (`menu.js`)
 - **Main menu:** Story, Versus, Training, Watch, Options. Arrow keys move between tiles.
 - **Story, "The Golden Clog":** six chapters with a short card before each. Pick Ray, Norah or Ollie; the other two
-  siblings appear as a rival and an ally. Chapter 5 is a 2-v-2 team fight, chapter 6 is the boss Big Brick (much bigger and
+  siblings appear as a rival and an ally. Chapter 5 is a 2-v-2 team fight, chapter 6 is the boss: the sixth sibling in the cast as a giant after a carton of Grow Juice (much bigger and
   heavier, 2 stocks). Progress per fighter is kept in the browser.
 - **Teams:** fighters on the same team cannot hit each other and CPUs do not target team-mates; a match ends when one side is left.
 - **Training:** a fighter who stands still, 99 stocks, no match end.
@@ -192,7 +192,7 @@ Original effects and sound; nothing is sampled from another game.
 | Jayson | fast, agile brawler | Blaster / Cannonball / Rocket / Dive Kick |
 
 Tyler and Jayson were built from their front photo only, because their photos mixed outfits; the brand logo on Jayson's
-T-shirt was removed first. Vex, Brick, Nova and Kai stay as the story's Shadow Squad. Any family member can be the story hero.
+T-shirt was removed first. The original placeholder fighters (Vex, Brick, Nova, Kai) were removed; the roster is the nine family members plus 10 locked unlockable slots. Any family member can be the story hero.
 
 ## Recorded-quality sound (`sfx/`, `sfx.js`)
 25 sound effects generated to order with ElevenLabs text-to-sound (about 17 credits each), so they are original to this
@@ -214,7 +214,7 @@ faded and levelled, and saved as `voice/<type>_<kind>_<take>.mp3`.
 volume a little. `VOICES` maps each fighter to a type and a pitch, so fighters who share a type sound different.
 To stop chatter, each fighter speaks at most once every ~1.1 s (0.65 s for hurt). Triggers: battle cry on most smash
 attacks, specials and throws; light effort on 10-30% of other attacks; hurt on 60% of real hits; jump on 18% of jumps;
-KO yell on every ring-out; the winner cheers on the results screen. The Shadow Squad has no voices.
+KO yell on every ring-out; the winner cheers on the results screen.
 
 ## Worlds (`worlds.js`, `props/`)
 Each family stage has a full 3D world built by `WORLDS.build` (called from `buildStage` in `render3d.js`): procedural

@@ -395,27 +395,7 @@ const FIGHTERS = [
     id: 'jayson', name: 'JAYSON', blurb: 'Fast, agile brawler. Blaster, cannonball, dive kick.', color: '#8fa0b8', dark: '#20242e', accent: '#ff7a6b', acc: 'kid',
     weight: 98, walk: 4.3, run: 9.2, air: 5.0, airAcc: 0.56, grav: 0.46, fall: 7.2, ff: 10.4, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
     scale: 1.133, power: 1.0, speed: 0.92, reach: 1.04, sp: { n: 'blaster', s: 'cannonball', u: 'rocket', d: 'diveKick' },
-  },
-  {
-    id: 'vex', name: 'VEX', blurb: 'Light and fast. Triple jump, dive kick.', color: '#38d6ff', dark: '#0d5874', accent: '#fff36b', acc: 'scarf',
-    weight: 82, walk: 4.2, run: 9.6, air: 5.0, airAcc: 0.55, grav: 0.46, fall: 7.2, ff: 10.5, jump: 12.6, hop: 8.0, djump: 12.0, jumps: 3,
-    scale: 0.92, power: 0.92, speed: 0.9, reach: 1.0, sp: { n: 'blaster', s: 'dashStrike', u: 'rocket', d: 'diveKick' },
-  },
-  {
-    id: 'brick', name: 'BRICK', blurb: 'Heavy hitter. Armoured charge, quake.', color: '#ff7a3d', dark: '#7a2d0b', accent: '#ffe0b0', acc: 'helm',
-    weight: 128, walk: 3.4, run: 7.2, air: 4.0, airAcc: 0.4, grav: 0.55, fall: 8.2, ff: 11.5, jump: 12.8, hop: 8.2, djump: 12.5, jumps: 2,
-    scale: 1.18, power: 1.15, speed: 1.12, reach: 1.05, sp: { n: 'chargePunch', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
-  },
-  {
-    id: 'nova', name: 'NOVA', blurb: 'Floaty zoner. Charge shot, bombs, teleport.', color: '#c56bff', dark: '#4b1675', accent: '#8affea', acc: 'orbs',
-    weight: 92, walk: 3.6, run: 7.6, air: 5.2, airAcc: 0.5, grav: 0.34, fall: 5.6, ff: 8.4, jump: 11.2, hop: 7.0, djump: 11.0, jumps: 2,
-    scale: 0.98, power: 0.95, speed: 1.0, reach: 1.0, sp: { n: 'chargeShot', s: 'bomb', u: 'teleport', d: 'counter' },
-  },
-  {
-    id: 'kai', name: 'KAI', blurb: 'All-rounder with a long blade. Counter.', color: '#4dd97a', dark: '#145a2c', accent: '#e8f4ff', acc: 'blade',
-    weight: 100, walk: 3.9, run: 8.4, air: 4.6, airAcc: 0.5, grav: 0.45, fall: 7.0, ff: 10.0, jump: 12.4, hop: 7.8, djump: 12.0, jumps: 2,
-    scale: 1.0, power: 1.0, speed: 1.0, reach: 1.22, sp: { n: 'waveSlash', s: 'dashStrike', u: 'spiral', d: 'counter' },
-  },
+  }
 ];
 
 // Fighters are drawn and simulated larger than the first prototype so they read clearly on screen.
