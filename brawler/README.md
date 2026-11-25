@@ -1,4 +1,4 @@
-# Clash Core (platform-fighter prototype)
+# Super Family Smash (platform-fighter prototype)
 
 An original platform fighter that plays by the rules of the genre: damage %, knockback, ring-outs, stocks, ledges, shields,
 dodges, grabs and throws, smash attacks you can charge, and 4 specials per fighter. Up to 4 players or CPUs (levels 1–9).

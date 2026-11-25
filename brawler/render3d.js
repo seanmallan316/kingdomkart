@@ -1,5 +1,5 @@
 'use strict';
-// 3D scene for Clash Core: stage, lights and fighters built from simple shapes in code (three.js).
+// 3D scene for Super Family Smash: stage, lights and fighters built from simple shapes in code (three.js).
 // The fight rules stay in game.js; this file only draws what game.js simulates.
 // World units are the same as the 2D game: x right, y DOWN in the sim, so three.js y = -sim y.
 

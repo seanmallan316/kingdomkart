@@ -1,5 +1,5 @@
 'use strict';
-// Main menu hub, story mode, training and options for Clash Core. Loaded after game.js and fx.js.
+// Main menu hub, story mode, training and options for Super Family Smash. Loaded after game.js and fx.js.
 (() => {
   const el = id => document.getElementById(id);
   const save = { get(k, d) { try { const v = localStorage.getItem('clash_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('clash_' + k, JSON.stringify(v)); } catch (e) { /* storage can be blocked; the game still works */ } } };

@@ -1,4 +1,4 @@
-# Clash Core — platform-fighter prototype (mechanics breakdown)
+# Super Family Smash — platform-fighter prototype (mechanics breakdown)
 
 An original platform fighter built on the *rules* of the genre (percent damage, knockback, ring-outs, stocks).
 No characters, art, music, stages or names from any existing game. This is the base that the droid game will

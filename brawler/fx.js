@@ -1,5 +1,5 @@
 'use strict';
-// Clash Core effects pack: original visual effects (drawn in code) and original sound (synthesized with Web Audio).
+// Super Family Smash effects pack: original visual effects (drawn in code) and original sound (synthesized with Web Audio).
 // Loaded after game.js; it replaces the simple effect and sound functions defined there.
 
 // ================================================================ SOUND

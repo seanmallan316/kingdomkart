@@ -1,5 +1,5 @@
 'use strict';
-// Clash Core — original platform-fighter prototype. All art is drawn in code; all sound is synthesized.
+// Super Family Smash — original platform-fighter prototype. All art is drawn in code; all sound is synthesized.
 
 // ---------------------------------------------------------------- utils
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
