@@ -97,3 +97,11 @@ each. The optimised files are in `models/*.glb` (about 1-1.5 MB each: 1024px Web
 `build_models.py` packs them into `models.js` so the game loads them from a web page, a local file or an APK alike.
 `render3d.js` turns the sim's pose angles into bone directions on the Meshy skeleton, so every existing move works on the
 scanned models. If a model is missing, that fighter falls back to the simple shapes.
+
+## Meshy animations
+Each family fighter has a set of motion clips from Meshy's animation library (idle, walk, run, jabs, kicks, uppercut, sweep,
+smash, spin kick, jump, fall, hit, block, roll, knock-down, get-up, cast, throw, slam, grab, victory; Ollie also has sword
+clips, Norah a sprint). `tools/extract_anims.py` keeps only the bone rotations (30 fps) and writes `anims.js`.
+`render3d.js` picks the clip for each state or move, lines the clip's furthest-reach moment up with the move's hitbox
+frame, and eases between clips. States with no clip (ledge hang, crouch, air dodge, Ray's cannonball) use the hand-posed
+fallback. The move-to-clip table is `MOVE_CLIP` / `CHAR_CLIP` in `render3d.js`.

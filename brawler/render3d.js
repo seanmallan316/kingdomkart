@@ -246,7 +246,7 @@ const R3 = (() => {
     const box = new THREE.Box3().setFromObject(model), height = box.max.y - box.min.y;
     const k = (86 * def.scale) / height;
     rig.rest = order.map(b => ({ b, name: b.name, parent: b.parent && b.parent.isBone ? b.parent : null, local: b.quaternion.clone(),
-      world: b.getWorldQuaternion(new THREE.Quaternion()), dir: DRIVE[b.name] && bones[DRIVE[b.name]] ? P(DRIVE[b.name]).sub(P(b.name)).normalize() : null }));
+      target: b.quaternion.clone(), world: b.getWorldQuaternion(new THREE.Quaternion()), dir: DRIVE[b.name] && bones[DRIVE[b.name]] ? P(DRIVE[b.name]).sub(P(b.name)).normalize() : null }));
     const hips = P('Hips');
     rig.thigh = P('LeftUpLeg').distanceTo(P('LeftLeg')) * k; rig.shin = P('LeftLeg').distanceTo(P('LeftFoot')) * k;
     rig.ankle = (P('LeftFoot').y - box.min.y) * k; rig.hipRest = (hips.y - box.min.y) * k; rig.hipDrop = (hips.y - P('LeftUpLeg').y) * k;
@@ -254,6 +254,10 @@ const R3 = (() => {
     root.add(spin); spin.add(turn); turn.add(model);
     model.scale.setScalar(k); model.position.set(-hips.x * k, -hips.y * k, -hips.z * k);
     rig.root = root; rig.spin = spin; rig.turn = turn; rig.model = model; rig.bones = bones;
+    rig.byName = {}; for (const r of rig.rest) rig.byName[r.name] = r;
+    rig.wq = new Map(); rig.unit = 0.01 * k; // clip hips offsets are in the skeleton's centimetres
+    rig.clips = clipsFor(def.id);
+    if (rig.clips && !rig.clips.idle.impact && rig.clips.idle.impact !== 0) findImpacts(rig, rig.clips);
     if (KIDS[def.id] && KIDS[def.id].sword) for (const side of ['L', 'R']) {
       const hand = bones[side === 'L' ? 'LeftHand' : 'RightHand'], fore = side === 'L' ? 'LeftForeArm' : 'RightForeArm'; if (!hand) continue;
       const dir = P(hand.name).sub(P(fore)).normalize().applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()).invert());
@@ -263,31 +267,127 @@ const R3 = (() => {
     }
     return rig;
   }
-  const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), IDENT = new THREE.Quaternion();
+  const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), IDENT = new THREE.Quaternion();
+
+  // ---- motion clips (Meshy animation library, stored as sampled bone rotations in anims.js)
+  const CLIPS = {}; // char id -> clip name -> { n, dur, bones, rot(Int16Array), hy, impact }
+  function clipsFor(id) {
+    if (CLIPS[id]) return CLIPS[id];
+    const src = (window.CLASH_ANIMS || {})[id]; if (!src) return (CLIPS[id] = null);
+    const out = {};
+    for (const name in src) {
+      const c = src[name], str = atob(c.rot), u8 = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) u8[i] = str.charCodeAt(i);
+      out[name] = { n: c.n, dur: c.dur, bones: c.bones, rot: new Int16Array(u8.buffer), hy: c.hy || null, impact: null };
+    }
+    return (CLIPS[id] = out);
+  }
+  // write one clip frame (blended between two samples) into each bone's target; returns the hips height offset
+  function sampleClip(rig, clip, time, loop) {
+    let t = loop ? ((time % clip.dur) + clip.dur) % clip.dur : clamp(time, 0, clip.dur);
+    const fpos = (t / clip.dur) * (clip.n - 1), i0 = Math.floor(fpos), i1 = Math.min(clip.n - 1, i0 + 1), w = fpos - i0, nb = clip.bones.length, R = clip.rot;
+    for (let b = 0; b < nb; b++) {
+      const r = rig.byName[clip.bones[b]]; if (!r) continue;
+      const o0 = (i0 * nb + b) * 4, o1 = (i1 * nb + b) * 4;
+      _q.set(R[o0], R[o0 + 1], R[o0 + 2], R[o0 + 3]).normalize(); _q2.set(R[o1], R[o1 + 1], R[o1 + 2], R[o1 + 3]).normalize();
+      r.target.copy(_q).slerp(_q2, w);
+    }
+    return clip.hy ? clip.hy[i0] * (1 - w) + clip.hy[i1] * w : 0;
+  }
+  // the moment of furthest reach in each clip, so a punch lands on the same frame the game's hitbox does
+  function findImpacts(rig, clips) {
+    const ext = ['LeftHand', 'RightHand', 'LeftFoot', 'RightFoot'].map(n => rig.bones[n]).filter(Boolean), hips = rig.bones.Hips;
+    const a = new THREE.Vector3(), h = new THREE.Vector3();
+    for (const name in clips) {
+      const c = clips[name]; let best = -1, bi = 0; const first = [];
+      for (let i = 0; i < c.n; i++) {
+        sampleClip(rig, c, (i / (c.n - 1)) * c.dur, false);
+        for (const r of rig.rest) r.b.quaternion.copy(r.target);
+        rig.model.updateMatrixWorld(true); hips.getWorldPosition(h);
+        let m = 0;
+        ext.forEach((e, k) => { e.getWorldPosition(a).sub(h); if (i === 0) first[k] = a.clone(); else m = Math.max(m, a.distanceTo(first[k])); });
+        if (m > best) { best = m; bi = i; }
+      }
+      c.impact = (bi / (c.n - 1)) * c.dur;
+    }
+    for (const r of rig.rest) { r.b.quaternion.copy(r.local); r.target.copy(r.local); }
+  }
+  const MOVE_CLIP = { jab1: 'jab', jab2: 'jab2', jab3: 'round', ftilt: 'kick', utilt: 'upper', dtilt: 'sweep', dash: 'kick', fsmash: 'smash', usmash: 'highkick', dsmash: 'sweep',
+    nair: 'spin', fair: 'airpunch', bair: 'round', uair: 'highkick', dair: 'slam', grab: 'grab', dashgrab: 'grab', throw: 'pitch', ledgeAtk: 'sweep', getupAtk: 'sweep', counterStrike: 'smash' };
+  const CHAR_CLIP = {
+    ray: { nspec: 'kick', uspec: 'jump', dspec: 'slam' },
+    norah: { nspec: 'pitch', sspec: 'airpunch', uspec: 'jump', dspec: 'kick', run: 'sprint' },
+    ollie: { jab1: 'slash', jab2: 'attack', jab3: 'thrust', ftilt: 'slash', utilt: 'upslash', dash: 'thrust', fsmash: 'attack', usmash: 'upslash', nair: 'bladespin', fair: 'slash', uair: 'upslash',
+      nspec: 'bladespin', sspec: 'thrust', uspec: 'bladespin', dspec: 'block', counterStrike: 'attack' },
+  };
+  // which clip (and what time in it) shows the fighter's current state; null = use the hand-posed fallback
+  function pickClip(rig, f) {
+    const C = rig.clips; if (!C || !f) return null;
+    const own = CHAR_CLIP[rig.def.id] || {}, S = f.state, t = f.t / 60;
+    const get = n => C[own[n] || n] || C[n];
+    const hold = (c, at) => ({ c, time: at, loop: false });
+    if (G.ending && f.stocks > 0 && f.grounded && S === 'idle') return { c: C.victory, time: G.ending / 60, loop: true };
+    switch (S) {
+      case 'idle': case 'respawn': case 'shieldDrop': return { c: C.idle, time: f.anim / 60, loop: true };
+      case 'walk': return { c: C.walk, time: f.anim / 60 * 1.3, loop: true };
+      case 'run': return { c: get('run'), time: f.anim / 60 * 1.15, loop: true };
+      case 'air': if (f.flipT > 0) return null; return f.vy < -1 ? hold(C.jump, C.jump.dur * 0.42) : { c: C.fall, time: f.anim / 60, loop: true, air: true };
+      case 'helpless': return { c: C.fall, time: f.anim / 60, loop: true, air: true };
+      case 'hitstun': return f.tumble ? { c: C.fly, time: C.fly.dur * 0.45, loop: false, air: true, keepRot: true } : hold(C.hit, Math.min(C.hit.dur * 0.6, 0.15 + t));
+      case 'shield': case 'shieldstun': case 'spotdodge': return hold(C.block, Math.min(C.block.impact || 0.5, 0.2 + t));
+      case 'roll': case 'tech': return hold(C.roll, (f.t / 30) * C.roll.dur);
+      case 'down': return hold(C.knock, C.knock.dur);
+      case 'getup': return hold(C.standup, C.standup.dur - 0.9 + (f.t / 22) * 0.9);
+      case 'holding': return hold(C.grab, C.grab.impact || 1);
+      case 'grabbed': return hold(C.hit, C.hit.dur * 0.3);
+      case 'attack': {
+        const mv = f.move, c = get(mv.name) || C[MOVE_CLIP[mv.name]]; const cc = C[own[mv.name]] || C[MOVE_CLIP[mv.name]];
+        const clip = cc || null; if (!clip || mv.rollSpin) return null;
+        const hbs = mv.hb.concat(f.xhb || []);
+        const hs = Math.max(2, hbs.length ? Math.min.apply(null, hbs.map(h => h.f[0])) : mv.len * 0.3);
+        const imp = clip.impact != null ? clip.impact : clip.dur * 0.4, lead = Math.min(imp, 0.45);
+        const time = f.mt <= hs ? imp - lead + lead * (f.mt / hs) : imp + (f.mt - hs) / 60;
+        return { c: clip, time, loop: false, air: !f.grounded };
+      }
+    }
+    return null;
+  }
+
   function poseGlb(rig, pose, rot, facing, f) {
     const [lean, afS, afE, abS, abE, lfH, lfK, lbH, lbK] = pose;
     const nL = facing < 0; // the left side is nearest the camera when facing left
     for (const b of rig.blades) b.visible = b.userData.sword === (nL ? 'L' : 'R');
-    const ang = { LeftArm: nL ? afS : abS, LeftForeArm: nL ? afS + afE : abS + abE, RightArm: nL ? abS : afS, RightForeArm: nL ? abS + abE : afS + afE,
-      LeftUpLeg: nL ? lfH : lbH, LeftLeg: nL ? lfH + lfK : lbH + lbK, RightUpLeg: nL ? lbH : lfH, RightLeg: nL ? lbH + lbK : lfH + lfK };
-    // hip height from the real leg lengths, so the feet meet the ground
-    const fd = (h, kk) => rig.thigh * Math.cos(h) + rig.shin * Math.cos(h + kk);
+    const pick = pickClip(rig, f) || (!f && rig.clips && rig.clips.idle ? { c: rig.clips.idle, time: 0.4, loop: true } : null);
     let hip = rig.hipRest;
-    if (f && (f.grounded || f.state === 'ledgeclimb')) hip = clamp(Math.max(fd(lfH, lfK), fd(lbH, lbK)) + rig.ankle + rig.hipDrop, rig.hipRest * 0.4, rig.hipRest);
-    if (f && f.state === 'down') hip = rig.hipRest * 0.3;
-    rig.spin.position.y = hip; rig.spin.rotation.z = -rot;
-    const wq = new Map();
-    for (const r of rig.rest) {
-      const pq = r.parent ? wq.get(r.parent) : IDENT; let q;
-      if (r.name === 'Spine02' && r.dir) { _v.set(0, Math.cos(lean), Math.sin(lean)); q = _q.setFromUnitVectors(r.dir, _v).clone().multiply(r.world); }
-      else if (r.name in ang && r.dir) {
-        const a = ang[r.name], side = r.name.startsWith('Left') ? 1 : -1, arm = r.name.indexOf('Arm') >= 0;
-        _v.set(side * (arm ? 0.22 : 0.07), -Math.cos(a), Math.sin(a)).normalize();
-        q = _q.setFromUnitVectors(r.dir, _v).clone().multiply(r.world);
-      } else if (r.name === 'Head') { _q.setFromAxisAngle(_v.set(1, 0, 0), lean * 0.35); q = _q.clone().multiply(r.world); }
-      else q = pq.clone().multiply(r.local);
-      wq.set(r.b, q); r.b.quaternion.copy(pq).invert().multiply(q);
+    if (pick && pick.c) {
+      for (const r of rig.rest) r.target.copy(r.local);
+      const hy = sampleClip(rig, pick.c, pick.time, pick.loop);
+      if (!pick.air) hip = clamp(rig.hipRest + hy * rig.unit, rig.hipRest * 0.18, rig.hipRest * 1.6);
+      rig.spin.rotation.z = pick.keepRot || (f && f.state === 'air') ? -rot : 0;
+    } else {
+      const ang = { LeftArm: nL ? afS : abS, LeftForeArm: nL ? afS + afE : abS + abE, RightArm: nL ? abS : afS, RightForeArm: nL ? abS + abE : afS + afE,
+        LeftUpLeg: nL ? lfH : lbH, LeftLeg: nL ? lfH + lfK : lbH + lbK, RightUpLeg: nL ? lbH : lfH, RightLeg: nL ? lbH + lbK : lfH + lfK };
+      // hip height from the real leg lengths, so the feet meet the ground
+      const fd = (h, kk) => rig.thigh * Math.cos(h) + rig.shin * Math.cos(h + kk);
+      if (f && (f.grounded || f.state === 'ledgeclimb')) hip = clamp(Math.max(fd(lfH, lfK), fd(lbH, lbK)) + rig.ankle + rig.hipDrop, rig.hipRest * 0.4, rig.hipRest);
+      rig.spin.rotation.z = -rot;
+      const wq = rig.wq;
+      for (const r of rig.rest) {
+        const pq = r.parent ? wq.get(r.parent) : IDENT; let q;
+        if (r.name === 'Spine02' && r.dir) { _v.set(0, Math.cos(lean), Math.sin(lean)); q = _q.setFromUnitVectors(r.dir, _v).clone().multiply(r.world); }
+        else if (r.name in ang && r.dir) {
+          const a = ang[r.name], side = r.name.startsWith('Left') ? 1 : -1, arm = r.name.indexOf('Arm') >= 0;
+          _v.set(side * (arm ? 0.22 : 0.07), -Math.cos(a), Math.sin(a)).normalize();
+          q = _q.setFromUnitVectors(r.dir, _v).clone().multiply(r.world);
+        } else if (r.name === 'Head') { _q.setFromAxisAngle(_v.set(1, 0, 0), lean * 0.35); q = _q.clone().multiply(r.world); }
+        else q = pq.clone().multiply(r.local);
+        wq.set(r.b, q); r.target.copy(pq).invert().multiply(q);
+      }
     }
+    // ease every bone toward its target so moves flow into each other
+    const k = f ? 0.42 : 1;
+    rig.hipNow = rig.hipNow == null || !f ? hip : rig.hipNow + (hip - rig.hipNow) * 0.5;
+    rig.spin.position.y = rig.hipNow;
+    for (const r of rig.rest) r.b.quaternion.slerp(r.target, k);
   }
 
   function buildRig(def) {
@@ -344,7 +444,7 @@ const R3 = (() => {
     let want = f.facing * TURN;
     if (f.state === 'ledge') want = f.facing * (Math.PI / 2 + 0.5); // hang facing the wall
     rig.turnY += (want - rig.turnY) * 0.35; rig.turn.rotation.y = rig.turnY;
-    if (f.state === 'attack' && f.move && f.move.twirl && f.mt > 4 && f.mt < f.move.len - 8) rig.turn.rotation.y = rig.turnY + f.mt * 0.75;
+    if (!rig.glb && f.state === 'attack' && f.move && f.move.twirl && f.mt > 4 && f.mt < f.move.len - 8) rig.turn.rotation.y = rig.turnY + f.mt * 0.75;
     if (rig.glb) poseGlb(rig, pose, rot, f.facing, f); else poseRig(rig, pose, rot, f.facing, a.hipH, G.frame);
     // flashes: invincible blink, hurt tint, overdrive glow
     let col = 0x000000, k = 0;
