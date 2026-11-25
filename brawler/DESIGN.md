@@ -67,6 +67,19 @@ off-screen. A bottom card for each player shows damage % (white → yellow → r
 Overdrive meter. Screens: Title → Fighter select (P1–P4: Player / CPU / Off, CPU level), stage and stocks → 3-2-1-GO →
 GAME! → results (place, KOs, falls, damage dealt).
 
+## Luxury menus (`lux.js` + the LUX block in index.html)
+- **Every menu selection** wobbles or spins with a burst: hub tiles spin their icon 360° and wobble, gold buttons and
+  fighter slots wobble (jelly squash), option chips flip-spin around their vertical axis. Each comes with a burst of
+  gold sparks, stars, light rays, two shock rings and a flash (drawn on the `#luxfx` overlay canvas), a chime and a
+  short vibration on phones. Works with mouse, touch and keyboard (Enter / Space).
+- **Gold selector ring:** a rotating gold ring glides to whatever is hovered or focused.
+- **Gold foil** buttons with a moving glint and a shine that follows the pointer; glass panels and chips with gold
+  hairline edges; gold headings; holographic foil sheen on the hub tiles that follows the pointer.
+- **Ambient:** drifting gold dust behind the menus, a sparkle trail behind the mouse cursor, and the 3D menu scene
+  leans with the pointer (`window.MENU_PARALLAX`, used by `R3.menuRender`).
+- **Screen changes** sweep a gold glint across the screen; the results screen rains confetti.
+- Respects "reduce motion" (bursts, dust and trails switch off).
+
 ## Heights
 Each family fighter's size (`def.scale` in game.js) follows their real height at 0.2 per foot: Layne 6'6" (1.30),
 Tyler 5'10" (1.167), Dad 5'9" (1.15), Mom 5'8" (1.133), Jayson 5'8" (1.133), Violet 5.3' (1.06), Norah 4.5' (0.90),

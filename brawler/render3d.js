@@ -666,7 +666,8 @@ const R3 = (() => {
     if (menuCamT) for (const k in menuCamT) menuCam[k] += (menuCamT[k] - menuCam[k]) * 0.07;
     const sway = Math.sin(menuT * 0.006) * 22;
     camera.aspect = innerWidth / innerHeight; camera.far = 14000;
-    camera.position.set(menuCam.x + sway, menuCam.y, menuCam.d); camera.lookAt(menuCam.lx, menuCam.ly, 0); camera.updateProjectionMatrix();
+    const par = window.MENU_PARALLAX || { x: 0, y: 0 };
+    camera.position.set(menuCam.x + sway + par.x * 46, menuCam.y - par.y * 26, menuCam.d); camera.lookAt(menuCam.lx, menuCam.ly, 0); camera.updateProjectionMatrix();
     renderer.render(scene, camera); return true;
   }
 
