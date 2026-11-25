@@ -67,6 +67,16 @@ off-screen. A bottom card for each player shows damage % (white → yellow → r
 Overdrive meter. Screens: Title → Fighter select (P1–P4: Player / CPU / Off, CPU level), stage and stocks → 3-2-1-GO →
 GAME! → results (place, KOs, falls, damage dealt).
 
+## Fighter select (`buildSelect` in game.js)
+Laid out like a classic platform-fighter select screen, in the game's own style:
+- **Roster grid** on top: a face close-up tile for every family fighter (cut from the family banner, `fam/face_*.webp`),
+  3D renders for the Shadow Squad, **10 locked tiles** reserved for unlockable fighters (`UNLOCKS` in game.js), and a
+  RANDOM tile. Coloured P-tokens on each tile show which players picked it.
+- **Player cards** below: one per active player (up to 8) with the fighter's photo, a P-badge in the player colour, the
+  fighter's name, and a PLAYER n / CPU pill (tap to switch; −/+ sets CPU level); ✕ removes a player, "+ ADD FIGHTER" adds one.
+  Tap a card to choose who you're picking for; the chosen card glows and says CHOOSING. A new pick slides in with a burst.
+- With controllers, each controller picks for its own player. Stage, stocks, BACK and FIGHT! sit along the bottom.
+
 ## Family banner on the opening screen (`fam.js`, `fam/`, `famjs.js`)
 The family's banner photo (supplied by the family) is cut into nine panels (`fam/*.webp`, packed into `famjs.js` by
 `tools/build_fam.py`) and shown as leaning photo cards along the bottom of the title screen, behind the logo and Play:

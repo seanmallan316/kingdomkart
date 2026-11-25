@@ -5,7 +5,7 @@
 (() => {
   const TAU = Math.PI * 2, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const inMenu = () => typeof G === 'undefined' || G.mode !== 'fight' || G.paused;
-  const SEL = 'button, .tile';
+  const SEL = 'button, .tile, .pc';
   const isMenuEl = el => el && !el.closest('#touch') && !el.disabled;
 
   // ------------------------------------------------------------ overlay canvas for bursts, dust, sparkles, confetti
@@ -79,6 +79,8 @@
   const FLIP = [{ rotate: 'y 0deg', scale: '1' }, { rotate: 'y 180deg', scale: '1.18' }, { rotate: 'y 360deg', scale: '1' }];
   function styleFor(el) {
     if (el.classList.contains('tile')) return 'spin';
+    if (el.classList.contains('rt')) return 'flip';
+    if (el.classList.contains('pc')) return 'wobble';
     if (el.matches('.big')) return 'wobble';
     if (el.closest('.slot')) return 'wobble';
     el._n = (el._n || 0) + 1; return el.closest('.pick, .row') ? 'flip' : 'wobble';

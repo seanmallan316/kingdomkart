@@ -1685,32 +1685,65 @@ const cfg = {
   slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 6, level: 5 }, { type: 'cpu', fighter: 7, level: 5 }, { type: 'off', fighter: 3, level: 5 },
     { type: 'off', fighter: 1, level: 5 }, { type: 'off', fighter: 2, level: 5 }, { type: 'off', fighter: 4, level: 5 }, { type: 'off', fighter: 5, level: 5 }],
 };
-function buildSelect() {
-  const wrap = $('slots'); wrap.innerHTML = '';
-  cfg.slots.forEach((s, i) => {
-    const d = FIGHTERS[s.fighter];
-    const el = document.createElement('div'); el.className = 'slot' + (s.type === 'off' ? ' off' : '');
-    const hk = cfg.slots.slice(0, i).filter(o => o.type === 'human').length, pad = typeof padLabel === 'function' ? padLabel(hk) : '';
-    el.innerHTML = `<div class="tag" style="background:${PORT_COLORS[i]}">P${i + 1}</div>${s.type === 'human' ? `<div class="pad">${pad}</div>` : ''}
-      <div class="stats">${[['SPEED', d.run / 11.6], ['POWER', (d.power - 0.8) / 0.45], ['WEIGHT', (d.weight - 70) / 65], ['AIR', d.jumps / 5]].map(([n, v]) => `<span>${n}</span><i><b style="width:${Math.round(clamp(v, 0.1, 1) * 100)}%;background:${d.color}"></b></i>`).join('')}</div>
-      <div class="row"><button data-a="prev">◀</button><div class="nm" style="color:${d.color};min-width:90px">${d.name}</div><button data-a="next">▶</button></div>
-      <div class="ds">${d.blurb}</div>
-      <div class="row">${['human', 'cpu', 'off'].map(t => `<button data-t="${t}" class="${s.type === t ? 'on' : ''}">${t === 'human' ? 'PLAYER' : t.toUpperCase()}</button>`).join('')}</div>
-      <div class="row" ${s.type === 'cpu' ? '' : 'style="visibility:hidden"'}><button data-a="ldn">−</button><span>LV ${s.level}</span><button data-a="lup">+</button></div>`;
-    el.onclick = e => {
-      const b = e.target.closest('button'); if (!b) return; Sfx.init(); Sfx.blip();
-      if (b.dataset.t) s.type = b.dataset.t;
-      if (b.dataset.a === 'prev') s.fighter = (s.fighter + FIGHTERS.length - 1) % FIGHTERS.length;
-      if (b.dataset.a === 'next') s.fighter = (s.fighter + 1) % FIGHTERS.length;
-      if (b.dataset.a === 'lup') s.level = Math.min(9, s.level + 1);
-      if (b.dataset.a === 'ldn') s.level = Math.max(1, s.level - 1);
-      buildSelect();
-    };
-    wrap.appendChild(el);
-  });
+// ---------------------------------------------------------------- fighter select: a roster grid on top, a card per player below
+let selActive = 0;
+// room for 10 unlockable fighters: each gets a locked tile until it is added to FIGHTERS and unlocked
+const UNLOCKS = Array.from({ length: 10 }, (_, i) => ({ name: '', hint: 'A secret fighter joins the family soon.' }));
+const portraitURL = {};
+function fighterArt(def, face) { // the family's own photos (a face close-up for roster tiles); 3D renders for everyone else
+  const F = window.CLASH_FAM || {}, fam = (face && F['face_' + def.id]) || F[def.id];
+  if (fam) return `<img src="${fam}" alt="" draggable="false">`;
+  if (!portraitURL[def.id] && G.modelsReady && typeof R3 !== 'undefined') { try { const c = document.createElement('canvas'); c.width = 400; c.height = 240; R3.portrait(c, def); portraitURL[def.id] = c.toDataURL(); } catch (e) {} }
+  return portraitURL[def.id] ? `<img class="r3" src="${portraitURL[def.id]}" alt="" draggable="false" style="object-position:50% 20%">` : `<span></span>`;
+}
+function humanNo(i) { return cfg.slots.slice(0, i).filter(o => o.type === 'human').length; }
+function buildSelect(swapped) {
+  const act = cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off');
+  if (!act.some(o => o.i === selActive)) selActive = act.length ? act[0].i : 0;
+  // roster
+  $('roster').innerHTML = FIGHTERS.map((d, k) => {
+    const toks = act.filter(o => o.s.fighter === k).map(o => `<i style="--pc:${PORT_COLORS[o.i]}">P${o.i + 1}</i>`).join('');
+    return `<button class="rt" data-f="${k}" style="--c:${d.color};--i:${k}" aria-label="${d.name}">${fighterArt(d, true)}<span class="toks">${toks}</span><span class="rn">${d.name}</span></button>`;
+  }).join('') + UNLOCKS.map((u, k) => `<button class="rt lock" data-f="lock" data-k="${k}" style="--i:${FIGHTERS.length + k}" aria-label="Locked fighter"><span class="lk">🔒</span><span class="rn">${u.name || 'LOCKED'}</span></button>`).join('')
+    + `<button class="rt rand" data-f="rand" style="--i:${FIGHTERS.length + UNLOCKS.length}" aria-label="Random"><b>?</b><span class="rn">RANDOM</span></button>`;
+  // player cards
+  const cards = act.map(({ s, i }, k) => {
+    const d = FIGHTERS[s.fighter], hn = humanNo(i), pad = typeof padLabel === 'function' ? padLabel(hn) : '';
+    const who = s.type === 'human' ? `<button class="t" data-a="type" title="${pad}">${pad && pad.startsWith('🎮') ? '🎮 ' : ''}PLAYER ${hn + 1}</button>`
+      : `<button class="t" data-a="type">CPU</button><button class="sm" data-a="ldn">−</button><span class="lv">LV ${s.level}</span><button class="sm" data-a="lup">+</button>`;
+    return `<div class="pc ${s.type === 'cpu' ? 'cpu' : ''} ${i === selActive ? 'on' : ''} ${swapped === i ? 'swap' : ''}" data-i="${i}" style="--pc:${PORT_COLORS[i]};--c:${d.color};--c2:${d.accent};--i:${k}">
+      <div class="art">${fighterArt(d)}</div><div class="badge">P${i + 1}</div>${act.length > 1 ? '<button class="x" data-a="off" aria-label="Remove">✕</button>' : ''}
+      <div class="nm">${d.name}</div><div class="who">${who}</div></div>`;
+  }).join('') + (act.length < 8 ? `<div class="pc add" data-a="add" style="--i:${act.length}"><div><b>+</b><small>ADD FIGHTER</small></div></div>` : '');
+  const wrap = $('slots'); wrap.innerHTML = cards; wrap.style.setProperty('--n', Math.min(8, act.length + (act.length < 8 ? 1 : 0)));
+  const a = cfg.slots[selActive];
+  $('selHint').innerHTML = `Choosing for <i style="--pc:${PORT_COLORS[selActive]}">P${selActive + 1}</i> · tap a card to switch player`;
+  $('bFight').classList.toggle('ready', act.length >= 2);
   $('optStage').innerHTML = Object.entries(STAGES).map(([k, v]) => `<button data-s="${k}" class="${cfg.stage === k ? 'on' : ''}">${v.name}</button>`).join('');
   $('optStock').innerHTML = [1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${cfg.stocks === n ? 'on' : ''}">${n}</button>`).join('');
 }
+$('roster').onclick = e => {
+  const b = e.target.closest('.rt'); if (!b) return; Sfx.init();
+  if (b.dataset.f === 'lock') { const u = UNLOCKS[+b.dataset.k]; $('selHint').innerHTML = '🔒 ' + u.hint; Sfx.tone && Sfx.tone(140, 0.12, 'square', 0.08, 90); setTimeout(() => buildSelect(), 1800); return; }
+  // a controller picks for its own player; otherwise the highlighted card gets the fighter
+  let i = selActive;
+  if (window.__padK != null) { const hi = cfg.slots.findIndex((s, k) => s.type === 'human' && humanNo(k) === window.__padK); if (hi >= 0) i = hi; }
+  const s = cfg.slots[i]; if (!s || s.type === 'off') return;
+  s.fighter = b.dataset.f === 'rand' ? Math.floor(Math.random() * FIGHTERS.length) : +b.dataset.f;
+  buildSelect(i);
+};
+$('slots').onclick = e => {
+  const card = e.target.closest('.pc'); if (!card) return; Sfx.init(); Sfx.blip();
+  const btn = e.target.closest('button');
+  if (card.dataset.a === 'add') { const k = cfg.slots.findIndex(s => s.type === 'off'); if (k >= 0) { cfg.slots[k].type = 'cpu'; cfg.slots[k].fighter = Math.floor(Math.random() * FIGHTERS.length); selActive = k; } buildSelect(k); return; }
+  const i = +card.dataset.i, s = cfg.slots[i];
+  if (btn && btn.dataset.a === 'type') s.type = s.type === 'human' ? 'cpu' : 'human';
+  else if (btn && btn.dataset.a === 'lup') s.level = Math.min(9, s.level + 1);
+  else if (btn && btn.dataset.a === 'ldn') s.level = Math.max(1, s.level - 1);
+  else if (btn && btn.dataset.a === 'off') { s.type = 'off'; }
+  if (s.type !== 'off') selActive = i;
+  buildSelect();
+};
 $('optStage').onclick = e => { const b = e.target.closest('button'); if (b) { cfg.stage = b.dataset.s; Sfx.blip(); buildSelect(); } };
 $('optStock').onclick = e => { const b = e.target.closest('button'); if (b) { cfg.stocks = +b.dataset.n; Sfx.blip(); buildSelect(); } };
 function drawPortrait(c, def) { R3.portrait(c, def); }

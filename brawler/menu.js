@@ -179,7 +179,7 @@
   // fighter select: the newly chosen fighter steps up and calls out
   const baseBuild = buildSelect; let lastPick = [];
   buildSelect = function () {
-    baseBuild();
+    baseBuild.apply(this, arguments);
     const now = cfg.slots.map(s => (s.type === 'off' ? null : s.fighter)); let changed = null;
     now.forEach((f, i) => { if (f != null && lastPick.length && lastPick[i] !== f) changed = i; });
     lastPick = now;

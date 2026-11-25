@@ -278,6 +278,69 @@
   @media (max-aspect-ratio: 6/5) { .famstrip { height:clamp(130px, 30vh, 320px); gap:3px; padding:0 6px; } .fam .ph { border-radius:10px; } .fam:hover, .fam:focus-visible, .fam.lit { flex-grow:3; } }
   @media (max-height:520px) { .famstrip { height:42vh; } }
   @media (prefers-reduced-motion: reduce) { .fam, .fam .ph::after { animation:none; } }
+
+  /* ================= fighter select: roster grid + player cards ================= */
+  #select { justify-content:flex-start !important; align-items:center; gap:clamp(6px, 1.4vh, 14px); padding:max(10px, 2vh) clamp(8px, 2vw, 24px) max(10px, 2vh) !important;
+    background:radial-gradient(ellipse at 50% 0%, rgba(60,40,10,.55), rgba(10,10,22,.92) 60%), repeating-linear-gradient(115deg, rgba(255,215,120,.035) 0 2px, transparent 2px 46px) !important; }
+  .selhead { width:min(1180px, 100%); display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .selhead b { font-size:clamp(20px, 3.4vw, 36px); font-style:italic; font-weight:900; letter-spacing:2px; background:var(--gold); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 3px 0 rgba(0,0,0,.5)); }
+  .selhead span { font-weight:800; letter-spacing:2px; font-size:clamp(11px, 1.5vw, 15px); color:#e8d6a8; }
+  .selhead span i { font-style:normal; padding:2px 9px; border-radius:6px; color:#111; background:var(--pc); margin:0 3px; }
+  .roster { width:min(1180px, 100%); display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(50px, 6.6vw, 92px), 1fr)); gap:clamp(4px, .7vw, 8px); }
+  .rt { position:relative; aspect-ratio:1/1; border-radius:10px; overflow:hidden; cursor:pointer; padding:0; font:inherit; color:#fff;
+    border:2px solid transparent; background:linear-gradient(180deg, color-mix(in srgb, var(--c) 55%, #10121f), #10121f) padding-box, linear-gradient(160deg, #fff1c4, var(--c), #6b4a12) border-box;
+    box-shadow:0 6px 14px rgba(0,0,0,.45); transition:transform .18s cubic-bezier(.2,.9,.3,1.3), box-shadow .18s; animation:rise .45s calc(var(--i) * .03s) cubic-bezier(.2,.9,.3,1.25) both; }
+  .rt img, .rt canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 8%; transition:transform .25s; }
+  .rt canvas { object-position:50% 30%; transform:scale(1.5); transform-origin:50% 22%; }
+  .rt .rn { position:absolute; left:0; right:0; bottom:0; padding:12px 4px 3px; font-weight:900; font-style:italic; letter-spacing:1px; font-size:clamp(9px, 1.15vw, 13px); text-align:center;
+    background:linear-gradient(180deg, transparent, rgba(0,0,0,.85)); text-shadow:0 1px 2px #000; }
+  .rt:hover, .rt:focus-visible { transform:translateY(-3px) scale(1.06); z-index:2; outline:none; box-shadow:0 10px 24px rgba(0,0,0,.55), 0 0 20px var(--c); }
+  .rt:hover img { transform:scale(1.08); }
+  .rt .toks { position:absolute; top:3px; left:3px; right:3px; display:flex; flex-wrap:wrap; gap:2px; z-index:2; }
+  .rt .toks i { font-style:normal; font-weight:900; font-size:clamp(8px, 1vw, 11px); padding:1px 5px; border-radius:5px; color:#111; background:var(--pc); box-shadow:0 2px 4px rgba(0,0,0,.5); animation:tokIn .35s cubic-bezier(.2,.9,.3,1.6) both; }
+  @keyframes tokIn { from { scale:0; rotate:-30deg; } to { scale:1; rotate:0deg; } }
+  .rt.lock { --c:#3a3550; cursor:not-allowed; display:grid; place-items:center; background:radial-gradient(circle at 50% 38%, rgba(255,215,120,.12), transparent 60%), repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 6px, transparent 6px 14px), #12131f padding-box, linear-gradient(160deg, #6a5a3a, #2a2640, #6a5a3a) border-box; }
+  .rt.lock::before { content:""; position:absolute; left:50%; top:16%; width:42%; height:62%; translate:-50% 0; background:radial-gradient(circle at 50% 22%, rgba(255,255,255,.13) 0 22%, transparent 23%), radial-gradient(ellipse 50% 40% at 50% 88%, rgba(255,255,255,.1) 0 98%, transparent 100%); }
+  .rt.lock .lk { position:relative; font-size:clamp(14px, 2.2vw, 24px); filter:drop-shadow(0 0 8px rgba(255,200,90,.6)); } .rt.lock .rn { color:#c8b48a; }
+  .rt.rand { --c:#8a6a2a; display:grid; place-items:center; } .rt.rand b { font-size:clamp(30px, 5vw, 54px); font-weight:900; background:var(--gold); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .cards { width:min(1180px, 100%); display:grid; grid-template-columns:repeat(var(--n, 4), minmax(0, 1fr)); gap:clamp(5px, .9vw, 12px); flex:1 1 auto; min-height:0; max-height:clamp(150px, 34vh, 300px); }
+  .pc { position:relative; border-radius:14px; overflow:hidden; cursor:pointer; min-height:clamp(130px, 22vh, 300px); isolation:isolate;
+    background:repeating-linear-gradient(120deg, rgba(255,255,255,.07) 0 10px, transparent 10px 26px), linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 35%, #0b0c18) 70%);
+    box-shadow:inset 0 0 0 2px rgba(255,236,180,.6), 0 10px 24px rgba(0,0,0,.5); transform:skewX(-4deg); transition:transform .2s cubic-bezier(.2,.9,.3,1.3), box-shadow .2s; animation:rise .45s calc(var(--i) * .05s) cubic-bezier(.2,.9,.3,1.25) both; }
+  .pc > * { transform:skewX(4deg); }
+  .pc .art { position:absolute; inset:0; z-index:-1; }
+  .pc .art img, .pc .art canvas { position:absolute; right:-6%; bottom:0; height:100%; width:auto; min-width:70%; object-fit:cover; object-position:50% 0%; -webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 28%); mask-image:linear-gradient(90deg, transparent 0%, #000 28%); }
+  .pc .art img.r3 { width:100%; right:0; object-fit:cover; object-position:50% 30% !important; transform:scale(1.25); transform-origin:50% 30%; -webkit-mask-image:none; mask-image:none; }
+  .pc.swap .art > * { animation:cardSwap .55s cubic-bezier(.2,.9,.3,1.3); }
+  @keyframes cardSwap { from { translate:60% 0; opacity:0; scale:1.2; } to { translate:0 0; opacity:1; scale:1; } }
+  .pc .badge { position:absolute; left:8px; top:8px; font-weight:900; font-style:italic; font-size:clamp(14px, 2vw, 24px); padding:1px 10px; border-radius:8px; color:#111; background:var(--pc); box-shadow:0 3px 8px rgba(0,0,0,.5); }
+  .pc .x { position:absolute; right:6px; top:6px; width:26px; height:26px; border-radius:50%; border:0; cursor:pointer; font-weight:900; color:#fff; background:rgba(0,0,0,.45); }
+  .pc .nm { position:absolute; right:10px; bottom:clamp(30px, 5.5vh, 44px); font-weight:900; font-style:italic; letter-spacing:1px; font-size:clamp(17px, 2.6vw, 34px); color:#fff;
+    text-shadow:0 0 0 #000, 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 0 18px var(--c2); }
+  .pc .who { position:absolute; left:8px; right:8px; bottom:7px; display:flex; align-items:center; gap:4px; justify-content:center; }
+  .pc .who button { font:inherit; font-weight:900; letter-spacing:1px; font-size:clamp(10px, 1.2vw, 13px); border:0; border-radius:20px; padding:4px 12px; cursor:pointer; color:#111; background:linear-gradient(180deg, #fff, var(--pc)); box-shadow:0 3px 0 rgba(0,0,0,.35); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .pc .who .lv { font-weight:900; font-size:clamp(10px, 1.2vw, 13px); color:#fff; text-shadow:0 1px 2px #000; }
+  .pc .who .sm { padding:3px 8px; background:rgba(0,0,0,.5); color:#fff; }
+  .pc.cpu .who button.t { background:linear-gradient(180deg, #e9e9f2, #8c90a8); }
+  .pc.on { transform:skewX(-4deg) translateY(-6px); box-shadow:inset 0 0 0 3px #fff1c4, 0 14px 30px rgba(0,0,0,.55), 0 0 30px var(--pc); }
+  .pc.on::after { content:"CHOOSING"; position:absolute; left:50%; top:8px; transform:translateX(-50%) skewX(4deg); font-size:10px; font-weight:900; letter-spacing:2px; padding:2px 8px; border-radius:6px; color:#2a1a00; background:var(--gold); animation:pulse 1.6s infinite; }
+  .pc.add { display:grid; place-items:center; background:repeating-linear-gradient(120deg, rgba(255,215,120,.06) 0 10px, transparent 10px 26px), rgba(16,18,32,.8); box-shadow:inset 0 0 0 2px rgba(255,215,120,.35); }
+  .pc.add b { font-size:clamp(28px, 4vw, 48px); background:var(--gold); -webkit-background-clip:text; background-clip:text; color:transparent; } .pc.add small { display:block; color:#e8d6a8; font-weight:800; letter-spacing:2px; font-size:11px; }
+  .selbar { width:min(1180px, 100%); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .selbar .opts { margin:0; gap:14px; } .selbar .acts { display:flex; gap:6px; }
+  #bFight.ready { animation:pulse 1.4s infinite; }
+  @media (max-aspect-ratio: 6/5) {
+    .roster { grid-template-columns:repeat(8, 1fr); gap:3px; } .rt .rn { font-size:8px; padding:8px 1px 2px; letter-spacing:0; } .rt { border-radius:8px; }
+    .pc .who { flex-wrap:wrap; gap:3px; } .pc .who .t { flex-basis:100%; padding:3px 6px; } .pc .who .sm { padding:2px 7px; } .pc .nm { bottom:50px; }
+    .pc.on::after { font-size:8px; padding:1px 5px; top:4px; } .pc .badge { font-size:13px; padding:0 7px; left:5px; top:5px; } .pc .x { width:22px; height:22px; font-size:11px; }
+    .selhead { gap:2px; } .selhead span { font-size:10px; } #select { gap:6px; }
+    .selbar .big { padding:8px 20px; font-size:17px; } .selbar .row button { padding:4px 8px; font-size:12px; } .selbar .opts { gap:8px; }
+    .cards { grid-template-columns:repeat(min(var(--n, 4), 4), minmax(0, 1fr)); max-height:none; flex:0 0 auto; }
+    .pc { min-height:clamp(120px, 19vh, 200px); } .pc .nm { font-size:clamp(14px, 4.4vw, 22px); right:6px; }
+    .selbar { justify-content:center; } .selbar .opts { justify-content:center; }
+    .selbar .acts { width:100%; justify-content:center; } .selbar .acts .big { flex:1; max-width:220px; }
+  }
+  @media (max-height:520px) { .roster { grid-template-columns:repeat(12, 1fr); } .rt .rn { font-size:8px; padding-top:6px; } .pc { min-height:90px; } .cards { max-height:30vh; } .selhead b { font-size:16px; } }
 </style>
 </head>
 <body>
@@ -331,15 +394,15 @@
 </div>
 
 <div id="select" class="screen">
-  <div class="sub" style="margin:0 0 14px">choose fighters</div>
-  <div class="slots" id="slots"></div>
-  <div class="opts">
-    <div><label>Stage</label><div class="row" id="optStage"></div></div>
-    <div><label>Stocks</label><div class="row" id="optStock"></div></div>
-  </div>
-  <div>
-    <button class="big alt" id="bBack">BACK</button>
-    <button class="big" id="bFight">FIGHT!</button>
+  <div class="selhead"><b>CHOOSE YOUR FIGHTER</b><span id="selHint"></span></div>
+  <div class="roster" id="roster"></div>
+  <div class="cards" id="slots"></div>
+  <div class="selbar">
+    <div class="opts">
+      <div><label>Stage</label><div class="row" id="optStage"></div></div>
+      <div><label>Stocks</label><div class="row" id="optStock"></div></div>
+    </div>
+    <div class="acts"><button class="big alt" id="bBack">BACK</button><button class="big" id="bFight">FIGHT!</button></div>
   </div>
 </div>
 

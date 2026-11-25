@@ -82,7 +82,7 @@
   // ------------------------------------------------------------ menus with a controller: move, A to choose, B to go back
   const prev = {}; let repeatT = 0, lastDir = '';
   const visible = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('#touch'); };
-  const items = () => { const s = document.querySelector('.screen.on'); return s ? [...s.querySelectorAll('button, .tile')].filter(visible) : []; };
+  const items = () => { const s = document.querySelector('.screen.on'); return s ? [...s.querySelectorAll('button, .tile, .pc')].filter(visible) : []; };
   function moveFocus(dx, dy) {
     const all = items(); if (!all.length) return;
     let cur = document.activeElement; if (!all.includes(cur)) { all[0].focus({ preventScroll: true }); return; }
@@ -100,8 +100,8 @@
     const b = s.querySelector('#bBack, #bOptBack, #bQuit, #bMenu') || [...s.querySelectorAll('button')].find(x => /BACK/i.test(x.textContent));
     if (b) b.click(); else if (s.id === 'story') { const h = document.getElementById('hub'); if (h) { showScreen('hub'); } }
   }
-  function press(el) {
-    if (!el) return; const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+  function press(el, k) {
+    if (!el) return; window.__padK = k == null ? null : k; setTimeout(() => { window.__padK = null; }, 0); const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y, pointerType: 'gamepad' }));
     el.click();
   }
@@ -121,7 +121,7 @@
       if (tap('attack') || (tap('_start') && !document.querySelector('#title.on'))) {
         try { Sfx.init(); } catch (e) {}
         const el = document.activeElement && items().includes(document.activeElement) ? document.activeElement : items()[0];
-        if (document.querySelector('#title.on')) press(document.getElementById('bPlay')); else press(el);
+        if (document.querySelector('#title.on')) press(document.getElementById('bPlay')); else press(el, pads.indexOf(p));
       } else if (tap('_start') && document.querySelector('#title.on')) { try { Sfx.init(); } catch (e) {} press(document.getElementById('bPlay')); }
       if (tap('special') || tap('_select')) back();
     }
