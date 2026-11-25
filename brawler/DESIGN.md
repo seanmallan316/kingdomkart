@@ -1,0 +1,80 @@
+# Clash Core — platform-fighter prototype (mechanics breakdown)
+
+An original platform fighter built on the *rules* of the genre (percent damage, knockback, ring-outs, stocks).
+No characters, art, music, stages or names from any existing game. This is the base that the droid game will
+be re-themed from.
+
+## Core loop
+Hit people to raise their **damage %**. The higher the %, the farther they fly. Knock them past the edge of the screen
+(the **blast zone**) to take one of their **stocks**. Last fighter with stocks left wins. A match is 2–4 fighters,
+humans or CPUs (levels 1–9).
+
+## Controls
+| Action | Keyboard P1 | Keyboard P2 | Gamepad | Touch |
+|---|---|---|---|---|
+| Move / aim | A D W S | Arrows | Left stick / D-pad | Left stick |
+| Jump | Space | Numpad 0 or / | X / Y | JUMP |
+| Attack | J | Numpad 1 or , | A | ATK |
+| Special | K | Numpad 2 or . | B | SPC |
+| Smash attack (direction + this) | I | Numpad 5 or ; | Right stick | SMASH |
+| Shield / dodge | L or Left Shift | Numpad 3 or Right Shift | LB / RB / LT | SHLD |
+| Grab | U | Numpad 4 or ' | RT | GRAB |
+| Overdrive (meter full) | Special + Shield together | same | same | OD button |
+| Pause | Esc / P | | Start | II |
+
+Keyboard: hold a direction to walk, and after a moment you break into a run (or double-tap to run at once).
+Analog sticks: push hard to run, flick + Attack = smash attack.
+
+## Movement numbers (60 fps; 1 fighter ≈ 80 px tall)
+| | Light (Vex) | Mid (Kai) | Heavy (Brick) | Floaty (Nova) |
+|---|---|---|---|---|
+| Weight | 82 | 100 | 128 | 92 |
+| Run px/f | 9.6 | 8.4 | 7.2 | 7.6 |
+| Air speed | 5.0 | 4.6 | 4.0 | 5.2 |
+| Gravity px/f² | 0.46 | 0.45 | 0.55 | 0.34 |
+| Max fall / fast fall | 7.2 / 10.5 | 7 / 10 | 8.2 / 11.5 | 5.6 / 8.4 |
+| Jumps (ground + air) | 1 + 2 | 1 + 1 | 1 + 1 | 1 + 1 |
+
+Jumpsquat 3 frames; let go of Jump during it for a short hop. Fast fall = tap down while falling.
+Landing lag: 3 f normal, aerials 6–16 f, after a recovery move 18 f.
+
+## Combat rules
+- **Knockback** = `((p/10 + p·d/20) · 200/(w+100) · 1.4 + 18) · growth/100 + base`, where p is % after the hit, d is damage, w is weight.
+- Launch speed = knockback × 0.135 px/f, which shrinks by 0.23 px/f every frame. Gravity still pulls on the fighter. **Hitstun** = knockback × 0.4 frames; over 80 knockback = tumble.
+- **Directional influence**: holding the stick at right angles to the launch bends it by up to 15°.
+- **Hitstop** (freeze on impact): ⌊d·0.45 + 4⌋ frames, on both fighters; the one hit shakes.
+- Angle "361" works like the genre's auto angle: flat along the ground for weak hits on the ground, 40° otherwise.
+- Moves: 3-hit jab, side/up/down tilts, dash attack, chargeable side/up/down smashes (up to 1 s, +40% damage),
+  5 aerials (neutral, forward, back, up, down; down spikes), grab → pummel and 4 throws, 4 specials per fighter.
+- **Shield**: 50 HP, drains while held, grows back when let go; it shrinks on screen. If it breaks you are dizzy for 4 s.
+  Raising it within 5 frames of a hit = **parry** (no shield damage, and the attacker freezes so you can punish).
+- Dodges: roll and spot dodge on the ground, air dodge in the air (any direction, once until you land).
+- **Ledges**: snap and hang with a short time you can't be hit (shorter if you grab again). From the ledge: climb, jump,
+  attack, or roll onto the stage.
+- **Tech**: press Shield just before hitting the ground in tumble to roll back up straight away, instead of lying down.
+- Respawn platform, then 2 s where you can't be hurt.
+
+## Original twist mechanics
+1. **Overdrive meter**: fills when you deal damage (and half as fast when you take it). When it's full, press Special + Shield
+   for 6 s of +30% damage, +12% knockback and +15% speed. You glow so everyone can see it.
+2. **Brick's armour charge**: his side special doesn't flinch from hits under 13%.
+3. **Nova's stored charge**: shield out of a charge shot to keep the charge, then fire it later.
+4. **Driftway stage**: platforms that move and carry fighters on them.
+
+## Camera and UI
+The camera follows every fighter and zooms to fit them (0.45×–1.25×), smoothly. Bubbles at the screen edge show anyone
+off-screen. A bottom card for each player shows damage % (white → yellow → red, and it shakes when hit), stocks and the
+Overdrive meter. Screens: Title → Fighter select (P1–P4: Player / CPU / Off, CPU level), stage and stocks → 3-2-1-GO →
+GAME! → results (place, KOs, falls, damage dealt).
+
+## Game feel
+Hitstop, camera shake scaled to knockback, hit sparks, smoke on landings and dashes, a smoke trail while flying, a white
+flash on hits strong enough to KO, a blast burst on KO, and synth sound effects (Web Audio).
+
+## Difficulty
+CPU level 1–9 changes reaction time (20 → 4 frames), how often it shields or dodges, whether it picks smash attacks at KO
+percents, and how well it recovers.
+
+## Next: the droid game
+Re-theme on top of this: droid fighters, an arena theme, new music and sound, droid-specific twists. Then touch-first
+controls and an Android APK.
