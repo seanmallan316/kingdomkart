@@ -1718,7 +1718,7 @@ $('bDemo').onclick = () => {
 $('bBack').onclick = () => { Sfx.blip(); showScreen('title'); G.mode = 'title'; };
 $('bFight').onclick = () => {
   const n = cfg.slots.filter(s => s.type !== 'off').length;
-  if (n < 2) { alert('Turn on at least two fighters.'); return; }
+  if (n < 2) { const b = $('bFight'); b.textContent = 'TURN ON 2+'; setTimeout(() => { b.textContent = 'FIGHT!'; }, 1400); return; }
   Sfx.init(); startMatch(JSON.parse(JSON.stringify(cfg)));
 };
 function togglePause() {
