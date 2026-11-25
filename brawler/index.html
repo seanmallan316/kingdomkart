@@ -43,6 +43,43 @@
   table.res th { color:var(--dim); font-size:12px; letter-spacing:2px; }
   table.res td.place { font-size:28px; font-weight:900; font-style:italic; }
   #pause { background:rgba(8,10,20,.72); }
+  /* main menu */
+  #hub { justify-content:flex-start; padding-top:max(22px, 4vh); background:
+    linear-gradient(115deg, transparent 0 58%, rgba(255,207,63,.07) 58% 59%, transparent 59% 100%),
+    linear-gradient(115deg, transparent 0 66%, rgba(255,255,255,.04) 66% 74%, transparent 74% 100%),
+    radial-gradient(ellipse at 20% 0%, #26315c 0%, #0c0f1a 70%); }
+  .hubhead { width:min(1040px, 100%); display:flex; align-items:baseline; gap:16px; margin-bottom:max(14px, 3vh); }
+  .hubhead h2 { margin:0; font-size:clamp(26px, 5vw, 44px); font-style:italic; font-weight:900; letter-spacing:3px; }
+  .hubhead span { color:var(--dim); letter-spacing:3px; text-transform:uppercase; font-size:12px; }
+  .tiles { width:min(1040px, 100%); display:grid; grid-template-columns:1.25fr 1fr 1fr; grid-auto-rows:minmax(118px, 27vh); gap:14px; }
+  @media (max-width:760px){ .tiles { grid-template-columns:1fr 1fr; grid-auto-rows:minmax(104px, 17vh); } .tile.wide { grid-column:span 2; } }
+  .tile { position:relative; overflow:hidden; text-align:left; font:inherit; color:#fff; cursor:pointer; border:0; border-radius:14px; padding:16px 18px;
+    background:linear-gradient(135deg, var(--c1), var(--c2)); transform:skewX(-4deg); transition:transform .12s ease, filter .12s ease, box-shadow .12s ease; box-shadow:0 8px 0 rgba(0,0,0,.35); }
+  .tile > * { transform:skewX(4deg); display:block; }
+  .tile::after { content:""; position:absolute; right:-30px; top:-30px; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,.14); }
+  .tile:hover, .tile:focus-visible { transform:skewX(-4deg) translateY(-4px) scale(1.02); filter:brightness(1.12); outline:3px solid #fff; box-shadow:0 12px 0 rgba(0,0,0,.35); }
+  .tile.tall { grid-row:span 2; }
+  .tile b { font-size:clamp(22px, 3.4vw, 36px); font-style:italic; font-weight:900; letter-spacing:2px; text-shadow:0 3px 0 rgba(0,0,0,.3); }
+  .tile small { font-size:13px; opacity:.92; margin-top:6px; max-width:26ch; line-height:1.35; }
+  .tile i { position:absolute; right:16px; bottom:10px; font-style:normal; font-size:clamp(34px, 6vw, 64px); opacity:.9; transform:skewX(4deg) rotate(-8deg); }
+  .tile .prog { position:absolute; left:18px; bottom:14px; font-size:12px; font-weight:800; letter-spacing:1px; background:rgba(0,0,0,.35); padding:3px 9px; border-radius:20px; }
+  /* story */
+  #story { background:radial-gradient(ellipse at 50% 20%, #33264f 0%, #0c0f1a 72%); }
+  .card { width:min(680px, 100%); background:var(--panel); border:2px solid var(--line); border-radius:16px; padding:22px 24px; text-align:center; }
+  .card .chap { color:var(--hot); letter-spacing:4px; font-size:12px; text-transform:uppercase; font-weight:800; }
+  .card h3 { margin:6px 0 10px; font-size:clamp(26px, 5vw, 40px); font-style:italic; font-weight:900; }
+  .card p { color:#d6dcf5; line-height:1.6; font-size:16px; margin:0 0 14px; text-wrap:balance; }
+  .card .vs { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; margin:10px 0 16px; font-weight:900; }
+  .card .vs span { padding:6px 14px; border-radius:8px; background:#232a45; }
+  .dots { display:flex; gap:8px; justify-content:center; margin-bottom:14px; }
+  .dots u { width:26px; height:8px; border-radius:6px; background:#2a3352; text-decoration:none; }
+  .dots u.done { background:var(--hot); } .dots u.now { background:#fff; }
+  .pick { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:6px 0 16px; }
+  .pick button { font:inherit; color:#fff; background:#1b2138; border:2px solid var(--line); border-radius:12px; padding:8px 10px 10px; cursor:pointer; width:150px; }
+  .pick button.on { border-color:var(--hot); background:#2a3157; }
+  .pick canvas { width:130px; height:78px; display:block; margin:0 auto 4px; }
+  .optrow { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0; border-bottom:1px solid var(--line); text-align:left; }
+  .optrow input[type=range] { width:200px; accent-color:#ffcf3f; }
   #touch { position:fixed; inset:0; pointer-events:none; display:none; }
   #touch.on { display:block; }
   #stick { position:absolute; left:calc(18px + env(safe-area-inset-left)); bottom:110px; width:150px; height:150px; border-radius:50%;
@@ -65,12 +102,38 @@
   <h1>CLASH CORE</h1>
   <div class="sub">family platform fighter</div>
   <button class="big" id="bPlay">PLAY</button>
-  <button class="big alt" id="bDemo">WATCH CPUs</button>
   <div class="help">
     <b>P1</b> A/D/W/S move · Space jump · J attack · K special · I smash · L shield · U grab &nbsp;|&nbsp;
     <b>P2</b> Arrows · Num0 jump · Num1 atk · Num2 spc · Num5 smash · Num3 shield · Num4 grab<br>
     Gamepads work (A attack, B special, X/Y jump, bumpers shield, RT grab, right stick smash). Touch controls on phones.<br>
     Knock fighters off the screen. Higher damage % = they fly farther. Full meter → Special + Shield = <b>OVERDRIVE</b>.
+  </div>
+</div>
+
+<div id="hub" class="screen">
+  <div class="hubhead"><h2>CLASH CORE</h2><span>choose a mode</span></div>
+  <div class="tiles">
+    <button class="tile tall wide" data-mode="story" style="--c1:#7a3df0;--c2:#d6336c"><b>STORY</b><small>The Golden Clog has been swiped. Fight through six chapters to bring it home.</small><span class="prog" id="storyProg"></span><i>★</i></button>
+    <button class="tile" data-mode="versus" style="--c1:#e8590c;--c2:#f59f00"><b>VERSUS</b><small>2 to 4 fighters, players or CPUs. Your rules.</small><i>⚔</i></button>
+    <button class="tile" data-mode="training" style="--c1:#0b7285;--c2:#12b886"><b>TRAINING</b><small>Practise moves on a fighter who stands still.</small><i>◎</i></button>
+    <button class="tile" data-mode="watch" style="--c1:#364fc7;--c2:#4dabf7"><b>WATCH</b><small>Sit back and watch four CPUs battle.</small><i>▶</i></button>
+    <button class="tile" data-mode="options" style="--c1:#343a55;--c2:#5c6485"><b>OPTIONS</b><small>Sound, effects and the controls list.</small><i>⚙</i></button>
+  </div>
+</div>
+
+<div id="story" class="screen"><div class="card" id="storyCard"></div></div>
+
+<div id="options" class="screen">
+  <div class="card">
+    <h3>OPTIONS</h3>
+    <div class="optrow"><label for="optVol">Sound volume</label><input type="range" id="optVol" min="0" max="100" value="100"></div>
+    <div class="optrow"><span>Glow effects</span><div class="row" id="optFx"><button data-q="0" class="on">FULL</button><button data-q="1">LIGHT</button></div></div>
+    <div class="optrow" style="display:block;border:0"><p style="font-size:13px;text-align:left;margin:0">
+      <b>P1</b> A/D/W/S move · Space jump · J attack · K special · I smash · L shield · U grab<br>
+      <b>P2</b> Arrows · Num0 jump · Num1 attack · Num2 special · Num5 smash · Num3 shield · Num4 grab<br>
+      <b>Gamepad</b> A attack · B special · X/Y jump · bumpers shield · RT grab · right stick smash<br>
+      Full meter: Special + Shield together for <b>Overdrive</b>. Esc or P pauses.</p></div>
+    <button class="big alt" id="bOptBack">BACK</button>
   </div>
 </div>
 
@@ -123,5 +186,6 @@
 <script src="render3d.js"></script>
 <script src="game.js"></script>
 <script src="fx.js"></script>
+<script src="menu.js"></script>
 </body>
 </html>

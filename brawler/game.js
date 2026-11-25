@@ -1022,7 +1022,7 @@ function checkHits() {
     for (const h of hbs) {
       const w = hbWorld(a, h);
       for (const v of fs) {
-        if (v === a || !canBeHit(v)) continue;
+        if (v === a || !canBeHit(v) || (a.team && a.team === v.team)) continue;
         if (v.state === 'grabbed' && v.holder === a) continue;
         const last = a.hitIds.get(v);
         if (last != null && !(h.rehit && a.mt - last >= h.rehit)) continue;
@@ -1052,7 +1052,7 @@ function checkHits() {
   for (const p of G.projs) {
     if (p.dead) continue;
     for (const v of fs) {
-      if (v === p.owner || !canBeHit(v) || p.hit.has(v)) continue;
+      if (v === p.owner || !canBeHit(v) || p.hit.has(v) || (p.owner.team && p.owner.team === v.team)) continue;
       if (!circRect(p.x, p.y, p.r, hurtRect(v))) continue;
       p.hit.add(v);
       applyHit(p.owner, v, p, sgn(p.vx) || p.owner.facing, { projectile: true, px: p.x, py: p.y });
@@ -1143,7 +1143,7 @@ function aiPoll(f) {
   if (a.holdX) { o.x = a.holdX; }
   const m = G.stage.main;
   let tgt = null, best = 1e9;
-  for (const g of G.fighters) if (g !== f && alive(g) && g.state !== 'dead' && g.state !== 'respawn') {
+  for (const g of G.fighters) if (g !== f && alive(g) && g.state !== 'dead' && g.state !== 'respawn' && !(f.team && g.team === f.team)) {
     const dd = Math.hypot(g.x - f.x, g.y - f.y) + (g.percent > 100 ? -80 : 0); if (dd < best) { best = dd; tgt = g; }
   }
   const S = f.state;
@@ -1295,9 +1295,9 @@ function startMatch(cfg) {
   const players = cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off');
   const n = players.length; const span = (st.main.x2 - st.main.x1) * 0.62;
   G.fighters = players.map((o, k) => {
-    const def = FIGHTERS[o.s.fighter];
+    const def = o.s.def || FIGHTERS[o.s.fighter];
     const f = newFighter(def, o.i, o.s.type === 'cpu' ? aiCtrl() : humanCtrl(o.i), o.s.type === 'cpu', o.s.level);
-    f.stocks = cfg.stocks; f.spawnX = n === 1 ? 0 : -span / 2 + (span * k) / (n - 1);
+    f.stocks = o.s.stocks || cfg.stocks; f.team = o.s.team || 0; f.spawnX = n === 1 ? 0 : -span / 2 + (span * k) / (n - 1);
     f.x = f.spawnX; f.y = 0; f.grounded = true; f.ground = G.mainSurf; f.facing = f.x > 0 ? -1 : 1; setState(f, 'idle');
     return f;
   });
@@ -1350,8 +1350,8 @@ function step() {
   if (G.banner && --G.banner.t <= 0) G.banner = null;
   // end
   if (!G.ending) {
-    const left = G.fighters.filter(alive);
-    if (G.fighters.length > 1 ? left.length <= 1 : left.length === 0) { G.ending = 1; G.banner = { text: 'GAME!', t: 999, color: '#ffcf3f', big: true }; Sfx.boom(); }
+    const left = G.fighters.filter(alive), sides = new Set(left.map(f => f.team || 'solo' + f.port));
+    if (G.cfg.training ? false : G.fighters.length > 1 ? sides.size <= 1 : left.length === 0) { G.ending = 1; G.banner = { text: 'GAME!', t: 999, color: '#ffcf3f', big: true }; Sfx.boom(); }
   } else if (++G.ending > 150) showResults();
 }
 
@@ -1594,7 +1594,7 @@ function drawHUD() {
       ctx.fillStyle = pctColor(f.percent); ctx.fillText(f.percent.toFixed(0) + '%', x + 60 + sh, y0 + 50 + sh);
     } else { ctx.fillStyle = '#8b95b8'; ctx.font = 'bold 18px Trebuchet MS'; ctx.fillText('OUT', x + 60, y0 + 48); }
     // stocks
-    for (let k = 0; k < f.stocks; k++) { ctx.fillStyle = f.def.color; ctx.beginPath(); ctx.arc(x + 14 + k * 12, y0 + 60, 4.5, 0, Math.PI * 2); ctx.fill(); }
+    for (let k = 0; k < Math.min(f.stocks, 6); k++) { ctx.fillStyle = f.def.color; ctx.beginPath(); ctx.arc(x + 14 + k * 12, y0 + 60, 4.5, 0, Math.PI * 2); ctx.fill(); }
     // meter
     const mw = cw - 70, mx = x + 60, my = y0 + 60;
     ctx.fillStyle = '#222842'; ctx.fillRect(mx, my, mw, 7);
@@ -1659,12 +1659,12 @@ $('optStage').onclick = e => { const b = e.target.closest('button'); if (b) { cf
 $('optStock').onclick = e => { const b = e.target.closest('button'); if (b) { cfg.stocks = +b.dataset.n; Sfx.blip(); buildSelect(); } };
 function drawPortrait(c, def) { R3.portrait(c, def); }
 
-$('bPlay').onclick = () => { Sfx.init(); Sfx.blip(); buildSelect(); showScreen('select'); };
-$('bDemo').onclick = () => {
+$('bPlay').onclick = () => { Sfx.init(); Sfx.blip(); showScreen('hub'); };
+function startDemo() {
   Sfx.init(); startMatch({ stage: ['skyforge', 'driftway', 'proving'][Math.floor(Math.random() * 3)], stocks: 3,
     slots: [0, 1, 2, 3].map(i => ({ type: 'cpu', fighter: (i + Math.floor(Math.random() * 7)) % 7, level: 6 + (i % 3) })) });
-};
-$('bBack').onclick = () => { Sfx.blip(); showScreen('title'); G.mode = 'title'; };
+}
+$('bBack').onclick = () => { Sfx.blip(); showScreen('hub'); G.mode = 'title'; };
 $('bFight').onclick = () => {
   const n = cfg.slots.filter(s => s.type !== 'off').length;
   if (n < 2) { const b = $('bFight'); b.textContent = 'TURN ON 2+'; setTimeout(() => { b.textContent = 'FIGHT!'; }, 1400); return; }
@@ -1676,7 +1676,7 @@ function togglePause() {
   if (!G.paused && Touch.on) $('touch').classList.add('on');
 }
 $('bResume').onclick = togglePause;
-$('bQuit').onclick = () => { G.paused = false; G.mode = 'title'; buildSelect(); showScreen('select'); };
+$('bQuit').onclick = () => { G.paused = false; G.mode = 'title'; showScreen('hub'); };
 $('bAgain').onclick = () => startMatch(G.cfg);
 $('bMenu').onclick = () => { G.mode = 'title'; buildSelect(); showScreen('select'); };
 

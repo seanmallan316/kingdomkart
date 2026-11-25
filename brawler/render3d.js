@@ -494,5 +494,14 @@ const R3 = (() => {
     c2.drawImage(pCache[def.id], 0, 0, canvas.width, canvas.height);
   }
 
-  return { init, buildStage, resetRigs, render, portrait, show, loadModels, get ok() { return ok; } };
+  // world positions (sim coordinates) of a fighter's hands, feet and sword tip, for motion trails
+  const _lp = new THREE.Vector3();
+  function limbPoints(f) {
+    const rig = rigs.get(f); if (!rig || !rig.glb || !rig.root.visible) return null;
+    const out = {};
+    for (const n of ['LeftHand', 'RightHand', 'LeftFoot', 'RightFoot']) { const b = rig.bones[n]; if (b) { b.getWorldPosition(_lp); out[n] = { x: _lp.x, y: -_lp.y }; } }
+    for (const h of rig.blades) if (h.visible) { _lp.set(0, -(12 + 34 * rig.def.reach), 0); h.localToWorld(_lp); out.Blade = { x: _lp.x, y: -_lp.y }; }
+    return out;
+  }
+  return { init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, get ok() { return ok; } };
 })();

@@ -106,15 +106,23 @@ clips, Norah a sprint). `tools/extract_anims.py` keeps only the bone rotations (
 frame, and eases between clips. States with no clip (ledge hang, crouch, air dodge, Ray's cannonball) use the hand-posed
 fallback. The move-to-clip table is `MOVE_CLIP` / `CHAR_CLIP` in `render3d.js`.
 
-## Effects pack (`fx.js`)
-Original effects drawn in code and original sound synthesized with Web Audio; nothing is sampled from another game.
-- **Hits:** white core flash, coloured starburst, streaks thrown along the launch direction, shock ring, embers; all scale with damage.
-- **Finisher:** a blow strong enough to KO freezes longer, darkens the screen, fires speed lines and lightning, and punches the camera in.
-- **Launch:** a glowing ribbon in the player's colour follows a fighter sent flying.
-- **Swings:** a tapered arc follows each attack's hitbox. Charging a smash pulls rings and streaks inward.
-- **KO:** a three-layer light column back into the screen, rays, confetti and shock rings.
-- **Ground:** dust on dashes, footsteps and landings; rings on double jumps and hard landings.
-- **Shield:** glassy bubble with a ripple when struck. Overdrive adds rising flames.
-- **Sound:** layered impacts in three weights (click, thump, crack), finisher crack with a sub drop, whooshes, blade swishes
-  for Ollie, footsteps, landings, double-jump chirp, shield hum and strike, parry chime, shield shatter, charge whine, KO
-  blast with a rising whistle, countdown, GO and GAME stabs. A compressor and a small generated reverb glue it together.
+## Effects (`fx.js`)
+Original effects and sound; nothing is sampled from another game.
+- **Glow layer:** everything bright is drawn on its own canvas that blends as light over the 3D scene (`mix-blend-mode:
+  screen`), built from soft sprites (glow, streak, comet, ring, wisp), then bloomed by shrinking and re-adding the image.
+- **Ribbons:** smooth tapered curves (Catmull-Rom) follow the scanned models' real hands, feet and sword tip during
+  attacks (`R3.limbPoints`), fighters sent flying, and projectiles.
+- **Hits:** white bloom, coloured halo, lens streak, soft ring, comet petals, a cone of comets along the launch, wisps, twinkles.
+- **Finisher:** long freeze, soft vignette, flowing speed lines, writhing energy arcs, camera punch-in.
+- **KO:** a soft beam of light with swirling glows and expanding rings, plus confetti.
+- **Sound:** layered synth impacts in three weights, finisher crack, whooshes, blade swishes, footsteps, shield, parry,
+  shatter, charge whine, KO blast, countdown and GAME stabs, through a compressor and a small generated reverb.
+- Options has a LIGHT effects setting that skips the bloom pass for slower phones.
+
+## Menus and modes (`menu.js`)
+- **Main menu:** Story, Versus, Training, Watch, Options. Arrow keys move between tiles.
+- **Story, "The Golden Clog":** six chapters with a short card before each. Pick Ray, Norah or Ollie; the other two
+  siblings appear as a rival and an ally. Chapter 5 is a 2-v-2 team fight, chapter 6 is the boss Big Brick (much bigger and
+  heavier, 2 stocks). Progress per fighter is kept in the browser.
+- **Teams:** fighters on the same team cannot hit each other and CPUs do not target team-mates; a match ends when one side is left.
+- **Training:** a fighter who stands still, 99 stocks, no match end.
