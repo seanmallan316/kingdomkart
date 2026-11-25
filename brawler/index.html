@@ -145,6 +145,23 @@
     #title { background:linear-gradient(180deg, rgba(10,12,30,.7) 0%, rgba(10,12,30,0) 40%, rgba(10,12,30,0) 78%, rgba(10,12,30,.7) 100%); }
   }
   @media (max-height:520px) { .logo.small .l1 { font-size:11px; } .logo.small .l2 { font-size:20px; } .logo.small { margin-bottom:4px; padding-bottom:6px; } .logo .l1 { font-size:16px; } .logo .l2 { font-size:34px; } #hub .tile b { font-size:19px; } #hub .tile small { font-size:11px; } }
+  /* ---- the supplied logo image (green screen removed, artwork untouched) ---- */
+  .logo.img { transform:none; filter:drop-shadow(0 10px 18px rgba(0,0,0,.55)); padding:0; display:block; animation:rise .6s cubic-bezier(.2,.9,.3,1.3) both, logoPulse 3.2s 1s ease-in-out infinite; }
+  .logo.img::before { display:none; }
+  .logo.img img { display:block; width:min(86vw, 620px); height:auto; max-height:34vh; object-fit:contain; user-select:none; }
+  .logo.img.small img { width:min(70vw, 380px); max-height:19vh; } .logo.img.small { margin-bottom:max(8px, 1.5vh); }
+  @keyframes logoPulse { 0%,100% { scale:1; } 50% { scale:1.035; } }
+  @media (max-height:520px) { .logo.img img { max-height:38vh; width:auto; } .logo.img.small img { max-height:12vh; width:auto; } .logo.img.small { margin-bottom:3px; } }
+  /* pressing Play: the logo pulses, rushes at the camera and the screen bursts into flame */
+  #intro { position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; }
+  #intro.on { display:flex; }
+  #intro video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none; }
+  #intro.vid video { display:block; } #intro.vid img, #intro.vid .fire { display:none; }
+  #title.leaving > * { visibility:hidden; }
+  #intro img { width:min(84vw, 760px); height:auto; animation:introZoom 1.25s cubic-bezier(.55,0,.85,.35) both; will-change:transform; }
+  #intro .fire { position:absolute; inset:-20%; background:radial-gradient(circle at 50% 50%, #fff 0%, #ffe680 12%, #ff9a1e 30%, #e2331a 52%, rgba(120,10,0,0) 72%); animation:introFire 1.5s ease-out both; }
+  @keyframes introZoom { 0% { transform:scale(.9); } 14% { transform:scale(1.1); } 28% { transform:scale(.98); } 42% { transform:scale(1.06); } 100% { transform:scale(16); opacity:0; } }
+  @keyframes introFire { 0%,48% { opacity:0; transform:scale(.2); } 70% { opacity:1; transform:scale(1.15); } 100% { opacity:0; transform:scale(1.7); } }
   /* story */
   .card { width:min(760px, 100%); background:var(--panel); border:2px solid var(--line); border-radius:16px; padding:22px 24px; text-align:center; }
   .card .chap { color:var(--hot); letter-spacing:4px; font-size:12px; text-transform:uppercase; font-weight:800; }
@@ -181,8 +198,10 @@
 <canvas id="gl"></canvas>
 <canvas id="c"></canvas>
 
+<div id="intro" aria-hidden="true"><i class="fire"></i><img src="logo.webp" alt=""><video id="introVid" src="intro.webm" preload="auto" playsinline></video></div>
+
 <div id="title" class="screen on">
-  <div class="logo"><span class="l1" data-t="SUPER">SUPER</span><span class="l2" data-t="FAMILY SMASH">FAMILY SMASH</span><i class="swoosh"></i><svg class="star" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2 61 36 97 38 68 59 78 95 50 74 22 95 32 59 3 38 39 36Z"/></svg></div>
+  <div class="logo img"><img src="logo.webp" alt="Super Family Smash" draggable="false"></div>
   <div class="sub">family platform fighter</div>
   <button class="big" id="bPlay">PLAY</button>
   <div class="tap">tap anywhere to wake the family up</div>
@@ -195,7 +214,7 @@
 </div>
 
 <div id="hub" class="screen">
-  <div class="logo small"><span class="l1" data-t="SUPER">SUPER</span><span class="l2" data-t="FAMILY SMASH">FAMILY SMASH</span><i class="swoosh"></i><svg class="star" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2 61 36 97 38 68 59 78 95 50 74 22 95 32 59 3 38 39 36Z"/></svg></div>
+  <div class="logo img small"><img src="logo.webp" alt="Super Family Smash" draggable="false"></div>
   <div class="tiles">
     <button class="tile tall" data-mode="story" style="--c1:#7a3df0;--c2:#e0368f"><canvas class="art hero" width="400" height="240"></canvas><b>STORY</b><small>The Golden Clog has been swiped. Fight through six chapters to bring it home.</small><span class="prog" id="storyProg"></span><i>★</i></button>
     <button class="tile" data-mode="versus" style="--c1:#e8590c;--c2:#f59f00"><canvas class="art sil a" width="400" height="240"></canvas><canvas class="art sil b" width="400" height="240"></canvas><b>VERSUS</b><small>2 to 4 fighters, players or CPUs. Your rules.</small><i>⚔</i></button>

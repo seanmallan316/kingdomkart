@@ -13,7 +13,7 @@
   function setScene(id, extra) {
     sceneId = id; sceneExtra = extra || null; if (!has3D()) return;
     const c = cast(), wide = innerWidth > innerHeight * 1.2;
-    if (id === 'title' && wide) R3.menuSet(KIDS.map((k, i) => ({ id: k, x: (i - 4) * 82, z: (i % 2) * -55, face: (4 - i) * 0.07 })), { x: 0, y: 118, d: 1040, lx: 0, ly: 96 });
+    if (id === 'title' && wide) R3.menuSet(KIDS.map((k, i) => ({ id: k, x: (i - 4) * 82, z: (i % 2) * -55, face: (4 - i) * 0.07 })), { x: 0, y: 200, d: 1120, lx: 0, ly: 205 });
     else if (id === 'title') R3.menuSet(KIDS.map((k, i) => (i < 5 ? { id: k, x: (i - 2) * 86, z: 45, face: (2 - i) * 0.1 } : { id: k, x: (i - 6.5) * 92, z: -70, face: (6.5 - i) * 0.1, scale: 1.05 })), { x: 0, y: 270, d: 2150, lx: 0, ly: 215 });  // portrait: two rows
     else if ((id === 'hub' || id === 'options') && wide) R3.menuSet([{ id: hero, x: 122, face: -0.4, scale: 1.12 }, { id: c.sib1, x: 222, z: -95, face: -0.55 }, { id: c.sib2, x: 28, z: -115, face: -0.15 }], { x: -30, y: 92, d: 520, lx: -30, ly: 60 });
     else if (id === 'hub' || id === 'options') { // portrait: the family lined up in the ring under the tiles
@@ -193,14 +193,34 @@
     const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.code]; if (!d) return;
     tiles[(i + d + tiles.length) % tiles.length].focus(); Sfx.blip(); e.preventDefault();
   });
-  el('bPlay').onclick = () => { Sfx.init(); Sfx.blip(); openHub(); };
+  // Play: the logo pulses and rushes the camera, the screen flashes into flame, then the main menu appears
+  let introBusy = false;
+  const vid = el('introVid'); let vidOK = true; vid.addEventListener('error', () => { vidOK = false; });
+  el('bPlay').onclick = () => {
+    Sfx.init(); if (introBusy) return;
+    if (still) { Sfx.blip(); openHub(); return; }
+    introBusy = true; const intro = el('intro'), title = el('title');
+    const done = () => { intro.classList.remove('on', 'vid'); title.classList.remove('leaving'); introBusy = false; };
+    const fallback = () => { // the built-in zoom-and-flame transition, used if the video cannot play
+      intro.classList.remove('vid'); intro.classList.add('on'); Sfx.od && Sfx.od(); setTimeout(() => Sfx.bigHit && Sfx.bigHit(), 760); setTimeout(openHub, 900); setTimeout(done, 1550);
+    };
+    if (!vidOK) return fallback();
+    // the supplied start animation: the logo zooms in and bursts; the main menu appears under the burst
+    let swapped = false; const swap = () => { if (!swapped) { swapped = true; openHub(); } };
+    vid.currentTime = 0; vid.volume = Sfx.volume == null ? 1 : Sfx.volume;
+    vid.ontimeupdate = () => { if (vid.currentTime >= 2.95) swap(); };
+    vid.onended = () => { swap(); done(); };
+    const p = vid.play();
+    const started = () => { intro.classList.add('on', 'vid'); title.classList.add('leaving'); setTimeout(() => { if (introBusy && intro.classList.contains('vid')) { swap(); done(); vid.pause(); } }, 5200); };
+    if (p && p.then) p.then(started).catch(() => { vidOK = false; fallback(); }); else started();
+  };
   el('bBack').onclick = () => { Sfx.blip(); openHub(); };
   el('bQuit').onclick = () => openHub();
   el('bMenu').onclick = () => openHub();
   el('bOptBack').onclick = () => { Sfx.blip(); openHub(); };
 
   // ---------------------------------------------------------------- logo flames (drawn in code)
-  const flameSets = [...document.querySelectorAll('.logo')].map(logo => {
+  const flameSets = [...document.querySelectorAll('.logo:not(.img)')].map(logo => {
     const cv = document.createElement('canvas'); cv.className = 'flames'; cv.width = 420; cv.height = 240; logo.prepend(cv);
     return { logo, cv, g: cv.getContext('2d'), ps: [] };
   });

@@ -179,3 +179,10 @@ A short-screen layout (under 520 px tall) keeps everything on screen on a phone 
   sweeping coloured beams and drifting sparkles drawn over the scene (`drawMenuBg` in `menu.js`).
 - **Portrait phones:** logo, then tiles in two columns, with five of the family in the ring along the bottom; the title
   screen shows all nine in two rows.
+
+## Supplied logo and start animation
+- `logo.webp`: the logo image supplied by the owner, with the green screen removed and nothing else changed. Shown on the
+  title screen and main menu. (It replaces the earlier CSS-built logo.)
+- `intro.webm`: the supplied start animation (logo zooms in and bursts), converted to a transparent VP9 video with its
+  sound. Pressing Play runs it over the title screen; the main menu appears at the burst (2.95 s). If the video cannot
+  play, a built-in zoom-and-flame transition runs instead. Reduced-motion settings skip both.
