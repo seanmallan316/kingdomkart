@@ -1626,25 +1626,29 @@ function drawHUD() {
     ctx.fillStyle = 'rgba(10,12,24,.72)'; ctx.fillRect(x, y0, cw, chh);
     ctx.fillStyle = PORT_COLORS[f.port]; ctx.fillRect(x, y0, 5, chh);
     // portrait
-    ctx.fillStyle = f.def.color; ctx.beginPath(); ctx.arc(x + 32, y0 + 32, 19, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#f4f7ff'; ctx.fillRect(x + 32, y0 + 27, 14, 6);
-    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Trebuchet MS, sans-serif';
-    ctx.fillText(f.def.name + (f.cpu ? ' · CPU ' + f.lvl : ''), x + 58, y0 + 16);
+    // narrow cards (phones held upright, 4 players): smaller portrait, shorter name, text shrunk to fit the card
+    const narrow = cw < 175, pr = narrow ? 13 : 19, px = narrow ? x + 22 : x + 32, tx = narrow ? x + 40 : x + 58;
+    ctx.fillStyle = f.def.color; ctx.beginPath(); ctx.arc(px, y0 + 32, pr, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f4f7ff'; ctx.fillRect(px, y0 + 32 - pr * 0.26, pr * 0.74, pr * 0.32);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+    const label = f.def.name + (f.cpu && !narrow ? ' · CPU ' + f.lvl : ''), room = x + cw - 6 - tx;
+    let fz = 12; ctx.font = `bold ${fz}px Trebuchet MS, sans-serif`; while (fz > 7 && ctx.measureText(label).width > room) { fz--; ctx.font = `bold ${fz}px Trebuchet MS, sans-serif`; }
+    ctx.fillText(label, tx, y0 + 16);
     if (alive(f)) {
       const sh = f.pctShake > 0 ? rand(-3, 3) : 0;
-      ctx.font = `italic 900 ${Math.min(36, cw * 0.18)}px Trebuchet MS, sans-serif`;
-      ctx.fillStyle = '#000'; ctx.fillText(f.percent.toFixed(0) + '%', x + 60 + sh + 2, y0 + 50 + sh + 2);
-      ctx.fillStyle = pctColor(f.percent); ctx.fillText(f.percent.toFixed(0) + '%', x + 60 + sh, y0 + 50 + sh);
-    } else { ctx.fillStyle = '#8b95b8'; ctx.font = 'bold 18px Trebuchet MS'; ctx.fillText('OUT', x + 60, y0 + 48); }
+      ctx.font = `italic 900 ${Math.min(36, Math.max(20, (x + cw - tx) * 0.36))}px Trebuchet MS, sans-serif`;
+      ctx.fillStyle = '#000'; ctx.fillText(f.percent.toFixed(0) + '%', tx + 2 + sh + 2, y0 + 50 + sh + 2);
+      ctx.fillStyle = pctColor(f.percent); ctx.fillText(f.percent.toFixed(0) + '%', tx + 2 + sh, y0 + 50 + sh);
+    } else { ctx.fillStyle = '#8b95b8'; ctx.font = 'bold 18px Trebuchet MS'; ctx.fillText('OUT', tx + 2, y0 + 48); }
     // stocks
-    for (let k = 0; k < Math.min(f.stocks, 6); k++) { ctx.fillStyle = f.def.color; ctx.beginPath(); ctx.arc(x + 14 + k * 12, y0 + 60, 4.5, 0, Math.PI * 2); ctx.fill(); }
+    for (let k = 0; k < Math.min(f.stocks, 6); k++) { ctx.fillStyle = f.def.color; ctx.beginPath(); ctx.arc(x + (narrow ? 11 : 14) + k * (narrow ? 8 : 12), y0 + 60, narrow ? 3.2 : 4.5, 0, Math.PI * 2); ctx.fill(); }
     // meter
-    const mw = cw - 70, mx = x + 60, my = y0 + 60;
+    const mx = narrow ? tx - 4 : x + 60, mw = x + cw - 8 - mx, my = y0 + 60;
     ctx.fillStyle = '#222842'; ctx.fillRect(mx, my, mw, 7);
     const full = f.meter >= 100 && f.od <= 0;
     ctx.fillStyle = f.od > 0 ? f.def.accent : full ? (G.frame % 20 < 10 ? '#ffffff' : f.def.accent) : '#6c7bd8';
     ctx.fillRect(mx, my, mw * (f.od > 0 ? f.od / 360 : f.meter / 100), 7);
-    if (full) { ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Trebuchet MS'; ctx.fillText('OVERDRIVE READY', mx, my - 2); }
+    if (full) { ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Trebuchet MS'; ctx.fillText(mw > 100 ? 'OVERDRIVE READY' : 'READY!', mx, my - 2); }
   }
   ctx.restore();
   // countdown

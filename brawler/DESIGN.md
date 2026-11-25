@@ -175,6 +175,18 @@ squash, cones get knocked flying, the basketball rolls, birds scatter, fairy lig
 - **Driveway:** chalk-drawn asphalt at golden hour, the house and garage behind, bike, hoop, cones, ball, fireflies.
 - **Bunk Beds:** quilted mattress, pillow platforms, bunk frame, teddy and blocks, moonlit window, fairy lights.
 
+### Real geometry, not painted boxes
+- Wooden floors are separate planks (an `InstancedMesh`) with gaps, joists underneath and a shade per plank.
+- Trees have furrowed, root-flared trunks (`trunkGeo`), curving tapered limbs (`branchGeo`, a tube along a spline)
+  and leafy canopies (`canopy`): a soft core plus hundreds of leaf cards, darker inside and underneath, swaying in the wind.
+- Hedges are leaf canopies too; lawns have thousands of grass tufts (`grassField`) that move in the wind.
+- The bed has a tufted quilt top (`tuftedTop`) and plump pillow platforms (`pillowGeo`).
+- All rounded shapes use smooth normals (the old faceted look came from flat per-face normals).
+- Lighting: an image-based environment (`RoomEnvironment`) on top of the sun, sky and rim lights, plus screen-space
+  ambient occlusion (`GTAOPass`) for soft contact shading. AO switches itself off if the device can't keep up
+  (add `?noao` to the URL to force it off).
+- The match HUD fits four players on a phone held upright.
+
 ## One-file build
 `python3 tools/build_single.py` writes `SuperFamilySmash.html`: every script, the logo and the intro video inlined into
 one page (about 42 MB) that runs by double-clicking it. It is ignored by git; rebuild it after changes.

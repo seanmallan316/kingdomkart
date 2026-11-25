@@ -42,12 +42,37 @@ const R3 = (() => {
     sun = lights(scene, true);
     stageGroup = new THREE.Group(); fighterGroup = new THREE.Group(); scene.add(stageGroup, fighterGroup);
     ok = true; resize();
+    try { const pm = new THREE.PMREMGenerator(renderer); envTex = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; pm.dispose(); } catch (e) { envTex = null; }
     return true;
+  }
+  // ambient occlusion for the 3D worlds (soft shading where things meet); switched off by itself if the device is too slow
+  let envTex = null, composer = null, aoPass = null, aoOn = !/[?&]noao/.test(location.search), slow = 0;
+  function ensureComposer() {
+    if (composer || !aoOn) return composer;
+    try {
+      composer = new THREE.EffectComposer(renderer); composer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); composer.setSize(innerWidth, innerHeight);
+      composer.addPass(new THREE.RenderPass(scene, camera));
+      aoPass = new THREE.GTAOPass(scene, camera, innerWidth, innerHeight);
+      aoPass.updateGtaoMaterial({ radius: 45, distanceExponent: 1.4, thickness: 12, scale: 1.2, samples: 12, distanceFallOff: 1 });
+      aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+      aoPass.blendIntensity = 1.0;
+      composer.addPass(aoPass); composer.addPass(new THREE.OutputPass());
+    } catch (e) { console.warn('AO off', e); aoOn = false; composer = null; }
+    return composer;
+  }
+  let lastT = 0;
+  function present() {
+    const now = performance.now(), dt = now - lastT; lastT = now;
+    if (worldOn && aoOn && ensureComposer()) {
+      if (dt > 0 && dt < 200) { slow = dt > 26 ? slow + 1 : Math.max(0, slow - 2); if (slow > 120) { aoOn = false; console.info('AO switched off for speed'); } }
+      composer.render();
+    } else renderer.render(scene, camera);
   }
   function resize() {
     if (!ok) return;
     renderer.setPixelRatio(Math.min(2.5, window.devicePixelRatio || 1));
     renderer.setSize(innerWidth, innerHeight, false);
+    if (composer) { composer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); composer.setSize(innerWidth, innerHeight); }
   }
   addEventListener('resize', resize);
 
@@ -116,12 +141,12 @@ const R3 = (() => {
     clearGroup(stageGroup); platMeshes = []; rocks = [];
     worldOn = !!(st.theme && window.WORLDS && WORLDS.has(st.theme));
     if (worldOn) { // full 3D world (worlds.js)
-      WORLDS.build(st, { scene, stageGroup, sun, renderer, camera });
+      WORLDS.build(st, { scene, stageGroup, sun, renderer, camera, envTex });
       for (const p of plats) { const g = WORLDS.plat(st, p); stageGroup.add(g); platMeshes.push({ g, p }); }
       sun.target.position.set(0, 0, 0);
       return;
     }
-    renderer.toneMappingExposure = 0.98;
+    renderer.toneMappingExposure = 0.98; scene.environment = null;
     document.getElementById('sky').style.background = `linear-gradient(180deg, ${st.sky[0]} 0%, ${st.sky[1]} 60%, ${st.sky[2]} 100%)`;
     scene.fog = new THREE.Fog(new THREE.Color(st.sky[1]), 1900, 5200);
     const m = st.main, w = m.x2 - m.x1, cx = (m.x1 + m.x2) / 2, D = 230;
@@ -532,7 +557,7 @@ const R3 = (() => {
     const cx = G.cam.x - shx / s, cy = -G.cam.y + shy / s;
     // the camera sits a little above the action and looks down, so the stages read as 3D spaces
     camera.aspect = VW / VH; camera.far = d + 12000; camera.position.set(cx, cy + d * (worldOn ? 0.11 : 0), d); camera.lookAt(cx, cy, 0); camera.updateProjectionMatrix();
-    renderer.render(scene, camera);
+    present();
     return true;
   }
   function show(on) { const el = document.getElementById('gl'); if (el) el.style.visibility = on ? 'visible' : 'hidden'; }

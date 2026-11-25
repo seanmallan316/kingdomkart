@@ -23,7 +23,7 @@
   }
   function texMat(tex, o) {
     for (const t of [tex.map, tex.bump]) { t.repeat.set(tex.rep[0], tex.rep[1]); t.needsUpdate = true; }
-    return new T.MeshStandardMaterial(Object.assign({ map: tex.map, bumpMap: tex.bump, bumpScale: 2.2, roughness: 0.78, metalness: 0 }, o || {}));
+    return new T.MeshStandardMaterial(Object.assign({ map: tex.map, bumpMap: tex.bump, bumpScale: 2.2, roughness: 0.78, metalness: 0, envMapIntensity: 0.5 }, o || {}));
   }
   const noise = (g, w, h, n, a, col) => { for (let i = 0; i < n; i++) { g.fillStyle = col || `rgba(0,0,0,${Math.random() * a})`; g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); } };
   const TEX = {
@@ -90,6 +90,28 @@
       g.fillStyle = '#5b9e45'; g.fillRect(0, 0, w, h); b.fillStyle = '#777'; b.fillRect(0, 0, w, h);
       for (let i = 0; i < 9000; i++) { const v = R(-30, 30); g.fillStyle = `rgb(${80 + v},${150 + v},${60 + v * 0.5})`; const x = R(0, w), y = R(0, h); g.fillRect(x, y, 1, 3); b.fillStyle = v > 0 ? '#bbb' : '#444'; b.fillRect(x, y, 1, 3); }
     }, 20, 8),
+    // a sprig of leaves on a transparent card (tinted per instance)
+    leaf: (shape = 'oak') => canvasTex('leaf' + shape, 256, 256, (g, b, w, h) => {
+      g.clearRect(0, 0, w, h); b.fillStyle = '#808080'; b.fillRect(0, 0, w, h);
+      const n = shape === 'hedge' ? 46 : 30;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * (w * 0.36), x = w / 2 + Math.cos(a) * d, y = h / 2 + Math.sin(a) * d;
+        const L = shape === 'hedge' ? 16 + Math.random() * 10 : 26 + Math.random() * 18, W = L * (shape === 'hedge' ? 0.55 : 0.48), rot = a + Math.random() * 0.8 - 0.4;
+        g.save(); g.translate(x, y); g.rotate(rot);
+        const v = 150 + Math.random() * 105, gr = g.createLinearGradient(-L, 0, L, 0); gr.addColorStop(0, `rgb(${v * 0.62|0},${v * 0.62|0},${v * 0.62|0})`); gr.addColorStop(1, `rgb(${v|0},${v|0},${v|0})`);
+        g.fillStyle = gr; g.beginPath(); g.moveTo(-L, 0); g.bezierCurveTo(-L * 0.3, -W, L * 0.5, -W * 0.9, L, 0); g.bezierCurveTo(L * 0.5, W * 0.9, -L * 0.3, W, -L, 0); g.fill();
+        g.strokeStyle = 'rgba(40,40,40,.35)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(-L, 0); g.lineTo(L * 0.85, 0); g.stroke();
+        g.restore();
+      }
+    }),
+    blades: () => canvasTex('blades', 128, 128, (g, b, w, h) => {
+      g.clearRect(0, 0, w, h); b.fillStyle = '#808080'; b.fillRect(0, 0, w, h);
+      for (let i = 0; i < 34; i++) {
+        const x = 10 + Math.random() * (w - 20), top = Math.random() * h * 0.45, lean = (Math.random() - 0.5) * 30, bw = 2 + Math.random() * 3;
+        const gr = g.createLinearGradient(0, h, 0, top); const v = 170 + Math.random() * 85; gr.addColorStop(0, '#3a3a3a'); gr.addColorStop(1, `rgb(${v|0},${v|0},${v|0})`);
+        g.fillStyle = gr; g.beginPath(); g.moveTo(x - bw, h); g.quadraticCurveTo(x + lean * 0.3, h * 0.6, x + lean, top); g.quadraticCurveTo(x + lean * 0.3 + bw * 0.4, h * 0.6, x + bw, h); g.fill();
+      }
+    }),
     rug: () => canvasTex('rug', 512, 512, (g, b, w, h) => {
       g.fillStyle = '#3c3f8f'; g.fillRect(0, 0, w, h); b.fillStyle = '#888'; b.fillRect(0, 0, w, h);
       for (let r = 240; r > 20; r -= 40) { g.strokeStyle = r % 80 ? '#ffd36b' : '#ff8fb8'; g.lineWidth = 14; g.beginPath(); g.arc(w / 2, h / 2, r, 0, TAU); g.stroke(); }
@@ -99,7 +121,7 @@
 
   // ------------------------------------------------------------ small builders
   let api = null, world = null;
-  const M = (c, o) => new T.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.75, metalness: 0 }, o || {}));
+  const M = (c, o) => new T.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.75, metalness: 0, envMapIntensity: 0.5 }, o || {}));
   const G2 = (c, k = 1) => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k });
   function add(parent, geo, mat, x = 0, y = 0, z = 0, cast = true) { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; parent.add(m); return m; }
   function rbox(w, h, d, r = 6) { // rounded box: a beveled extrusion, centred on its middle
@@ -120,8 +142,111 @@
       fragmentShader: 'uniform vec3 a; uniform vec3 b; uniform vec3 c; varying vec3 vp; void main(){ float h = vp.y; vec3 col = h > 0.05 ? mix(b, a, smoothstep(0.05, 0.75, h)) : mix(b, c, smoothstep(0.05, -0.4, h)); gl_FragColor = vec4(col, 1.0); }' });
     const m = new T.Mesh(new T.SphereGeometry(9000, 32, 16), mat); m.renderOrder = -10; return m;
   }
-  function softBlob(r, mat, x, y, z, sx = 1, sy = 1, sz = 1) { const g = new T.IcosahedronGeometry(r, 3); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const v = new T.Vector3().fromBufferAttribute(p, i), k = 1 + Math.sin(v.x * 0.05 + v.y * 0.07) * 0.06 + Math.sin(v.z * 0.09) * 0.05; p.setXYZ(i, v.x * k, v.y * k, v.z * k); } g.computeVertexNormals(); const m = new T.Mesh(g, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; m.receiveShadow = true; return m; }
+  function softBlob(r, mat, x, y, z, sx = 1, sy = 1, sz = 1) { let g = new T.IcosahedronGeometry(r, 4); g.deleteAttribute('normal'); g.deleteAttribute('uv'); if (T.mergeVertices) g = T.mergeVertices(g, 0.5); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const v = new T.Vector3().fromBufferAttribute(p, i), k = 1 + Math.sin(v.x * 0.05 + v.y * 0.07) * 0.06 + Math.sin(v.z * 0.09) * 0.05; p.setXYZ(i, v.x * k, v.y * k, v.z * k); } g.computeVertexNormals(); const m = new T.Mesh(g, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; m.receiveShadow = true; return m; }
 
+  // ------------------------------------------------------------ detail kit: real geometry instead of painted boxes
+  const WIND = { value: 0 };
+  // leaves and grass bend in the wind: the top of each card moves, the base stays put
+  function windy(mat, amp) {
+    mat.onBeforeCompile = sh => {
+      sh.uniforms.uTime = WIND;
+      sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          float wph = instanceMatrix[3].x * 0.011 + instanceMatrix[3].z * 0.017 + instanceMatrix[3].y * 0.007;
+        #else
+          float wph = 0.0;
+        #endif
+        transformed.x += sin(uTime * 1.7 + wph) * uv.y * ${amp.toFixed(2)};
+        transformed.z += cos(uTime * 1.3 + wph * 1.3) * uv.y * ${(amp * 0.6).toFixed(2)};`);
+    };
+    return mat;
+  }
+  // a leafy canopy: a soft dark core plus hundreds of leaf cards on its surface, shaded darker inside and underneath
+  function canopy(parent, x, y, z, rx, ry, rz, pal, n = 220, size = 120, shape = 'oak') {
+    const g = new T.Group(); g.position.set(x, y, z); parent.add(g);
+    const core = softBlob(1, M(pal[0], { roughness: 1 }), 0, 0, 0, rx * 0.82, ry * 0.82, rz * 0.82); g.add(core);
+    const tex = TEX.leaf(shape); const mat = windy(new T.MeshStandardMaterial({ map: tex.map, alphaTest: 0.45, side: T.DoubleSide, roughness: 0.85, envMapIntensity: 0.4 }), size * 0.06);
+    const geo = new T.PlaneGeometry(size, size); geo.translate(0, size * 0.3, 0);
+    const im = new T.InstancedMesh(geo, mat, n); im.castShadow = false; im.receiveShadow = true;
+    const o = new T.Object3D(), c = new T.Color(), lo = new T.Color(pal[0]), mid = new T.Color(pal[1]), hi = new T.Color(pal[2]), sunD = new T.Vector3(-0.4, 0.8, 0.45).normalize();
+    for (let i = 0; i < n; i++) {
+      const u = new T.Vector3(R(-1, 1), R(-0.7, 1), R(-1, 1)).normalize(), k = R(0.78, 1.04);
+      o.position.set(u.x * rx * k, u.y * ry * k, u.z * rz * k);
+      o.lookAt(o.position.x * 2, o.position.y * 2 + 40, o.position.z * 2); o.rotateZ(R(0, TAU)); o.rotateX(R(-0.5, 0.5)); o.scale.setScalar(R(0.75, 1.25));
+      o.updateMatrix(); im.setMatrixAt(i, o.matrix);
+      const t = Math.max(0, Math.min(1, 0.45 + u.y * 0.35 + u.dot(sunD) * 0.3 + R(-0.12, 0.12)));
+      c.copy(lo).lerp(mid, Math.min(1, t * 1.6)); if (t > 0.62) c.lerp(hi, (t - 0.62) / 0.38); im.setColorAt(i, c);
+    }
+    g.add(im); return g;
+  }
+  // an organic trunk: furrowed bark, slightly wavy, flaring out into roots at the base
+  function trunkGeo(h, r0, r1) {
+    const geo = new T.CylinderGeometry(r1, r0, h, 56, 48, true), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), a = Math.atan2(z, x), v = (y + h / 2) / h;
+      const flare = 1 + Math.pow(Math.max(0, 1 - v * 3.2), 3) * 0.8 * (1 + 0.45 * Math.sin(a * 5 + 1));
+      const k = flare * (1 + 0.045 * Math.sin(a * 19 + v * 7) + 0.03 * Math.sin(a * 37 - v * 13) + 0.04 * Math.sin(v * 9 + a * 2));
+      p.setXYZ(i, x * k + Math.sin(v * 5) * 18, y, z * k);
+    }
+    geo.computeVertexNormals(); return geo;
+  }
+  // a curved, tapering branch along a smooth path
+  function branchGeo(pts, r0, r1) {
+    const curve = new T.CatmullRomCurve3(pts.map(q => new T.Vector3(q[0], q[1], q[2]))), segs = 40, rad = 14;
+    const geo = new T.TubeGeometry(curve, segs, 1, rad, false), p = geo.attributes.position, P = new T.Vector3(), V = new T.Vector3();
+    for (let i = 0; i <= segs; i++) { curve.getPointAt(i / segs, P); const r = r0 + (r1 - r0) * Math.pow(i / segs, 0.8); for (let j = 0; j <= rad; j++) { const k = i * (rad + 1) + j; V.fromBufferAttribute(p, k).sub(P).multiplyScalar(r).add(P); p.setXYZ(k, V.x, V.y, V.z); } }
+    geo.computeVertexNormals(); return { geo, curve };
+  }
+  // a floor of separate planks with gaps between them, each a slightly different shade; the tops sit at y = 0
+  function plankFloor(parent, x1, x2, z1, z2, mat, pw = 30, th = 10, gap = 3) {
+    const rows = Math.floor((z2 - z1) / (pw + gap)), list = [];
+    for (let r = 0; r < rows; r++) { let x = x1 + (r % 3) * -60; while (x < x2) { const len = R(170, 330), a = Math.max(x, x1), b = Math.min(x + len, x2); if (b - a > 20) list.push([a, b, z1 + r * (pw + gap) + pw / 2 + gap / 2]); x += len + gap; } }
+    const geo = rbox(100, th, pw, 3), im = new T.InstancedMesh(geo, mat, list.length), o = new T.Object3D(), c = new T.Color();
+    list.forEach(([a, b, z], i) => { o.position.set((a + b) / 2, -th / 2 - R(0, 0.6), z); o.scale.set((b - a) / 100, 1, 1); o.rotation.set(0, R(-0.004, 0.004), 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); const v = R(0.78, 1.12); c.setRGB(v, v * R(0.95, 1), v * R(0.9, 1)); im.setColorAt(i, c); });
+    im.castShadow = true; im.receiveShadow = true; parent.add(im); return im;
+  }
+  // tufts of grass blades over an area (crossed cards, swaying in the wind)
+  function grassField(parent, x1, x2, z1, z2, n, y = 0, h = 46) {
+    const tex = TEX.blades(), mat = windy(new T.MeshStandardMaterial({ map: tex.map, alphaTest: 0.4, side: T.DoubleSide, roughness: 1, envMapIntensity: 0.3 }), 6);
+    const geo = new T.PlaneGeometry(h * 1.3, h); geo.translate(0, h / 2, 0);
+    const im = new T.InstancedMesh(geo, mat, n), o = new T.Object3D(), c = new T.Color(), a = new T.Color('#4f8f38'), b = new T.Color('#9fd06a');
+    for (let i = 0; i < n; i++) { o.position.set(R(x1, x2), y, R(z1, z2)); o.rotation.set(0, R(0, TAU), 0); o.scale.setScalar(R(0.7, 1.35)); o.updateMatrix(); im.setMatrixAt(i, o.matrix); im.setColorAt(i, c.copy(a).lerp(b, R(0, 1))); }
+    im.receiveShadow = true; parent.add(im); return im;
+  }
+  // a plump pillow: thick in the middle, thin at the seams; top at y = 0
+  function pillowGeo(w, h, d) {
+    let geo = new T.BoxGeometry(w, h, d, 28, 8, 12); geo.deleteAttribute('normal'); if (T.mergeVertices) geo = T.mergeVertices(geo, 0.01);
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const nx = p.getX(i) / (w / 2), ny = p.getY(i) / (h / 2), nz = p.getZ(i) / (d / 2), puff = (1 - Math.pow(Math.abs(nx), 6)) * (1 - Math.pow(Math.abs(nz), 4));
+      const yy = ny * (h / 2) * (0.25 + 0.75 * puff), xx = p.getX(i), zz = p.getZ(i) * (0.82 + 0.18 * puff);
+      p.setXYZ(i, xx, yy - h * 0.5, zz);
+    }
+    geo.computeVertexNormals(); return geo;
+  }
+  // a tufted quilt top: pillowy squares with stitched dips between them, rolling down at the edges; peaks at y = 0
+  function tuftedTop(w, d, cell, mat) {
+    const geo = new T.PlaneGeometry(w, d, Math.round(w / 6), Math.round(d / 6)); geo.rotateX(-Math.PI / 2);
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i), puff = Math.sqrt(Math.abs(Math.sin(Math.PI * x / cell) * Math.sin(Math.PI * z / cell)));
+      const e = Math.min(1, Math.min(w / 2 - Math.abs(x), d / 2 - Math.abs(z)) / 26);
+      p.setY(i, -7 * (1 - puff) - (1 - e * e) * 16);
+    }
+    geo.computeVertexNormals(); return new T.Mesh(geo, mat);
+  }
+
+  // a whole tree: furrowed trunk, two curving limbs and a cluster of leafy canopies
+  function tree(parent, x, y, z, h, r, pal, leaves = 200) {
+    const g = new T.Group(); g.position.set(x, y, z); parent.add(g);
+    const bt = TEX.bark(); bt.rep = [3, 4]; const bark = texMat(bt, { bumpScale: 6, roughness: 0.95 });
+    add(g, trunkGeo(h, r * 1.3, r * 0.6), bark, 0, h / 2, 0);
+    for (const sx of [-1, 1]) add(g, branchGeo([[0, h * 0.7, 0], [sx * h * 0.18, h * 0.86, 0], [sx * h * 0.34, h * 0.98, sx * 20]], r * 0.45, r * 0.18).geo, bark, 0, 0, 0);
+    const cr = h * 0.32;
+    canopy(g, 0, h * 1.08, 0, cr * 1.2, cr * 0.8, cr, pal, leaves, cr * 0.5);
+    for (const sx of [-1, 1]) canopy(g, sx * h * 0.36, h * 0.98, sx * 30, cr * 0.85, cr * 0.6, cr * 0.75, pal, Math.round(leaves * 0.7), cr * 0.45);
+    return g;
+  }
   // ------------------------------------------------------------ props generated with Meshy (base64 GLBs)
   const propScenes = {}, propWait = {};
   function loadProp(name, cb) {
@@ -155,7 +280,7 @@
   function platMesh(pw, mat, sideMat, thick = 14, depth = 120, r = 6) { const g = new T.Group(); const m = add(g, rbox(pw, thick, depth, r), [sideMat, mat], 0, -thick / 2, 0); m.receiveShadow = true; return g; }
   function lights(L) {
     const s = api.sun; s.color.set(L.sun); s.intensity = L.sunI; s.position.set(L.sunPos[0], L.sunPos[1], L.sunPos[2]);
-    const hemi = api.scene.children.find(o => o.isHemisphereLight); if (hemi) { hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemiI; }
+    const hemi = api.scene.children.find(o => o.isHemisphereLight); if (hemi) { hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemiI * (api.envTex ? 0.75 : 1); }
     const rim = api.scene.children.find(o => o.isDirectionalLight && o !== s); if (rim) { rim.color.set(L.rim); rim.intensity = L.rimI; }
     api.renderer.toneMappingExposure = L.exposure || 1;
   }
@@ -169,7 +294,12 @@
       lights({ sun: '#fff1d2', sunI: 3.0, sunPos: [-600, 1100, 900], sky: '#cfe8ff', ground: '#4b6b3a', hemiI: 1.5, rim: '#ffe2b0', rimI: 1.2, exposure: 1.0 });
       g.add(skyDome('#3d8fe8', '#a7d8ff', '#d9f0ff')); api.scene.fog = new T.Fog('#bfe3ff', 2200, 7000);
       const plank = TEX.planks('#b98552'), dark = TEX.planks('#7a5232');
-      mainSlab(g, m, texMat(plank), texMat(dark), 260, 36, 10);
+      // deck: separate planks over dark joists, with a chunky front beam
+      plankFloor(g, m.x1, m.x2, -128, 128, texMat(plank, { bumpScale: 1.5 }));
+      add(g, rbox(m.x2 - m.x1 - 20, 22, 240, 4), M('#3a2515', { roughness: 1 }), 0, -22, 0, false);
+      const beam = texMat(TEX.planks('#8a5a34'));
+      add(g, rbox(m.x2 - m.x1 + 16, 34, 26, 5), beam, 0, -26, 132); add(g, rbox(m.x2 - m.x1 + 16, 34, 26, 5), beam, 0, -26, -132);
+      for (let k = 0; k <= 8; k++) add(g, rbox(22, 30, 270, 4), texMat(TEX.planks('#6d4529')), m.x1 + 10 + k * (m.x2 - m.x1 - 20) / 8, -40, 0);
       // support beams under the deck, into the trunk
       const beamM = texMat(TEX.planks('#8a5a34'));
       for (const x of [m.x1 + 60, 0, m.x2 - 60]) { const b = add(g, rbox(26, 300, 26, 5), beamM, x, -170, -40); b.rotation.z = x ? -Math.sign(x) * 0.42 : 0; }
@@ -182,23 +312,32 @@
       for (const sx of [-1, 1]) add(g, new T.CylinderGeometry(2.2, 2.2, 260, 6), rope, m.x1 + 70 + sx * 26, -150, 128);
       for (let k = 0; k < 7; k++) add(g, rbox(64, 7, 8, 3), rail, m.x1 + 70, -40 - k * 34, 128);
       // the great oak, procedural trunk plus a generated tree for the canopy silhouette
-      const bark = texMat(TEX.bark(), { bumpScale: 5 });
-      add(g, new T.CylinderGeometry(150, 230, 2600, 18, 6), bark, 0, -700, -420);
-      const branch = (x, y, rz, len, r) => { const b = add(g, new T.CylinderGeometry(r * 0.6, r, len, 12), bark, x, y, -420); b.rotation.z = rz; };
-      branch(-430, 340, 1.0, 900, 70); branch(450, 420, -0.95, 950, 74); branch(-300, -330, 2.25, 700, 60); branch(330, -360, -2.25, 740, 60);
-      const leafA = M('#3f9b4f', { roughness: 0.9 }), leafB = M('#5fc068', { roughness: 0.9 }), leafC = M('#2f7d3f', { roughness: 0.9 });
-      [[-700, 560, -480, 280], [-420, 800, -560, 330], [-60, 900, -620, 380], [340, 820, -560, 320], [720, 600, -480, 290], [-950, 360, -700, 240], [980, 380, -700, 250], [0, 640, -760, 420], [-560, -560, -500, 220], [580, -600, -500, 230], [-1250, 700, -1100, 330], [1250, 680, -1100, 330]]
-        .forEach(([x, y, z, r], i) => { const b = softBlob(r, [leafA, leafB, leafC][i % 3], x, y, z, 1.3, 0.85, 1); g.add(b); world.sway.push({ o: b, ph: i, amp: 0.02 }); });
+      const barkT = TEX.bark(); barkT.rep = [5, 7]; const bark = texMat(barkT, { bumpScale: 7, roughness: 0.95 });
+      add(g, trunkGeo(3700, 260, 150), bark, 0, -450, -470);
+      const pal = ['#24572c', '#3f9346', '#8fd06a'], pal2 = ['#2a5e2a', '#4fa24a', '#b4dc6e'];
+      // branches curve out of the trunk; each ends in a leafy canopy
+      const limbs = [
+        [[[-60, 200, -470], [-380, 380, -440], [-700, 520, -380], [-980, 600, -420]], 85, 22, [-1000, 640, -420, 330]],
+        [[[60, 260, -470], [400, 430, -450], [720, 560, -400], [1000, 640, -440]], 88, 22, [1020, 690, -440, 340]],
+        [[[0, 500, -480], [-120, 760, -520], [-320, 960, -560]], 70, 20, [-340, 1000, -580, 360]],
+        [[[0, 520, -480], [160, 800, -520], [380, 980, -560]], 70, 20, [400, 1020, -590, 360]],
+        [[[-40, -250, -460], [-360, -330, -420], [-680, -330, -380]], 62, 18, [-720, -320, -400, 250]],
+        [[[40, -280, -460], [380, -360, -420], [720, -350, -390]], 62, 18, [760, -340, -410, 250]],
+      ];
+      limbs.forEach(([pts, r0, r1, c], i) => { add(g, branchGeo(pts, r0, r1).geo, bark, 0, 0, 0); const cn = canopy(g, c[0], c[1], c[2], c[3] * 1.25, c[3] * 0.8, c[3], i % 2 ? pal : pal2, 260, 120); world.sway.push({ o: cn, ph: i, amp: 0.012 }); });
+      const top = canopy(g, 0, 1200, -650, 620, 380, 420, pal, 420, 140); world.sway.push({ o: top, ph: 9, amp: 0.006 });
+      for (const [x, y, z, r] of [[-1500, 820, -1300, 420], [1500, 780, -1300, 420], [-600, 1400, -1100, 400], [700, 1380, -1100, 400]]) canopy(g, x, y, z, r * 1.2, r * 0.8, r, pal2, 260, 150);
       prop(g, 'treehouse', -640, 230, -430, 430, 0.5, 0.4);
       prop(g, 'birdhouse', m.x2 - 40, 0, -112, 120, -0.4, 1.4);
-      prop(g, 'oaktree', 1700, -500, -1700, 1500, 0.8, 0); prop(g, 'oaktree', -1800, -450, -1900, 1400, 2.4, 0);
+      tree(g, 1900, -1400, -1900, 2300, 120, ['#2f5e33', '#4f9150', '#a4d27a'], 220); tree(g, -2000, -1400, -2100, 2200, 115, ['#2f5e33', '#4f9150', '#a4d27a'], 220);
       // distant hills and clouds
-      const hill = M('#7cc46a', { roughness: 1 }), hill2 = M('#9fd88a', { roughness: 1 });
+      const hill = M('#7cc46a', { roughness: 1 }), hill2 = M('#9fd88a', { roughness: 1 }), leafC = M('#2f7d3f', { roughness: 0.9 });
       for (let k = -3; k <= 3; k++) { const h = softBlob(900, k % 2 ? hill : hill2, k * 1500, -1300, -3200, 1.4, 0.55, 0.6); g.add(h); }
       const cloud = M('#ffffff', { roughness: 1, emissive: '#ffffff', emissiveIntensity: 0.15 });
       for (let k = 0; k < 7; k++) { const c = new T.Group(); [[0, 0, 160], [170, 30, 120], [-160, 20, 120], [70, 80, 110]].forEach(([dx, dy, r]) => c.add(softBlob(r, cloud, dx, dy, 0, 1.3, 0.75, 1))); c.position.set(-3000 + k * 1000, 650 + (k % 3) * 260, -2400); g.add(c); world.drift.push({ o: c, vx: 0.25 + (k % 3) * 0.1, wrap: 3600 }); }
       // foreground leaves at the bottom corners, out of focus
-      for (const sx of [-1, 1]) { const b = softBlob(260, leafC, sx * 720, -520, 380, 1.2, 0.8, 0.6); g.add(b); world.sway.push({ o: b, ph: sx, amp: 0.03 }); }
+      for (const sx of [-1, 1]) { const b = canopy(g, sx * 760, -560, 380, 300, 200, 160, ['#173d1d', '#2c6a30', '#5aa04a'], 200, 120); world.sway.push({ o: b, ph: sx, amp: 0.02 }); }
+      for (let k = 0; k < 9; k++) canopy(g, -3600 + k * 900, -900 + (k % 2) * 120, -2700, 520, 380, 300, ['#3d6e3a', '#5f9a52', '#9fca7a'], 140, 220);
       // drifting leaves
       const leafGeo = new T.PlaneGeometry(14, 9); const leafMats = ['#5fc068', '#e0b040', '#d97a2f'].map(c => new T.MeshStandardMaterial({ color: c, side: T.DoubleSide, roughness: 1 }));
       particles(g, 26, 0, i => { const o = new T.Mesh(leafGeo, leafMats[i % 3]); o.position.set(R(-900, 900), R(-300, 900), R(-300, 200)); return { o, kind: 'leaf', vy: R(0.4, 1.1), ph: R(0, TAU) }; });
@@ -225,7 +364,16 @@
       for (let k = -6; k <= 6; k++) { add(g, rbox(300, 600, 20, 10), M('#5c9c8b', { roughness: 0.6 }), k * 320, -650, -740); add(g, new T.SphereGeometry(12, 10, 8), knob, k * 320 + 110, -420, -725); }
       for (let k = -5; k <= 5; k++) if (Math.abs(k) > 1) { add(g, rbox(300, 420, 300, 10), cab, k * 320, 900, -1180); }
       // the big window, glowing with morning light
-      const win = new T.Group(); add(win, new T.PlaneGeometry(1300, 900), G2('#cfeaff', 1.1), 0, 0, 0, false); const fr = M('#fbf7ee');
+      const view = document.createElement('canvas'); view.width = 1024; view.height = 720; { const v = view.getContext('2d');
+        const sk = v.createLinearGradient(0, 0, 0, 720); sk.addColorStop(0, '#7fc4ff'); sk.addColorStop(0.6, '#d8efff'); sk.addColorStop(1, '#fff4d6'); v.fillStyle = sk; v.fillRect(0, 0, 1024, 720);
+        v.fillStyle = 'rgba(255,255,255,.85)'; for (let k = 0; k < 5; k++) { const cx = 120 + k * 210, cy = 90 + (k % 2) * 50; for (let j = 0; j < 5; j++) { v.beginPath(); v.arc(cx + j * 26 - 50, cy + Math.sin(j * 2) * 10, 26 + (j % 2) * 10, 0, TAU); v.fill(); } }
+        v.fillStyle = '#9ccf7a'; v.beginPath(); v.moveTo(0, 520); for (let x = 0; x <= 1024; x += 32) v.lineTo(x, 500 - Math.sin(x * 0.006) * 40); v.lineTo(1024, 720); v.lineTo(0, 720); v.fill();
+        for (let k = 0; k < 14; k++) { const x = k * 80 + Math.random() * 30, y = 470 + Math.random() * 40, r = 50 + Math.random() * 50; v.fillStyle = '#5a3a22'; v.fillRect(x - 6, y, 12, 90); for (let j = 0; j < 9; j++) { v.fillStyle = ['#3f8a3f', '#5fae4f', '#86c95f'][j % 3]; v.beginPath(); v.arc(x + Math.random() * r - r / 2, y - Math.random() * r * 0.9, r * 0.45, 0, TAU); v.fill(); } }
+        v.fillStyle = '#ffffff'; v.fillRect(0, 600, 1024, 14); for (let x = 0; x < 1024; x += 40) v.fillRect(x, 560, 12, 60);
+        v.fillStyle = '#6fb653'; v.fillRect(0, 618, 1024, 102); }
+      const viewT = new T.CanvasTexture(view); viewT.colorSpace = T.SRGBColorSpace;
+      const win = new T.Group(); add(win, new T.PlaneGeometry(1300, 900), new T.MeshBasicMaterial({ map: viewT, toneMapped: false }), 0, 0, -30, false); const fr = M('#fbf7ee');
+      for (const sx of [-1, 1]) { const cur = new T.PlaneGeometry(260, 1100, 30, 1), cp = cur.attributes.position; for (let i = 0; i < cp.count; i++) cp.setZ(i, Math.sin(cp.getX(i) * 0.09) * 14); cur.computeVertexNormals(); add(win, cur, M('#f6efe0', { side: T.DoubleSide, roughness: 1 }), sx * 760, -20, 40); }
       for (const x of [-650, 0, 650]) add(win, rbox(40, 960, 40, 8), fr, x, 0, 10); for (const y of [-450, 0, 450]) add(win, rbox(1340, 40, 40, 8), fr, 0, y, 10);
       win.position.set(-300, 760, -1270); g.add(win);
       const sunbeam = new T.Mesh(new T.PlaneGeometry(900, 2600), new T.MeshBasicMaterial({ color: '#fff3d0', transparent: true, opacity: 0.12, depthWrite: false })); sunbeam.position.set(-200, 200, -600); sunbeam.rotation.z = 0.6; g.add(sunbeam);
@@ -252,7 +400,7 @@
       mainSlab(g, m, asphalt, texMat(TEX.asphalt(), { color: '#9a9aa2' }), 320, 60, 8);
       const chalk = TEX.chalk(); const cm = new T.MeshStandardMaterial({ map: chalk.map, transparent: true, roughness: 1, depthWrite: false }); const ch = add(g, new T.PlaneGeometry(m.x2 - m.x1 - 20, 200), cm, 0, 0.6, 10, false); ch.rotation.x = -Math.PI / 2;
       // lawn, kerb and the house
-      const grass = texMat(TEX.grass(), { roughness: 1 }); const lawn = add(g, new T.PlaneGeometry(12000, 7000), grass, 0, -6, -1500, false); lawn.rotation.x = -Math.PI / 2;
+      const grass = texMat(TEX.grass(), { roughness: 1 }); const lawn = add(g, new T.PlaneGeometry(12000, 7000), grass, 0, -8, -1500, false); lawn.rotation.x = -Math.PI / 2;
       const brick = texMat(TEX.brick(), { bumpScale: 3 });
       add(g, rbox(3000, 1100, 80, 6), brick, 0, 520, -1400);
       const door = add(g, rbox(1100, 720, 30, 12), M('#f2f2ee', { roughness: 0.5 }), 0, 360, -1350); for (let k = 1; k < 6; k++) add(g, rbox(1100, 6, 8, 3), M('#cfcfc9'), 0, k * 120, -1332);
@@ -265,8 +413,10 @@
       world.cones = cones;
       // hedges, trees and the street beyond
       const hedge = M('#3f8f45', { roughness: 1 }), hedge2 = M('#57a85a', { roughness: 1 });
-      for (let k = 0; k < 14; k++) { const b = softBlob(120 + (k % 3) * 30, k % 2 ? hedge : hedge2, -2200 + k * 340, 60, -1150 + (k % 2) * 40, 1.2, 0.85, 1); if (Math.abs(-2200 + k * 340) > 600) g.add(b); }
-      prop(g, 'oaktree', -2300, -10, -1500, 1300, 1.2, 0); prop(g, 'oaktree', 2400, -10, -1600, 1250, 3.1, 0);
+      for (let k = 0; k < 14; k++) { const x = -2200 + k * 340; if (Math.abs(x) > 600) canopy(g, x, 80, -1150 + (k % 2) * 40, 170, 120, 130, ['#1f4d22', '#3b8a3c', '#86c25a'], 220, 70, 'hedge'); }
+      grassField(g, -2600, 2600, 190, 320, 2600, -8, 11); grassField(g, -2600, 2600, -1150, -185, 7000, -8, 17);
+      const kerb = M('#c9c5bb', { roughness: 0.9 }); add(g, rbox(m.x2 - m.x1 + 40, 16, 22, 5), kerb, 0, -2, 171); add(g, rbox(m.x2 - m.x1 + 40, 16, 22, 5), kerb, 0, -2, -171);
+      tree(g, -2300, -10, -1700, 1300, 70, ['#5a4a1e', '#a0782e', '#ffc25a'], 200); tree(g, 2400, -10, -1800, 1250, 70, ['#3d5a22', '#7c9a3a', '#e0c060'], 200);
       const ball = add(g, new T.SphereGeometry(36, 24, 18), M('#ff7a1e', { roughness: 0.6 }), m.x1 + 160, 36, -120); world.ball = { o: ball, x: m.x1 + 160, vx: 0, vy: 0, y: 36, spin: 0, min: m.x1 + 40, max: m.x2 - 40 };
       // fireflies come out at dusk
       particles(g, 18, 0, () => { const o = new T.Mesh(new T.SphereGeometry(3, 6, 4), G2('#fff59a', 2.5)); o.position.set(R(-1400, 1400), R(80, 600), R(-1100, -300)); return { o, kind: 'fly', ph: R(0, TAU), base: o.position.clone() }; });
@@ -277,7 +427,11 @@
       lights({ sun: '#ffe2c4', sunI: 2.4, sunPos: [-700, 1000, 700], sky: '#b8b4ff', ground: '#4a3050', hemiI: 1.1, rim: '#9fb4ff', rimI: 1.8, exposure: 1.15 });
       g.add(skyDome('#0b1035', '#1d2466', '#2a1f4a')); api.scene.fog = new T.Fog('#1d2060', 2200, 7000);
       const quilt = TEX.quilt();
-      const mat = mainSlab(g, m, texMat(quilt, { roughness: 0.95, bumpScale: 4 }), texMat(TEX.quilt(), { roughness: 0.95 }), 300, 90, 26);
+      const side = texMat(TEX.quilt(), { roughness: 0.95 });
+      mainSlab(g, m, side, side, 290, 80, 24).position.y = -62;
+      const qt = TEX.quilt(); qt.rep = [(m.x2 - m.x1) / 256, 300 / 256]; const topM = texMat(qt, { roughness: 0.95, bumpScale: 3 });
+      const qtop = tuftedTop(m.x2 - m.x1 + 4, 300, 64, topM); qtop.position.set((m.x1 + m.x2) / 2, 0, 0); qtop.receiveShadow = true; qtop.castShadow = true; g.add(qtop);
+      // (no piping: the quilt rolls straight into the mattress)
       // pillow platforms (soft, they squash when you land)
       world.platMat = M('#f6efe4', { roughness: 1 });
       // the bunk bed frame around the fight, the top bunk above
@@ -313,6 +467,7 @@
     build(st, a) {
       api = a; T = window.THREE; rnd.seed(7 + st.main.x2);
       world = { theme: st.theme, wobblers: [], sway: [], drift: [], particles: [], birds: [], fairy: [], cones: [], ball: null, toast: null, platMat: null, squash: new Map(), mem: new WeakMap(), flash: 0, t: 0 };
+      a.scene.environment = a.envTex || null;
       const g = new T.Group(); BUILD[st.theme](g, st); a.stageGroup.add(g);
       document.getElementById('sky').style.background = '#000';
       return world;
@@ -320,19 +475,25 @@
     // a platform to stand on, matching the world
     plat(st, p) {
       const pw = p.x2 - p.x1;
-      if (st.theme === 'bedroom') { const g = new T.Group(); const pil = add(g, rbox(pw, 40, 110, 19), world.platMat, 0, -20, 0); world.squash.set(g, { o: pil, s: 0, v: 0 }); return g; }
+      if (st.theme === 'bedroom') { const g = new T.Group(); const pil = add(g, pillowGeo(pw + 10, 46, 120), world.platMat, 0, 0, 0); world.squash.set(g, { o: pil, s: 0, v: 0 }); return g; }
       const top = st.theme === 'kitchen' ? texMat(TEX.planks('#c98d55')) : st.theme === 'driveway' ? M('#9aa0aa') : texMat(TEX.planks('#b98552'));
       const side = st.theme === 'kitchen' ? M('#8a5a34') : texMat(TEX.planks('#7a5232'));
       const g = platMesh(pw, top, side, 16, 120, 6);
       if (st.theme === 'kitchen') { // a floating serving tray with handles
         for (const sx of [-1, 1]) add(g, new T.TorusGeometry(14, 4, 8, 16, Math.PI), M('#c9ced6', { metalness: 0.7, roughness: 0.3 }), sx * (pw / 2 + 4), -4, 0).rotation.z = sx * Math.PI / 2;
       }
-      if (st.theme === 'treehouse') { const rope = M('#d8b47a', { roughness: 1 }); for (const sx of [-1, 1]) add(g, new T.CylinderGeometry(2, 2, 600, 6), rope, sx * (pw / 2 - 10), 300, 0); } // hanging from the branches
+      if (st.theme === 'treehouse') { // a swing made of planks, hanging from the branches on ropes
+        g.clear(); const pm = texMat(TEX.planks('#b98552'), { bumpScale: 1.5 }); const inner = new T.Group(); g.add(inner);
+        for (let k = 0; k < 4; k++) { const pl = add(inner, rbox(pw - R(0, 14), 12, 27, 3), pm, R(-4, 4), -6, -45 + k * 30); pl.material = pm; }
+        for (const sx of [-1, 1]) add(inner, rbox(24, 14, 130, 3), texMat(TEX.planks('#6d4529')), sx * (pw / 2 - 30), -18, 0);
+        const rope = M('#d8b47a', { roughness: 1 }); for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(inner, new T.CylinderGeometry(2.2, 2.2, 640, 6), rope, sx * (pw / 2 - 12), 318, sz * 50);
+        world.squash.set(g, { o: inner, s: 0, v: 0 }); return g;
+      }
       world.squash.set(g, { o: g.children[0], s: 0, v: 0 });
       return g;
     },
     update(a) {
-      if (!world) return; const t = ++world.t, F = (window.G && G.fighters) || [];
+      if (!world) return; WIND.value = world.t / 60; const t = ++world.t, F = (window.G && G.fighters) || [];
       // react to the fight: big launches and landings shake nearby scenery, ring-outs shake everything
       let shock = 0;
       for (const f of F) {
