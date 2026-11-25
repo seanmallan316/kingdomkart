@@ -67,6 +67,11 @@ off-screen. A bottom card for each player shows damage % (white → yellow → r
 Overdrive meter. Screens: Title → Fighter select (P1–P4: Player / CPU / Off, CPU level), stage and stocks → 3-2-1-GO →
 GAME! → results (place, KOs, falls, damage dealt).
 
+## Heights
+Each family fighter's size (`def.scale` in game.js) follows their real height at 0.2 per foot: Layne 6'6" (1.30),
+Tyler 5'10" (1.167), Dad 5'9" (1.15), Mom 5'8" (1.133), Jayson 5'8" (1.133), Violet 5.3' (1.06), Norah 4.5' (0.90),
+Ray and Ollie 3.5' (0.70). Hurtboxes, reach and the 3D models all scale with it, so taller fighters are bigger targets.
+
 ## Game feel
 Hitstop, camera shake scaled to knockback, hit sparks, smoke on landings and dashes, a smoke trail while flying, a white
 flash on hits strong enough to KO, a blast burst on KO, and synth sound effects (Web Audio).

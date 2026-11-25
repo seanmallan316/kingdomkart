@@ -354,47 +354,47 @@ const FIGHTERS = [
   {
     id: 'ray', name: 'RAY', blurb: 'Small and floaty. Five jumps, clog toss, cannonball.', color: '#2f55e8', dark: '#27304a', accent: '#2fc4c0', acc: 'kid',
     weight: 76, walk: 3.6, run: 7.4, air: 4.6, airAcc: 0.5, grav: 0.33, fall: 5.4, ff: 8.6, jump: 11.0, hop: 7.0, djump: 8.6, jumps: 5,
-    scale: 0.8, power: 0.9, speed: 0.92, reach: 0.95, sp: { n: 'clogToss', s: 'cannonball', u: 'hop', d: 'quake' },
+    scale: 0.700, power: 0.9, speed: 0.92, reach: 0.95, sp: { n: 'clogToss', s: 'cannonball', u: 'hop', d: 'quake' },
   },
   {
     id: 'norah', name: 'NORAH', blurb: 'The fastest runner. Sparkle dash, star toss, dive kick.', color: '#f08bb4', dark: '#a65fe0', accent: '#ff6ad5', acc: 'kid', trail: ['#ff6ad5', '#a65fe0'],
     weight: 88, walk: 4.6, run: 11.6, air: 5.2, airAcc: 0.55, grav: 0.48, fall: 7.4, ff: 10.8, jump: 12.4, hop: 7.8, djump: 11.8, jumps: 2,
-    scale: 0.93, power: 0.9, speed: 0.88, reach: 1.0, sp: { n: 'starToss', s: 'sparkleDash', u: 'rocket', d: 'diveKick' },
+    scale: 0.900, power: 0.9, speed: 0.88, reach: 1.0, sp: { n: 'starToss', s: 'sparkleDash', u: 'rocket', d: 'diveKick' },
   },
   {
     id: 'ollie', name: 'OLLIE', blurb: 'Lightning-fast foam sword. Five jumps, whirl, counter.', color: '#e3271d', dark: '#5d7fb3', accent: '#ffd23f', acc: 'kid',
     weight: 79, walk: 4.3, run: 9.4, air: 4.9, airAcc: 0.6, grav: 0.5, fall: 7.6, ff: 11, jump: 12.2, hop: 7.8, djump: 8.8, jumps: 5,
-    scale: 0.78, power: 0.86, speed: 0.82, reach: 1.2, sp: { n: 'whirl', s: 'dashStrike', u: 'spiral', d: 'counter' },
+    scale: 0.700, power: 0.86, speed: 0.82, reach: 1.2, sp: { n: 'whirl', s: 'dashStrike', u: 'spiral', d: 'counter' },
   },
   {
     id: 'tyler', name: 'TYLER', blurb: 'Strong all-rounder. Charge punch, dash strike, counter.', color: '#4a6fd6', dark: '#2c3f66', accent: '#9fd0ff', acc: 'kid',
     weight: 106, walk: 4.0, run: 8.6, air: 4.7, airAcc: 0.5, grav: 0.46, fall: 7.2, ff: 10.2, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
-    scale: 1.1, power: 1.08, speed: 1.0, reach: 1.08, sp: { n: 'chargePunch', s: 'dashStrike', u: 'rocket', d: 'counter' },
+    scale: 1.167, power: 1.08, speed: 1.0, reach: 1.08, sp: { n: 'chargePunch', s: 'dashStrike', u: 'rocket', d: 'counter' },
   },
   {
     id: 'violet', name: 'VIOLET', blurb: 'Quick and graceful. Blaster, dash, teleport, counter.', color: '#9b6bff', dark: '#4b3d6b', accent: '#e3c8ff', acc: 'kid',
     weight: 92, walk: 4.3, run: 9.0, air: 5.2, airAcc: 0.56, grav: 0.42, fall: 6.8, ff: 9.8, jump: 12.4, hop: 7.8, djump: 12.0, jumps: 2,
-    scale: 1.02, power: 0.96, speed: 0.9, reach: 1.02, sp: { n: 'blaster', s: 'dashStrike', u: 'teleport', d: 'counter' },
+    scale: 1.060, power: 0.96, speed: 0.9, reach: 1.02, sp: { n: 'blaster', s: 'dashStrike', u: 'teleport', d: 'counter' },
   },
   {
     id: 'layne', name: 'LAYNE', blurb: 'Heavy bruiser. Charge punch, armoured charge, quake.', color: '#3f5f9e', dark: '#1d2740', accent: '#ffd27a', acc: 'kid',
     weight: 124, walk: 3.5, run: 7.4, air: 4.1, airAcc: 0.42, grav: 0.53, fall: 8.0, ff: 11.2, jump: 12.8, hop: 8.2, djump: 12.4, jumps: 2,
-    scale: 1.12, power: 1.14, speed: 1.1, reach: 1.06, sp: { n: 'chargePunch', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
+    scale: 1.300, power: 1.14, speed: 1.1, reach: 1.06, sp: { n: 'chargePunch', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
   },
   {
     id: 'dad', name: 'DAD', blurb: 'The powerhouse. Shockwave, armoured charge, quake.', color: '#5a6072', dark: '#2a3a5c', accent: '#ffb347', acc: 'kid',
     weight: 132, walk: 3.6, run: 7.6, air: 4.1, airAcc: 0.42, grav: 0.54, fall: 8.2, ff: 11.4, jump: 13.0, hop: 8.3, djump: 12.6, jumps: 2,
-    scale: 1.16, power: 1.2, speed: 1.12, reach: 1.08, sp: { n: 'waveSlash', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
+    scale: 1.150, power: 1.2, speed: 1.12, reach: 1.08, sp: { n: 'waveSlash', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
   },
   {
     id: 'mom', name: 'MOM', blurb: 'Sharp and technical. Charge shot, bombs, counter.', color: '#b9783f', dark: '#2f4468', accent: '#ffe0a8', acc: 'kid',
     weight: 94, walk: 4.1, run: 8.4, air: 4.9, airAcc: 0.54, grav: 0.43, fall: 6.9, ff: 9.9, jump: 12.2, hop: 7.7, djump: 11.8, jumps: 2,
-    scale: 1.01, power: 1.0, speed: 0.94, reach: 1.0, sp: { n: 'chargeShot', s: 'bomb', u: 'rocket', d: 'counter' },
+    scale: 1.133, power: 1.0, speed: 0.94, reach: 1.0, sp: { n: 'chargeShot', s: 'bomb', u: 'rocket', d: 'counter' },
   },
   {
     id: 'jayson', name: 'JAYSON', blurb: 'Fast, agile brawler. Blaster, cannonball, dive kick.', color: '#8fa0b8', dark: '#20242e', accent: '#ff7a6b', acc: 'kid',
     weight: 98, walk: 4.3, run: 9.2, air: 5.0, airAcc: 0.56, grav: 0.46, fall: 7.2, ff: 10.4, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
-    scale: 1.06, power: 1.0, speed: 0.92, reach: 1.04, sp: { n: 'blaster', s: 'cannonball', u: 'rocket', d: 'diveKick' },
+    scale: 1.133, power: 1.0, speed: 0.92, reach: 1.04, sp: { n: 'blaster', s: 'cannonball', u: 'rocket', d: 'diveKick' },
   },
   {
     id: 'vex', name: 'VEX', blurb: 'Light and fast. Triple jump, dive kick.', color: '#38d6ff', dark: '#0d5874', accent: '#fff36b', acc: 'scarf',
@@ -419,6 +419,7 @@ const FIGHTERS = [
 ];
 
 // Fighters are drawn and simulated larger than the first prototype so they read clearly on screen.
+// def.scale follows each family member's real height (0.2 per foot): Layne 6'6" 1.3, Tyler 5'10" 1.167, Dad 5'9" 1.15, Mom and Jayson 5'8" 1.133, Violet 5.3' 1.06, Norah 4.5' 0.9, Ray and Ollie 3.5' 0.7
 const FIGHTER_SIZE = 1.9;
 for (const d of FIGHTERS) d.scale *= FIGHTER_SIZE;
 
