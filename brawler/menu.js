@@ -13,9 +13,13 @@
   function setScene(id, extra) {
     sceneId = id; sceneExtra = extra || null; if (!has3D()) return;
     const c = cast(), wide = innerWidth > innerHeight * 1.2;
-    if (id === 'title') R3.menuSet(KIDS.map((k, i) => ({ id: k, x: (i - 4) * 82, z: (i % 2) * -55, face: (4 - i) * 0.07 })), { x: 0, y: 118, d: wide ? 1040 : 1700, lx: 0, ly: wide ? 96 : 60 });
-    else if (id === 'hub' || id === 'options') R3.menuSet([{ id: hero, x: 122, face: -0.4, scale: 1.12 }, { id: c.sib1, x: 222, z: -95, face: -0.55 }, { id: c.sib2, x: 28, z: -115, face: -0.15 }],
-      wide ? { x: -30, y: 92, d: 520, lx: -30, ly: 60 } : { x: 120, y: 100, d: 820, lx: 120, ly: 20 });
+    if (id === 'title' && wide) R3.menuSet(KIDS.map((k, i) => ({ id: k, x: (i - 4) * 82, z: (i % 2) * -55, face: (4 - i) * 0.07 })), { x: 0, y: 118, d: 1040, lx: 0, ly: 96 });
+    else if (id === 'title') R3.menuSet(KIDS.map((k, i) => (i < 5 ? { id: k, x: (i - 2) * 86, z: 45, face: (2 - i) * 0.1 } : { id: k, x: (i - 6.5) * 92, z: -70, face: (6.5 - i) * 0.1, scale: 1.05 })), { x: 0, y: 270, d: 2150, lx: 0, ly: 215 });  // portrait: two rows
+    else if ((id === 'hub' || id === 'options') && wide) R3.menuSet([{ id: hero, x: 122, face: -0.4, scale: 1.12 }, { id: c.sib1, x: 222, z: -95, face: -0.55 }, { id: c.sib2, x: 28, z: -115, face: -0.15 }], { x: -30, y: 92, d: 520, lx: -30, ly: 60 });
+    else if (id === 'hub' || id === 'options') { // portrait: the family lined up in the ring under the tiles
+      const i0 = KIDS.indexOf(hero), five = [-2, -1, 0, 1, 2].map(o => KIDS[(i0 + o + KIDS.length) % KIDS.length]);
+      R3.menuSet(five.map((k, i) => ({ id: k, x: (i - 2) * 88, z: i === 2 ? 30 : -20, face: (2 - i) * 0.12, scale: i === 2 ? 1.18 : 1 })), { x: 0, y: 330, d: 1750, lx: 0, ly: 300 });
+    }
     else if (id === 'select') R3.menuSet(cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off').map(o => ({ key: 'slot' + o.i, id: FIGHTERS[o.s.fighter].id, x: (o.i - 1.5) * 128, face: (1.5 - o.i) * 0.16, once: extra === o.i ? 'jab' : null })),
       { x: 0, y: 62, d: wide ? 780 : 1250, lx: 0, ly: wide ? -78 : -120 });
     else if (id === 'story') {
@@ -25,7 +29,37 @@
       R3.menuSet(list, { x: 0, y: 66, d: wide ? 660 : 1050, lx: 0, ly: wide ? -62 : -110 });
     } else if (id === 'results' && extra) R3.menuSet([{ key: 'win', id: extra, x: 0, face: 0.15, scale: 1.15, once: 'victory' }], { x: 0, y: 84, d: wide ? 520 : 820, lx: 0, ly: wide ? 4 : -30 });
   }
-  window.refreshMenuScene = () => setScene(sceneId, sceneExtra);
+  window.refreshMenuScene = () => { setScene(sceneId, sceneExtra); tileArt(); };
+  // tile artwork drawn from the real fighters: the hero on Story, two family silhouettes on Versus
+  function tileArt() {
+    if (typeof R3 === 'undefined') return; const c = cast();
+    const put = (sel, id) => { const cv = document.querySelector(sel); if (cv) R3.portrait(cv, FIGHTERS[idx(id)]); };
+    put('.art.hero', hero); put('.art.sil.a', c.sib1); put('.art.sil.b', c.sib2);
+  }
+  // arena atmosphere over the 3D scene: rows of stadium lights, sweeping coloured beams and drifting sparkles
+  const sparks = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), s: 0.6 + Math.random() * 2.2, v: 0.0004 + Math.random() * 0.0012, p: Math.random() * 6.28, h: [45, 320, 190, 270, 30][Math.floor(Math.random() * 5)] }));
+  const baseBg = drawMenuBg; let bgT = 0;
+  drawMenuBg = function () {
+    baseBg(); if (G.mode === 'fight') return; bgT++;
+    const W = VW, H = VH, horizon = H * 0.86;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    [[0.12, '#ff5ea8'], [0.34, '#7a5cff'], [0.66, '#6cf0ff'], [0.88, '#ffb347']].forEach(([px, col], i) => { // beams from the ring
+      const sway = Math.sin(bgT * 0.008 + i * 1.7) * 0.22, x0 = W * px, len = H * 0.75, a = -Math.PI / 2 + sway + (px - 0.5) * -0.5;
+      const g = ctx.createLinearGradient(x0, horizon, x0 + Math.cos(a) * len, horizon + Math.sin(a) * len); g.addColorStop(0, col + '66'); g.addColorStop(1, col + '00');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0 - 8, horizon); ctx.lineTo(x0 + Math.cos(a - 0.11) * len, horizon + Math.sin(a - 0.11) * len); ctx.lineTo(x0 + Math.cos(a + 0.11) * len, horizon + Math.sin(a + 0.11) * len); ctx.lineTo(x0 + 8, horizon); ctx.fill();
+    });
+    for (const side of [0, 1]) for (let r = 0; r < 3; r++) for (let k = 0; k < 6; k++) { // stadium light banks, top corners
+      const x = side ? W - 14 - k * 20 - r * 6 : 14 + k * 20 + r * 6, y = H * 0.2 + r * 22 + k * 5, tw = 0.45 + 0.35 * Math.sin(bgT * 0.05 + k + r * 2 + side);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 13); g.addColorStop(0, 'rgba(255,255,255,' + tw + ')'); g.addColorStop(1, 'rgba(180,200,255,0)'); ctx.fillStyle = g; ctx.fillRect(x - 13, y - 13, 26, 26);
+    }
+    for (const s of sparks) { // sparkles drifting up
+      s.y -= s.v; if (s.y < -0.02) { s.y = 1.02; s.x = Math.random(); }
+      const a = 0.35 + 0.65 * Math.abs(Math.sin(bgT * 0.04 + s.p)), x = s.x * W + Math.sin(bgT * 0.01 + s.p) * 12, y = s.y * H;
+      ctx.fillStyle = 'hsla(' + s.h + ',100%,75%,' + a + ')'; ctx.beginPath(); ctx.arc(x, y, s.s, 0, 6.283); ctx.fill();
+      if (s.s > 2) { ctx.fillStyle = 'hsla(' + s.h + ',100%,85%,' + a * 0.5 + ')'; ctx.fillRect(x - s.s * 3, y - 0.5, s.s * 6, 1); ctx.fillRect(x - 0.5, y - s.s * 3, 1, s.s * 6); }
+    }
+    ctx.restore();
+  };
   addEventListener('resize', () => { if (G.mode !== 'fight') setScene(sceneId, sceneExtra); });
   const voiceOf = id => { const d = FIGHTERS.find(f => f.id === id); if (d && Sfx.voice) Sfx.voice({ def: d, port: 9 }, 'atk1', true); };
   function react(key, clip, speak) { if (!has3D()) return; const id = R3.menuReact(key, clip || REACT[Math.floor(Math.random() * REACT.length)]); if (id && speak) voiceOf(id); }
@@ -119,7 +153,7 @@
     G.mode = 'title'; G.paused = false;
     const p = prog(), best = Math.max(0, ...KIDS.map(k => p[k] || 0));
     el('storyProg').textContent = best >= CHAPTERS.length ? 'COMPLETE' : best ? `CHAPTER ${best + 1} OF ${CHAPTERS.length}` : 'NEW';
-    showScreen('hub'); const t = document.querySelector('#hub .tile'); if (t) t.focus({ preventScroll: true });
+    showScreen('hub'); tileArt(); const t = document.querySelector('#hub .tile'); if (t) t.focus({ preventScroll: true });
   }
   el('hub').addEventListener('click', e => {
     const b = e.target.closest('.tile'); if (!b) return; Sfx.init(); Sfx.blip();

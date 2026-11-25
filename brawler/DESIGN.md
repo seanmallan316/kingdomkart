@@ -168,3 +168,13 @@ The menus sit over a live 3D scene (`R3.menuSet` / `menuRender` in `render3d.js`
   speed, power, weight and air-jump bars.
 - **Story:** your hero faces the chapter's opponents. **Results:** the winner celebrates.
 A short-screen layout (under 520 px tall) keeps everything on screen on a phone held sideways.
+
+## Arena menu look
+- **Logo:** an original Super Family Smash logo built in CSS (stacked italic lettering, gold-to-red gradient, a swoosh
+  underline and a spinning star). It deliberately does not imitate any existing game's logo.
+- **Tiles:** glass-style tiles with an inner highlight and a coloured glow. Story shows the current hero, Versus shows
+  silhouettes of two family fighters; both are drawn from the real 3D models (`tileArt` in `menu.js`).
+- **Arena:** a ring with corner posts and glowing ropes at the back and sides (`render3d.js`), plus stadium light banks,
+  sweeping coloured beams and drifting sparkles drawn over the scene (`drawMenuBg` in `menu.js`).
+- **Portrait phones:** logo, then tiles in two columns, with five of the family in the ring along the bottom; the title
+  screen shows all nine in two rows.

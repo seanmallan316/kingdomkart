@@ -507,7 +507,16 @@ const R3 = (() => {
   // list: [{ key, id, x, z, face, scale, once }]; cam: { x, y, d, lx, ly } eased toward
   function menuSet(list, cam) {
     if (!init()) return;
-    if (!menuGroup) { menuGroup = new THREE.Group(); scene.add(menuGroup); }
+    if (!menuGroup) {
+      menuGroup = new THREE.Group(); scene.add(menuGroup);
+      // a boxing-style ring around the stage: corner posts and three glowing ropes on each side
+      const post = std('#2a2f55', { metalness: 0.4, roughness: 0.4 }), cols = ['#ff5ea8', '#b48cff', '#6cc8ff'];
+      const X = 330, Z = 105;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const p = mesh(new THREE.CylinderGeometry(6, 7, 96, 10), post, sx * X, 48, sz * Z); menuGroup.add(p); menuGroup.add(sphere(9, std('#ffd23f', { emissive: '#ffb347', emissiveIntensity: 0.7 }), sx * X, 100, sz * Z)); }
+      cols.forEach((c, i) => { const m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.9 }), y = 34 + i * 26;
+        { const r = mesh(new THREE.CylinderGeometry(1.8, 1.8, X * 2, 6), m, 0, y, -Z); r.rotation.z = Math.PI / 2; r.castShadow = false; menuGroup.add(r); }
+        for (const sx of [-1, 1]) { const r = mesh(new THREE.CylinderGeometry(1.8, 1.8, Z * 2, 6), m, sx * X, y, 0); r.rotation.x = Math.PI / 2; r.castShadow = false; menuGroup.add(r); } });
+    }
     if (!stageGroup.children.length) buildStage(STAGES.skyforge, []);
     const want = new Set(list.map(e => e.key || e.id));
     for (const [k, m] of menuRigs) m.rig.root.visible = want.has(k);
