@@ -88,6 +88,69 @@
     tone(f0, dur, type = 'square', vol = 0.12, f1 = null) { tone(type, f0, f1 || f0, dur, vol); },
     noise(dur, vol, fc = 1200, q = 0.8, fc1 = null) { noise(dur, vol, 'bandpass', fc, fc1 || fc, { q }); },
   });
+
+  // ---- recorded-quality samples (generated to order; see sfx/). Each sound falls back to the synth above
+  // until its sample has decoded, or if decoding is not available.
+  const bufs = {}, synth = Object.assign({}, Sfx);
+  let loading = false;
+  function loadSamples() {
+    const src = window.CLASH_SFX; if (!src || loading || !ctx) return; loading = true;
+    for (const name in src) {
+      try {
+        const str = atob(src[name]), u8 = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) u8[i] = str.charCodeAt(i);
+        const done = b => { bufs[name] = b; Sfx.samplesReady = Object.keys(bufs).length; };
+        const p = ctx.decodeAudioData(u8.buffer, done, () => {}); if (p && p.catch) p.catch(() => {});
+      } catch (e) { /* keep the synth for this one */ }
+    }
+  }
+  function play(name, vol = 1, rate = 1, wet = 0.12) {
+    const b = bufs[name]; if (!b || !ctx) return false;
+    const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = rate;
+    const g = ctx.createGain(); g.gain.value = vol; s.connect(g); g.connect(out);
+    if (wet) { const w = ctx.createGain(); w.gain.value = wet; g.connect(w); w.connect(verb); }
+    s.start(); return true;
+  }
+  const vary = a => 1 + (Math.random() * 2 - 1) * a;
+  // one(name, sample, volume, pitch variation, reverb, minimum gap in ms)
+  const one = (key, sample, vol, v = 0.05, wet = 0.12, gap = 0) => function () {
+    if (!bufs[sample]) return synth[key].apply(Sfx, arguments);
+    if (gap && !gate('s:' + key, gap)) return;
+    play(sample, vol, vary(v), wet);
+  };
+  Object.assign(Sfx, {
+    samplesReady: 0,
+    init() { init(); loadSamples(); },
+    hit(d) {
+      const k = Math.min(d, 28) / 28, name = k < 0.3 ? 'hit1' : k < 0.62 ? 'hit2' : 'hit3';
+      if (!bufs[name]) return synth.hit(d);
+      if (!gate('s:hit', 28)) return;
+      play(name, 0.5 + k * 0.5, vary(0.07), 0.1 + k * 0.2);
+    },
+    bigHit: one('bigHit', 'finisher', 1.0, 0.02, 0.3),
+    swing(power = 0.4) { const n = power > 0.6 ? 'swingHeavy' : 'swing'; if (!bufs[n]) return synth.swing(power); if (!gate('s:sw', 60)) return; play(n, 0.3 + power * 0.25, vary(0.1), 0.05); },
+    blade: one('blade', 'blade', 0.42, 0.1, 0.1, 60),
+    jump: one('jump', 'jump', 0.4, 0.06, 0.05),
+    djump: one('djump', 'djump', 0.45, 0.06, 0.15),
+    land(h = 0.3) { if (!bufs.land) return synth.land(h); if (!gate('s:ld', 70)) return; play('land', 0.28 + h * 0.4, vary(0.08), 0.05); },
+    step: one('step', 'step', 0.2, 0.14, 0, 90),
+    dash: one('dash', 'dash', 0.38, 0.06, 0.05, 120),
+    shield: one('shield', 'shield', 0.42, 0.04, 0.15, 120),
+    shieldHit: one('shieldHit', 'shieldHit', 0.6, 0.06, 0.15, 60),
+    parry: one('parry', 'parry', 0.85, 0.02, 0.35),
+    shieldBreak: one('shieldBreak', 'shieldBreak', 0.9, 0.02, 0.3),
+    zap: one('zap', 'zap', 0.42, 0.08, 0.1, 60),
+    charge(k) { if (!bufs.charge) return synth.charge(k); if (!gate('s:ch', 950)) return; play('charge', 0.4, 0.9 + k * 0.3, 0.1); },
+    boom() { if (!bufs.hit3) return synth.boom(); if (!gate('s:bm', 80)) return; play('hit3', 0.85, 0.72, 0.3); },
+    ko: one('ko', 'ko', 1.0, 0.02, 0.3),
+    grab: one('grab', 'grab', 0.5, 0.06, 0.05),
+    throw_: one('throw_', 'swingHeavy', 0.5, 0.06, 0.05),
+    blip: one('blip', 'blip', 0.4, 0.03, 0, 40),
+    count: one('count', 'count', 0.6, 0, 0.2),
+    go: one('go', 'go', 0.85, 0, 0.2),
+    game: one('game', 'game', 0.95, 0, 0.35),
+    od: one('od', 'od', 0.85, 0.02, 0.3),
+    tech: one('tech', 'djump', 0.4, 0.02, 0.1),
+  });
 })();
 
 // ================================================================ VISUALS

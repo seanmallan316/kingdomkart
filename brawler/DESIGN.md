@@ -142,3 +142,12 @@ Original effects and sound; nothing is sampled from another game.
 
 Tyler and Jayson were built from their front photo only, because their photos mixed outfits; the brand logo on Jayson's
 T-shirt was removed first. Vex, Brick, Nova and Kai stay as the story's Shadow Squad. Any family member can be the story hero.
+
+## Recorded-quality sound (`sfx/`, `sfx.js`)
+25 sound effects generated to order with ElevenLabs text-to-sound (about 17 credits each), so they are original to this
+game: three weights of hit, finisher, two swings, blade, jump, double jump, land, footstep, dash, shield on, shield hit,
+parry, shield break, energy shot, charge, KO, grab, countdown, GO, GAME, menu click, Overdrive.
+Each was trimmed of leading silence, cut to length, faded out and levelled to the same loudness with ffmpeg, then saved
+as an 80 kbps mono MP3. `tools/build_sfx.py` packs them into `sfx.js`. `fx.js` plays the sample with a little random
+pitch and falls back to the old synthesized sound if a sample has not decoded. The per-sound volumes are in `fx.js`.
+The camera now frames the fighters closely (zoom up to 2.3x) and the HUD shrinks on short screens.
