@@ -1414,7 +1414,7 @@ function w2s(x, y) { const s = camScale(); return { x: (x - G.cam.x) * s + VW / 
 
 function render() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  if (G.mode !== 'fight' || !G.stage) { R3.show(false); drawMenuBg(); return; }
+  if (G.mode !== 'fight' || !G.stage) { drawMenuBg(); if (!R3.menuRender()) R3.show(false); return; }
   updateCam();
   const sh = G.shake, shx = rand(-sh, sh), shy = rand(-sh, sh);
   R3.show(true);
@@ -1437,8 +1437,8 @@ function render() {
 }
 
 function drawMenuBg() {
-  const g = ctx.createLinearGradient(0, 0, 0, VH); g.addColorStop(0, '#141a33'); g.addColorStop(1, '#0c0f1a');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+  // the menus sit over a live 3D scene, so the overlay canvas only needs clearing
+  ctx.clearRect(0, 0, VW, VH);
 }
 function drawRespawnPlat(f) {
   ctx.save(); ctx.translate(f.x, f.y);
@@ -1667,7 +1667,7 @@ function buildSelect() {
     const d = FIGHTERS[s.fighter];
     const el = document.createElement('div'); el.className = 'slot' + (s.type === 'off' ? ' off' : '');
     el.innerHTML = `<div class="tag" style="background:${PORT_COLORS[i]}">P${i + 1}</div>
-      <canvas width="200" height="120"></canvas>
+      <div class="stats">${[['SPEED', d.run / 11.6], ['POWER', (d.power - 0.8) / 0.45], ['WEIGHT', (d.weight - 70) / 65], ['AIR', d.jumps / 5]].map(([n, v]) => `<span>${n}</span><i><b style="width:${Math.round(clamp(v, 0.1, 1) * 100)}%;background:${d.color}"></b></i>`).join('')}</div>
       <div class="row"><button data-a="prev">◀</button><div class="nm" style="color:${d.color};min-width:90px">${d.name}</div><button data-a="next">▶</button></div>
       <div class="ds">${d.blurb}</div>
       <div class="row">${['human', 'cpu', 'off'].map(t => `<button data-t="${t}" class="${s.type === t ? 'on' : ''}">${t === 'human' ? 'PLAYER' : t.toUpperCase()}</button>`).join('')}</div>
@@ -1682,7 +1682,6 @@ function buildSelect() {
       buildSelect();
     };
     wrap.appendChild(el);
-    drawPortrait(el.querySelector('canvas'), d);
   });
   $('optStage').innerHTML = Object.entries(STAGES).map(([k, v]) => `<button data-s="${k}" class="${cfg.stage === k ? 'on' : ''}">${v.name}</button>`).join('');
   $('optStock').innerHTML = [1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${cfg.stocks === n ? 'on' : ''}">${n}</button>`).join('');
@@ -1757,7 +1756,7 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 // scanned family models load in the background; fighters use the simple shapes until they are ready
-if (typeof R3 !== 'undefined') R3.loadModels(() => { G.modelsReady = true; if (document.getElementById('select').classList.contains('on')) buildSelect(); if (G.mode === 'fight') R3.resetRigs(); });
+if (typeof R3 !== 'undefined') R3.loadModels(() => { G.modelsReady = true; if (typeof refreshMenuScene === 'function') refreshMenuScene(); if (document.getElementById('select').classList.contains('on')) buildSelect(); if (G.mode === 'fight') R3.resetRigs(); });
 
 // test hooks
 window.__clash = { G, startMatch, step, FIGHTERS, STAGES, cfg };

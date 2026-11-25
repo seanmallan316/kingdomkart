@@ -6,6 +6,35 @@
   const idx = id => FIGHTERS.findIndex(f => f.id === id);
   const KIDS = ['ray', 'norah', 'ollie', 'tyler', 'violet', 'layne', 'jayson', 'mom', 'dad'];
 
+  // ---------------------------------------------------------------- live 3D scene behind each menu
+  const has3D = () => typeof R3 !== 'undefined' && R3.menuSet;
+  let sceneId = 'title', sceneExtra = null;
+  const REACT = ['victory', 'jab', 'kick', 'spin', 'upper', 'highkick'];
+  function setScene(id, extra) {
+    sceneId = id; sceneExtra = extra || null; if (!has3D()) return;
+    const c = cast(), wide = innerWidth > innerHeight * 1.2;
+    if (id === 'title') R3.menuSet(KIDS.map((k, i) => ({ id: k, x: (i - 4) * 82, z: (i % 2) * -55, face: (4 - i) * 0.07 })), { x: 0, y: 118, d: wide ? 1040 : 1700, lx: 0, ly: wide ? 96 : 60 });
+    else if (id === 'hub' || id === 'options') R3.menuSet([{ id: hero, x: 122, face: -0.4, scale: 1.12 }, { id: c.sib1, x: 222, z: -95, face: -0.55 }, { id: c.sib2, x: 28, z: -115, face: -0.15 }],
+      wide ? { x: -30, y: 92, d: 520, lx: -30, ly: 60 } : { x: 120, y: 100, d: 820, lx: 120, ly: 20 });
+    else if (id === 'select') R3.menuSet(cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off').map(o => ({ key: 'slot' + o.i, id: FIGHTERS[o.s.fighter].id, x: (o.i - 1.5) * 128, face: (1.5 - o.i) * 0.16, once: extra === o.i ? 'jab' : null })),
+      { x: 0, y: 62, d: wide ? 780 : 1250, lx: 0, ly: wide ? -78 : -120 });
+    else if (id === 'story') {
+      const foes = (extra && extra.foes) || [], ally = extra && extra.ally, list = [{ id: hero, x: foes.length ? -105 : 0, face: foes.length ? 0.85 : 0.2, scale: 1.05 }];
+      if (ally) list.push({ key: 'ally', id: ally, x: -200, z: -70, face: 0.8 });
+      foes.forEach((f, i) => list.push({ key: 'foe' + i, id: f.id, x: 105 + i * 95, z: -i * 60, face: -0.85, scale: f.big ? 1.5 : 1 }));
+      R3.menuSet(list, { x: 0, y: 66, d: wide ? 660 : 1050, lx: 0, ly: wide ? -62 : -110 });
+    } else if (id === 'results' && extra) R3.menuSet([{ key: 'win', id: extra, x: 0, face: 0.15, scale: 1.15, once: 'victory' }], { x: 0, y: 84, d: wide ? 520 : 820, lx: 0, ly: wide ? 4 : -30 });
+  }
+  window.refreshMenuScene = () => setScene(sceneId, sceneExtra);
+  addEventListener('resize', () => { if (G.mode !== 'fight') setScene(sceneId, sceneExtra); });
+  const voiceOf = id => { const d = FIGHTERS.find(f => f.id === id); if (d && Sfx.voice) Sfx.voice({ def: d, port: 9 }, 'atk1', true); };
+  function react(key, clip, speak) { if (!has3D()) return; const id = R3.menuReact(key, clip || REACT[Math.floor(Math.random() * REACT.length)]); if (id && speak) voiceOf(id); }
+  const baseShow = showScreen;
+  showScreen = id => { baseShow(id); if (id && id !== 'pause' && id !== 'story' && id !== 'results') setScene(id); };
+  // the title line-up fidgets on its own, and reacts when you tap the background
+  setInterval(() => { if (G.mode !== 'fight' && sceneId === 'title' && !document.hidden) react(KIDS[Math.floor(Math.random() * KIDS.length)]); }, 2400);
+  el('title').addEventListener('pointerdown', e => { if (e.target.closest('button')) return; Sfx.init(); react(KIDS[Math.floor(Math.random() * KIDS.length)], null, true); });
+
   // ---------------------------------------------------------------- story: The Golden Clog (original)
   // {sib1}/{sib2} are the two siblings the player did not pick.
   const bigBrick = () => Object.assign({}, FIGHTERS[idx('brick')], { id: 'brick', name: 'BIG BRICK', scale: 1.62, weight: 170, power: 1.3, speed: 1.2, run: 6.4, jump: 13.6, djump: 13.2 });
@@ -36,19 +65,18 @@
     const p = prog(), done = Math.min(CHAPTERS.length, p[hero] || 0);
     el('storyCard').innerHTML = `<div class="chap">Story mode</div><h3>THE GOLDEN CLOG</h3>
       <p>Pick your fighter. Each one keeps their own progress.</p>
-      <div class="pick">${KIDS.map(k => `<button data-hero="${k}" class="${k === hero ? 'on' : ''}"><canvas width="200" height="120"></canvas><b>${FIGHTERS[idx(k)].name}</b><br><small>${Math.min(CHAPTERS.length, p[k] || 0)} / ${CHAPTERS.length}</small></button>`).join('')}</div>
+      <div class="pick">${KIDS.map(k => `<button data-hero="${k}" class="${k === hero ? 'on' : ''}" style="--c:${FIGHTERS[idx(k)].color}"><b>${FIGHTERS[idx(k)].name}</b><small>${Math.min(CHAPTERS.length, p[k] || 0)} / ${CHAPTERS.length}</small></button>`).join('')}</div>
       ${dots(done < CHAPTERS.length ? done : -1, done)}
       <div><button class="big alt" data-act="hub">BACK</button><button class="big" data-act="go">${done >= CHAPTERS.length ? 'PLAY AGAIN' : done ? 'CONTINUE' : 'START'}</button></div>`;
-    el('storyCard').querySelectorAll('.pick button').forEach(b => drawPortrait(b.querySelector('canvas'), FIGHTERS[idx(b.dataset.hero)]));
-    showScreen('story');
+    showScreen('story'); setScene('story');
   }
   function chapterCard(i) {
     const c = CHAPTERS[i], h = cast(), foes = c.foes(h), ally = c.ally && c.ally(h);
     el('storyCard').innerHTML = `<div class="chap">Chapter ${i + 1} of ${CHAPTERS.length}</div><h3>${c.title.toUpperCase()}</h3>${dots(i, i)}
       <p>${fill(c.text)}</p>
-      <div class="vs"><span style="color:${FIGHTERS[idx(hero)].color}">${FIGHTERS[idx(hero)].name}${ally ? ' + ' + nameOf(ally) : ''}</span>VS<span>${foes.map(nameOf).join(' + ')}</span></div>
+      <div class="vs"><span style="border-bottom:3px solid ${FIGHTERS[idx(hero)].color}">${FIGHTERS[idx(hero)].name}${ally ? ' + ' + nameOf(ally) : ''}</span>VS<span style="border-bottom:3px solid #ff5a5a">${foes.map(nameOf).join(' + ')}</span></div>
       <div><button class="big alt" data-act="home">BACK</button><button class="big" data-act="fight" data-i="${i}">FIGHT!</button></div>`;
-    showScreen('story');
+    showScreen('story'); setScene('story', { foes: foes.map(f => ({ id: f.def ? f.def.id : f.id, big: !!f.def })), ally: ally && ally.id });
   }
   function fightChapter(i) {
     const c = CHAPTERS[i], h = cast(), foes = c.foes(h), ally = c.ally && c.ally(h);
@@ -68,18 +96,23 @@
       ? (last ? `<div class="chap">The end</div><h3>THE CLOG COMES HOME</h3>${dots(-1, CHAPTERS.length)}<p>${ENDING}</p><div><button class="big" data-act="hub">MAIN MENU</button></div>`
         : `<div class="chap">Chapter ${i + 1} cleared</div><h3>VICTORY!</h3>${dots(i + 1, i + 1)}<p>${me.stats.kos} KO${me.stats.kos === 1 ? '' : 's'}, ${me.stats.dealt.toFixed(0)}% damage dealt, ${me.stocks} stock${me.stocks === 1 ? '' : 's'} left.</p><div><button class="big alt" data-act="hub">MAIN MENU</button><button class="big" data-act="chapter" data-i="${i + 1}">NEXT CHAPTER</button></div>`)
       : `<div class="chap">Chapter ${i + 1}</div><h3>SO CLOSE</h3>${dots(i, i)}<p>${CHAPTERS[i].boss ? 'Big Brick is heavy, so he takes a lot of damage before he flies. Stay out of reach of his charge and hit him after he misses.' : 'Shake it off and go again. Use your shield, and save your smash attacks for when their damage is high.'}</p><div><button class="big alt" data-act="hub">MAIN MENU</button><button class="big" data-act="fight" data-i="${i}">TRY AGAIN</button></div>`;
-    showScreen('story');
+    showScreen('story'); setScene('story'); if (won) react(hero, 'victory', true);
   }
   el('storyCard').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return; Sfx.init(); Sfx.blip();
-    if (b.dataset.hero) { hero = b.dataset.hero; save.set('hero', hero); storyHome(); return; }
+    if (b.dataset.hero) { hero = b.dataset.hero; save.set('hero', hero); storyHome(); react(hero, 'victory', true); return; }
     const a = b.dataset.act, i = +b.dataset.i;
     if (a === 'hub') openHub(); else if (a === 'home') storyHome(); else if (a === 'fight') fightChapter(i); else if (a === 'chapter') chapterCard(i);
     else if (a === 'go') { const d = prog()[hero] || 0; chapterCard(d >= CHAPTERS.length ? 0 : d); }
   });
   // story matches end on the story card; training never ends
   const baseResults = showResults;
-  showResults = function () { if (G.cfg && G.cfg.story) storyResult(); else baseResults(); };
+  showResults = function () {
+    if (G.cfg && G.cfg.story) return storyResult();
+    baseResults();
+    const w = [...G.fighters].sort((a, b) => (b.stocks - a.stocks) || (b.outT - a.outT) || (a.percent - b.percent))[0];
+    if (w) { setScene('results', w.def.id); voiceOf(w.def.id); }
+  };
 
   // ---------------------------------------------------------------- hub
   function openHub() {
@@ -100,6 +133,25 @@
       G.fighters[1].ai.cool = 1e9; G.banner = { text: 'TRAINING  ·  Esc to leave', t: 240, color: '#8affea' };
     }
   });
+  // tiles lean toward the pointer, and the fighters react to the tile you are on
+  const TILE_CLIP = { story: 'victory', versus: 'kick', training: 'jab', watch: 'spin', options: 'block' };
+  for (const t of document.querySelectorAll('#hub .tile')) {
+    t.addEventListener('pointermove', e => { const r = t.getBoundingClientRect(); t.style.setProperty('--ry', ((e.clientX - r.left) / r.width - 0.5) * 14 + 'deg'); t.style.setProperty('--rx', (0.5 - (e.clientY - r.top) / r.height) * 12 + 'deg'); t.style.setProperty('--mx', ((e.clientX - r.left) / r.width) * 100 + '%'); });
+    t.addEventListener('pointerleave', () => { t.style.setProperty('--ry', '0deg'); t.style.setProperty('--rx', '0deg'); });
+    const on = () => { if (t._hot) return; t._hot = true; Sfx.blip && Sfx.ctx && Sfx.blip(); react(hero, TILE_CLIP[t.dataset.mode]); };
+    t.addEventListener('pointerenter', on); t.addEventListener('focus', on);
+    t.addEventListener('pointerleave', () => { t._hot = false; }); t.addEventListener('blur', () => { t._hot = false; });
+  }
+  // fighter select: the newly chosen fighter steps up and calls out
+  const baseBuild = buildSelect; let lastPick = [];
+  buildSelect = function () {
+    baseBuild();
+    const now = cfg.slots.map(s => (s.type === 'off' ? null : s.fighter)); let changed = null;
+    now.forEach((f, i) => { if (f != null && lastPick.length && lastPick[i] !== f) changed = i; });
+    lastPick = now;
+    if (el('select').classList.contains('on')) { setScene('select', changed); if (changed != null) voiceOf(FIGHTERS[now[changed]].id); }
+  };
+
   // arrow keys move between tiles
   addEventListener('keydown', e => {
     if (!el('hub').classList.contains('on')) return;

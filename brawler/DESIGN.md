@@ -151,3 +151,20 @@ Each was trimmed of leading silence, cut to length, faded out and levelled to th
 as an 80 kbps mono MP3. `tools/build_sfx.py` packs them into `sfx.js`. `fx.js` plays the sample with a little random
 pitch and falls back to the old synthesized sound if a sample has not decoded. The per-sound volumes are in `fx.js`.
 The camera now frames the fighters closely (zoom up to 2.3x) and the HUD shrinks on short screens.
+
+## Character voices (`voice/`)
+30 voice clips generated with ElevenLabs text-to-sound: six generic voice types (boy, girl, teen boy, young woman, man,
+woman), each with a light effort, a big effort, a hurt sound, a jump sound and a KO yell. They are generated voices, not
+recordings or clones of the family. `VOICES` in `fx.js` maps each fighter to a type and a pitch, so fighters who share a
+type still sound different (Ray and Ollie; Tyler, Jayson and Layne). Each clip was cut down to its first vocal sound,
+because several came back many seconds long. Triggers: big effort on smash attacks, specials and throws; light effort on
+some other attacks; hurt on a real hit; jump on some jumps; KO yell on every ring-out. The Shadow Squad has no voices.
+
+## Live menus
+The menus sit over a live 3D scene (`R3.menuSet` / `menuRender` in `render3d.js`, driven by `setScene` in `menu.js`):
+- **Title:** the whole family lined up on stage, fidgeting; tap the background and one of them reacts and calls out.
+- **Main menu:** tiles lean toward the pointer and light up; the fighters beside them react to the tile you are on.
+- **Fighter select:** the chosen fighters stand on stage; changing one makes them step up and call out. Cards show
+  speed, power, weight and air-jump bars.
+- **Story:** your hero faces the chapter's opponents. **Results:** the winner celebrates.
+A short-screen layout (under 520 px tall) keeps everything on screen on a phone held sideways.

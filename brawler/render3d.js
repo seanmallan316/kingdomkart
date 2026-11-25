@@ -465,6 +465,7 @@ const R3 = (() => {
 
   function render(shx, shy) {
     if (!ok) return false;
+    fighterGroup.visible = true; if (menuGroup) menuGroup.visible = false;
     for (const pm of platMeshes) pm.g.position.set((pm.p.x1 + pm.p.x2) / 2, -pm.p.y, 0);
     for (const r of rocks) r.position.y = r.userData.by + Math.sin(G.frame * 0.006 + r.userData.ph) * 18;
     for (const f of G.fighters) syncFighter(f);
@@ -500,6 +501,57 @@ const R3 = (() => {
     c2.drawImage(pCache[def.id], 0, 0, canvas.width, canvas.height);
   }
 
+  // ------------------------------------------------------------ menu scene: live fighters behind the menus
+  let menuGroup = null, menuList = [], menuCamT = null, menuT = 0;
+  const menuRigs = new Map(), menuCam = { x: 0, y: 110, d: 1000, lx: 0, ly: 70 };
+  // list: [{ key, id, x, z, face, scale, once }]; cam: { x, y, d, lx, ly } eased toward
+  function menuSet(list, cam) {
+    if (!init()) return;
+    if (!menuGroup) { menuGroup = new THREE.Group(); scene.add(menuGroup); }
+    if (!stageGroup.children.length) buildStage(STAGES.skyforge, []);
+    const want = new Set(list.map(e => e.key || e.id));
+    for (const [k, m] of menuRigs) m.rig.root.visible = want.has(k);
+    menuList = [];
+    for (const e of list) {
+      const key = e.key || e.id, def = FIGHTERS.find(f => f.id === e.id); if (!def) continue;
+      let m = menuRigs.get(key);
+      if (!m || m.id !== e.id || m.glb !== !!MODELS[e.id]) {
+        if (m) menuGroup.remove(m.rig.root);
+        const rig = buildRig(def); menuGroup.add(rig.root);
+        m = { rig, id: e.id, glb: !!rig.glb, x: e.x, t: Math.random() * 3, once: null, onceT: 0 }; menuRigs.set(key, m);
+      }
+      m.rig.root.visible = true; m.tx = e.x; m.z = e.z || 0; m.face = e.face == null ? 0.25 : e.face; m.scale = e.scale || 1;
+      if (e.once) { m.once = e.once; m.onceT = 0; }
+      menuList.push(m);
+    }
+    if (cam) menuCamT = cam;
+  }
+  function menuReact(key, clip) { const m = menuRigs.get(key); if (m && m.rig.root.visible) { m.once = clip; m.onceT = 0; return m.id; } return null; }
+  function menuRender() {
+    if (!ok || !menuGroup) return false;
+    show(true); fighterGroup.visible = false; menuGroup.visible = true; menuT++;
+    for (const m of menuList) {
+      const rig = m.rig; m.x += (m.tx - m.x) * 0.14; m.t += 1 / 60;
+      rig.root.position.set(m.x, 0, m.z); rig.root.scale.setScalar(rig.glb ? m.scale : rig.def.scale * m.scale);
+      rig.turn.rotation.y += (m.face - rig.turn.rotation.y) * 0.15;
+      if (rig.glb && rig.clips) {
+        let c = rig.clips.idle, time = m.t, loop = true;
+        const oc = m.once && rig.clips[m.once];
+        if (oc) { m.onceT += 1 / 60; if (m.onceT < Math.min(oc.dur, 2.4)) { c = oc; time = m.onceT; loop = false; } else m.once = null; } else m.once = null;
+        for (const r of rig.rest) r.target.copy(r.local);
+        const hy = sampleClip(rig, c, time, loop);
+        rig.spin.position.y = clamp(rig.hipRest + hy * rig.unit, rig.hipRest * 0.3, rig.hipRest * 1.6); rig.spin.rotation.z = 0;
+        for (const r of rig.rest) r.b.quaternion.slerp(r.target, 0.3);
+        for (const b of rig.blades) b.visible = b.userData.sword === 'R';
+      } else poseRig(rig, POSES.idle, 0, 1, 33 * rig.def.scale, menuT);
+    }
+    if (menuCamT) for (const k in menuCamT) menuCam[k] += (menuCamT[k] - menuCam[k]) * 0.07;
+    const sway = Math.sin(menuT * 0.006) * 22;
+    camera.aspect = innerWidth / innerHeight; camera.far = 9000;
+    camera.position.set(menuCam.x + sway, menuCam.y, menuCam.d); camera.lookAt(menuCam.lx, menuCam.ly, 0); camera.updateProjectionMatrix();
+    renderer.render(scene, camera); return true;
+  }
+
   // world positions (sim coordinates) of a fighter's hands, feet and sword tip, for motion trails
   const _lp = new THREE.Vector3();
   function limbPoints(f) {
@@ -509,5 +561,5 @@ const R3 = (() => {
     for (const h of rig.blades) if (h.visible) { _lp.set(0, -(12 + 34 * rig.def.reach), 0); h.localToWorld(_lp); out.Blade = { x: _lp.x, y: -_lp.y }; }
     return out;
   }
-  return { init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, get ok() { return ok; } };
+  return { init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, menuSet, menuReact, menuRender, get ok() { return ok; } };
 })();
