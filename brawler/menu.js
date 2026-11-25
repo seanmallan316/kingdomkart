@@ -145,7 +145,7 @@
     if (G.cfg && G.cfg.story) return storyResult();
     baseResults();
     const w = [...G.fighters].sort((a, b) => (b.stocks - a.stocks) || (b.outT - a.outT) || (a.percent - b.percent))[0];
-    if (w) { setScene('results', w.def.id); voiceOf(w.def.id); }
+    if (w) { setScene('results', w.def.id); const d = w.def; setTimeout(() => Sfx.voice && Sfx.voice({ def: d, port: 9 }, 'win', true), 450); }
   };
 
   // ---------------------------------------------------------------- hub

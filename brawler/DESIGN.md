@@ -153,12 +153,31 @@ pitch and falls back to the old synthesized sound if a sample has not decoded. T
 The camera now frames the fighters closely (zoom up to 2.3x) and the HUD shrinks on short screens.
 
 ## Character voices (`voice/`)
-30 voice clips generated with ElevenLabs text-to-sound: six generic voice types (boy, girl, teen boy, young woman, man,
-woman), each with a light effort, a big effort, a hurt sound, a jump sound and a KO yell. They are generated voices, not
-recordings or clones of the family. `VOICES` in `fx.js` maps each fighter to a type and a pitch, so fighters who share a
-type still sound different (Ray and Ollie; Tyler, Jayson and Layne). Each clip was cut down to its first vocal sound,
-because several came back many seconds long. Triggers: big effort on smash attacks, specials and throws; light effort on
-some other attacks; hurt on a real hit; jump on some jumps; KO yell on every ring-out. The Shadow Squad has no voices.
+108 voice clips generated with ElevenLabs text-to-sound (v3 model): six generic voice types (boy, girl, teen boy, young
+woman, man, woman) x six kinds (light effort, big battle cry, hurt, jump, KO yell, victory cheer) x three takes each.
+The prompts ask for expressive, playful reactions (a laugh after getting hit, a cartoon yell fading away on a KO, a
+cheer on a win). They are generated voices, not recordings or clones of the family. Each clip was trimmed to its sound,
+faded and levelled, and saved as `voice/<type>_<kind>_<take>.mp3`.
+
+`Sfx.voice` in `fx.js` picks a random take but never the one that fighter just used for that kind, and varies pitch and
+volume a little. `VOICES` maps each fighter to a type and a pitch, so fighters who share a type sound different.
+To stop chatter, each fighter speaks at most once every ~1.1 s (0.65 s for hurt). Triggers: battle cry on most smash
+attacks, specials and throws; light effort on 10-30% of other attacks; hurt on 60% of real hits; jump on 18% of jumps;
+KO yell on every ring-out; the winner cheers on the results screen. The Shadow Squad has no voices.
+
+## Worlds (`worlds.js`, `props/`)
+Each family stage has a full 3D world built by `WORLDS.build` (called from `buildStage` in `render3d.js`): procedural
+canvas textures with bump maps, rounded-edge geometry, a sky dome, fog, per-world lighting, and 13 Meshy-generated props
+(`props/*.glb`, packed as base64 in `propjs/`). Worlds react to the fight: props wobble when hit or landed near, pillows
+squash, cones get knocked flying, the basketball rolls, birds scatter, fairy lights flash on big hits.
+- **Treehouse:** plank deck high in an oak, railing, rope ladder, hanging-swing platforms, birdhouse, falling leaves.
+- **Kitchen Table:** gingham tablecloth, breakfast props, teal cabinets, glowing window and sunbeam, pendant lamps, popping toast.
+- **Driveway:** chalk-drawn asphalt at golden hour, the house and garage behind, bike, hoop, cones, ball, fireflies.
+- **Bunk Beds:** quilted mattress, pillow platforms, bunk frame, teddy and blocks, moonlit window, fairy lights.
+
+## One-file build
+`python3 tools/build_single.py` writes `SuperFamilySmash.html`: every script, the logo and the intro video inlined into
+one page (about 42 MB) that runs by double-clicking it. It is ignored by git; rebuild it after changes.
 
 ## Live menus
 The menus sit over a live 3D scene (`R3.menuSet` / `menuRender` in `render3d.js`, driven by `setScene` in `menu.js`):

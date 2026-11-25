@@ -153,11 +153,18 @@
     // character voices: kind is atk1 (light effort), atk2 (big effort), hurt, jump or ko
     voice(f, kind, force) {
       const v = VOICES[f.def.id]; if (!v || !ctx) return;
-      const key = 'v:' + f.def.id + (f.port || 0), gap = kind === 'ko' ? 0 : 240;
-      if (!force && gap && !gate(key, gap)) return;
-      play('v_' + v.g + '_' + kind, kind === 'ko' ? 0.8 : kind === 'jump' ? 0.42 : 0.6, v.rate * vary(0.04), kind === 'ko' ? 0.4 : 0.1);
+      const who = f.def.id + (f.port || 0), now = performance.now(), mem = VMEM[who] || (VMEM[who] = { t: 0, last: {} });
+      // one voice at a time per fighter, with breathing room so it never chatters
+      if (!force && now - mem.t < (kind === 'hurt' ? 650 : 1100)) return;
+      const n = VN.filter(i => bufs['v_' + v.g + '_' + kind + '_' + i] && i !== mem.last[kind]);
+      if (!n.length) return;
+      const pick = n[Math.floor(Math.random() * n.length)];
+      mem.last[kind] = pick; mem.t = now;
+      const vol = { ko: 0.85, win: 0.9, jump: 0.4, atk1: 0.5, atk2: 0.68, hurt: 0.62 }[kind] || 0.6;
+      play('v_' + v.g + '_' + kind + '_' + pick, vol * vary(0.08), v.rate * vary(0.05), kind === 'ko' || kind === 'win' ? 0.45 : 0.12);
     },
   });
+  const VMEM = {}, VN = [1, 2, 3];
   // generic generated voices, shared by build; the rate shifts the pitch so family members sharing a set sound different
   const VOICES = { ray: { g: 'boy', rate: 1.0 }, ollie: { g: 'boy', rate: 1.08 }, norah: { g: 'girl', rate: 1.0 }, tyler: { g: 'teen', rate: 0.97 }, jayson: { g: 'teen', rate: 1.05 },
     layne: { g: 'teen', rate: 0.9 }, violet: { g: 'ywoman', rate: 1.0 }, dad: { g: 'man', rate: 1.0 }, mom: { g: 'woman', rate: 1.0 } };
@@ -284,10 +291,10 @@
       // voices
       if (f.state === 'attack' && m.st !== 'attack' && f.move) {
         const n = f.move.name, big = f.move.smash || f.move.special || n === 'throw', light = n === 'jab1' || n === 'jab2' || n === 'grab' || n === 'dashgrab';
-        if (big) Sfx.voice(f, 'atk2'); else if (Math.random() < (light ? 0.22 : 0.6)) Sfx.voice(f, 'atk1');
+        if (big) { if (Math.random() < 0.8) Sfx.voice(f, 'atk2'); } else if (Math.random() < (light ? 0.1 : 0.3)) Sfx.voice(f, 'atk1');
       }
-      if (f.state === 'hitstun' && m.st !== 'hitstun' && f.hitstun > 12 && Math.random() < 0.85) Sfx.voice(f, 'hurt');
-      if (f.state === 'air' && m.st === 'jumpsquat' && Math.random() < 0.45) Sfx.voice(f, 'jump');
+      if (f.state === 'hitstun' && m.st !== 'hitstun' && f.hitstun > 14 && Math.random() < 0.6) Sfx.voice(f, 'hurt');
+      if (f.state === 'air' && m.st === 'jumpsquat' && Math.random() < 0.18) Sfx.voice(f, 'jump');
       if ((f.state === 'dead' || f.state === 'out') && m.st !== 'dead' && m.st !== 'out') Sfx.voice(f, 'ko', true);
       m.st = f.state; m.gr = f.grounded; m.jumps = f.airJumps;
     }

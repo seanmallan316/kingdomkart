@@ -53,8 +53,10 @@ const R3 = (() => {
 
   // ------------------------------------------------------------ stage
   function clearGroup(g) {
-    for (const c of [...g.children]) { g.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
+    const kill = m => { if (!m) return; for (const k of ['map', 'bumpMap']) if (m[k] && m[k].isTexture) m[k].dispose(); if (m.dispose) m.dispose(); };
+    for (const c of [...g.children]) { g.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (Array.isArray(o.material)) o.material.forEach(kill); else kill(o.material); }); }
   }
+
   // ------------------------------------------------------------ stage worlds, built from simple shapes
   const flat = (c, o) => std(c, Object.assign({ roughness: 1, flatShading: true }, o || {}));
   const glowM = (c, k = 1) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k });
@@ -108,9 +110,18 @@ const R3 = (() => {
     },
   };
 
+  let worldOn = false;
   function buildStage(st, plats) {
     if (!init()) return;
     clearGroup(stageGroup); platMeshes = []; rocks = [];
+    worldOn = !!(st.theme && window.WORLDS && WORLDS.has(st.theme));
+    if (worldOn) { // full 3D world (worlds.js)
+      WORLDS.build(st, { scene, stageGroup, sun, renderer, camera });
+      for (const p of plats) { const g = WORLDS.plat(st, p); stageGroup.add(g); platMeshes.push({ g, p }); }
+      sun.target.position.set(0, 0, 0);
+      return;
+    }
+    renderer.toneMappingExposure = 0.98;
     document.getElementById('sky').style.background = `linear-gradient(180deg, ${st.sky[0]} 0%, ${st.sky[1]} 60%, ${st.sky[2]} 100%)`;
     scene.fog = new THREE.Fog(new THREE.Color(st.sky[1]), 1900, 5200);
     const m = st.main, w = m.x2 - m.x1, cx = (m.x1 + m.x2) / 2, D = 230;
@@ -516,9 +527,11 @@ const R3 = (() => {
     for (const pm of platMeshes) pm.g.position.set((pm.p.x1 + pm.p.x2) / 2, -pm.p.y, 0);
     for (const r of rocks) r.position.y = r.userData.by + Math.sin(G.frame * 0.006 + r.userData.ph) * 18;
     for (const f of G.fighters) syncFighter(f);
+    if (worldOn) WORLDS.update();
     const s = camScale(), d = VH / (2 * s * Math.tan((FOV * DEG) / 2));
     const cx = G.cam.x - shx / s, cy = -G.cam.y + shy / s;
-    camera.aspect = VW / VH; camera.far = d + 5000; camera.position.set(cx, cy, d); camera.lookAt(cx, cy, 0); camera.updateProjectionMatrix();
+    // the camera sits a little above the action and looks down, so the stages read as 3D spaces
+    camera.aspect = VW / VH; camera.far = d + 12000; camera.position.set(cx, cy + d * (worldOn ? 0.11 : 0), d); camera.lookAt(cx, cy, 0); camera.updateProjectionMatrix();
     renderer.render(scene, camera);
     return true;
   }
@@ -603,7 +616,7 @@ const R3 = (() => {
     }
     if (menuCamT) for (const k in menuCamT) menuCam[k] += (menuCamT[k] - menuCam[k]) * 0.07;
     const sway = Math.sin(menuT * 0.006) * 22;
-    camera.aspect = innerWidth / innerHeight; camera.far = 9000;
+    camera.aspect = innerWidth / innerHeight; camera.far = 14000;
     camera.position.set(menuCam.x + sway, menuCam.y, menuCam.d); camera.lookAt(menuCam.lx, menuCam.ly, 0); camera.updateProjectionMatrix();
     renderer.render(scene, camera); return true;
   }
