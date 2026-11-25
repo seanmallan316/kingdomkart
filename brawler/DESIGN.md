@@ -90,3 +90,10 @@ Family fighters, modelled by hand from reference photos (no photo is stored in t
   Dash Strike, Spiral (rising recovery), Counter.
 - **Norah**: the big sister and the fastest runner, with pink and purple sparkle effects. Specials: Star Toss (a quick
   spinning star), Sparkle Dash (a very fast, long streak), Rocket (rising recovery), Dive Kick. She stands taller than the twins.
+
+## Scanned family models
+Ray, Ollie and Norah now use 3D models made from their photos with Meshy (image-to-3D plus auto-rigging), about 35 credits
+each. The optimised files are in `models/*.glb` (about 1-1.5 MB each: 1024px WebP texture, quantized mesh).
+`build_models.py` packs them into `models.js` so the game loads them from a web page, a local file or an APK alike.
+`render3d.js` turns the sim's pose angles into bone directions on the Meshy skeleton, so every existing move works on the
+scanned models. If a model is missing, that fighter falls back to the simple shapes.

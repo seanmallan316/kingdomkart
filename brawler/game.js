@@ -1359,6 +1359,7 @@ function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); VW = innerW
 addEventListener('resize', resize); resize();
 
 function updateCam() {
+  if (G.camLock) { Object.assign(G.cam, G.camLock); return; } // debug / photo mode
   const st = G.stage, b = st.blast;
   let x1 = 1e9, x2 = -1e9, y1 = 1e9, y2 = -1e9, n = 0;
   for (const f of G.fighters) {
@@ -1720,6 +1721,8 @@ function loop(now) {
   render();
 }
 requestAnimationFrame(loop);
+// scanned family models load in the background; fighters use the simple shapes until they are ready
+if (typeof R3 !== 'undefined') R3.loadModels(() => { G.modelsReady = true; if (document.getElementById('select').classList.contains('on')) buildSelect(); if (G.mode === 'fight') R3.resetRigs(); });
 
 // test hooks
 window.__clash = { G, startMatch, step, FIGHTERS, STAGES, cfg };

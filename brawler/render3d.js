@@ -138,6 +138,14 @@ const R3 = (() => {
     for (let k = 0; k < 300; k++) { g.fillStyle = 'rgba(0,0,0,' + (0.3 + Math.random() * 0.6) + ')'; g.fillRect(Math.random() * 256, Math.random() * 256, 1.5 + Math.random() * 2, 1.5 + Math.random() * 2); }
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
+  // foam toy sword, pointing down its own -y axis; shown in whichever hand is nearest the camera
+  function makeSword(def, side) {
+    const sw = new THREE.Group(); sw.userData.blade = side; sw.position.y = -U - 2;
+    sw.add(mesh(new THREE.CylinderGeometry(1.6, 1.6, 9, 8), std('#2b3566'), 0, 0, 0));
+    sw.add(box(11, 2.4, 3.4, std('#ffd23f'), 0, -5, 0));
+    const bl = mesh(new THREE.CapsuleGeometry(2.6, 34 * def.reach, 4, 10), std('#f4f6fa', { roughness: 0.55, emissive: '#9fc4ff', emissiveIntensity: 0.18 }), 0, -8 - 17 * def.reach, 0); bl.scale.z = 0.55; sw.add(bl);
+    sw.rotation.x = -0.25; return sw;
+  }
   const KIDS = {
     ray: { shirt: '#1c3fd6', shirtDk: '#1733b0', jeans: '#27304a', clog: '#1f9c9a', hole: '#0e5f5e', hair: '#4a3424', hoodie: true, print: 'varsity', sock: true },
     norah: { shirt: '#efe9dc', shirtDk: '#ddd5c4', jeans: '#f1c3cf', clog: '#ee7fa6', hole: '#ffffff', hair: '#b98a52', hoodie: true, print: 'gold', long: true, strand: '#a65fe0', sneaker: true, teeth: 'full', legR: 6.2, eye: '#4a2f1c' },
@@ -204,20 +212,86 @@ const R3 = (() => {
       hand(g, side) {
         if (o.hoodie) g.add(mesh(new THREE.CylinderGeometry(5.3, 5.3, 3.4, 12), shirtDk, 0, -U + 2.6, 0));
         g.add(sphere(4.3, skin, 0, -U - 1.6, 0));
-        if (o.sword) { // foam toy sword, held in whichever hand is nearest the camera
-          const sw = new THREE.Group(); sw.userData.blade = side; sw.position.y = -U - 2;
-          sw.add(mesh(new THREE.CylinderGeometry(1.6, 1.6, 9, 8), std('#2b3566'), 0, 0, 0));
-          sw.add(box(11, 2.4, 3.4, std('#ffd23f'), 0, -5, 0));
-          const bl = mesh(new THREE.CapsuleGeometry(2.6, 34 * def.reach, 4, 10), std('#f4f6fa', { roughness: 0.55, emissive: '#9fc4ff', emissiveIntensity: 0.18 }), 0, -8 - 17 * def.reach, 0); bl.scale.z = 0.55; sw.add(bl);
-          sw.rotation.x = -0.25; g.add(sw);
-        }
+        if (o.sword) g.add(makeSword(def, side));
       },
       extras() {},
     };
   }
   const LOOKS = { ray: lookKid, ollie: lookKid, norah: lookKid };
 
+  // ---- scanned models (GLB with a skeleton). The sim's pose angles are turned into bone directions.
+  const MODELS = {};
+  const DRIVE = { LeftArm: 'LeftForeArm', LeftForeArm: 'LeftHand', RightArm: 'RightForeArm', RightForeArm: 'RightHand',
+    LeftUpLeg: 'LeftLeg', LeftLeg: 'LeftFoot', RightUpLeg: 'RightLeg', RightLeg: 'RightFoot', Spine02: 'Spine' };
+  function loadModels(done) {
+    const src = window.CLASH_MODELS || {}, ids = Object.keys(src); let left = ids.length;
+    if (!left || !window.THREE || !THREE.GLTFLoader) { if (done) done(); return; }
+    const loader = new THREE.GLTFLoader();
+    const fin = () => { if (--left === 0 && done) done(); };
+    for (const id of ids) {
+      try {
+        const str = atob(src[id]), buf = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) buf[i] = str.charCodeAt(i);
+        loader.parse(buf.buffer, '', g => { MODELS[id] = g.scene; delete pCache[id]; fin(); }, e => { console.warn('model failed', id, e); fin(); });
+      } catch (e) { console.warn('model failed', id, e); fin(); }
+    }
+  }
+  function buildGlbRig(def) {
+    const model = THREE.SkeletonUtils.clone(MODELS[def.id]);
+    const rig = { def, glb: true, turnY: TURN, blades: [], look: { mats: [] } };
+    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); o.material.side = THREE.FrontSide; o.material.metalness = 0; o.material.roughness = 0.85; rig.look.mats.push(o.material); } });
+    model.updateMatrixWorld(true);
+    const bones = {}, order = [];
+    model.traverse(o => { if (o.isBone) { bones[o.name] = o; order.push(o); } });
+    const P = n => bones[n].getWorldPosition(new THREE.Vector3());
+    const box = new THREE.Box3().setFromObject(model), height = box.max.y - box.min.y;
+    const k = (86 * def.scale) / height;
+    rig.rest = order.map(b => ({ b, name: b.name, parent: b.parent && b.parent.isBone ? b.parent : null, local: b.quaternion.clone(),
+      world: b.getWorldQuaternion(new THREE.Quaternion()), dir: DRIVE[b.name] && bones[DRIVE[b.name]] ? P(DRIVE[b.name]).sub(P(b.name)).normalize() : null }));
+    const hips = P('Hips');
+    rig.thigh = P('LeftUpLeg').distanceTo(P('LeftLeg')) * k; rig.shin = P('LeftLeg').distanceTo(P('LeftFoot')) * k;
+    rig.ankle = (P('LeftFoot').y - box.min.y) * k; rig.hipRest = (hips.y - box.min.y) * k; rig.hipDrop = (hips.y - P('LeftUpLeg').y) * k;
+    const root = new THREE.Group(), spin = new THREE.Group(), turn = new THREE.Group();
+    root.add(spin); spin.add(turn); turn.add(model);
+    model.scale.setScalar(k); model.position.set(-hips.x * k, -hips.y * k, -hips.z * k);
+    rig.root = root; rig.spin = spin; rig.turn = turn; rig.model = model; rig.bones = bones;
+    if (KIDS[def.id] && KIDS[def.id].sword) for (const side of ['L', 'R']) {
+      const hand = bones[side === 'L' ? 'LeftHand' : 'RightHand'], fore = side === 'L' ? 'LeftForeArm' : 'RightForeArm'; if (!hand) continue;
+      const dir = P(hand.name).sub(P(fore)).normalize().applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()).invert());
+      const holder = new THREE.Group(); holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
+      const sw = makeSword(def, side); sw.position.y = 2; sw.rotation.x = 0; holder.add(sw); holder.scale.setScalar(def.scale / (k * 0.01)); holder.userData.sword = side;
+      hand.add(holder); rig.blades.push(holder);
+    }
+    return rig;
+  }
+  const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), IDENT = new THREE.Quaternion();
+  function poseGlb(rig, pose, rot, facing, f) {
+    const [lean, afS, afE, abS, abE, lfH, lfK, lbH, lbK] = pose;
+    const nL = facing < 0; // the left side is nearest the camera when facing left
+    for (const b of rig.blades) b.visible = b.userData.sword === (nL ? 'L' : 'R');
+    const ang = { LeftArm: nL ? afS : abS, LeftForeArm: nL ? afS + afE : abS + abE, RightArm: nL ? abS : afS, RightForeArm: nL ? abS + abE : afS + afE,
+      LeftUpLeg: nL ? lfH : lbH, LeftLeg: nL ? lfH + lfK : lbH + lbK, RightUpLeg: nL ? lbH : lfH, RightLeg: nL ? lbH + lbK : lfH + lfK };
+    // hip height from the real leg lengths, so the feet meet the ground
+    const fd = (h, kk) => rig.thigh * Math.cos(h) + rig.shin * Math.cos(h + kk);
+    let hip = rig.hipRest;
+    if (f && (f.grounded || f.state === 'ledgeclimb')) hip = clamp(Math.max(fd(lfH, lfK), fd(lbH, lbK)) + rig.ankle + rig.hipDrop, rig.hipRest * 0.4, rig.hipRest);
+    if (f && f.state === 'down') hip = rig.hipRest * 0.3;
+    rig.spin.position.y = hip; rig.spin.rotation.z = -rot;
+    const wq = new Map();
+    for (const r of rig.rest) {
+      const pq = r.parent ? wq.get(r.parent) : IDENT; let q;
+      if (r.name === 'Spine02' && r.dir) { _v.set(0, Math.cos(lean), Math.sin(lean)); q = _q.setFromUnitVectors(r.dir, _v).clone().multiply(r.world); }
+      else if (r.name in ang && r.dir) {
+        const a = ang[r.name], side = r.name.startsWith('Left') ? 1 : -1, arm = r.name.indexOf('Arm') >= 0;
+        _v.set(side * (arm ? 0.22 : 0.07), -Math.cos(a), Math.sin(a)).normalize();
+        q = _q.setFromUnitVectors(r.dir, _v).clone().multiply(r.world);
+      } else if (r.name === 'Head') { _q.setFromAxisAngle(_v.set(1, 0, 0), lean * 0.35); q = _q.clone().multiply(r.world); }
+      else q = pq.clone().multiply(r.local);
+      wq.set(r.b, q); r.b.quaternion.copy(pq).invert().multiply(q);
+    }
+  }
+
   function buildRig(def) {
+    if (MODELS[def.id]) return buildGlbRig(def);
     const look = (LOOKS[def.id] || lookGeneric)(def);
     const rig = { def, look, arm: {}, leg: {}, turnY: TURN, blades: [] };
     const root = new THREE.Group(), spin = new THREE.Group(), turn = new THREE.Group();
@@ -271,7 +345,7 @@ const R3 = (() => {
     if (f.state === 'ledge') want = f.facing * (Math.PI / 2 + 0.5); // hang facing the wall
     rig.turnY += (want - rig.turnY) * 0.35; rig.turn.rotation.y = rig.turnY;
     if (f.state === 'attack' && f.move && f.move.twirl && f.mt > 4 && f.mt < f.move.len - 8) rig.turn.rotation.y = rig.turnY + f.mt * 0.75;
-    poseRig(rig, pose, rot, f.facing, a.hipH, G.frame);
+    if (rig.glb) poseGlb(rig, pose, rot, f.facing, f); else poseRig(rig, pose, rot, f.facing, a.hipH, G.frame);
     // flashes: invincible blink, hurt tint, overdrive glow
     let col = 0x000000, k = 0;
     if ((f.invinc > 0 && G.frame % 6 < 3) || (f.intang > 0 && f.state !== 'ledge' && G.frame % 4 < 2)) { col = 0xffffff; k = 0.55; }
@@ -308,10 +382,10 @@ const R3 = (() => {
           pRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); pRenderer.setSize(800, 480, false);
           pScene = new THREE.Scene(); lights(pScene, false); pCamera = new THREE.PerspectiveCamera(24, 400 / 240, 10, 2000);
         }
-        const rig = buildRig(def); rig.turn.rotation.y = 0.5;
-        poseRig(rig, POSES.idle, 0, 1, 33 * def.scale, 20);
+        const rig = buildRig(def); rig.turn.rotation.y = rig.glb ? 0.35 : 0.5;
+        if (rig.glb) { poseGlb(rig, POSES.idle, 0, 1, null); rig.root.position.y = 0; } else poseRig(rig, POSES.idle, 0, 1, 33 * def.scale, 20);
         pScene.add(rig.root);
-        const h = 100 * def.scale; pCamera.position.set(0, h * 0.5, h * 2.6); pCamera.lookAt(0, h * 0.46, 0);
+        const h = (rig.glb ? 86 : 100) * def.scale; pCamera.position.set(0, h * 0.52, h * 2.5); pCamera.lookAt(0, h * 0.5, 0);
         pRenderer.render(pScene, pCamera);
         const copy = document.createElement('canvas'); copy.width = 800; copy.height = 480; copy.getContext('2d').drawImage(pRenderer.domElement, 0, 0);
         pCache[def.id] = copy; pScene.remove(rig.root);
@@ -320,5 +394,5 @@ const R3 = (() => {
     c2.drawImage(pCache[def.id], 0, 0, canvas.width, canvas.height);
   }
 
-  return { init, buildStage, resetRigs, render, portrait, show, get ok() { return ok; } };
+  return { init, buildStage, resetRigs, render, portrait, show, loadModels, get ok() { return ok; } };
 })();
