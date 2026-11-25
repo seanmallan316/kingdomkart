@@ -419,7 +419,7 @@ const FIGHTERS = [
 ];
 
 // Fighters are drawn and simulated larger than the first prototype so they read clearly on screen.
-const FIGHTER_SIZE = 1.35;
+const FIGHTER_SIZE = 1.6;
 for (const d of FIGHTERS) d.scale *= FIGHTER_SIZE;
 
 function buildMoves(def) {
@@ -1414,10 +1414,10 @@ function updateCam() {
   }
   // frame the fighters closely; only widen when they spread out
   if (!n) { x1 = st.main.x1 * 0.5; x2 = st.main.x2 * 0.5; y1 = -200; y2 = 0; }
-  const padX = 120, padY = 95;
-  const w = Math.max(470, x2 - x1 + padX * 2), h = Math.max(300, y2 - y1 + padY * 2);
+  const padX = 95, padY = 80;
+  const w = Math.max(400, x2 - x1 + padX * 2), h = Math.max(280, y2 - y1 + padY * 2);
   const base = VH / 720;
-  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.55, 2.6);
+  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.55, 3.0);
   const c = G.cam;
   c.x = lerp(c.x, (x1 + x2) / 2, 0.1); c.y = lerp(c.y, (y1 + y2) / 2 - 12, 0.1); c.z = lerp(c.z, z, z < c.z ? 0.12 : 0.05);
 }

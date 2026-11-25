@@ -150,6 +150,8 @@
     game: one('game', 'game', 0.95, 0, 0.35),
     od: one('od', 'od', 0.85, 0.02, 0.3),
     tech: one('tech', 'djump', 0.4, 0.02, 0.1),
+    // any packed sample by name (items, the Super Orb, finales)
+    sample(n, v = 0.7, r = 1) { if (ctx && bufs[n]) play(n, v, r * vary(0.03), 0.15); },
     // character voices: kind is atk1 (light effort), atk2 (big effort), hurt, jump or ko
     voice(f, kind, force) {
       const v = VOICES[f.def.id]; if (!v || !ctx) return;

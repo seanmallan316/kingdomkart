@@ -395,7 +395,8 @@ const R3 = (() => {
     for (const r of rig.rest) { r.b.quaternion.copy(r.local); r.target.copy(r.local); }
   }
   const MOVE_CLIP = { jab1: 'jab', jab2: 'jab2', jab3: 'round', ftilt: 'kick', utilt: 'upper', dtilt: 'sweep', dash: 'kick', fsmash: 'smash', usmash: 'highkick', dsmash: 'sweep',
-    nair: 'spin', fair: 'airpunch', bair: 'round', uair: 'highkick', dair: 'slam', grab: 'grab', dashgrab: 'grab', throw: 'pitch', ledgeAtk: 'sweep', getupAtk: 'sweep', counterStrike: 'smash' };
+    nair: 'spin', fair: 'airpunch', bair: 'round', uair: 'highkick', dair: 'slam', grab: 'grab', dashgrab: 'grab', throw: 'pitch',
+    batSwing: 'pitch', batHomer: 'smash', batAir: 'spin', shoot: 'cast', toss: 'pitch', finale: 'victory', finaleBeam: 'cast', finaleRush: 'kick', finaleStorm: 'spin', ledgeAtk: 'sweep', getupAtk: 'sweep', counterStrike: 'smash' };
   const CHAR_CLIP = {
     ray: { nspec: 'kick', uspec: 'jump', dspec: 'slam' },
     norah: { nspec: 'pitch', sspec: 'airpunch', uspec: 'jump', dspec: 'kick', run: 'sprint' },
@@ -557,6 +558,7 @@ const R3 = (() => {
     const cx = G.cam.x - shx / s, cy = -G.cam.y + shy / s;
     // the camera sits a little above the action and looks down, so the stages read as 3D spaces
     camera.aspect = VW / VH; camera.far = d + 12000; camera.position.set(cx, cy + d * (worldOn ? 0.11 : 0), d); camera.lookAt(cx, cy, 0); camera.updateProjectionMatrix();
+    for (const h of hooks) h(scene, camera);
     present();
     return true;
   }
@@ -655,5 +657,6 @@ const R3 = (() => {
     for (const h of rig.blades) if (h.visible) { _lp.set(0, -(12 + 34 * rig.def.reach), 0); h.localToWorld(_lp); out.Blade = { x: _lp.x, y: -_lp.y }; }
     return out;
   }
-  return { init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, menuSet, menuReact, menuRender, get ok() { return ok; } };
+  const hooks = [];
+  return { addHook: fn => hooks.push(fn), rigOf: f => rigs.get(f), init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, menuSet, menuReact, menuRender, get ok() { return ok; } };
 })();

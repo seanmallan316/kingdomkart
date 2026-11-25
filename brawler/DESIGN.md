@@ -187,6 +187,26 @@ squash, cones get knocked flying, the basketball rolls, birds scatter, fairy lig
   (add `?noao` to the URL to force it off).
 - The match HUD fits four players on a phone held upright.
 
+## Items, the Super Orb and Family Finales (`items.js`)
+`items.js` wraps a few game.js functions (step, startMatch, groundActions, airActions, applyHit, ko, canBeHit, aiPoll,
+updateCam, render) and draws its models through `R3.addHook`. Set `cfg.items = false` to turn items off.
+- **Item boxes** drop from the sky every 8-13 s (at most 4 loose items): a wooden **crate** (hit it to break it, 1-2
+  items) or a **capsule** (break it, or pick it up and throw it; it pops open on impact).
+- **Controls:** Attack (or Grab) next to an item picks it up. With a weapon, Attack uses it; Grab throws it
+  (hold up to throw up, down to drop). Unclaimed items blink and vanish after ~18 s.
+- **Weapons:** Slugger Bat (swing, a chargeable home-run smash, and an air swing), Foam Blaster (16 darts),
+  Water Balloon (throw it; it bursts in a splash). **Power-ups:** Mega Mallet (8 s of auto-swinging, can only move and
+  jump), Star Candy (8 s invincible), Grow Juice (10 s giant: bigger, hits 35% harder, harder to launch),
+  Zoom Sneakers (10 s faster), Heart Cookie (heals 45%).
+- **Super Orb:** a rainbow orb floats around the stage every 25-45 s; it takes ~30 damage to break. Whoever breaks it
+  glows and can press **Special** for their **Family Finale**: a close-up cinematic (letterbox, speed lines, name card),
+  then one of three attacks: **beam** (Dad, Violet, Jayson: a screen-wide energy beam), **rush** (Norah, Tyler, Layne:
+  a dash that catches foes, then a close-up barrage) or **storm** (Ray, Ollie, Mom: a vortex that pulls foes in and
+  blasts them out). The finale fighter can't be hit while it plays. CPUs chase the orb, grab items and use finales.
+- New sounds (ElevenLabs): crate break, pickup chime, orb shatter, finale charge, energy beam, home-run crack.
+
+Fighters are 1.6x their base size (was 1.35) and the camera frames them tighter (zoom up to 3x).
+
 ## One-file build
 `python3 tools/build_single.py` writes `SuperFamilySmash.html`: every script, the logo and the intro video inlined into
 one page (about 42 MB) that runs by double-clicking it. It is ignored by git; rebuild it after changes.
