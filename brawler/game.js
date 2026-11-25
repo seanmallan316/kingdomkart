@@ -231,8 +231,8 @@ function spec(kind) {
       len: 32, pose: 'throw', special: true, drift: 0.6, landLag: 4,
       onFrame: (f, t) => { if (t === 10) { spawnProj(f, { type: 'bomb', x: 20, y: -60, vx: 6, vy: -7, grav: 0.35, r: 11, d: 3, a: 70, b: 20, g: 20, life: 110, explode: { r: 58, d: 11, a: 70, b: 45, g: 70 } }); Sfx.swing(); } },
     });
-    case 'rocket': case 'rocketHeavy': case 'spiral': {
-      const pw = kind === 'rocketHeavy' ? 14.8 : kind === 'spiral' ? 15.5 : 16.5;
+    case 'rocket': case 'rocketHeavy': case 'spiral': case 'hop': {
+      const pw = kind === 'rocketHeavy' ? 14.8 : kind === 'spiral' ? 15.5 : kind === 'hop' ? 12.5 : 16.5;
       const hx = kind === 'spiral' ? 5 : 3.5;
       const multi = kind === 'spiral'
         ? [H(5, 22, 26, -44, 22, 1.8, 85, 35, 15, { rehit: 4 }), H(5, 22, -26, -44, 22, 1.8, 95, 35, 15, { rehit: 4 }), H(23, 26, 0, -70, 30, 5, 70, 60, 90)]
@@ -300,6 +300,25 @@ function spec(kind) {
         fx.smoke(f.x, f.y, 12); G.shake = Math.max(G.shake, 10); Sfx.boom();
       },
     });
+    case 'clogToss': return M({ // kicks a clog off in an arc
+      len: 30, pose: 'kick', special: true, drift: 0.7, landLag: 4,
+      onFrame: (f, t) => { if (t === 8) { spawnProj(f, { type: 'clog', x: 26, y: -30, vx: 8.5, vy: -5.5, grav: 0.32, r: 10, d: 6, a: 60, b: 30, g: 55, life: 80 }); Sfx.swing(); } },
+    });
+    case 'cannonball': return M({ // tucks into a ball and rolls through people
+      len: 44, pose: 'tuck', rollSpin: true, special: true, landLag: 8, noLandCancel: true,
+      hb: [H(7, 26, 6, -28, 24, 2.2, 70, 25, 20, { rehit: 6 }), H(27, 30, 10, -28, 26, 5, 45, 50, 85)],
+      onStart: f => { f.dashUsedNow = !f.grounded && f.sideB; if (!f.grounded) f.sideB = true; },
+      onFrame: (f, t) => {
+        if (t < 7) { f.vx *= 0.6; if (!f.grounded && !f.dashUsedNow) f.vy = Math.min(f.vy, 0.5); }
+        else if (t < 30) { f.vx = f.facing * 10; if (!f.grounded && !f.dashUsedNow) f.vy = Math.min(f.vy, 1.2); if (f.grounded && t % 4 === 0) fx.smoke(f.x, f.y, 1); }
+        else f.vx *= 0.8;
+      },
+    });
+    case 'whirl': return M({ // spins with the sword out; can drift while spinning
+      len: 52, pose: 'nair', twirl: true, special: true, drift: 1, landLag: 8, noLandCancel: true,
+      hb: [H(6, 38, 0, -34, 34, 1.5, 80, 30, 15, { rehit: 5 }), H(40, 43, 0, -40, 38, 4, 60, 50, 95)],
+      onFrame: (f, t, inp) => { if (!f.grounded && t > 4 && t < 40) f.vy = Math.min(f.vy, inp.special ? -0.6 : 1.2); if (f.grounded && t < 40) f.vx = approach(f.vx, inp.x * 5, 0.8); },
+    });
     case 'counter': return M({
       len: 50, pose: 'counter', special: true, drift: 0.3, landLag: 6,
       onFrame: (f, t) => { f.counter = t >= 5 && t <= 28; if (!f.grounded && t < 30) f.vy = Math.min(f.vy, 1); },
@@ -310,6 +329,16 @@ function spec(kind) {
 
 // ---------------------------------------------------------------- fighters
 const FIGHTERS = [
+  {
+    id: 'ray', name: 'RAY', blurb: 'Small and floaty. Five jumps, clog toss, cannonball.', color: '#2f55e8', dark: '#27304a', accent: '#2fc4c0', acc: 'kid',
+    weight: 76, walk: 3.6, run: 7.4, air: 4.6, airAcc: 0.5, grav: 0.33, fall: 5.4, ff: 8.6, jump: 11.0, hop: 7.0, djump: 8.6, jumps: 5,
+    scale: 0.8, power: 0.9, speed: 0.92, reach: 0.95, sp: { n: 'clogToss', s: 'cannonball', u: 'hop', d: 'quake' },
+  },
+  {
+    id: 'ollie', name: 'OLLIE', blurb: 'Lightning-fast foam sword. Five jumps, whirl, counter.', color: '#e3271d', dark: '#5d7fb3', accent: '#ffd23f', acc: 'kid',
+    weight: 79, walk: 4.3, run: 9.4, air: 4.9, airAcc: 0.6, grav: 0.5, fall: 7.6, ff: 11, jump: 12.2, hop: 7.8, djump: 8.8, jumps: 5,
+    scale: 0.78, power: 0.86, speed: 0.82, reach: 1.2, sp: { n: 'whirl', s: 'dashStrike', u: 'spiral', d: 'counter' },
+  },
   {
     id: 'vex', name: 'VEX', blurb: 'Light and fast. Triple jump, dive kick.', color: '#38d6ff', dark: '#0d5874', accent: '#fff36b', acc: 'scarf',
     weight: 82, walk: 4.2, run: 9.6, air: 5.0, airAcc: 0.55, grav: 0.46, fall: 7.2, ff: 10.5, jump: 12.6, hop: 8.0, djump: 12.0, jumps: 3,
@@ -1249,6 +1278,7 @@ function startMatch(cfg) {
     f.x = f.spawnX; f.y = 0; f.grounded = true; f.ground = G.mainSurf; f.facing = f.x > 0 ? -1 : 1; setState(f, 'idle');
     return f;
   });
+  R3.buildStage(st, G.plats); R3.resetRigs();
   G.countdown = 200; G.cam = { x: 0, y: -150, z: 0.8 };
   G.mode = 'fight'; showScreen(null);
   Touch.on && document.getElementById('touch').classList.add('on');
@@ -1331,19 +1361,19 @@ function w2s(x, y) { const s = camScale(); return { x: (x - G.cam.x) * s + VW / 
 
 function render() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  if (G.mode !== 'fight' || !G.stage) { drawMenuBg(); return; }
+  if (G.mode !== 'fight' || !G.stage) { R3.show(false); drawMenuBg(); return; }
   updateCam();
-  const st = G.stage;
-  drawSky(st);
+  const sh = G.shake, shx = rand(-sh, sh), shy = rand(-sh, sh);
+  R3.show(true);
+  ctx.clearRect(0, 0, VW, VH);
+  if (!R3.render(shx, shy)) { ctx.fillStyle = '#141a33'; ctx.fillRect(0, 0, VW, VH); bigText('3D needs WebGL', '#fff', 40); return; }
   const s = camScale();
-  const sh = G.shake;
   ctx.save();
-  ctx.translate(VW / 2 + rand(-sh, sh), VH / 2 + rand(-sh, sh));
+  ctx.translate(VW / 2 + shx, VH / 2 + shy);
   ctx.scale(s, s); ctx.translate(-G.cam.x, -G.cam.y);
-  drawStage(st);
   for (const f of G.fighters) if (f.state === 'respawn') drawRespawnPlat(f);
   for (const p of G.projs) drawProj(p);
-  for (const f of G.fighters) drawFighter(f);
+  for (const f of G.fighters) drawFighterFX(f);
   drawParts();
   ctx.restore();
   drawKOBeams();
@@ -1356,53 +1386,6 @@ function render() {
 function drawMenuBg() {
   const g = ctx.createLinearGradient(0, 0, 0, VH); g.addColorStop(0, '#141a33'); g.addColorStop(1, '#0c0f1a');
   ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
-}
-const stars = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random() * 0.7, s: Math.random() * 1.6 + 0.3 }));
-function drawSky(st) {
-  const g = ctx.createLinearGradient(0, 0, 0, VH);
-  g.addColorStop(0, st.sky[0]); g.addColorStop(0.6, st.sky[1]); g.addColorStop(1, st.sky[2]);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
-  ctx.fillStyle = '#ffffff';
-  for (const s_ of stars) { ctx.globalAlpha = 0.3 + 0.3 * Math.sin(G.frame * 0.03 + s_.x * 50); ctx.fillRect(((s_.x * VW - G.cam.x * 0.03) % VW + VW) % VW, s_.y * VH * 0.8, s_.s, s_.s); }
-  ctx.globalAlpha = 1;
-  // parallax floating rocks
-  const s = camScale();
-  for (let layer = 0; layer < 2; layer++) {
-    const pf = layer ? 0.35 : 0.18;
-    ctx.fillStyle = layer ? 'rgba(20,24,48,0.55)' : 'rgba(20,24,48,0.35)';
-    for (let k = -3; k <= 3; k++) {
-      const wx = k * 520 + layer * 260, wy = 120 + layer * 60 + Math.sin(k * 1.7 + layer) * 90;
-      const sx = (wx - G.cam.x * pf) * s * (0.5 + layer * 0.2) + VW / 2, sy = (wy - G.cam.y * pf) * s * 0.6 + VH * 0.55;
-      const r = (80 + ((k * 37) % 40)) * s * (0.6 + layer * 0.3);
-      ctx.beginPath(); ctx.moveTo(sx - r * 1.4, sy); ctx.lineTo(sx + r * 1.4, sy); ctx.lineTo(sx + r * 0.6, sy + r * 0.9); ctx.lineTo(sx, sy + r * 1.6); ctx.lineTo(sx - r * 0.7, sy + r * 0.8); ctx.closePath(); ctx.fill();
-    }
-  }
-}
-function drawStage(st) {
-  const m = st.main;
-  // body
-  ctx.fillStyle = st.ground;
-  ctx.beginPath();
-  ctx.moveTo(m.x1, m.y); ctx.lineTo(m.x2, m.y); ctx.lineTo(m.x2, m.y + m.depth);
-  ctx.lineTo(m.x2 * 0.55, m.y + m.depth + 90); ctx.lineTo(0, m.y + m.depth + 150); ctx.lineTo(m.x1 * 0.55, m.y + m.depth + 90); ctx.lineTo(m.x1, m.y + m.depth);
-  ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 4; ctx.stroke();
-  // circuit-ish lines
-  ctx.strokeStyle = st.top; ctx.globalAlpha = 0.25; ctx.lineWidth = 3;
-  for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(k * 80, m.y + 20); ctx.lineTo(k * 80, m.y + 60 + Math.abs(k) * 6); ctx.lineTo(k * 55, m.y + m.depth + 40); ctx.stroke(); }
-  ctx.globalAlpha = 1;
-  // top surface
-  ctx.fillStyle = st.top; ctx.fillRect(m.x1, m.y, m.x2 - m.x1, 10);
-  ctx.fillStyle = st.trim; ctx.fillRect(m.x1, m.y, m.x2 - m.x1, 3);
-  // ledges
-  ctx.fillStyle = st.trim; ctx.fillRect(m.x1 - 4, m.y - 2, 10, 14); ctx.fillRect(m.x2 - 6, m.y - 2, 10, 14);
-  // platforms
-  for (const p of G.plats) {
-    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(p.x1 + 6, p.y + 4, p.x2 - p.x1 - 12, 14);
-    ctx.fillStyle = st.top; ctx.fillRect(p.x1, p.y, p.x2 - p.x1, 7);
-    ctx.fillStyle = st.trim; ctx.fillRect(p.x1, p.y, p.x2 - p.x1, 2);
-    if (p.move) { ctx.fillStyle = st.top; ctx.globalAlpha = 0.5 + 0.3 * Math.sin(G.frame * 0.2); ctx.fillRect((p.x1 + p.x2) / 2 - 18, p.y + 10, 36, 5); ctx.globalAlpha = 1; }
-  }
 }
 function drawRespawnPlat(f) {
   ctx.save(); ctx.translate(f.x, f.y);
@@ -1422,6 +1405,10 @@ function drawProj(p) {
   } else if (p.type === 'wave') {
     ctx.strokeStyle = c; ctx.lineWidth = 5; ctx.shadowColor = c; ctx.shadowBlur = 12;
     ctx.beginPath(); ctx.arc(-sgn(p.vx) * 10, 0, p.r, sgn(p.vx) > 0 ? -1.2 : Math.PI - 1.2 + 0.4, sgn(p.vx) > 0 ? 1.2 : Math.PI + 1.2 - 0.4); ctx.stroke();
+  } else if (p.type === 'clog') {
+    ctx.rotate(p.t * 0.4 * sgn(p.vx)); ctx.fillStyle = '#0e5f5e'; ctx.beginPath(); ctx.ellipse(0, 0, p.r * 1.25, p.r * 0.72, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1f9c9a'; ctx.beginPath(); ctx.ellipse(0, -1, p.r * 1.1, p.r * 0.58, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0e5f5e'; for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.arc(k * 4 + 3, -2, 1.3, 0, Math.PI * 2); ctx.fill(); }
   } else if (p.type === 'bomb') {
     ctx.fillStyle = '#2a2140'; ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = G.frame % 10 < 5 ? c : '#ff5050'; ctx.beginPath(); ctx.arc(0, -p.r * 0.2, p.r * 0.4, 0, Math.PI * 2); ctx.fill();
@@ -1486,6 +1473,7 @@ function computePose(f) {
       if (t > s1) pose = lerpPose(strike, base, Math.min(1, (t - s1) / Math.max(1, mv.len - s1)));
       if (mv.name === 'nair' && t >= 3 && t < 20) rot = (t / 20) * Math.PI * 2 * f.facing * 0.5;
       if (mv.pose === 'spin') rot = f.mt * 0.6 * f.facing;
+      if (mv.rollSpin && f.mt >= 7 && f.mt < 30) rot = f.mt * 0.55 * f.facing;
       if (f.mtHold && mv.charge) pose = wind;
       break;
     }
@@ -1505,98 +1493,40 @@ function computePose(f) {
   return { pose, rot };
 }
 
-function drawFighter(f) {
-  if (f.state === 'dead' || f.state === 'out' || f.hidden) return;
-  const d = f.def, sc = f.sc, face = f.facing;
-  const { pose, rot } = computePose(f);
-  const [lean, afS, afE, abS, abE, lfH, lfK, lbH, lbK] = pose;
-  const L = 18 * sc, T = 26 * sc, U = 15 * sc, HR = 12 * sc;
+// where the 3D body is drawn from: feet position (with ledge-climb slide and hit shake) and hip height
+function fighterAnchor(f, pose) {
+  const sc = f.sc, L = 18 * sc;
   const fdy = (h, k) => L * (Math.cos(h) + Math.cos(h + k));
-  let hipH = (f.grounded || f.state === 'ledgeclimb') ? clamp(Math.max(fdy(lfH, lfK), fdy(lbH, lbK)), 14 * sc, 36 * sc) : 36 * sc;
+  let hipH = (f.grounded || f.state === 'ledgeclimb') ? clamp(Math.max(fdy(pose[5], pose[6]), fdy(pose[7], pose[8])), 14 * sc, 36 * sc) : 36 * sc;
   if (f.state === 'down') hipH = 12 * sc;
   if (f.state === 'ledgeclimb') hipH = lerp(36 * sc, 20 * sc, f.t / 22);
   let ox = f.x, oy = f.y;
   if (f.state === 'ledgeclimb') { ox = lerp(f.x, f.climbTo.x, f.t / 22); oy = lerp(f.y, f.climbTo.y, Math.min(1, f.t / 14)); }
   if (f.shake > 0) ox += rand(-3, 3);
-  // shadow
-  if (f.grounded) { ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(ox, f.ground.y + 2, f.w * 0.8, 5, 0, 0, Math.PI * 2); ctx.fill(); }
-  ctx.save();
-  ctx.translate(ox, oy - hipH);
-  if (rot) ctx.rotate(rot);
-  const blink = (f.invinc > 0 && G.frame % 6 < 3) || (f.intang > 0 && f.state !== 'ledge' && G.frame % 4 < 2);
-  if (f.od > 0) { ctx.shadowColor = d.accent; ctx.shadowBlur = 22; }
-  const dir = a => ({ x: Math.sin(a) * face, y: Math.cos(a) });
-  const neck = { x: Math.sin(lean) * T * face, y: -Math.cos(lean) * T };
-  const limb = (o, a1, a2, l1, l2) => { const d1 = dir(a1), e = { x: o.x + d1.x * l1, y: o.y + d1.y * l1 }; const d2 = dir(a1 + a2); return [o, e, { x: e.x + d2.x * l2, y: e.y + d2.y * l2 }]; };
-  const outline = '#0b0d16';
-  const seg = (pts, w, col) => {
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = outline; ctx.lineWidth = w + 4; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y); ctx.stroke();
-    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y); ctx.stroke();
-  };
-  const hip = { x: 0, y: 0 };
-  const col = blink ? '#ffffff' : d.color, dark = blink ? '#dddddd' : d.dark;
-  const hurtTint = f.state === 'hitstun' && f.hitstop > 0 ? '#ffd0d0' : null;
-  const armB = limb(neck, abS, abE, U, U), legB = limb(hip, lbH, lbK, L, L);
-  const armF = limb(neck, afS, afE, U, U), legF = limb(hip, lfH, lfK, L, L);
-  // back limbs
-  seg(legB, 9 * sc, dark); seg(armB, 8 * sc, dark);
-  if (d.acc === 'scarf') {
-    const sw = Math.sin(G.frame * 0.3) * 4; const bx = -face * (18 + Math.min(20, Math.abs(f.vx) * 2)) * sc;
-    seg([neck, { x: neck.x + bx * 0.6, y: neck.y + 4 + sw }, { x: neck.x + bx, y: neck.y + 10 - sw }], 6 * sc, d.accent);
-  }
-  // torso
-  seg([hip, neck], 16 * sc, hurtTint || col);
-  // chest emblem
-  ctx.fillStyle = d.accent; ctx.beginPath(); const cm = { x: neck.x * 0.55, y: neck.y * 0.55 }; ctx.arc(cm.x, cm.y, 3.2 * sc, 0, Math.PI * 2); ctx.fill();
-  // head
-  const hd = { x: neck.x + Math.sin(lean) * HR * face * 1.1, y: neck.y - Math.cos(lean) * HR * 1.1 };
-  ctx.fillStyle = outline; ctx.beginPath(); ctx.arc(hd.x, hd.y, HR + 2, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = hurtTint || col; ctx.beginPath();
-  if (d.acc === 'helm') { ctx.rect(hd.x - HR, hd.y - HR, HR * 2, HR * 2); } else ctx.arc(hd.x, hd.y, HR, 0, Math.PI * 2);
-  ctx.fill();
-  // visor / eyes
-  ctx.fillStyle = f.state === 'hitstun' ? '#ff5a5a' : (d.acc === 'helm' ? d.accent : '#f4f7ff');
-  ctx.fillRect(hd.x + face * HR * 0.05 - (face < 0 ? HR * 0.95 : 0), hd.y - HR * 0.25, HR * 0.95, HR * 0.4);
-  if (f.state === 'dizzy') { ctx.fillStyle = '#ffe14d'; for (let k = 0; k < 3; k++) { const aa = G.frame * 0.1 + k * 2.1; ctx.beginPath(); ctx.arc(hd.x + Math.cos(aa) * 16, hd.y - HR - 6 + Math.sin(aa) * 4, 3, 0, Math.PI * 2); ctx.fill(); } }
-  // front limbs
-  seg(legF, 9.5 * sc, col);
-  seg(armF, 8.5 * sc, col);
-  // fists
-  ctx.fillStyle = outline; ctx.beginPath(); ctx.arc(armF[2].x, armF[2].y, 5.5 * sc, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = d.accent; ctx.beginPath(); ctx.arc(armF[2].x, armF[2].y, 4 * sc, 0, Math.PI * 2); ctx.fill();
-  if (d.acc === 'blade') {
-    const e = armF[1], h = armF[2]; const vx = h.x - e.x, vy = h.y - e.y, m = Math.hypot(vx, vy) || 1;
-    const tip = { x: h.x + (vx / m) * 36 * d.reach, y: h.y + (vy / m) * 36 * d.reach };
-    ctx.strokeStyle = outline; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-    ctx.strokeStyle = '#e8f4ff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-  }
-  if (d.acc === 'orbs') {
-    for (let k = 0; k < 2; k++) { const aa = G.frame * 0.08 + k * Math.PI; ctx.fillStyle = d.accent; ctx.shadowColor = d.accent; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(neck.x + Math.cos(aa) * 26 * sc, neck.y + 6 + Math.sin(aa) * 10, 4.5 * sc, 0, Math.PI * 2); ctx.fill(); }
-  }
-  ctx.restore();
-  ctx.shadowBlur = 0;
-  // attack swoosh
+  return { ox, oy, hipH };
+}
+// 2D overlay effects on top of the 3D fighter: attack swoosh, shield bubble, rings, player tag
+function drawFighterFX(f) {
+  if (f.state === 'dead' || f.state === 'out' || f.hidden) return;
+  const d = f.def, sc = f.sc;
   for (const h of activeHBsForDraw(f)) {
     const w = hbWorld(f, h);
-    ctx.fillStyle = d.accent; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = d.accent; ctx.globalAlpha = 0.28; ctx.beginPath(); ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 0.6; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(w.x, w.y, w.r * 0.8, -1 + f.mt * 0.5, 1 + f.mt * 0.5); ctx.stroke(); ctx.globalAlpha = 1;
   }
-  // shield bubble
   if (f.state === 'shield' || f.state === 'shieldstun') {
     const r = 46 * sc * (0.35 + 0.65 * f.shieldHP / 50);
     ctx.fillStyle = PORT_COLORS[f.port]; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(f.x, f.y - f.h * 0.5, r, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 0.8; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1;
   }
+  if (f.state === 'dizzy') { ctx.fillStyle = '#ffe14d'; for (let k = 0; k < 3; k++) { const aa = G.frame * 0.1 + k * 2.1; ctx.beginPath(); ctx.arc(f.x + Math.cos(aa) * 18, f.y - f.h - 8 + Math.sin(aa) * 4, 3.5, 0, Math.PI * 2); ctx.fill(); } }
   if (f.counter) { ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.frame); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(f.x, f.y - f.h / 2, f.h * 0.6, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
-  if (f.charge > 0 && (f.state === 'attack')) { ctx.strokeStyle = f.def.accent; ctx.lineWidth = 3; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.arc(f.x, f.y - f.h / 2, f.h * 0.4 + Math.sin(G.frame * 0.5) * 4, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
-  // player tag
-  if (f.noTag) return;
+  if (f.charge > 0 && f.state === 'attack') { ctx.strokeStyle = d.accent; ctx.lineWidth = 3; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.arc(f.x, f.y - f.h / 2, f.h * 0.4 + Math.sin(G.frame * 0.5) * 4, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
   ctx.fillStyle = PORT_COLORS[f.port]; ctx.font = 'bold 15px Trebuchet MS, sans-serif'; ctx.textAlign = 'center';
-  const tag = f.cpu ? 'CPU' : 'P' + (f.port + 1);
-  const ty = oy - f.h - 26;
-  ctx.fillText(tag, ox, ty);
-  ctx.beginPath(); ctx.moveTo(ox - 6, ty + 4); ctx.lineTo(ox + 6, ty + 4); ctx.lineTo(ox, ty + 11); ctx.fill();
+  const ty = f.y - f.h - 26;
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(f.cpu ? 'CPU' : 'P' + (f.port + 1), f.x, ty);
+  ctx.fillText(f.cpu ? 'CPU' : 'P' + (f.port + 1), f.x, ty);
+  ctx.beginPath(); ctx.moveTo(f.x - 6, ty + 4); ctx.lineTo(f.x + 6, ty + 4); ctx.lineTo(f.x, ty + 11); ctx.fill();
 }
 function activeHBsForDraw(f) { if (f.state !== 'attack' || !f.move) return []; return f.move.hb.concat(f.xhb || []).filter(h => !h.grab && f.mt >= h.f[0] && f.mt <= h.f[1]); }
 
@@ -1669,7 +1599,7 @@ const $ = id => document.getElementById(id);
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); if (id) $('touch').classList.remove('on'); }
 const cfg = {
   stage: 'skyforge', stocks: 3,
-  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 1, level: 5 }, { type: 'off', fighter: 2, level: 5 }, { type: 'off', fighter: 3, level: 5 }],
+  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 1, level: 5 }, { type: 'off', fighter: 3, level: 5 }, { type: 'off', fighter: 5, level: 5 }],
 };
 function buildSelect() {
   const wrap = $('slots'); wrap.innerHTML = '';
@@ -1699,21 +1629,12 @@ function buildSelect() {
 }
 $('optStage').onclick = e => { const b = e.target.closest('button'); if (b) { cfg.stage = b.dataset.s; Sfx.blip(); buildSelect(); } };
 $('optStock').onclick = e => { const b = e.target.closest('button'); if (b) { cfg.stocks = +b.dataset.n; Sfx.blip(); buildSelect(); } };
-function drawPortrait(c, def) {
-  const saveCtx = ctx; const c2 = c.getContext('2d');
-  const fake = newFighter(def, 0, { poll: emptyIn }, false, 1);
-  fake.x = 100; fake.y = 112; fake.noTag = true; fake.grounded = true; fake.ground = { y: 112 }; fake.state = 'idle'; fake.anim = 20; fake.facing = 1;
-  c2.clearRect(0, 0, c.width, c.height);
-  const g = c2.createRadialGradient(100, 70, 5, 100, 70, 90); g.addColorStop(0, def.color + '55'); g.addColorStop(1, 'transparent');
-  c2.fillStyle = g; c2.fillRect(0, 0, 200, 120);
-  c2.save(); c2.translate(100, 116); c2.scale(0.85, 0.85); c2.translate(-100, -112);
-  ctx = c2; try { drawFighter(fake); } finally { ctx = mainCtx; c2.restore(); }
-}
+function drawPortrait(c, def) { R3.portrait(c, def); }
 
 $('bPlay').onclick = () => { Sfx.init(); Sfx.blip(); buildSelect(); showScreen('select'); };
 $('bDemo').onclick = () => {
   Sfx.init(); startMatch({ stage: ['skyforge', 'driftway', 'proving'][Math.floor(Math.random() * 3)], stocks: 3,
-    slots: [0, 1, 2, 3].map(i => ({ type: 'cpu', fighter: i, level: 6 + (i % 3) })) });
+    slots: [0, 1, 2, 3].map(i => ({ type: 'cpu', fighter: (i + Math.floor(Math.random() * 6)) % 6, level: 6 + (i % 3) })) });
 };
 $('bBack').onclick = () => { Sfx.blip(); showScreen('title'); G.mode = 'title'; };
 $('bFight').onclick = () => {

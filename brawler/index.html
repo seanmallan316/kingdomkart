@@ -9,7 +9,9 @@
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--text); overflow:hidden;
     font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; user-select:none; -webkit-user-select:none; touch-action:none; }
-  canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #sky { position:fixed; inset:0; background:var(--bg); }
+  canvas#gl, canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  canvas#c { pointer-events:none; }
   .screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
     background:radial-gradient(ellipse at 50% 30%, #1f2747 0%, #0c0f1a 70%); padding:16px; overflow:auto; }
   .screen.on { display:flex; }
@@ -55,11 +57,13 @@
 </style>
 </head>
 <body>
+<div id="sky"></div>
+<canvas id="gl"></canvas>
 <canvas id="c"></canvas>
 
 <div id="title" class="screen on">
   <h1>CLASH CORE</h1>
-  <div class="sub">platform fighter prototype</div>
+  <div class="sub">family platform fighter</div>
   <button class="big" id="bPlay">PLAY</button>
   <button class="big alt" id="bDemo">WATCH CPUs</button>
   <div class="help">
@@ -113,6 +117,8 @@
   <button id="tpause">II</button>
 </div>
 
+<script src="vendor/three.min.js"></script>
 <script src="game.js"></script>
+<script src="render3d.js"></script>
 </body>
 </html>

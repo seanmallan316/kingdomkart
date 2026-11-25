@@ -78,3 +78,13 @@ percents, and how well it recovers.
 ## Next: the droid game
 Re-theme on top of this: droid fighters, an arena theme, new music and sound, droid-specific twists. Then touch-first
 controls and an Android APK.
+
+## 3D update
+The game now draws in real 3D (three.js, bundled in `vendor/`): a lit stage with shadows and fighters built from shapes in
+code, posed by the same animation angles as before. The fight rules did not change. `render3d.js` holds the scene.
+
+Family fighters, modelled by hand from reference photos (no photo is stored in the repo or sent anywhere):
+- **Ray**: small and floaty with five jumps. Specials: Clog Toss (arcing throw), Cannonball (rolling multi-hit dash),
+  Hoodie Hop (short rising recovery), Belly Flop (ground slam, or a plunge from the air).
+- **Ollie**: very fast with a foam sword and five jumps. Specials: Whirl (spinning multi-hit, hold Special to float),
+  Dash Strike, Spiral (rising recovery), Counter.
