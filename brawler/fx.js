@@ -98,7 +98,7 @@
   const easeOut = t => 1 - Math.pow(1 - t, 3), easeOut5 = t => 1 - Math.pow(1 - t, 5);
   // ---- glow canvas
   const fxc = document.createElement('canvas'); fxc.id = 'fxc';
-  fxc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:block;pointer-events:none;mix-blend-mode:screen';
+  fxc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:block;pointer-events:none;mix-blend-mode:screen;opacity:0.78';
   const main = document.getElementById('c'); main.parentNode.insertBefore(fxc, main);
   const X = fxc.getContext('2d'), b1 = document.createElement('canvas'), B1 = b1.getContext('2d'), b2 = document.createElement('canvas'), B2 = b2.getContext('2d');
   let FW = 0, FH = 0;
@@ -131,15 +131,16 @@
     spark(x, y, color, n = 4, sp = 5) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), s = rand(sp * 0.3, sp); Pn('glow', x, y, rand(14, 28), { vx: Math.cos(a) * s, vy: Math.sin(a) * s, color, size: rand(5, 11), drag: 0.92, grav: 0.05 }); } },
     hit(x, y, d, color, lx, ly, spd) {
       const k = Math.min(d, 28) / 28, ang = lx != null ? Math.atan2(ly, lx) : rand(0, TAU);
-      Pn('bloom', x, y, 9 + k * 7, { size: 70 + k * 190, color: '#ffffff' });
-      Pn('bloom', x, y, 16 + k * 10, { size: 120 + k * 300, color });
-      Pn('flare', x, y, 12 + k * 8, { size: 220 + k * 620, color, rot: rand(-0.12, 0.12) });
+      // kept see-through and short so the fighters stay visible through a hit
+      Pn('bloom', x, y, 7 + k * 4, { size: 50 + k * 110, color: '#ffffff', amp: 0.6 });
+      Pn('bloom', x, y, 12 + k * 7, { size: 90 + k * 190, color, amp: 0.45 });
+      Pn('flare', x, y, 10 + k * 6, { size: 180 + k * 420, color, rot: rand(-0.12, 0.12), amp: 0.6 });
       Pn('ring', x, y, 16 + k * 10, { size: 60 + k * 190, color });
       const petals = 7 + Math.round(k * 9), off = rand(0, TAU);
       for (let i = 0; i < petals; i++) { const a = off + (i / petals) * TAU + rand(-0.12, 0.12), s = rand(9, 15) + k * 16; Pn('glow', x, y, rand(11, 18) + k * 7, { vx: Math.cos(a) * s, vy: Math.sin(a) * s, color: i % 2 ? '#ffffff' : color, size: 9 + k * 12, drag: 0.8, stretch: 5 }); }
       const cone = 6 + Math.round(k * 22);
       for (let i = 0; i < cone; i++) { const a = ang + rand(-0.45, 0.45) * (1 - k * 0.3), s = rand(10, 22) + k * rand(8, 30); Pn('glow', x, y, rand(14, 26) + k * 10, { vx: Math.cos(a) * s, vy: Math.sin(a) * s, color: i % 3 ? color : '#ffffff', size: 6 + k * 9, drag: 0.86, stretch: 6 }); }
-      for (let i = 0; i < 2 + k * 6; i++) { const a = ang + rand(-1.2, 1.2), s = rand(1, 4 + k * 5); Pn('wisp', x, y, rand(26, 46), { vx: Math.cos(a) * s, vy: Math.sin(a) * s, color, size: 40 + k * 70, rot: rand(0, TAU), vr: rand(-0.05, 0.05), alpha: 0.5, drag: 0.93, v: i % 4 }); }
+      for (let i = 0; i < 2 + k * 6; i++) { const a = ang + rand(-1.2, 1.2), s = rand(1, 4 + k * 5); Pn('wisp', x, y, rand(22, 38), { vx: Math.cos(a) * s, vy: Math.sin(a) * s, color, size: 34 + k * 56, rot: rand(0, TAU), vr: rand(-0.05, 0.05), alpha: 0.3, drag: 0.93, v: i % 4 }); }
       for (let i = 0; i < 2 + k * 6; i++) Pn('twinkle', x + rand(-50, 50) * (0.4 + k), y + rand(-50, 50) * (0.4 + k), rand(14, 30), { size: rand(16, 40) * (0.5 + k), color: i % 2 ? color : '#ffffff', delay: rand(0, 8) });
     },
     smoke(x, y, n = 3, color) { for (let i = 0; i < n; i++) Pn('wisp', x + rand(-10, 10), y - rand(0, 8), rand(26, 44), { vx: rand(-1.4, 1.4), vy: rand(-1.4, -0.3), color: color && color.length <= 7 ? color : '#cfd4e6', size: rand(26, 48), rot: rand(0, TAU), vr: rand(-0.04, 0.04), alpha: 0.3, drag: 0.95, v: i % 4 }); },
@@ -161,7 +162,7 @@
       G.fin = { t: 0, max: frames, x, y, color, ang, seed: Math.random() * 1000 };
       for (let i = 0; i < 7; i++) Pn('arc', x, y, rand(frames * 0.6, frames + 8), { color: i % 2 ? '#ffffff' : color, ang: rand(0, TAU), len: rand(150, 330), seed: rand(0, 99), size: rand(3, 6) });
       for (let i = 0; i < 34; i++) { const a = ang + rand(-0.5, 0.5), s = rand(18, 60); Pn('glow', x, y, rand(18, 34), { vx: Math.cos(a) * s, vy: Math.sin(a) * s, color: i % 2 ? '#ffffff' : color, size: 14, drag: 0.86, stretch: 7 }); }
-      Pn('bloom', x, y, frames, { size: 300, color, hold: true, amp: 0.55 }); Pn('bloom', x, y, 12, { size: 200, color: '#ffffff' }); Pn('flare', x, y, frames, { size: 1300, color, hold: true });
+      Pn('bloom', x, y, frames, { size: 240, color, hold: true, amp: 0.35 }); Pn('bloom', x, y, 10, { size: 150, color: '#ffffff', amp: 0.6 }); Pn('flare', x, y, frames, { size: 1300, color, hold: true });
       for (let i = 0; i < 3; i++) Pn('ring', x, y, 22 + i * 9, { size: 300 + i * 220, color: i ? color : '#ffffff', delay: i * 3 });
     },
   });
@@ -269,7 +270,7 @@
       }
       case 'wisp': { const s = p.size * (0.55 + easeOut(u) * 1.1); spr(tint(S_WISP[p.v || 0], p.color), p.x, p.y, s, s, p.rot, (p.alpha || 0.4) * Math.sin(Math.min(1, u * 5) * Math.PI / 2) * k); break; }
       case 'bloom': { const s = p.size * (p.hold ? 0.8 + 0.2 * Math.sin(u * 40) : 0.45 + easeOut5(u) * 0.75); spr(tint(S_GLOW, p.color), p.x, p.y, s, s, 0, (p.hold ? Math.min(1, k * 3) : k * k) * (p.amp || 1)); break; }
-      case 'flare': { const s = p.size * (p.hold ? 1 : 0.4 + easeOut5(u) * 0.8), a = p.hold ? Math.min(1, k * 3) * 0.8 : k * k; spr(tint(S_STREAK, p.color), p.x, p.y, s, s * 0.11, p.rot || 0, a); spr(S_STREAK, p.x, p.y, s * 0.55, s * 0.05, p.rot || 0, a); spr(tint(S_STREAK, p.color), p.x, p.y, s * 0.3, s * 0.045, (p.rot || 0) + Math.PI / 2, a * 0.7); break; }
+      case 'flare': { const s = p.size * (p.hold ? 1 : 0.4 + easeOut5(u) * 0.8), a = (p.hold ? Math.min(1, k * 3) * 0.6 : k * k) * (p.amp || 1); spr(tint(S_STREAK, p.color), p.x, p.y, s, s * 0.11, p.rot || 0, a); spr(S_STREAK, p.x, p.y, s * 0.55, s * 0.05, p.rot || 0, a); spr(tint(S_STREAK, p.color), p.x, p.y, s * 0.3, s * 0.045, (p.rot || 0) + Math.PI / 2, a * 0.7); break; }
       case 'ring': { const s = p.size * (0.12 + easeOut5(u) * 0.95); X.globalAlpha = 1; spr(tint(S_RING, p.color), p.x, p.y, s, s * (p.flat || 1), 0, k * k * 0.95); break; }
       case 'twinkle': { const s = p.size * Math.sin(u * Math.PI), a = Math.sin(u * Math.PI); spr(tint(S_STREAK, p.color), p.x, p.y, s * 2, s * 0.32, 0, a); spr(tint(S_STREAK, p.color), p.x, p.y, s * 2, s * 0.32, Math.PI / 2, a); spr(S_GLOW, p.x, p.y, s * 0.6, s * 0.6, 0, a); break; }
       case 'arc': { // flowing energy arc: a smooth curve that writhes and tapers

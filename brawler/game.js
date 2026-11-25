@@ -1332,7 +1332,7 @@ function startMatch(cfg) {
     return f;
   });
   R3.buildStage(st, G.plats); R3.resetRigs();
-  G.countdown = 200; G.cam = { x: 0, y: -150, z: 0.8 };
+  G.countdown = 200; G.cam = { x: 0, y: -60, z: 1.3 };
   G.mode = 'fight'; showScreen(null);
   Touch.on && document.getElementById('touch').classList.add('on');
 }
@@ -1400,15 +1400,14 @@ function updateCam() {
     const fx_ = clamp(f.x, b.l * 0.75, b.r * 0.75), fy = clamp(f.y, b.t * 0.7, b.b * 0.8);
     x1 = Math.min(x1, fx_); x2 = Math.max(x2, fx_); y1 = Math.min(y1, fy - f.h); y2 = Math.max(y2, fy); n++;
   }
-  // always keep some of the stage in view
-  x1 = Math.min(x1, st.main.x1 * 0.6); x2 = Math.max(x2, st.main.x2 * 0.6); y1 = Math.min(y1, -260); y2 = Math.max(y2, st.main.y + 60);
-  if (!n) { x1 = st.main.x1; x2 = st.main.x2; }
-  const padX = 180, padY = 140;
-  const w = x2 - x1 + padX * 2, h = y2 - y1 + padY * 2;
+  // frame the fighters closely; only widen when they spread out
+  if (!n) { x1 = st.main.x1 * 0.5; x2 = st.main.x2 * 0.5; y1 = -200; y2 = 0; }
+  const padX = 150, padY = 105;
+  const w = Math.max(540, x2 - x1 + padX * 2), h = Math.max(330, y2 - y1 + padY * 2);
   const base = VH / 720;
-  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.45, 1.25);
+  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.5, 2.3);
   const c = G.cam;
-  c.x = lerp(c.x, (x1 + x2) / 2, 0.08); c.y = lerp(c.y, (y1 + y2) / 2 + 30, 0.08); c.z = lerp(c.z, z, 0.05);
+  c.x = lerp(c.x, (x1 + x2) / 2, 0.1); c.y = lerp(c.y, (y1 + y2) / 2 - 12, 0.1); c.z = lerp(c.z, z, z < c.z ? 0.12 : 0.05);
 }
 function camScale() { return G.cam.z * (VH / 720); }
 function w2s(x, y) { const s = camScale(); return { x: (x - G.cam.x) * s + VW / 2, y: (y - G.cam.y) * s + VH / 2 }; }
@@ -1604,6 +1603,8 @@ function drawOffscreen() {
 }
 function pctColor(p) { const k = Math.min(p, 160) / 160; return `hsl(${50 - k * 50}, 100%, ${100 - k * 52}%)`; }
 function drawHUD() {
+  // on short screens (phones held sideways) the HUD shrinks so it does not cover the fight
+  const hs = clamp(VH / 600, 0.62, 1); ctx.save(); ctx.translate(VW / 2, VH); ctx.scale(hs, hs); ctx.translate(-VW / 2, -VH);
   const fs = G.fighters, n = fs.length;
   const cw = Math.min(210, (VW - 40) / n - 10), chh = 74;
   const total = n * cw + (n - 1) * 12; let x0 = (VW - total) / 2;
@@ -1633,6 +1634,7 @@ function drawHUD() {
     ctx.fillRect(mx, my, mw * (f.od > 0 ? f.od / 360 : f.meter / 100), 7);
     if (full) { ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Trebuchet MS'; ctx.fillText('OVERDRIVE READY', mx, my - 2); }
   }
+  ctx.restore();
   // countdown
   if (G.countdown > 0) {
     const n2 = Math.ceil(G.countdown / 60) - 0;
