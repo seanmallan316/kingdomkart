@@ -419,7 +419,7 @@ const FIGHTERS = [
 ];
 
 // Fighters are drawn and simulated larger than the first prototype so they read clearly on screen.
-const FIGHTER_SIZE = 1.6;
+const FIGHTER_SIZE = 1.9;
 for (const d of FIGHTERS) d.scale *= FIGHTER_SIZE;
 
 function buildMoves(def) {
@@ -1414,10 +1414,10 @@ function updateCam() {
   }
   // frame the fighters closely; only widen when they spread out
   if (!n) { x1 = st.main.x1 * 0.5; x2 = st.main.x2 * 0.5; y1 = -200; y2 = 0; }
-  const padX = 95, padY = 80;
-  const w = Math.max(400, x2 - x1 + padX * 2), h = Math.max(280, y2 - y1 + padY * 2);
+  const padX = 70, padY = 65;
+  const w = Math.max(340, x2 - x1 + padX * 2), h = Math.max(260, y2 - y1 + padY * 2);
   const base = VH / 720;
-  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.55, 3.0);
+  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.5, 3.2);
   const c = G.cam;
   c.x = lerp(c.x, (x1 + x2) / 2, 0.1); c.y = lerp(c.y, (y1 + y2) / 2 - 12, 0.1); c.z = lerp(c.z, z, z < c.z ? 0.12 : 0.05);
 }
@@ -1767,7 +1767,9 @@ let last = performance.now(), acc = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(100, now - last); last = now;
-  if (G.mode === 'fight' && !G.paused) { acc += dt; let n = 0; while (acc >= 1000 / 60 && n < 4) { step(); acc -= 1000 / 60; n++; } if (n === 4) acc = 0; }
+  // the game runs at G.speed (0.8 by default, a bit calmer than full speed); fighters are drawn between steps so it stays smooth
+  const stepMs = 1000 / (60 * (G.speed || 0.8));
+  if (G.mode === 'fight' && !G.paused) { acc += dt; let n = 0; while (acc >= stepMs && n < 4) { for (const f of G.fighters) { f.px = f.x; f.py = f.y; } step(); acc -= stepMs; n++; } if (n === 4) acc = 0; G.alpha = acc / stepMs; } else G.alpha = 1;
   render();
 }
 requestAnimationFrame(loop);

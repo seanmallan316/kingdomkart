@@ -25,10 +25,10 @@
 
   // ------------------------------------------------------------ setup per match
   function reset() {
-    G.items = []; G.orb = null; G.cine = null; G.notes = [];
+    G.items = []; G.orb = null; G.cine = null; G.notes = []; G.pulses = [];
     G.boxT = rand(300, 480); G.orbT = rand(1100, 1600);
     for (const f of G.fighters) {
-      f.baseSc = f.sc; f.baseDef = f.def; f.item = null; f.final = false; f.starT = 0; f.giantT = 0; f.speedT = 0; f.malletT = 0; f.malletCD = new Map();
+      f.baseSc = f.sc; f.baseDef = f.def; f.item = null; f.final = false; f.starT = 0; f.giantT = 0; f.speedT = 0; f.malletT = 0; f.malletCD = new Map(); f.hold = {}; f.pcd = { attack: 0, special: 0, smash: 0 };
       Object.assign(f.moves, itemMoves());
     }
   }
@@ -40,6 +40,9 @@
       shoot: M({ len: 18, pose: 'jab', special: true, drift: 1, landLag: 2, onFrame: (f, t) => { if (t === 5) fire(f); } }),
       toss: M({ len: 20, pose: 'throw', special: true, drift: 1 }),
       finale: M({ len: 99999, pose: 'smashF', special: true, drift: 0 }),
+      pulseA: M({ len: 34, pose: 'smashD', special: true, drift: 0.5, onFrame: (f, t) => { if (t === 7) pulse(f, 'attack'); } }),
+      pulseB: M({ len: 36, pose: 'smashU', special: true, drift: 0.5, onFrame: (f, t) => { if (t === 7) pulse(f, 'special'); } }),
+      pulseS: M({ len: 40, pose: 'smashF', special: true, drift: 0.5, onFrame: (f, t) => { if (t === 9) pulse(f, 'smash'); } }),
       finaleBeam: M({ len: 99999, pose: 'jab', special: true, drift: 0 }),
       finaleRush: M({ len: 99999, pose: 'dashkick', special: true, drift: 0 }),
       finaleStorm: M({ len: 99999, pose: 'nair', special: true, drift: 0 }),
@@ -326,6 +329,7 @@
       if (!it.box && it.grounded && !it.thrown && it.t > 1100) it.dead = true; // unclaimed items vanish after a while
     }
     hitTargets();
+    pulseInput(); pulseStep();
     for (const f of G.fighters) {
       if (f.starT > 0) { f.starT--; if (G.frame % 2 === 0) fx.spark(f.x + rand(-24, 24) * f.sc, f.y - rand(0, f.h), `hsl(${(G.frame * 12) % 360},100%,65%)`, 1, 3); }
       if (f.giantT > 0 && --f.giantT === 0) { grow(f, 1); fx.ring(f.x, f.y - f.h / 2, '#ffffff', 50); }
@@ -350,6 +354,55 @@
     }
     for (const it of G.items) if (it.box && !it.dead && !it.held && Math.hypot(cx - it.x, cy - it.y) < r + it.r) openBox(it, f);
     const o = G.orb; if (o && G.frame % 20 === 0 && Math.hypot(cx - o.x, cy - o.y) < r + 30) hitOrb(f, 10, f.facing);
+  }
+  // ------------------------------------------------------------ pulse attacks: hold Attack, Special or Smash to release a shockwave (10 s recharge each)
+  const PULSE = {
+    attack: { move: 'pulseA', R: 200, d: 9, a: 45, b: 55, g: 72, col: '#ffffff', name: 'POWER PULSE' },
+    special: { move: 'pulseB', R: 290, d: 7, a: 80, b: 62, g: 62, col: null, name: 'ENERGY PULSE' },
+    smash: { move: 'pulseS', R: 230, d: 15, a: 38, b: 66, g: 105, col: '#ffd23f', name: 'SMASH PULSE' },
+  };
+  const HOLD = 28, pulseCD = () => Math.round(600 * (G.speed || 0.8));
+  const PULSE_MOVES = new Set(['pulseA', 'pulseB', 'pulseS', 'finale', 'finaleBeam', 'finaleRush', 'finaleStorm']);
+  function canPulse(f) {
+    if (G.cine || f.malletT > 0) return false;
+    if (['idle', 'walk', 'run', 'crouch', 'air', 'land', 'jumpsquat', 'shield'].includes(f.state)) return true;
+    return f.state === 'attack' && f.move && !PULSE_MOVES.has(Object.keys(f.moves).find(k => f.moves[k] === f.move));
+  }
+  function pulseInput() {
+    for (const f of G.fighters) {
+      if (!f.pcd) continue; const raw = f.prevRaw || {};
+      for (const b in PULSE) {
+        if (f.pcd[b] > 0) f.pcd[b]--;
+        f.hold[b] = raw[b] ? (f.hold[b] || 0) + 1 : 0;
+        if (f.hold[b] === HOLD && f.pcd[b] <= 0 && canPulse(f)) {
+          f.pcd[b] = pulseCD(); f.hold[b] = HOLD + 1; if (f.state === 'attack') endMove(f);
+          startMove(f, PULSE[b].move); f.buf[b] = 0; f.charge = 0;
+          snd('finaleCharge', 0.5, 1.8); Sfx.voice && Sfx.voice(f, 'atk2');
+        }
+      }
+    }
+  }
+  function pulse(f, b) {
+    const P = PULSE[b], k = f.sc / 1.9;
+    G.pulses.push({ f, b, x: f.x, y: f.y - f.h * 0.5, r: 0, R: P.R * Math.max(0.8, k), t: 0, hit: new Set(), col: P.col || f.def.accent });
+    G.shake = Math.max(G.shake, b === 'smash' ? 10 : 6); G.flash = Math.max(G.flash, 4);
+    snd(b === 'smash' ? 'orbBreak' : 'itemBreak', b === 'smash' ? 0.55 : 0.7, b === 'special' ? 0.8 : 1.15);
+    for (let i = 0; i < 24; i++) fx.spark(f.x, f.y - f.h * 0.5, i % 2 ? '#ffffff' : (P.col || f.def.accent), 1, 14);
+    note(f.x, f.y - f.h - 30, P.name + '!', P.col || f.def.accent, 1, 60);
+  }
+  function pulseStep() {
+    for (const p of G.pulses) {
+      p.t++; p.r = p.R * (1 - Math.pow(1 - Math.min(1, p.t / 16), 3)); const f = p.f, P = PULSE[p.b];
+      for (const v of G.fighters) {
+        if (v === f || p.hit.has(v) || !canBeHit(v) || (f.team && f.team === v.team)) continue;
+        const d = Math.hypot(v.x - p.x, (v.y - v.h / 2) - p.y);
+        if (d > p.r + v.w / 2) continue;
+        p.hit.add(v); applyHit(f, v, { d: P.d * f.def.power, a: P.a, b: P.b, g: P.g }, sgn(v.x - p.x) || f.facing, { projectile: true, px: v.x, py: v.y - v.h / 2 });
+      }
+      for (const it of G.items) if (it.box && !it.dead && !it.held && !p.hit.has(it) && Math.hypot(it.x - p.x, it.y - it.r - p.y) < p.r + it.r) { p.hit.add(it); openBox(it, f); }
+      const o = G.orb; if (o && !p.hit.has(o) && Math.hypot(o.x - p.x, o.y - p.y) < p.r + 30) { p.hit.add(o); hitOrb(f, P.d, sgn(o.x - p.x) || 1); }
+    }
+    G.pulses = G.pulses.filter(p => p.t < 24);
   }
   function note(x, y, text, color, follow, life = 90) { if (G.notes) G.notes.push({ x, y, text, color, t: 0, life }); }
 
@@ -396,6 +449,9 @@
         }
       }
       if (f.item && f.item.type === 'balloon' && near && press) r.attack = true;
+      const a = f.ai || (f.ai = {});
+      if (a.pulseB) { r[a.pulseB] = true; r.x = 0; if (--a.pulseN <= 0) a.pulseB = null; return r; }
+      if (near && f.pcd && Math.random() < 0.004 * lvl) { const ready = Object.keys(PULSE).filter(b => f.pcd[b] <= 0); if (ready.length) { a.pulseB = ready[Math.floor(Math.random() * ready.length)]; a.pulseN = HOLD + 4; } }
     } catch (e) { /* the base AI keeps working */ }
     return r;
   };
@@ -448,12 +504,45 @@
       for (let k = 0; k < 8; k++) { const y = f.y - rand(10, f.h); g.globalAlpha = 0.6; g.beginPath(); g.moveTo(f.x - f.facing * rand(40, 80), y); g.lineTo(f.x - f.facing * rand(200, 420), y); g.stroke(); }
       g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     }
+    for (const p of G.pulses || []) {
+      const a = 1 - p.t / 24; g.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 3; k++) { g.strokeStyle = k === 1 ? '#ffffff' : p.col; g.globalAlpha = a * (k === 1 ? 0.9 : 0.55); g.lineWidth = (k === 1 ? 6 : 16 - k * 3) / Math.max(0.5, s) * 1.5; g.beginPath(); g.arc(p.x, p.y, Math.max(1, p.r - k * 10), 0, TAU); g.stroke(); }
+      const rg = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(1, p.r)); rg.addColorStop(0, 'rgba(255,255,255,0)'); rg.addColorStop(0.85, 'rgba(255,255,255,0)'); rg.addColorStop(1, p.col);
+      g.globalAlpha = a * 0.35; g.fillStyle = rg; g.beginPath(); g.arc(p.x, p.y, Math.max(1, p.r), 0, TAU); g.fill();
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    }
+    for (const f of G.fighters) {
+      if (!f.hold || f.state === 'dead' || f.state === 'out') continue;
+      for (const b in PULSE) {
+        const h = f.hold[b] || 0; if (h < 8 || h > HOLD || f.pcd[b] > 0) continue;
+        const u = (h - 8) / (HOLD - 8), cy = f.y - f.h / 2, col = PULSE[b].col || f.def.accent;
+        g.globalCompositeOperation = 'lighter'; g.strokeStyle = col; g.globalAlpha = 0.4 + u * 0.5; g.lineWidth = 4 / Math.max(0.5, s) * 1.5;
+        g.beginPath(); g.arc(f.x, cy, f.h * (0.9 - u * 0.35), -Math.PI / 2, -Math.PI / 2 + TAU * u); g.stroke();
+        g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+      }
+    }
     for (const n of G.notes) {
       const a = Math.min(1, (n.life - n.t) / 20), y = n.y - n.t * 0.6;
       g.globalAlpha = a; g.font = `italic 900 ${22 / Math.max(0.6, s) * 1.2}px Trebuchet MS, sans-serif`; g.textAlign = 'center';
       g.lineWidth = 5 / s; g.strokeStyle = '#000'; g.strokeText(n.text, n.x, y); g.fillStyle = n.color; g.fillText(n.text, n.x, y);
     }
     g.globalAlpha = 1; g.restore();
+    // pulse recharge dials on each HUD card (same layout as drawHUD)
+    {
+      const hs = clamp(VH / 600, 0.62, 1), fs = G.fighters, n = fs.length, cw = Math.min(210, (VW - 40) / n - 10), chh = 74, total = n * cw + (n - 1) * 12;
+      g.save(); g.translate(VW / 2, VH); g.scale(hs, hs); g.translate(-VW / 2, -VH);
+      let x0 = (VW - total) / 2; const y0 = VH - chh - 12;
+      for (const f of fs) {
+        const x = x0; x0 += cw + 12; if (!f.pcd) continue;
+        ['attack', 'special', 'smash'].forEach((b, k) => {
+          const cx = x + cw - 14 - (2 - k) * 17, cy = y0 - 9, cd = f.pcd[b], full = pulseCD(), u = cd > 0 ? 1 - cd / full : 1;
+          g.fillStyle = 'rgba(10,12,24,.8)'; g.beginPath(); g.arc(cx, cy, 7.5, 0, TAU); g.fill();
+          g.fillStyle = cd > 0 ? 'rgba(255,255,255,.35)' : (PULSE[b].col || f.def.accent); g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, 6, -Math.PI / 2, -Math.PI / 2 + TAU * u); g.closePath(); g.fill();
+          g.fillStyle = cd > 0 ? '#ffffff' : '#000'; g.font = 'bold 8px Trebuchet MS'; g.textAlign = 'center'; g.fillText('ABS'[k], cx, cy + 3);
+        });
+      }
+      g.restore();
+    }
     // cinematic framing
     if (c && (c.phase === 'intro' || c.phase === 'barrage')) {
       const k = Math.min(1, c.t / 10), bar = VH * 0.12 * k, f = c.f;
@@ -544,7 +633,7 @@
     const hm = new T3.Mesh(new T3.ShapeGeometry(hs), eM); hm.position.z = 26.5; em.add(hm);
     const ht = new T3.Mesh(new T3.ShapeGeometry(heartShape(4.5)), new T3.MeshBasicMaterial({ color: '#ff4d6d' })); ht.position.set(0, -1.5, 26.8); ht.rotation.z = Math.PI; em.add(ht);
     g.add(em);
-    const sp = new T3.Sprite(new T3.SpriteMaterial({ map: glow(), color: '#fff2c0', transparent: true, depthWrite: false, blending: T3.AdditiveBlending })); sp.scale.set(170, 170, 1); g.add(sp);
+    const sp = new T3.Sprite(new T3.SpriteMaterial({ map: glow(), color: '#fff2c0', transparent: true, depthWrite: false, blending: T3.AdditiveBlending })); sp.scale.set(120, 120, 1); g.add(sp);
     g.userData = { mat, sp, em };
     return g;
   }
@@ -601,7 +690,7 @@
       if (!orbMesh) orbMesh = makeOrb(); if (orbMesh.parent !== group) group.add(orbMesh);
       const o = G.orb; orbMesh.visible = true; orbMesh.position.set(o.x, -o.y, 20); orbMesh.rotation.y = G.frame * 0.03; orbMesh.rotation.x = Math.sin(G.frame * 0.02) * 0.3;
       orbMesh.userData.mat.uniforms.t.value = G.frame / 60; orbMesh.userData.mat.uniforms.flash.value = o.flash / 8;
-      const p = 1 + Math.sin(G.frame * 0.15) * 0.12; orbMesh.userData.sp.scale.set(170 * p, 170 * p, 1);
+      const p = 1 + Math.sin(G.frame * 0.15) * 0.12; orbMesh.userData.sp.scale.set(120 * p, 120 * p, 1);
     } else if (orbMesh) orbMesh.visible = false;
     // giant fighters
     for (const f of G.fighters) {

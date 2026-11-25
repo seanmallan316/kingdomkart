@@ -205,7 +205,23 @@ updateCam, render) and draws its models through `R3.addHook`. Set `cfg.items = f
   blasts them out). The finale fighter can't be hit while it plays. CPUs chase the orb, grab items and use finales.
 - New sounds (ElevenLabs): crate break, pickup chime, orb shatter, finale charge, energy beam, home-run crack.
 
-Fighters are 1.6x their base size (was 1.35) and the camera frames them tighter (zoom up to 3x).
+## Pulse attacks (`items.js`)
+Hold **Attack**, **Special** or **Smash** for about half a second (a ring fills around the fighter) to release a
+shockwave. Each button has its own pulse and its own 10-second recharge, shown as three small dials (A, B, S) above
+each player's card:
+- **Power Pulse** (Attack): close shockwave, sends foes out to the sides.
+- **Energy Pulse** (Special): the widest ring, launches foes upward.
+- **Smash Pulse** (Smash): strongest, big knockback.
+Pulses also break item boxes and hit the Super Orb. CPUs use them now and then when someone is close.
+
+## Game feel
+- **Game speed** (Options): Slow 0.65x, Normal 0.8x (default), Fast 1.0x. The simulation steps at that rate and fighters
+  are drawn between steps (`G.alpha`, `f.px/f.py`), so it stays smooth on any screen refresh rate.
+- **Motion:** every state now plays a real motion clip (jump squat, landing, crouch, flips, air dodge, ledge,
+  specials without their own clip use cast / air punch / high kick / slam), never the old hand-posed angles.
+  New clips fade in over several frames; attacks fade in faster so hits still read.
+- Fighters are 1.9x their base size; the camera frames them tightly (zoom up to 3.2x).
+- The ambient-occlusion pass skips sprites, leaf and grass cards and other see-through things (they showed as squares).
 
 ## One-file build
 `python3 tools/build_single.py` writes `SuperFamilySmash.html`: every script, the logo and the intro video inlined into

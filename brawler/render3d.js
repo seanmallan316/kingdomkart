@@ -56,6 +56,11 @@ const R3 = (() => {
       aoPass.updateGtaoMaterial({ radius: 45, distanceExponent: 1.4, thickness: 12, scale: 1.2, samples: 12, distanceFallOff: 1 });
       aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
       aoPass.blendIntensity = 1.0;
+      const ov = aoPass.overrideVisibility.bind(aoPass);
+      aoPass.overrideVisibility = function () {
+        ov();
+        this.scene.traverse(o => { const m = o.material; if (o.isSprite || (o.userData && o.userData.noAO) || (m && !Array.isArray(m) && (m.alphaTest > 0 || m.transparent || m.blending === THREE.AdditiveBlending))) o.visible = false; });
+      };
       composer.addPass(aoPass); composer.addPass(new THREE.OutputPass());
     } catch (e) { console.warn('AO off', e); aoOn = false; composer = null; }
     return composer;
@@ -396,7 +401,7 @@ const R3 = (() => {
   }
   const MOVE_CLIP = { jab1: 'jab', jab2: 'jab2', jab3: 'round', ftilt: 'kick', utilt: 'upper', dtilt: 'sweep', dash: 'kick', fsmash: 'smash', usmash: 'highkick', dsmash: 'sweep',
     nair: 'spin', fair: 'airpunch', bair: 'round', uair: 'highkick', dair: 'slam', grab: 'grab', dashgrab: 'grab', throw: 'pitch',
-    batSwing: 'pitch', batHomer: 'smash', batAir: 'spin', shoot: 'cast', toss: 'pitch', finale: 'victory', finaleBeam: 'cast', finaleRush: 'kick', finaleStorm: 'spin', ledgeAtk: 'sweep', getupAtk: 'sweep', counterStrike: 'smash' };
+    batSwing: 'pitch', batHomer: 'smash', batAir: 'spin', shoot: 'cast', toss: 'pitch', finale: 'victory', finaleBeam: 'cast', finaleRush: 'kick', finaleStorm: 'spin', pulseA: 'slam', pulseB: 'cast', pulseS: 'smash', ledgeAtk: 'sweep', getupAtk: 'sweep', counterStrike: 'smash' };
   const CHAR_CLIP = {
     ray: { nspec: 'kick', uspec: 'jump', dspec: 'slam' },
     norah: { nspec: 'pitch', sspec: 'airpunch', uspec: 'jump', dspec: 'kick', run: 'sprint' },
@@ -416,11 +421,19 @@ const R3 = (() => {
     const get = n => C[own[n] || n] || C[n];
     const hold = (c, at) => ({ c, time: at, loop: false });
     if (G.ending && f.stocks > 0 && f.grounded && S === 'idle') return { c: C.victory, time: G.ending / 60, loop: true };
+    const J = C.jump;
     switch (S) {
       case 'idle': case 'respawn': case 'shieldDrop': return { c: C.idle, time: f.anim / 60, loop: true };
       case 'walk': return { c: C.walk, time: f.anim / 60 * 1.3, loop: true };
       case 'run': return { c: get('run'), time: f.anim / 60 * 1.15, loop: true };
-      case 'air': if (f.flipT > 0) return null; return f.vy < -1 ? hold(C.jump, C.jump.dur * 0.42) : { c: C.fall, time: f.anim / 60, loop: true, air: true };
+      case 'air': if (f.flipT > 0) return { c: J, time: J.dur * (0.3 + 0.25 * (1 - f.flipT / 24)), loop: false, air: true, keepRot: true }; return f.vy < -1 ? { c: J, time: Math.min(J.dur * 0.55, J.dur * 0.3 + f.t / 60), loop: false, air: true } : { c: C.fall, time: f.anim / 60, loop: true, air: true };
+      case 'jumpsquat': return hold(J, Math.min(J.dur * 0.25, 0.05 + f.t / 30));
+      case 'land': return hold(J, Math.max(J.dur * 0.08, J.dur * 0.75 - f.t / 40));
+      case 'crouch': return hold(J, J.dur * 0.2);
+      case 'airdodge': return { c: C.roll, time: Math.min(C.roll.dur * 0.6, f.t / 40), loop: false, air: true };
+      case 'ledge': return { c: C.grab, time: C.grab.impact || C.grab.dur * 0.5, loop: false, air: true };
+      case 'ledgeclimb': return hold(C.standup, C.standup.dur * 0.5 + f.t / 60);
+      case 'shieldbreak': case 'dizzy': case 'stunned': return { c: C.hit, time: f.anim / 60, loop: true };
       case 'helpless': return { c: C.fall, time: f.anim / 60, loop: true, air: true };
       case 'hitstun': return f.tumble ? { c: C.fly, time: C.fly.dur * 0.45, loop: false, air: true, keepRot: true } : hold(C.hit, Math.min(C.hit.dur * 0.6, 0.15 + t));
       case 'shield': case 'shieldstun': case 'spotdodge': return hold(C.block, Math.min(C.block.impact || 0.5, 0.2 + t));
@@ -430,8 +443,11 @@ const R3 = (() => {
       case 'holding': return hold(C.grab, C.grab.impact || 1);
       case 'grabbed': return hold(C.hit, C.hit.dur * 0.3);
       case 'attack': {
+        if (!f.move) return { c: C.idle, time: f.anim / 60, loop: true };
         const mv = f.move, c = get(mv.name) || C[MOVE_CLIP[mv.name]]; const cc = C[own[mv.name]] || C[MOVE_CLIP[mv.name]];
-        const clip = cc || null; if (!clip || mv.rollSpin) return null;
+        const GEN = { nspec: 'cast', sspec: 'airpunch', uspec: 'highkick', dspec: 'slam' };
+        const clip = cc || C[GEN[mv.name]] || C[mv.air ? 'airpunch' : 'smash'];
+        if (mv.rollSpin) return { c: C.spin || C.roll, time: f.mt / 60, loop: true, air: !f.grounded, keepRot: true };
         const hbs = mv.hb.concat(f.xhb || []);
         const hs = Math.max(2, hbs.length ? Math.min.apply(null, hbs.map(h => h.f[0])) : mv.len * 0.3);
         const imp = clip.impact != null ? clip.impact : clip.dur * 0.4, lead = Math.min(imp, 0.45);
@@ -439,7 +455,7 @@ const R3 = (() => {
         return { c: clip, time, loop: false, air: !f.grounded };
       }
     }
-    return null;
+    return f.grounded ? { c: C.idle, time: f.anim / 60, loop: true } : { c: C.fall, time: f.anim / 60, loop: true, air: true };
   }
 
   function poseGlb(rig, pose, rot, facing, f) {
@@ -450,7 +466,9 @@ const R3 = (() => {
     let hip = rig.hipRest;
     if (pick && pick.c) {
       for (const r of rig.rest) r.target.copy(r.local);
-      const hy = sampleClip(rig, pick.c, pick.time, pick.loop);
+      const adv = pick.loop || (f && f.state === 'attack') ? (G.alpha || 0) / 60 : 0;
+      if (rig.lastClip !== pick.c) { rig.lastClip = pick.c; rig.blendT = 0; }
+      const hy = sampleClip(rig, pick.c, pick.time + adv, pick.loop);
       if (!pick.air) hip = clamp(rig.hipRest + hy * rig.unit, rig.hipRest * 0.18, rig.hipRest * 1.6);
       rig.spin.rotation.z = pick.keepRot || (f && f.state === 'air') ? -rot : 0;
     } else {
@@ -474,8 +492,10 @@ const R3 = (() => {
       }
     }
     // ease every bone toward its target so moves flow into each other
-    const k = f ? 0.42 : 1;
-    rig.hipNow = rig.hipNow == null || !f ? hip : rig.hipNow + (hip - rig.hipNow) * 0.5;
+    // a new clip fades in over a few frames (faster for attacks so hits still read instantly)
+    rig.blendT = (rig.blendT || 0) + 1;
+    const fast = f && f.state === 'attack', k = !f ? 1 : Math.min(1, (fast ? 0.32 : 0.2) + rig.blendT * (fast ? 0.06 : 0.035));
+    rig.hipNow = rig.hipNow == null || !f ? hip : rig.hipNow + (hip - rig.hipNow) * 0.3;
     rig.spin.position.y = rig.hipNow;
     for (const r of rig.rest) r.b.quaternion.slerp(r.target, k);
   }
@@ -531,6 +551,8 @@ const R3 = (() => {
     const { pose, rot } = computePose(f);
     const a = fighterAnchor(f, pose);
     rig.root.position.set(a.ox, -a.oy, 0);
+    const ia = 1 - (G.alpha == null ? 1 : G.alpha);
+    if (f.px != null && ia > 0 && Math.abs(f.x - f.px) + Math.abs(f.y - f.py) < 160) { rig.root.position.x -= (f.x - f.px) * ia; rig.root.position.y += (f.y - f.py) * ia; }
     let want = f.facing * TURN;
     if (f.state === 'ledge') want = f.facing * (Math.PI / 2 + 0.5); // hang facing the wall
     rig.turnY += (want - rig.turnY) * 0.35; rig.turn.rotation.y = rig.turnY;
