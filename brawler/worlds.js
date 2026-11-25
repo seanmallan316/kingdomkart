@@ -23,7 +23,7 @@
   }
   function texMat(tex, o) {
     for (const t of [tex.map, tex.bump]) { t.repeat.set(tex.rep[0], tex.rep[1]); t.needsUpdate = true; }
-    return new T.MeshStandardMaterial(Object.assign({ map: tex.map, bumpMap: tex.bump, bumpScale: 2.2, roughness: 0.78, metalness: 0, envMapIntensity: 0.5 }, o || {}));
+    return new T.MeshStandardMaterial(Object.assign({ map: tex.map, bumpMap: tex.bump, bumpScale: 2.2, roughness: 0.78, metalness: 0, envMapIntensity: 0.35 }, o || {}));
   }
   const noise = (g, w, h, n, a, col) => { for (let i = 0; i < n; i++) { g.fillStyle = col || `rgba(0,0,0,${Math.random() * a})`; g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); } };
   const TEX = {
@@ -121,7 +121,7 @@
 
   // ------------------------------------------------------------ small builders
   let api = null, world = null;
-  const M = (c, o) => new T.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.75, metalness: 0, envMapIntensity: 0.5 }, o || {}));
+  const M = (c, o) => new T.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.75, metalness: 0, envMapIntensity: 0.35 }, o || {}));
   const G2 = (c, k = 1) => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k });
   function add(parent, geo, mat, x = 0, y = 0, z = 0, cast = true) { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; parent.add(m); return m; }
   function rbox(w, h, d, r = 6) { // rounded box: a beveled extrusion, centred on its middle
@@ -279,10 +279,10 @@
   }
   function platMesh(pw, mat, sideMat, thick = 14, depth = 120, r = 6) { const g = new T.Group(); const m = add(g, rbox(pw, thick, depth, r), [sideMat, mat], 0, -thick / 2, 0); m.receiveShadow = true; return g; }
   function lights(L) {
-    const s = api.sun; s.color.set(L.sun); s.intensity = L.sunI; s.position.set(L.sunPos[0], L.sunPos[1], L.sunPos[2]);
-    const hemi = api.scene.children.find(o => o.isHemisphereLight); if (hemi) { hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemiI * (api.envTex ? 0.75 : 1); }
-    const rim = api.scene.children.find(o => o.isDirectionalLight && o !== s); if (rim) { rim.color.set(L.rim); rim.intensity = L.rimI; }
-    api.renderer.toneMappingExposure = L.exposure || 1;
+    const s = api.sun; s.color.set(L.sun); s.intensity = L.sunI * 1.15; s.position.set(L.sunPos[0], L.sunPos[1], L.sunPos[2]);
+    const hemi = api.scene.children.find(o => o.isHemisphereLight); if (hemi) { hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemiI * (api.envTex ? 0.55 : 0.8); }
+    const rim = api.scene.children.find(o => o.isDirectionalLight && o !== s); if (rim) { rim.color.set(L.rim); rim.intensity = L.rimI * 1.4; }
+    api.renderer.toneMappingExposure = (L.exposure || 1) * 0.95;
   }
   function particles(g, n, spread, make) { const list = []; for (let i = 0; i < n; i++) { const p = make(i); g.add(p.o); list.push(p); } world.particles.push(...list); return list; }
 
@@ -372,7 +372,7 @@
         v.fillStyle = '#ffffff'; v.fillRect(0, 600, 1024, 14); for (let x = 0; x < 1024; x += 40) v.fillRect(x, 560, 12, 60);
         v.fillStyle = '#6fb653'; v.fillRect(0, 618, 1024, 102); }
       const viewT = new T.CanvasTexture(view); viewT.colorSpace = T.SRGBColorSpace;
-      const win = new T.Group(); add(win, new T.PlaneGeometry(1300, 900), new T.MeshBasicMaterial({ map: viewT, toneMapped: false }), 0, 0, -30, false); const fr = M('#fbf7ee');
+      const win = new T.Group(); add(win, new T.PlaneGeometry(1300, 900), new T.MeshBasicMaterial({ map: viewT, toneMapped: false }), 0, 0, -12, false); const fr = M('#fbf7ee');
       for (const sx of [-1, 1]) { const cur = new T.PlaneGeometry(260, 1100, 30, 1), cp = cur.attributes.position; for (let i = 0; i < cp.count; i++) cp.setZ(i, Math.sin(cp.getX(i) * 0.09) * 14); cur.computeVertexNormals(); add(win, cur, M('#f6efe0', { side: T.DoubleSide, roughness: 1 }), sx * 760, -20, 40); }
       for (const x of [-650, 0, 650]) add(win, rbox(40, 960, 40, 8), fr, x, 0, 10); for (const y of [-450, 0, 450]) add(win, rbox(1340, 40, 40, 8), fr, 0, y, 10);
       win.position.set(-300, 760, -1270); g.add(win);
@@ -398,13 +398,13 @@
       g.add(skyDome('#6a6ad8', '#ffae6b', '#ffd9a0')); api.scene.fog = new T.Fog('#f7b98a', 2600, 9000);
       const asphalt = texMat(TEX.asphalt(), { roughness: 0.95, bumpScale: 3 });
       mainSlab(g, m, asphalt, texMat(TEX.asphalt(), { color: '#9a9aa2' }), 320, 60, 8);
-      const chalk = TEX.chalk(); const cm = new T.MeshStandardMaterial({ map: chalk.map, transparent: true, roughness: 1, depthWrite: false }); const ch = add(g, new T.PlaneGeometry(m.x2 - m.x1 - 20, 200), cm, 0, 0.6, 10, false); ch.rotation.x = -Math.PI / 2;
+      const chalk = TEX.chalk(); const cm = new T.MeshStandardMaterial({ map: chalk.map, transparent: true, roughness: 1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); const ch = add(g, new T.PlaneGeometry(m.x2 - m.x1 - 20, 200), cm, 0, 0.6, 10, false); ch.rotation.x = -Math.PI / 2;
       // lawn, kerb and the house
       const grass = texMat(TEX.grass(), { roughness: 1 }); const lawn = add(g, new T.PlaneGeometry(12000, 7000), grass, 0, -8, -1500, false); lawn.rotation.x = -Math.PI / 2;
       const brick = texMat(TEX.brick(), { bumpScale: 3 });
       add(g, rbox(3000, 1100, 80, 6), brick, 0, 520, -1400);
       const door = add(g, rbox(1100, 720, 30, 12), M('#f2f2ee', { roughness: 0.5 }), 0, 360, -1350); for (let k = 1; k < 6; k++) add(g, rbox(1100, 6, 8, 3), M('#cfcfc9'), 0, k * 120, -1332);
-      const drive = add(g, new T.PlaneGeometry(1200, 1100), texMat(TEX.asphalt(), { roughness: 0.95 }), 0, -3, -850, false); drive.rotation.x = -Math.PI / 2;
+      const drive = add(g, new T.PlaneGeometry(1200, 1100), texMat(TEX.asphalt(), { roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 0, -2, -850, false); drive.rotation.x = -Math.PI / 2;
       for (const x of [-1050, 1050]) { add(g, rbox(300, 260, 20, 8), G2('#ffd88a', 0.9), x, 640, -1356, false); add(g, rbox(320, 20, 30, 6), M('#fbf7ee'), x, 500, -1350); }
       const roof = add(g, new T.ConeGeometry(2200, 600, 4, 1), M('#6a4a4a', { roughness: 0.9 }), 0, 1370, -1580); roof.rotation.y = Math.PI / 4; roof.scale.z = 0.4;
       prop(g, 'hoop', m.x2 + 260, 0, -520, 560, -0.3, 0.5);
@@ -442,7 +442,7 @@
       for (const sx of [-1, 1]) add(g, rbox(18, 700, 18, 5), frame, m.x2 + 70 + sx * 40, 240, 150);
       // the room: wallpaper, window with the moon, rug, shelf and toys
       add(g, new T.PlaneGeometry(9000, 4000), texMat(TEX.wallpaper('#3a3f7e', '#444a8e'), { roughness: 1 }), 0, 500, -1200, false);
-      const rug = add(g, new T.CircleGeometry(1400, 48), texMat(TEX.rug(), { roughness: 1 }), 0, -420, -500, false); rug.rotation.x = -Math.PI / 2; rug.scale.y = 0.6;
+      const rug = add(g, new T.CircleGeometry(1400, 48), texMat(TEX.rug(), { roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 0, -412, -500, false); rug.rotation.x = -Math.PI / 2; rug.scale.y = 0.6;
       const floor = add(g, new T.PlaneGeometry(9000, 4000), texMat(TEX.planks('#6b4a8a')), 0, -425, -1600, false); floor.rotation.x = -Math.PI / 2;
       const win = new T.Group(); add(win, new T.PlaneGeometry(800, 800), G2('#18287a', 1), 0, 0, 0, false); const moon = add(win, new T.SphereGeometry(130, 32, 20), G2('#fff6c8', 1.6), 150, 140, 30, false);
       for (let k = 0; k < 30; k++) add(win, new T.SphereGeometry(3, 6, 4), G2('#ffffff', 2), R(-380, 380), R(-380, 380), 5, false);

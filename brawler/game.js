@@ -9,7 +9,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const DEG = Math.PI / 180;
 const BTNS = ['jump', 'attack', 'special', 'shield', 'grab', 'smash'];
 const BUF = 6; // input buffer frames
-const PORT_COLORS = ['#ff4d4d', '#4d8dff', '#ffcf3f', '#4dd97a'];
+const PORT_COLORS = ['#ff4d4d', '#4d8dff', '#ffcf3f', '#4dd97a', '#ff8a3d', '#b46cff', '#3dd9e0', '#ff6ad5'];
 
 // ---------------------------------------------------------------- audio (synth only)
 const Sfx = {
@@ -1615,15 +1615,21 @@ function drawOffscreen() {
   }
 }
 function pctColor(p) { const k = Math.min(p, 160) / 160; return `hsl(${50 - k * 50}, 100%, ${100 - k * 52}%)`; }
+// where each player's HUD card goes (in the HUD's scaled space): one row, or two rows for 5-8 players on narrow screens
+function hudLayout(n) {
+  const rows = n > 4 && VW < 1200 ? 2 : 1, cols = Math.ceil(n / rows), chh = 74, gap = n > 4 ? 8 : 12, cw = Math.min(210, (VW - 30) / cols - gap), out = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols), total = inRow * cw + (inRow - 1) * gap;
+    out.push({ x: (VW - total) / 2 + c * (cw + gap), y: VH - 12 - chh - (rows - 1 - r) * (chh + gap + 18), cw, chh });
+  }
+  return out;
+}
 function drawHUD() {
   // on short screens (phones held sideways) the HUD shrinks so it does not cover the fight
   const hs = clamp(VH / 600, 0.62, 1); ctx.save(); ctx.translate(VW / 2, VH); ctx.scale(hs, hs); ctx.translate(-VW / 2, -VH);
-  const fs = G.fighters, n = fs.length;
-  const cw = Math.min(210, (VW - 40) / n - 10), chh = 74;
-  const total = n * cw + (n - 1) * 12; let x0 = (VW - total) / 2;
-  const y0 = VH - chh - 12;
-  for (const f of fs) {
-    const x = x0; x0 += cw + 12;
+  const fs = G.fighters, n = fs.length, lay = hudLayout(n);
+  fs.forEach((f, idx) => {
+    const { x, cw, chh } = lay[idx], y0 = lay[idx].y;
     ctx.fillStyle = 'rgba(10,12,24,.72)'; ctx.fillRect(x, y0, cw, chh);
     ctx.fillStyle = PORT_COLORS[f.port]; ctx.fillRect(x, y0, 5, chh);
     // portrait
@@ -1650,7 +1656,7 @@ function drawHUD() {
     ctx.fillStyle = f.od > 0 ? f.def.accent : full ? (G.frame % 20 < 10 ? '#ffffff' : f.def.accent) : '#6c7bd8';
     ctx.fillRect(mx, my, mw * (f.od > 0 ? f.od / 360 : f.meter / 100), 7);
     if (full) { ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Trebuchet MS'; ctx.fillText(mw > 100 ? 'OVERDRIVE READY' : 'READY!', mx, my - 2); }
-  }
+  });
   ctx.restore();
   // countdown
   if (G.countdown > 0) {
@@ -1676,14 +1682,16 @@ const $ = id => document.getElementById(id);
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); if (id) $('touch').classList.remove('on'); }
 const cfg = {
   stage: 'skyforge', stocks: 3,
-  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 6, level: 5 }, { type: 'cpu', fighter: 7, level: 5 }, { type: 'off', fighter: 3, level: 5 }],
+  slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 6, level: 5 }, { type: 'cpu', fighter: 7, level: 5 }, { type: 'off', fighter: 3, level: 5 },
+    { type: 'off', fighter: 1, level: 5 }, { type: 'off', fighter: 2, level: 5 }, { type: 'off', fighter: 4, level: 5 }, { type: 'off', fighter: 5, level: 5 }],
 };
 function buildSelect() {
   const wrap = $('slots'); wrap.innerHTML = '';
   cfg.slots.forEach((s, i) => {
     const d = FIGHTERS[s.fighter];
     const el = document.createElement('div'); el.className = 'slot' + (s.type === 'off' ? ' off' : '');
-    el.innerHTML = `<div class="tag" style="background:${PORT_COLORS[i]}">P${i + 1}</div>
+    const hk = cfg.slots.slice(0, i).filter(o => o.type === 'human').length, pad = typeof padLabel === 'function' ? padLabel(hk) : '';
+    el.innerHTML = `<div class="tag" style="background:${PORT_COLORS[i]}">P${i + 1}</div>${s.type === 'human' ? `<div class="pad">${pad}</div>` : ''}
       <div class="stats">${[['SPEED', d.run / 11.6], ['POWER', (d.power - 0.8) / 0.45], ['WEIGHT', (d.weight - 70) / 65], ['AIR', d.jumps / 5]].map(([n, v]) => `<span>${n}</span><i><b style="width:${Math.round(clamp(v, 0.1, 1) * 100)}%;background:${d.color}"></b></i>`).join('')}</div>
       <div class="row"><button data-a="prev">◀</button><div class="nm" style="color:${d.color};min-width:90px">${d.name}</div><button data-a="next">▶</button></div>
       <div class="ds">${d.blurb}</div>

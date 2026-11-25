@@ -67,6 +67,21 @@ off-screen. A bottom card for each player shows damage % (white → yellow → r
 Overdrive meter. Screens: Title → Fighter select (P1–P4: Player / CPU / Off, CPU level), stage and stocks → 3-2-1-GO →
 GAME! → results (place, KOs, falls, damage dealt).
 
+## Controllers and 8 players (`pads.js`)
+- **Up to 8 fighters** (any mix of players and CPUs): 8 slots on the fighter select (off slots fold down), 8 player
+  colours, and the match HUD wraps to two rows of four on narrower screens (`hudLayout` in game.js).
+- **Any controller the browser sees, wired or Bluetooth** (Xbox, PlayStation, Switch Pro, 8BitDo, generic). Each human
+  slot takes the next connected controller in order; the first two humans also get the keyboard maps and the first gets
+  touch. Each human slot shows which controller it has.
+- Non-standard pads (common over Bluetooth on some phones) are calibrated at rest so resting triggers don't read as a
+  held stick, and hat-switch / axis d-pads are decoded.
+- Connect / disconnect messages; a disconnect mid-match pauses the game. Rumble on hits and KOs where supported.
+- **Menus with a controller:** stick or d-pad moves between options, A chooses (with the wobble / burst), B or
+  Back/Select goes back, Start starts from the title and pauses in a match.
+- Lighting pass: stronger sun and rim, less flat fill, soft contact shadows under every fighter, a gentle vignette;
+  the camera's near plane scales with distance and stacked surfaces use polygon offset (fixes stripes on phone GPUs,
+  e.g. the kitchen window), deeper shadow bias (fixes speckles on clothes), and AO is off on touch devices.
+
 ## Luxury menus (`lux.js` + the LUX block in index.html)
 - **Every menu selection** wobbles or spins with a burst: hub tiles spin their icon 360° and wobble, gold buttons and
   fighter slots wobble (jelly squash), option chips flip-spin around their vertical axis. Each comes with a burst of

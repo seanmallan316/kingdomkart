@@ -529,11 +529,10 @@
     g.globalAlpha = 1; g.restore();
     // pulse recharge dials on each HUD card (same layout as drawHUD)
     {
-      const hs = clamp(VH / 600, 0.62, 1), fs = G.fighters, n = fs.length, cw = Math.min(210, (VW - 40) / n - 10), chh = 74, total = n * cw + (n - 1) * 12;
+      const hs = clamp(VH / 600, 0.62, 1), fs = G.fighters, lay = hudLayout(fs.length);
       g.save(); g.translate(VW / 2, VH); g.scale(hs, hs); g.translate(-VW / 2, -VH);
-      let x0 = (VW - total) / 2; const y0 = VH - chh - 12;
-      for (const f of fs) {
-        const x = x0; x0 += cw + 12; if (!f.pcd) continue;
+      for (let fi = 0; fi < fs.length; fi++) {
+        const f = fs[fi], x = lay[fi].x, cw = lay[fi].cw, y0 = lay[fi].y; if (!f.pcd) continue;
         ['attack', 'special', 'smash'].forEach((b, k) => {
           const cx = x + cw - 14 - (2 - k) * 17, cy = y0 - 9, cd = f.pcd[b], full = pulseCD(), u = cd > 0 ? 1 - cd / full : 1;
           g.fillStyle = 'rgba(10,12,24,.8)'; g.beginPath(); g.arc(cx, cy, 7.5, 0, TAU); g.fill();

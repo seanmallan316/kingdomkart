@@ -23,7 +23,7 @@ const R3 = (() => {
     if (forStage) {
       d.castShadow = true; d.shadow.mapSize.set(4096, 4096); d.shadow.radius = 3;
       const c = d.shadow.camera; c.left = -800; c.right = 800; c.top = 800; c.bottom = -400; c.near = 100; c.far = 3000;
-      d.shadow.bias = -0.0015; d.shadow.normalBias = 2;
+      d.shadow.bias = -0.0025; d.shadow.normalBias = 4.5;
     }
     sc.add(d); sc.add(d.target);
     const rim = new THREE.DirectionalLight(0x8fb4ff, 1.1); rim.position.set(500, 300, -600); sc.add(rim);
@@ -46,7 +46,7 @@ const R3 = (() => {
     return true;
   }
   // ambient occlusion for the 3D worlds (soft shading where things meet); switched off by itself if the device is too slow
-  let envTex = null, composer = null, aoPass = null, aoOn = !/[?&]noao/.test(location.search), slow = 0;
+  let envTex = null, composer = null, aoPass = null, aoOn = !/[?&]noao/.test(location.search) && !matchMedia('(pointer: coarse)').matches, slow = 0;
   function ensureComposer() {
     if (composer || !aoOn) return composer;
     try {
@@ -326,7 +326,7 @@ const R3 = (() => {
   function buildGlbRig(def) {
     const model = THREE.SkeletonUtils.clone(MODELS[def.id]);
     const rig = { def, glb: true, turnY: TURN, blades: [], look: { mats: [] } };
-    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); o.material.side = THREE.FrontSide; o.material.metalness = 0; o.material.roughness = 0.85; if (o.material.map && renderer) o.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy(); rig.look.mats.push(o.material); } });
+    model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); o.material.side = THREE.FrontSide; o.material.metalness = 0; o.material.roughness = 0.78; o.material.envMapIntensity = 0.45; if (o.material.map && renderer) o.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy(); rig.look.mats.push(o.material); } });
     model.updateMatrixWorld(true);
     const bones = {}, order = [];
     model.traverse(o => { if (o.isBone) { bones[o.name] = o; order.push(o); } });
@@ -543,11 +543,26 @@ const R3 = (() => {
 
   function resetRigs() { if (!ok) return; clearGroup(fighterGroup); rigs.clear(); }
 
+  let blobTex = null;
+  function contactShadow(f, rig) {
+    if (!rig.blob) {
+      if (!blobTex) { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); blobTex = new THREE.CanvasTexture(c); }
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+      m.rotation.x = -Math.PI / 2; m.renderOrder = 2; m.userData.noAO = true; fighterGroup.add(m); rig.blob = m;
+    }
+    let gy = null;
+    if (f.grounded) gy = f.y; else for (const s of (G.surfs || [])) if (f.x >= s.x1 && f.x <= s.x2 && s.y >= f.y - 2 && (gy == null || s.y < gy)) gy = s.y;
+    const vis = rig.root.visible && gy != null && gy - f.y < 600;
+    rig.blob.visible = vis; if (!vis) return;
+    const k = 1 - Math.min(1, (gy - f.y) / 600), w = f.w * 2.6 * (0.5 + 0.5 * k);
+    const ia = 1 - (G.alpha == null ? 1 : G.alpha), x = f.px != null && Math.abs(f.x - f.px) < 160 ? f.x - (f.x - f.px) * ia : f.x;
+    rig.blob.position.set(x, -gy + 1.5, 0); rig.blob.scale.set(w, w * 0.55, 1); rig.blob.material.opacity = 0.35 + 0.65 * k;
+  }
   function syncFighter(f) {
     let rig = rigs.get(f);
     if (!rig) { rig = buildRig(f.def); rigs.set(f, rig); fighterGroup.add(rig.root); rig.turnY = f.facing * TURN; }
     const gone = f.state === 'dead' || f.state === 'out' || f.hidden;
-    rig.root.visible = !gone; if (gone) return;
+    rig.root.visible = !gone; if (worldOn) contactShadow(f, rig); else if (rig.blob) rig.blob.visible = false; if (gone) return;
     const { pose, rot } = computePose(f);
     const a = fighterAnchor(f, pose);
     rig.root.position.set(a.ox, -a.oy, 0);
@@ -579,7 +594,7 @@ const R3 = (() => {
     const s = camScale(), d = VH / (2 * s * Math.tan((FOV * DEG) / 2));
     const cx = G.cam.x - shx / s, cy = -G.cam.y + shy / s;
     // the camera sits a little above the action and looks down, so the stages read as 3D spaces
-    camera.aspect = VW / VH; camera.far = d + 12000; camera.position.set(cx, cy + d * (worldOn ? 0.11 : 0), d); camera.lookAt(cx, cy, 0); camera.updateProjectionMatrix();
+    camera.aspect = VW / VH; camera.near = Math.max(30, d * 0.1); camera.far = d + 12000; camera.position.set(cx, cy + d * (worldOn ? 0.11 : 0), d); camera.lookAt(cx, cy, 0); camera.updateProjectionMatrix();
     for (const h of hooks) h(scene, camera);
     present();
     return true;

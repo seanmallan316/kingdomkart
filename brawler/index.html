@@ -196,6 +196,14 @@
   @property --a { syntax:'<angle>'; inherits:false; initial-value:0deg; }
   :root { --gold:linear-gradient(180deg,#fff6cf 0%,#ffd970 26%,#e3a738 52%,#ffe391 76%,#b9852a 100%);
     --goldEdge:linear-gradient(135deg,#fff6c9 0%,#d9a441 30%,#fff1bd 50%,#a8772a 72%,#ffe7a0 100%); }
+  .slots { grid-template-columns:repeat(4, minmax(140px, 200px)); }
+  .slot.off { opacity:.55; } .slot.off .stats, .slot.off .ds, .slot.off > .row:first-of-type ~ .row:last-child { display:none; } .slot.off .row:nth-of-type(1) { opacity:.5; }
+  .slot .pad { position:absolute; top:-11px; right:10px; padding:1px 8px; border-radius:6px; font-size:11px; font-weight:800; color:#2a1a00; background:var(--gold); white-space:nowrap; max-width:70%; overflow:hidden; text-overflow:ellipsis; }
+  #padtoast { position:fixed; left:50%; top:14px; transform:translate(-50%,-140%); z-index:58; padding:10px 18px; border-radius:12px; font-weight:800; letter-spacing:1px; color:#ffe9b0; pointer-events:none;
+    background:linear-gradient(180deg, rgba(30,34,58,.92), rgba(12,14,28,.92)) padding-box, var(--goldEdge) border-box; border:2px solid transparent; box-shadow:0 10px 30px rgba(0,0,0,.5); transition:transform .35s cubic-bezier(.2,.9,.3,1.3); }
+  #padtoast.on { transform:translate(-50%,0); }
+  .gpfocus { outline:none; }
+  #vig { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse 120% 95% at 50% 45%, rgba(0,0,0,0) 55%, rgba(10,6,20,.38) 100%); }
   #luxfx { position:fixed; inset:0; width:100%; height:100%; z-index:52; pointer-events:none; }
   #luxsel { position:fixed; z-index:51; pointer-events:none; opacity:0; padding:3px; left:0; top:0; width:0; height:0;
     background:conic-gradient(from var(--a), #fff6c9, #ffc94a, #a6741f, #fff0b8, #ffffff, #ffc94a, #8a5f1a, #fff6c9);
@@ -241,6 +249,7 @@
 <body>
 <div id="sky"></div>
 <canvas id="gl"></canvas>
+<div id="vig"></div>
 <canvas id="c"></canvas>
 
 <div id="intro" aria-hidden="true"><i class="fire"></i><img src="logo.webp" alt=""><video id="introVid" src="intro.webm" preload="auto" playsinline></video></div>
@@ -253,7 +262,7 @@
   <div class="help">
     <b>P1</b> A/D/W/S move · Space jump · J attack · K special · I smash · L shield · U grab &nbsp;|&nbsp;
     <b>P2</b> Arrows · Num0 jump · Num1 atk · Num2 spc · Num5 smash · Num3 shield · Num4 grab<br>
-    Gamepads work (A attack, B special, X/Y jump, bumpers shield, RT grab, right stick smash). Touch controls on phones.<br>
+    Wired or Bluetooth controllers work, up to 8 players (A attack, B special, X/Y jump, bumpers/LT shield, RT grab, right stick smash, Start pause); controllers also drive the menus (B = back). Touch controls on phones.<br>
     Knock fighters off the screen. Higher damage % = they fly farther. Full meter → Special + Shield = <b>OVERDRIVE</b>.
   </div>
 </div>
@@ -281,7 +290,7 @@
     <div class="optrow" style="display:block;border:0"><p style="font-size:13px;text-align:left;margin:0">
       <b>P1</b> A/D/W/S move · Space jump · J attack · K special · I smash · L shield · U grab<br>
       <b>P2</b> Arrows · Num0 jump · Num1 attack · Num2 special · Num5 smash · Num3 shield · Num4 grab<br>
-      <b>Gamepad</b> A attack · B special · X/Y jump · bumpers shield · RT grab · right stick smash<br>
+      <b>Controller</b> (wired or Bluetooth, up to 8) A attack · B special · X/Y jump · bumpers/LT shield · RT grab · right stick smash · Start pause. Each human player gets the next connected controller.<br>
       Full meter: Special + Shield together for <b>Overdrive</b>. Esc or P pauses.</p></div>
     <button class="big alt" id="bOptBack">BACK</button>
   </div>
@@ -362,5 +371,6 @@
 <script src="items.js"></script>
 <script src="menu.js"></script>
 <script src="lux.js"></script>
+<script src="pads.js"></script>
 </body>
 </html>

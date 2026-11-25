@@ -20,7 +20,7 @@
       const i0 = KIDS.indexOf(hero), five = [-2, -1, 0, 1, 2].map(o => KIDS[(i0 + o + KIDS.length) % KIDS.length]);
       R3.menuSet(five.map((k, i) => ({ id: k, x: (i - 2) * 88, z: i === 2 ? 30 : -20, face: (2 - i) * 0.12, scale: i === 2 ? 1.18 : 1 })), { x: 0, y: 330, d: 1750, lx: 0, ly: 300 });
     }
-    else if (id === 'select') R3.menuSet(cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off').map(o => ({ key: 'slot' + o.i, id: FIGHTERS[o.s.fighter].id, x: (o.i - 1.5) * 128, face: (1.5 - o.i) * 0.16, once: extra === o.i ? 'jab' : null })),
+    else if (id === 'select') R3.menuSet(((act, sp) => act.map((o, k) => ({ key: 'slot' + o.i, id: FIGHTERS[o.s.fighter].id, x: (k - (act.length - 1) / 2) * sp, face: ((act.length - 1) / 2 - k) * 0.12, once: extra === o.i ? 'jab' : null })))(cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off'), Math.min(128, 620 / Math.max(1, cfg.slots.filter(s => s.type !== 'off').length - 1))),
       { x: 0, y: 62, d: wide ? 780 : 1250, lx: 0, ly: wide ? -78 : -120 });
     else if (id === 'story') {
       const foes = (extra && extra.foes) || [], ally = extra && extra.ally, list = [{ id: hero, x: foes.length ? -105 : 0, face: foes.length ? 0.85 : 0.2, scale: 1.05 }];
