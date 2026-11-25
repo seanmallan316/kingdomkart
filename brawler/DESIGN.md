@@ -105,3 +105,16 @@ clips, Norah a sprint). `tools/extract_anims.py` keeps only the bone rotations (
 `render3d.js` picks the clip for each state or move, lines the clip's furthest-reach moment up with the move's hitbox
 frame, and eases between clips. States with no clip (ledge hang, crouch, air dodge, Ray's cannonball) use the hand-posed
 fallback. The move-to-clip table is `MOVE_CLIP` / `CHAR_CLIP` in `render3d.js`.
+
+## Effects pack (`fx.js`)
+Original effects drawn in code and original sound synthesized with Web Audio; nothing is sampled from another game.
+- **Hits:** white core flash, coloured starburst, streaks thrown along the launch direction, shock ring, embers; all scale with damage.
+- **Finisher:** a blow strong enough to KO freezes longer, darkens the screen, fires speed lines and lightning, and punches the camera in.
+- **Launch:** a glowing ribbon in the player's colour follows a fighter sent flying.
+- **Swings:** a tapered arc follows each attack's hitbox. Charging a smash pulls rings and streaks inward.
+- **KO:** a three-layer light column back into the screen, rays, confetti and shock rings.
+- **Ground:** dust on dashes, footsteps and landings; rings on double jumps and hard landings.
+- **Shield:** glassy bubble with a ripple when struck. Overdrive adds rising flames.
+- **Sound:** layered impacts in three weights (click, thump, crack), finisher crack with a sub drop, whooshes, blade swishes
+  for Ollie, footsteps, landings, double-jump chirp, shield hum and strike, parry chime, shield shatter, charge whine, KO
+  blast with a rising whistle, countdown, GO and GAME stabs. A compressor and a small generated reverb glue it together.

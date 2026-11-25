@@ -1006,9 +1006,12 @@ function applyHit(att, vic, hb, dir, o = {}) {
   if (att) { vic.lastHitBy = att; vic.lastHitT = G.frame; att.stats.dealt += dmg; addMeter(att, dmg); }
   addMeter(vic, dmg * 0.5);
   G.shake = Math.max(G.shake, Math.min(22, kb * 0.06));
-  fx.hit(o.px, o.py, dmg, att ? att.def.accent : '#fff');
+  fx.hit(o.px, o.py, dmg, att ? att.def.accent : '#fff', lx, ly, spd);
   Sfx.hit(dmg);
-  if (spd > 25) { G.flash = 5; vic.hitstop += 8; if (att && !o.projectile) att.hitstop += 8; Sfx.bigHit(); fx.ring(o.px, o.py, '#ffffff', 70); }
+  if (spd > 25) { // strong enough to finish: long freeze with the dramatic backdrop
+    G.flash = 6; vic.hitstop += 16; vic.shake = vic.hitstop; if (att && !o.projectile) att.hitstop += 16; Sfx.bigHit();
+    if (fx.finisher) fx.finisher(o.px, o.py, lx, ly, att ? att.def.accent : '#fff', vic.hitstop);
+  }
   return true;
 }
 
