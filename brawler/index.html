@@ -155,7 +155,7 @@
   /* pressing Play: the logo pulses, rushes at the camera and the screen bursts into flame */
   #intro { position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; pointer-events:none; overflow:hidden; }
   #intro.on { display:flex; }
-  #intro video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none; }
+  #intro video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:none; will-change:transform; }
   #intro.vid video { display:block; } #intro.vid img, #intro.vid .fire { display:none; }
   #title.leaving > * { visibility:hidden; }
   #intro img { width:min(84vw, 760px); height:auto; animation:introZoom 1.25s cubic-bezier(.55,0,.85,.35) both; will-change:transform; }

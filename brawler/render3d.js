@@ -55,6 +55,59 @@ const R3 = (() => {
   function clearGroup(g) {
     for (const c of [...g.children]) { g.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
   }
+  // ------------------------------------------------------------ stage worlds, built from simple shapes
+  const flat = (c, o) => std(c, Object.assign({ roughness: 1, flatShading: true }, o || {}));
+  const glowM = (c, k = 1) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: k });
+  const cyl = (rt, rb, h, mat, x, y, z, seg = 10) => mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat, x, y, z);
+  const blob = (r, mat, x, y, z, sx = 1, sy = 1, sz = 1) => { const b = mesh(new THREE.IcosahedronGeometry(r, 1), mat, x, y, z); b.scale.set(sx, sy, sz); return b; };
+  const wall = (c, y = 200, z = -900) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(6000, 3200), flat(c)); p.position.set(0, y, z); return p; };
+  const DECOR = {
+    treehouse(g, m, w) { // a deck high in a big tree, on a sunny day
+      const bark = flat('#6b4a2e'), bark2 = flat('#5a3d25'), leaf = flat('#3f9b4f'), leaf2 = flat('#5fc068'), cloud = flat('#ffffff');
+      g.add(cyl(130, 190, 2200, bark, 0, -500, -300, 9));
+      const br = (x, y, rz, len) => { const b = cyl(34, 60, len, bark2, x, y, -300, 7); b.rotation.z = rz; g.add(b); };
+      br(-330, 260, 1.05, 760); br(340, 330, -0.95, 800); br(-240, -260, 2.2, 600); br(260, -300, -2.2, 640);
+      [[-620, 470, -340, 230], [-380, 640, -420, 260], [-60, 720, -460, 300], [300, 660, -400, 270], [620, 520, -340, 240], [-820, 300, -520, 200], [840, 330, -520, 210], [0, 520, -560, 340], [-470, -470, -360, 190], [480, -520, -360, 200]]
+        .forEach(([x, y, z, r], i) => g.add(blob(r, i % 2 ? leaf : leaf2, x, y, z, 1.25, 0.8, 1)));
+      for (let k = 0; k < 9; k++) g.add(box(12, 78, 12, bark2, m.x1 + 20 + k * ((w - 40) / 8), 39, -108)); // back railing
+      g.add(box(w, 10, 12, bark, 0, 80, -108), box(w, 8, 10, bark, 0, 44, -108));
+      for (let k = 0; k < 6; k++) { const c = new THREE.Group(), x = -2400 + k * 950, y = 520 - (k % 3) * 260; [[0, 0, 150], [150, 30, 120], [-150, 20, 110], [60, 70, 100]].forEach(([dx, dy, r]) => c.add(blob(r, cloud, dx, dy, 0, 1.3, 0.75, 1))); c.position.set(x, y, -1700); c.userData = { by: y, ph: k }; g.add(c); rocks.push(c); }
+      const sunM = sphere(170, glowM('#fff3b0', 1.4), 1300, 900, -2300); sunM.castShadow = false; g.add(sunM);
+    },
+    kitchen(g, m, w) { // a giant kitchen table: you are the size of a salt shaker
+      const wood = flat('#8a5a34'), white = flat('#fbf7ee'), red = flat('#e8493f'), steel = std('#c9ced6', { metalness: 0.7, roughness: 0.3 });
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(26, 20, 1400, wood, sx * (w / 2 - 40), -760, sz * 80, 8));
+      g.add(wall('#f6dfb8')); g.add(box(6000, 520, 30, flat('#e9c48f'), 0, -640, -880));
+      const win = new THREE.Group(); win.add(box(900, 640, 20, glowM('#bfe6ff', 0.9), 0, 0, 0)); for (const x of [-460, 0, 460]) win.add(box(34, 700, 34, white, x, 0, 10)); for (const y of [-330, 0, 330]) win.add(box(960, 34, 34, white, 0, y, 10)); win.position.set(-500, 560, -870); g.add(win);
+      const mug = (x, c) => { const u = new THREE.Group(); u.add(cyl(70, 62, 150, flat(c), 0, 75, 0, 16)); const h = mesh(new THREE.TorusGeometry(44, 13, 8, 14), flat(c), 74, 80, 0); u.add(h); u.position.set(x, 0, -150); g.add(u); };
+      mug(-250, '#3f8fe8'); mug(300, '#ff8a3d');
+      const bowl = new THREE.Group(); bowl.add(cyl(120, 70, 70, white, 0, 35, 0, 18)); [['#e8493f', -50, 95], ['#ffd23f', 30, 105], ['#57b85f', 80, 85], ['#ff8a3d', -5, 120]].forEach(([c, x, y]) => bowl.add(sphere(46, flat(c, { flatShading: false }), x, y, 0))); bowl.position.set(30, 0, -190); g.add(bowl);
+      for (let k = 0; k < 2; k++) { const s2 = new THREE.Group(); s2.add(cyl(30, 34, 110, k ? flat('#333842') : white, 0, 55, 0, 12)); s2.add(cyl(22, 30, 24, steel, 0, 122, 0, 12)); s2.position.set(-520 + k * 80, 0, -140); g.add(s2); }
+      for (let k = -4; k <= 4; k++) g.add(box(w / 9, 3, 230, k % 2 ? red : white, k * (w / 9), 1.6, 0)); // checked runner
+    },
+    driveway(g, m, w) { // the driveway at sunset: garage, hoop, hedges
+      const grey = flat('#d9dce3'), dark = flat('#3a3d47'), bush = flat('#3f9b4f'), bush2 = flat('#57b85f'), brick = flat('#b5553c');
+      g.add(box(2600, 900, 60, brick, 0, 450, -420)); g.add(box(980, 560, 30, grey, 0, 280, -385)); for (let k = 1; k < 6; k++) g.add(box(980, 8, 6, dark, 0, k * 93, -366));
+      const roof = mesh(new THREE.CylinderGeometry(0, 1500, 420, 4), flat('#5a3d3d'), 0, 1110, -520); roof.rotation.y = Math.PI / 4; roof.scale.z = 0.5; g.add(roof);
+      const hoop = new THREE.Group(); hoop.add(cyl(11, 13, 520, dark, 0, 260, 0, 8)); hoop.add(box(220, 150, 12, flat('#ffffff'), 0, 520, 30)); hoop.add(box(80, 60, 4, flat('#e8493f'), 0, 500, 38)); const ring = mesh(new THREE.TorusGeometry(42, 5, 8, 18), flat('#ff7a1e'), 0, 460, 84); ring.rotation.x = Math.PI / 2; hoop.add(ring); hoop.position.set(560, 0, -330); g.add(hoop);
+      for (let k = 0; k < 9; k++) g.add(blob(110 + (k % 3) * 25, k % 2 ? bush : bush2, -1150 + k * 290, 60, -330 + (k % 2) * 40, 1.2, 0.9, 1));
+      g.add(sphere(34, flat('#ff8a3d', { flatShading: false }), -470, 34, -150));
+      const sunM = sphere(260, glowM('#ffd07a', 1.3), -900, 420, -2400); sunM.castShadow = false; g.add(sunM); g.add(box(8000, 30, 2400, flat('#6fae5a'), 0, -125, -1300));
+      for (let k = -3; k <= 3; k++) g.add(box(60, 2, 14, flat('#fff7c2'), k * 110, 1.2, 60)); // chalk dashes
+    },
+    bedroom(g, m, w) { // bunk beds at night, lit by fairy lights
+      const frame = flat('#c58a4a'), sheet = flat('#6c8cff'), pillow = flat('#fbf7ee');
+      g.add(wall('#232a6e')); const win = new THREE.Group(); win.add(box(620, 620, 16, glowM('#1b2f8a', 0.8), 0, 0, 0)); const moon = sphere(110, glowM('#fff6c8', 1.5), 120, 110, 20); moon.castShadow = false; win.add(moon); for (const x of [-320, 0, 320]) win.add(box(26, 660, 26, pillow, x, 0, 10)); for (const y of [-320, 0, 320]) win.add(box(660, 26, 26, pillow, 0, y, 10)); win.position.set(620, 520, -880); g.add(win);
+      for (const sx of [-1, 1]) g.add(box(34, 1200, 34, frame, sx * (w / 2 + 6), 250, -125)); g.add(box(w + 46, 30, 34, frame, 0, 470, -125), box(w + 46, 150, 20, frame, 0, 560, -135));
+      g.add(box(w + 10, 60, 190, sheet, 0, 520, -30)); g.add(box(150, 44, 120, pillow, -w / 2 + 110, 570, -40));
+      for (let k = 0; k < 6; k++) g.add(box(22, 440, 16, frame, w / 2 + 6, 40 + k * 0, -125 + 0)); for (let k = 1; k < 6; k++) g.add(box(16, 16, 120, frame, w / 2 + 40, k * 80, -70)); // ladder rungs
+      const cols = ['#ff6ad5', '#ffd23f', '#6cf0ff', '#8affea', '#ff8a3d'];
+      for (let k = 0; k <= 26; k++) { const u = k / 26, x = -900 + u * 1800, y = 760 - Math.sin(u * Math.PI * 3) ** 2 * 90; const b = sphere(13, glowM(cols[k % 5], 1.6), x, y, -700); b.castShadow = false; g.add(b); }
+      [['#e8493f', -470, 0], ['#3f8fe8', -540, 0], ['#ffd23f', -505, 70], ['#57b85f', 470, 0], ['#ff8a3d', 540, 0]].forEach(([c, x, y]) => g.add(box(68, 68, 68, flat(c), x, y + 34 - 150, -200)));
+      g.add(box(8000, 40, 2400, flat('#5b4a9a'), 0, -170, -400));
+    },
+  };
+
   function buildStage(st, plats) {
     if (!init()) return;
     clearGroup(stageGroup); platMeshes = []; rocks = [];
@@ -67,11 +120,12 @@ const R3 = (() => {
     stageGroup.add(box(w + 8, 3, 4, glow, cx, -m.y - 1.5, D / 2 + 1));
     stageGroup.add(box(8, 14, D + 4, glow, m.x1 - 1, -m.y - 6, 0), box(8, 14, D + 4, glow, m.x2 + 1, -m.y - 6, 0));
     const sh = new THREE.Shape(); const y0 = -m.y - 12, yd = -m.y - m.depth;
-    sh.moveTo(m.x1, y0); sh.lineTo(m.x2, y0); sh.lineTo(m.x2, yd); sh.lineTo(m.x2 * 0.55, yd - 90); sh.lineTo(cx, yd - 150); sh.lineTo(m.x1 * 0.55, yd - 90); sh.lineTo(m.x1, yd); sh.closePath();
+    if (st.theme) { sh.moveTo(m.x1, y0); sh.lineTo(m.x2, y0); sh.lineTo(m.x2, yd); sh.lineTo(m.x1, yd); sh.closePath(); } // themed stages are plain slabs (a deck, a table top, a mattress)
+    else { sh.moveTo(m.x1, y0); sh.lineTo(m.x2, y0); sh.lineTo(m.x2, yd); sh.lineTo(m.x2 * 0.55, yd - 90); sh.lineTo(cx, yd - 150); sh.lineTo(m.x1 * 0.55, yd - 90); sh.lineTo(m.x1, yd); sh.closePath(); }
     const body = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: D * 0.92, bevelEnabled: true, bevelSize: 6, bevelThickness: 6, bevelSegments: 1 }), gMat);
     body.position.z = -D * 0.46; body.receiveShadow = true; stageGroup.add(body);
     const strip = new THREE.MeshStandardMaterial({ color: st.top, emissive: st.top, emissiveIntensity: 0.55 });
-    for (let k = -3; k <= 3; k++) stageGroup.add(box(4, 46 + Math.abs(k) * 8, 3, strip, cx + k * (w / 8), -m.y - 46 - Math.abs(k) * 3, D * 0.46 + 6));
+    if (!st.theme) for (let k = -3; k <= 3; k++) stageGroup.add(box(4, 46 + Math.abs(k) * 8, 3, strip, cx + k * (w / 8), -m.y - 46 - Math.abs(k) * 3, D * 0.46 + 6));
     for (const p of plats) {
       const g = new THREE.Group();
       const pw = p.x2 - p.x1;
@@ -80,15 +134,7 @@ const R3 = (() => {
       g.add(box(pw * 0.5, 5, 60, gMat, 0, -9, 0));
       stageGroup.add(g); platMeshes.push({ g, p });
     }
-    // far floating rocks
-    let seed = 11 + w; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const rMat = std(new THREE.Color(st.ground).lerp(new THREE.Color(st.sky[1]), 0.35), { flatShading: true, roughness: 1 });
-    for (let k = 0; k < 16; k++) {
-      const r = 50 + rnd() * 90; const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), rMat);
-      rock.position.set((rnd() - 0.5) * 5200, (rnd() - 0.75) * 1300, -1300 - rnd() * 1800); rock.scale.set(1.5, 0.8 + rnd() * 0.5, 1);
-      rock.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3); rock.userData = { by: rock.position.y, ph: rnd() * 6 };
-      stageGroup.add(rock); rocks.push(rock);
-    }
+    if (st.theme && DECOR[st.theme]) { const g = new THREE.Group(); DECOR[st.theme](g, m, w); g.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); stageGroup.add(g); }
     sun.target.position.set(cx, -m.y, 0);
   }
 

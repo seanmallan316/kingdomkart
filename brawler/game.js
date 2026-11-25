@@ -59,26 +59,34 @@ const Sfx = {
 };
 
 // ---------------------------------------------------------------- stages
+// Original family-themed stages. Layout types are genre staples (three platforms, moving platforms, flat, staircase);
+// the layouts, names and art are this game's own. The ids are kept from the earlier prototype stages.
 const STAGES = {
   skyforge: {
-    name: 'Skyforge', main: { x1: -320, x2: 320, y: 0, depth: 150 },
-    plats: [{ x1: -250, x2: -90, y: -140 }, { x1: 90, x2: 250, y: -140 }, { x1: -80, x2: 80, y: -270 }],
+    name: 'Treehouse', theme: 'treehouse', main: { x1: -330, x2: 330, y: 0, depth: 150 },
+    plats: [{ x1: -270, x2: -90, y: -150 }, { x1: 90, x2: 270, y: -150 }, { x1: -90, x2: 90, y: -295 }],
     blast: { l: -1150, r: 1150, t: -1000, b: 700 },
-    sky: ['#1a2650', '#5a4a7a', '#e98b5d'], ground: '#33405e', top: '#7fe0c8', trim: '#c8fff0',
+    sky: ['#4aa8ff', '#9fd8ff', '#e8f7ff'], ground: '#7a5230', top: '#c8935a', trim: '#f2d19a',
   },
   driftway: {
-    name: 'Driftway', main: { x1: -360, x2: 360, y: 0, depth: 120 },
+    name: 'Kitchen Table', theme: 'kitchen', main: { x1: -370, x2: 370, y: 0, depth: 60 },
     plats: [
-      { x1: -80, x2: 80, y: -170, move: t => ({ dx: Math.sin(t * 0.011) * 250, dy: 0 }) },
-      { x1: -60, x2: 60, y: -320, move: t => ({ dx: Math.sin(t * 0.011 + Math.PI) * 180, dy: Math.cos(t * 0.022) * 30 }) },
+      { x1: -90, x2: 90, y: -175, move: t => ({ dx: Math.sin(t * 0.011) * 250, dy: 0 }) },
+      { x1: -70, x2: 70, y: -330, move: t => ({ dx: Math.sin(t * 0.011 + Math.PI) * 180, dy: Math.cos(t * 0.022) * 30 }) },
     ],
     blast: { l: -1200, r: 1200, t: -1050, b: 700 },
-    sky: ['#06121f', '#0f3a4a', '#2aa38a'], ground: '#283548', top: '#ffb347', trim: '#fff0c0',
+    sky: ['#ffe9c4', '#ffd49a', '#f2b27a'], ground: '#8a5a34', top: '#d9a066', trim: '#fff1d6',
   },
   proving: {
-    name: 'Proving Ground', main: { x1: -380, x2: 380, y: 0, depth: 110 }, plats: [],
+    name: 'Driveway', theme: 'driveway', main: { x1: -400, x2: 400, y: 0, depth: 110 }, plats: [],
     blast: { l: -1150, r: 1150, t: -950, b: 680 },
-    sky: ['#120b22', '#2c1745', '#7a2b5a'], ground: '#2b2440', top: '#b98cff', trim: '#ecdcff',
+    sky: ['#ff9a5a', '#ffc78a', '#ffe9c0'], ground: '#4a4d57', top: '#7c808c', trim: '#f4f4f4',
+  },
+  bunk: {
+    name: 'Bunk Beds', theme: 'bedroom', main: { x1: -320, x2: 320, y: 0, depth: 130 },
+    plats: [{ x1: -300, x2: -140, y: -125 }, { x1: -70, x2: 110, y: -245 }, { x1: 170, x2: 310, y: -165 }],
+    blast: { l: -1150, r: 1150, t: -1000, b: 700 },
+    sky: ['#0d1238', '#1d2466', '#3a2f7a'], ground: '#4a3a8a', top: '#8f7bff', trim: '#ffe9a8',
   },
 };
 
@@ -409,6 +417,10 @@ const FIGHTERS = [
     scale: 1.0, power: 1.0, speed: 1.0, reach: 1.22, sp: { n: 'waveSlash', s: 'dashStrike', u: 'spiral', d: 'counter' },
   },
 ];
+
+// Fighters are drawn and simulated larger than the first prototype so they read clearly on screen.
+const FIGHTER_SIZE = 1.35;
+for (const d of FIGHTERS) d.scale *= FIGHTER_SIZE;
 
 function buildMoves(def) {
   const m = baseMoves();
@@ -1402,10 +1414,10 @@ function updateCam() {
   }
   // frame the fighters closely; only widen when they spread out
   if (!n) { x1 = st.main.x1 * 0.5; x2 = st.main.x2 * 0.5; y1 = -200; y2 = 0; }
-  const padX = 150, padY = 105;
-  const w = Math.max(540, x2 - x1 + padX * 2), h = Math.max(330, y2 - y1 + padY * 2);
+  const padX = 120, padY = 95;
+  const w = Math.max(470, x2 - x1 + padX * 2), h = Math.max(300, y2 - y1 + padY * 2);
   const base = VH / 720;
-  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.5, 2.3);
+  const z = clamp(Math.min(VW / (w * base), VH / (h * base)), 0.55, 2.6);
   const c = G.cam;
   c.x = lerp(c.x, (x1 + x2) / 2, 0.1); c.y = lerp(c.y, (y1 + y2) / 2 - 12, 0.1); c.z = lerp(c.z, z, z < c.z ? 0.12 : 0.05);
 }

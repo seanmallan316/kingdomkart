@@ -71,11 +71,11 @@
 
   // ---------------------------------------------------------------- story: The Golden Clog (original)
   // {sib1}/{sib2} are the two siblings the player did not pick.
-  const bigBrick = () => Object.assign({}, FIGHTERS[idx('brick')], { id: 'brick', name: 'BIG BRICK', scale: 1.62, weight: 170, power: 1.3, speed: 1.2, run: 6.4, jump: 13.6, djump: 13.2 });
+  const bigBrick = () => Object.assign({}, FIGHTERS[idx('brick')], { id: 'brick', name: 'BIG BRICK', scale: 1.62 * FIGHTER_SIZE * 0.9, weight: 170, power: 1.3, speed: 1.2, run: 6.4, jump: 13.6, djump: 13.2 });
   const CHAPTERS = [
     { title: 'Warm-Up', text: 'The Golden Clog, the family trophy, is gone from the shelf. Before the search starts, {sib1} wants to check you are ready.', stage: 'proving',
       foes: h => [{ id: h.sib1, level: 3 }] },
-    { title: 'My Turn!', text: '{sib2} says a trophy hunt needs the best fighter in the house, and reckons that is not you. Settle it.', stage: 'skyforge',
+    { title: 'My Turn!', text: '{sib2} says a trophy hunt needs the best fighter in the house, and reckons that is not you. Settle it.', stage: 'bunk',
       foes: h => [{ id: h.sib2, level: 4 }] },
     { title: 'The Quickstep', text: 'Muddy footprints lead up to the sky platforms. Vex, the fastest of the Shadow Squad, is waiting, and he is not handing anything over.', stage: 'driftway',
       foes: () => [{ id: 'vex', level: 5 }] },
@@ -208,6 +208,11 @@
     // the supplied start animation: the logo zooms in and bursts; the main menu appears under the burst
     let swapped = false; const swap = () => { if (!swapped) { swapped = true; openHub(); } };
     vid.currentTime = 0; vid.volume = Sfx.volume == null ? 1 : Sfx.volume;
+    // The video is wide. It starts fitted to the screen so the whole logo shows, then grows to fill the screen as
+    // the logo zooms, so the burst covers everything (this matters on a phone held upright).
+    const fill = Math.max(1, (innerHeight / innerWidth) * (1280 / 704), (innerWidth / innerHeight) * (704 / 1280));
+    const grow = () => { if (!introBusy) { vid.style.transform = ''; return; } const u = Math.min(1, Math.max(0, (vid.currentTime - 1.3) / 1.5)), e = u * u * (3 - 2 * u); vid.style.transform = 'scale(' + (1 + (fill - 1) * e) + ')'; requestAnimationFrame(grow); };
+    vid.style.transform = 'scale(1)'; requestAnimationFrame(grow);
     vid.ontimeupdate = () => { if (vid.currentTime >= 2.95) swap(); };
     vid.onended = () => { swap(); done(); };
     const p = vid.play();

@@ -194,3 +194,16 @@ The game now targets PC first (it still runs in a phone browser, but quality is 
 - Fullscreen: F on the menus, F11, or Options.
 - Models are packed one file per fighter in `modeljs/` (built by `build_models.py`); `models.js` is gone.
 - To play on a PC: unzip the download and open `index.html` in Chrome or Edge. No install or internet needed.
+
+## Family worlds (stages)
+Four original stages, built from simple 3D shapes in `DECOR` (`render3d.js`). The layout types are genre staples; the
+layouts, names and art are this game's own, not copies of any existing game's stages.
+| Stage | Layout | Setting |
+|---|---|---|
+| Treehouse (`skyforge`) | three platforms | a deck in a big tree, clouds drifting past |
+| Kitchen Table (`driftway`) | two moving platforms | a giant table top with mugs, a fruit bowl and a window |
+| Driveway (`proving`) | flat | garage door, basketball hoop and hedges at sunset |
+| Bunk Beds (`bunk`) | staircase of three platforms | a bedroom at night with fairy lights and a moon |
+
+Fighters are 1.35x larger relative to the stages (`FIGHTER_SIZE` in `game.js`) and the camera frames them more tightly.
+The start video now begins fitted to the screen and grows to fill it, so it is not cropped on an upright phone.
