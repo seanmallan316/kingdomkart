@@ -1342,6 +1342,7 @@ function startMatch(cfg) {
   });
   R3.buildStage(st, G.plats); R3.resetRigs();
   G.countdown = 200; G.cam = { x: 0, y: -60, z: 1.3 };
+  G.timeLeft = cfg.time ? Math.round(cfg.time * 3600) : 0; G.timeUp = false;
   G.mode = 'fight'; showScreen(null);
   Touch.on && document.getElementById('touch').classList.add('on');
 }
@@ -1387,6 +1388,12 @@ function step() {
   if (G.shake > 0) G.shake *= 0.86; if (G.shake < 0.3) G.shake = 0;
   if (G.flash > 0) G.flash--;
   if (G.banner && --G.banner.t <= 0) G.banner = null;
+  // time limit
+  if (G.timeLeft > 0 && G.countdown <= 0 && !G.ending) {
+    G.timeLeft--;
+    if (G.timeLeft > 0 && G.timeLeft <= 300 && G.timeLeft % 60 === 0) Sfx.count();
+    if (G.timeLeft === 0) { G.timeUp = true; G.ending = 1; G.banner = { text: 'TIME!', t: 999, color: '#ffcf3f', big: true }; Sfx.boom(); }
+  }
   // end
   if (!G.ending) {
     const left = G.fighters.filter(alive), sides = new Set(left.map(f => f.team || 'solo' + f.port));
@@ -1654,6 +1661,14 @@ function drawHUD() {
     if (full) { ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Trebuchet MS'; ctx.fillText(mw > 100 ? 'OVERDRIVE READY' : 'READY!', mx, my - 2); }
   });
   ctx.restore();
+  // match clock
+  if (G.timeLeft > 0 || G.timeUp) {
+    const s = Math.ceil(G.timeLeft / 60), txt = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'), low = s <= 10;
+    const fz = Math.round(clamp(VH / 18, 26, 44) * (low ? 1 + 0.12 * Math.max(0, Math.sin(G.frame * 0.25)) : 1));
+    ctx.save(); ctx.textAlign = 'center'; ctx.font = `italic 900 ${fz}px Trebuchet MS, sans-serif`;
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.strokeText(txt, VW / 2, fz + 10);
+    ctx.fillStyle = low ? '#ff5a5a' : '#fff4d0'; ctx.fillText(txt, VW / 2, fz + 10); ctx.restore();
+  }
   // countdown
   if (G.countdown > 0) {
     const n2 = Math.ceil(G.countdown / 60) - 0;
@@ -1677,7 +1692,7 @@ function drawBanner() {
 const $ = id => document.getElementById(id);
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); if (id) $('touch').classList.remove('on'); }
 const cfg = {
-  stage: 'skyforge', stocks: 3,
+  stage: 'skyforge', stocks: 3, time: 5,
   slots: [{ type: 'human', fighter: 0, level: 5 }, { type: 'cpu', fighter: 6, level: 5 }, { type: 'cpu', fighter: 7, level: 5 }, { type: 'off', fighter: 3, level: 5 },
     { type: 'off', fighter: 1, level: 5 }, { type: 'off', fighter: 2, level: 5 }, { type: 'off', fighter: 4, level: 5 }, { type: 'off', fighter: 5, level: 5 }],
 };
@@ -1724,7 +1739,9 @@ function buildSelect(swapped) {
   $('bFight').classList.toggle('ready', act.length >= 2);
   $('optStage').innerHTML = Object.entries(STAGES).map(([k, v]) => `<button data-s="${k}" class="${cfg.stage === k ? 'on' : ''}">${v.name}</button>`).join('');
   $('optStock').innerHTML = [1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${cfg.stocks === n ? 'on' : ''}">${n}</button>`).join('');
+  $('optTime').innerHTML = [0, 2, 3, 5, 8].map(n => `<button data-t="${n}" class="${cfg.time === n ? 'on' : ''}">${n ? n + ' MIN' : '∞'}</button>`).join('');
 }
+$('optTime').onclick = e => { const b = e.target.closest('button'); if (b) { cfg.time = +b.dataset.t; Sfx.blip(); buildSelect(); } };
 $('roster').onclick = e => {
   const b = e.target.closest('.rt'); if (!b) return; Sfx.init();
   if (b.dataset.f === 'lock') { const u = UNLOCKS[+b.dataset.k]; $('selHint').innerHTML = '🔒 ' + u.hint; Sfx.tone && Sfx.tone(140, 0.12, 'square', 0.08, 90); setTimeout(() => buildSelect(), 1800); return; }

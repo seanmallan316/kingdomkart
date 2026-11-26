@@ -90,6 +90,25 @@ stretch). Hurtboxes are wider and lower (`hw`/`hh`). Voices are dog / cat / drag
 Norah shouts "Spirit animal, ACTIVATED!", then Pink Fluff (the same 3D model) flies in on a swooping path, snaps up
 each opponent one by one (chomp sound, lunge), carries them off and hurls them away with a roar.
 
+## Pink Fluff's flight (dragon.js)
+After the reference flight footage: the scanned model has no skeleton, so a vertex shader bends it using weights baked
+from the model's own shape (inner wing, outer wing, tail, neck). Wings: slow strong downstroke, quicker upstroke, the
+outer wing lags so the tips trail; held out between beats in the approach glide, swept back and folded in a dive, beating
+forward to brake in the flare. Tail: a wave travelling to the tip. Neck: lags in turns, lunges on a bite. Breathing.
+Flight (items.js): long banking glide in from the distance -> wings-tucked dive at a foe -> flare and bite -> heavy power
+climb and wide turn carrying the catch -> next foe -> climb out and fling. Turn rate is limited so every move is a curve,
+and she banks in proportion to how hard she turns.
+
+## Time limits
+Fighter select has a TIME row (∞, 2, 3, 5 or 8 minutes; default 5). The clock sits top centre, turns red and pulses in
+the last 10 seconds with a beep each second. At zero: "TIME!", ranked by stocks then lowest damage. Story rounds are 3 minutes.
+
+## Story mode: a 12-round ladder
+Beat each opponent and go straight on to the next (a VS card appears and the fight starts on its own after 5 seconds):
+the other eight family members one by one (levels rising 2 to 7) including a 2-v-2 tag match, River, Rosie, a 3-on-1
+Family Brawl, the Giant Showdown, and the final boss: Pink Fluff herself. Progress is saved per hero; lose and retry
+the same round.
+
 ## Locker: outfits, hats, back items and weapons (`locker.js`)
 Every fighter has their own: 7 outfits (recolours / materials of the scan: Shadow, Frost, Chrome, Lava, Neon, Gold
 Statue), 7 hats, 5 back items (cape, jetpack, angel wings, dragon wings) and 8 weapons, built in 3D and attached to the

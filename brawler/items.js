@@ -275,7 +275,7 @@
       if (c.t >= 78) {
         c.phase = 'act'; c.t = 0;
         startMove(f, c.type === 'beam' ? 'finaleBeam' : c.type === 'rush' ? 'finaleRush' : c.type === 'dragon' ? 'finaleDragon' : 'finaleStorm');
-        if (c.type === 'dragon') { const tg = foes(f).sort((a, b) => Math.abs(a.x - f.x) - Math.abs(b.x - f.x)); c.dr = { x: f.x - f.facing * 1700, y: f.y - 900, vx: f.facing * 20, vy: 6, trail: [], jaw: 0.2, chomp: 0, targets: tg, ti: 0, mode: tg.length ? 'hunt' : 'out', t: 0, ot: 0, flap: 0 }; }
+        if (c.type === 'dragon') { const tg = foes(f).sort((a, b) => Math.abs(a.x - f.x) - Math.abs(b.x - f.x)); c.dr = { x: f.x - f.facing * 1500, y: f.y - 1100, z: -1400, vx: f.facing * 16, vy: 4, vz: 10, trail: [], chomp: 0, targets: tg, ti: 0, mode: tg.length ? 'enter' : 'out', mt: 0, t: 0, ot: 0, phase: 0, speed: 18, bank: 0 }; }
         snd(c.type === 'beam' ? 'finaleBeam' : 'finaleCharge', 1, c.type === 'beam' ? 1 : 1.3); G.shake = 14; G.flash = 8;
       }
       return;
@@ -303,28 +303,48 @@
       if (c.t >= 72) { for (const v of c.caught) launch(f, v, f.facing, 45); G.flash = 12; snd('homeRun', 1, 0.8); return endFinale(); }
       return;
     }
-    if (c.phase === 'act' && c.type === 'dragon') { // Spirit Dragon: flies in, chomps each foe, then hurls them all away
-      const d = c.dr; d.t++; f.x = c.px; f.y = c.py; f.vx = f.vy = 0;
-      let tx, ty, sp = 30;
-      const tgt = d.mode === 'hunt' ? d.targets[d.ti] : null;
-      if (tgt && (tgt.state === 'dead' || tgt.state === 'out')) { d.ti++; }
-      if (d.mode === 'hunt' && tgt) { tx = tgt.x; ty = tgt.y - tgt.h * 0.55; }
-      else { d.mode = 'out'; d.ot++; tx = d.x + (d.vx >= 0 ? 1 : -1) * 900; ty = G.stage.blast.t - 600; sp = 26; }
-      // steer: a curving, swooping flight rather than a straight line
-      const dx = tx - d.x, dy = ty - d.y, dist = Math.hypot(dx, dy) || 1, wob = Math.sin(d.t * 0.12) * 0.35;
-      const wx = dx / dist * Math.cos(wob) - dy / dist * Math.sin(wob), wy = dx / dist * Math.sin(wob) + dy / dist * Math.cos(wob);
-      d.vx += (wx * sp - d.vx) * 0.09; d.vy += (wy * sp - d.vy) * 0.09; d.x += d.vx; d.y += d.vy;
-      d.trail.unshift({ x: d.x, y: d.y }); if (d.trail.length > 70) d.trail.pop();
-      d.jaw += ((d.mode === 'hunt' && dist < 520 ? 1 : 0.15) - d.jaw) * 0.2; if (d.chomp > 0) { d.chomp--; d.jaw = 0; }
-      if (G.frame % 2 === 0) fx.spark(d.x, d.y, ['#ff6ad5', '#b46cff', '#ffd23f'][d.t % 3], 2, 6);
-      if (d.mode === 'hunt' && tgt && dist < 95) { // CHOMP
-        d.chomp = 10; d.ti++; c.caught.push(tgt); tgt.hitstop = 0; small(f, tgt, sgn(d.vx) || 1); small(f, tgt, sgn(d.vx) || 1); tgt.percent = Math.min(999, tgt.percent + 8);
-        snd('dragonChomp', 1); G.shake = 14; G.flash = 6; fx.ring(tgt.x, tgt.y - tgt.h / 2, '#ff6ad5', 80);
-        if (d.ti >= d.targets.length) d.mode = 'out';
+    if (c.phase === 'act' && c.type === 'dragon') {
+      // Pink Fluff hunts like a real flyer (after the reference footage): a long banking glide in from the distance,
+      // wings tucked into a dive at each foe, a flare with big back-beats as she bites, a heavy power climb carrying
+      // them, a wide turn, and finally a fling and a roar. The wing / tail / neck motion is drawn in dragon.js.
+      const d = c.dr; d.t++; d.mt++; f.x = c.px; f.y = c.py; f.vx = f.vy = 0;
+      const live = v => v && v.state !== 'dead' && v.state !== 'out';
+      while (d.ti < d.targets.length && !live(d.targets[d.ti])) d.ti++;
+      const tgt = d.targets[d.ti], top = G.stage.blast.t, mid = (G.stage.main.x1 + G.stage.main.x2) / 2;
+      let tx = d.x, ty = d.y, tz = 140, want = 20, turn = 0.05;
+      const set = m => { d.mode = m; d.mt = 0; };
+      if (d.mode === 'enter') { tx = tgt ? tgt.x - Math.sign(tgt.x - d.x || 1) * 420 : mid; ty = (tgt ? tgt.y : f.y) - 520; tz = 60; want = 22; turn = 0.035; if (Math.hypot(tx - d.x, ty - d.y) < 260 || d.mt > 120) set(tgt ? 'dive' : 'out'); }
+      else if (d.mode === 'dive') { if (!tgt) { set('out'); } else { tx = tgt.x; ty = tgt.y - tgt.h * 0.55; want = 34; turn = 0.09; if (Math.hypot(tx - d.x, ty - d.y) < 230) set('flare'); if (d.mt > 90) set('flare'); } }
+      else if (d.mode === 'flare') { // back-beat to brake, neck lunges in, CHOMP
+        tx = tgt ? tgt.x : d.x; ty = tgt ? tgt.y - tgt.h * 0.55 : d.y; want = 7; turn = 0.14;
+        if (tgt && Math.hypot(tx - d.x, ty - d.y) < 120 && d.chomp === 0) {
+          d.chomp = 14; d.ti++; c.caught.push(tgt); tgt.hitstop = 0; small(f, tgt, sgn(d.vx) || 1); small(f, tgt, sgn(d.vx) || 1); tgt.percent = Math.min(999, tgt.percent + 8);
+          snd('dragonChomp', 1); G.shake = 14; G.flash = 6; fx.ring(tgt.x, tgt.y - tgt.h / 2, '#ff6ad5', 80);
+        }
+        if ((d.chomp > 0 && d.chomp < 4) || d.mt > 45) set('climb');
       }
-      for (const v of c.caught) { if (d.mode === 'out' && d.ot > 26) continue; v.hitstop = 9999; v.x = d.x + sgn(d.vx || 1) * 20; v.y = d.y + v.h * 0.5; v.lvx = v.lvy = 0; }
-      if (d.mode === 'out' && d.ot === 26) { for (const v of c.caught) launch(f, v, sgn(d.vx) || f.facing, 65); G.flash = 12; snd('dragonRoar', 0.8, 1.15); }
-      if (d.t > 400 || (d.mode === 'out' && d.ot > 70)) { c.dr = null; return endFinale(); }
+      else if (d.mode === 'climb') { // heavy power beats up and around in a wide arc toward the next foe (or out)
+        const nx = d.targets[d.ti]; tx = d.x + Math.sign(d.vx || 1) * 500; ty = Math.max(top + 260, (nx ? nx.y : f.y) - 650); tz = 220; want = 17; turn = 0.045;
+        if (d.mt > 60) set(nx ? 'dive' : 'out');
+      }
+      else { d.ot++; tx = d.x + Math.sign(d.vx || 1) * 900; ty = top - 500; tz = -300; want = 26; turn = 0.05; } // 'out'
+      if (d.chomp > 0) d.chomp--;
+      // steering with a limited turn rate, so every change of direction is a smooth curve
+      const dx = tx - d.x, dy = ty - d.y, dz = tz - d.z, L = Math.hypot(dx, dy, dz) || 1;
+      d.speed += (want - d.speed) * (want < d.speed ? 0.12 : 0.04);
+      const sp0 = Math.hypot(d.vx, d.vy, d.vz) || 1, ux = d.vx / sp0, uy = d.vy / sp0, uz = d.vz / sp0;
+      let nx = ux + (dx / L - ux) * turn, ny = uy + (dy / L - uy) * turn, nz = uz + (dz / L - uz) * turn;
+      ny += d.mode === 'dive' ? 0.006 : 0; // gravity helps a dive
+      const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+      const tr = ux * ny - uy * nx; // signed turn this frame -> how hard she banks
+      d.bank += (Math.max(-1.1, Math.min(1.1, -tr * 22)) - d.bank) * 0.08;
+      d.vx = nx * d.speed; d.vy = ny * d.speed; d.vz = nz * d.speed; d.x += d.vx; d.y += d.vy; d.z += d.vz;
+      d.trail.unshift({ x: d.x, y: d.y }); if (d.trail.length > 70) d.trail.pop();
+      if (G.frame % 3 === 0) fx.spark(d.x - d.vx * 3, d.y - d.vy * 3, ['#ff6ad5', '#b46cff', '#ffd23f'][d.t % 3], 1, 4);
+      // victims dangle from her jaws (and swing with the motion)
+      for (const v of c.caught) { if (d.mode === 'out' && d.ot > 30) continue; v.hitstop = 9999; v.x = d.x + nx * 90 - nx * 0; v.y = d.y + 40 + v.h * 0.5 + Math.sin(d.t * 0.2) * 6; v.lvx = v.lvy = 0; }
+      if (d.mode === 'out' && d.ot === 30) { for (const v of c.caught) launch(f, v, sgn(d.vx) || f.facing, 65); G.flash = 12; snd('dragonRoar', 0.8, 1.15); }
+      if (d.t > 520 || (d.mode === 'out' && d.ot > 80)) { c.dr = null; return endFinale(); }
       return;
     }
     if (c.phase === 'act' && c.type === 'storm') {

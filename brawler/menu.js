@@ -73,25 +73,29 @@
   // {sib1}..{sib6} are the next six family members after the one the player picked.
   // the final boss: the last sibling in the cast, supersized by a whole carton of Grow Juice
   const giant = id => { const d = FIGHTERS[idx(id)]; return Object.assign({}, d, { name: 'GIANT ' + d.name, scale: d.scale * 1.45, weight: 170, power: 1.3, run: d.run * 0.7, jump: d.jump * 1.05, djump: d.djump * 1.05 }); };
+  // the story is a ladder: beat each family member in turn (and the pets), with team fights, a free-for-all,
+  // a giant and finally Pink Fluff herself. {sib1}..{sib8} are the other eight family members, starting after the hero.
+  const pet = id => () => [{ id, level: 7 }];
+  const fluffBoss = () => Object.assign({}, FIGHTERS[idx('fluff')], { name: 'PINK FLUFF', scale: FIGHTERS[idx('fluff')].scale * 1.25, weight: 180, power: 1.35 });
   const CHAPTERS = [
-    { title: 'Warm-Up', text: 'The Golden Clog, the family trophy, is gone from the shelf. Before the search starts, {sib1} wants to check you are ready.', stage: 'proving',
-      foes: h => [{ id: h.sib1, level: 3 }] },
-    { title: 'My Turn!', text: '{sib2} says a trophy hunt needs the best fighter in the house, and reckons that is not you. Settle it.', stage: 'bunk',
-      foes: h => [{ id: h.sib2, level: 4 }] },
-    { title: 'The Quickstep', text: 'Muddy footprints lead up to the treehouse. {sib3} was seen running up the rope ladder with something shiny, and is not coming down without a fight.', stage: 'skyforge',
-      foes: h => [{ id: h.sib3, level: 5 }] },
-    { title: 'Light Show', text: '{sib3} swears {sib4} has it. Sure enough, {sib4} has been using the Golden Clog as a lamp on the kitchen table. Go get it back.', stage: 'driftway',
-      foes: h => [{ id: h.sib4, level: 6 }] },
-    { title: 'Double Trouble', text: '{sib4} and {sib5} team up to block the driveway. Good thing {sib1} just caught up with you. Two against two!', stage: 'proving',
-      foes: h => [{ id: h.sib4, level: 6 }, { id: h.sib5, level: 6 }], ally: h => ({ id: h.sib1, level: 6 }) },
-    { title: 'Giant Showdown', text: '{sib6} drank a whole carton of Grow Juice and is wearing the Golden Clog on a chain. Huge, slow and very hard to launch. Wear them down.', stage: 'skyforge',
-      foes: h => [{ def: giant(h.sib6), level: 8, stocks: 2 }], boss: true },
+    { title: 'Warm-Up', text: 'The Golden Clog, the family trophy, is gone from the shelf. Before the search starts, {sib1} wants to check you are ready.', stage: 'proving', foes: h => [{ id: h.sib1, level: 2 }] },
+    { title: 'My Turn!', text: '{sib2} says a trophy hunt needs the best fighter in the house, and reckons that is not you. Settle it.', stage: 'bunk', foes: h => [{ id: h.sib2, level: 3 }] },
+    { title: 'Footprints', text: 'Muddy footprints lead out to the driveway, where {sib3} is shooting hoops and refuses to move.', stage: 'driftway', foes: h => [{ id: h.sib3, level: 3 }] },
+    { title: 'The Quickstep', text: '{sib4} was seen running up the treehouse ladder with something shiny, and is not coming down without a fight.', stage: 'skyforge', foes: h => [{ id: h.sib4, level: 4 }] },
+    { title: 'Double Trouble', text: '{sib5} and {sib6} team up to block the kitchen. Good thing {sib1} just caught up with you. Two against two!', stage: 'driftway', foes: h => [{ id: h.sib5, level: 5 }, { id: h.sib6, level: 5 }], ally: h => ({ id: h.sib1, level: 6 }) },
+    { title: 'Pillow Fort', text: '{sib7} has built a pillow fort on the bunk beds and swears the Clog is not inside. It is definitely inside.', stage: 'bunk', foes: h => [{ id: h.sib7, level: 6 }] },
+    { title: 'Lights Out', text: 'The Clog is not in the fort after all. {sib8} has been using it as a night light on the kitchen table. Go get it.', stage: 'driftway', foes: h => [{ id: h.sib8, level: 6 }] },
+    { title: 'Good Boy', text: 'River grabbed the Clog and thinks this is the best game of fetch ever. You will have to wrestle it off him.', stage: 'proving', foes: pet('river') },
+    { title: 'Cat Burglar', text: 'Rosie swiped the Clog from River and is guarding it on the bed with her claws out.', stage: 'bunk', foes: pet('rosie') },
+    { title: 'Family Brawl', text: 'Everyone wants the Clog now. {sib2}, {sib3} and {sib4} all jump in at once. Last one standing keeps it!', stage: 'skyforge', foes: h => [{ id: h.sib2, level: 7 }, { id: h.sib3, level: 7 }, { id: h.sib4, level: 7 }] },
+    { title: 'Giant Showdown', text: '{sib6} drank a whole carton of Grow Juice and is wearing the Golden Clog on a chain. Huge, slow and very hard to launch. Wear them down.', stage: 'proving', foes: h => [{ def: giant(h.sib6), level: 8, stocks: 2 }], boss: true },
+    { title: 'Spirit Dragon', text: 'The Clog flies out of reach and lands in the claws of Pink Fluff, Norah\'s spirit dragon. Win it back from the dragon herself!', stage: 'skyforge', foes: () => [{ def: fluffBoss(), level: 9, stocks: 3 }], boss: true },
   ];
-  const ENDING = '{sib6} shrinks back to normal size and the Golden Clog drops into your hands. Back home it goes on the shelf, with one new rule: whoever wins the next family match gets to hold it.';
+  const ENDING = 'Pink Fluff bows her great head and drops the Golden Clog into your hands. Back home it goes on the shelf, with one new rule: whoever wins the next family match gets to hold it.';
   let hero = save.get('hero', 'ray');
   const prog = () => save.get('story', {});
   // the rival and the ally are the next two family members after the hero in the list
-  const cast = () => { const i = KIDS.indexOf(hero), n = KIDS.length, c = {}; for (let k = 1; k <= 6; k++) c['sib' + k] = KIDS[(i + k) % n]; return c; };
+  const cast = () => { const i = KIDS.indexOf(hero), n = KIDS.length, c = {}; for (let k = 1; k <= 8; k++) c['sib' + k] = KIDS[(i + k) % n]; return c; };
   const fill = t => { const c = cast(); return t.replace(/\{(sib\d)\}/g, (_, k) => FIGHTERS[idx(c[k])].name); };
   const nameOf = f => (f.def ? f.def.name : FIGHTERS[idx(f.id)].name);
 
@@ -105,13 +109,15 @@
       <div><button class="big alt" data-act="hub">BACK</button><button class="big" data-act="go">${done >= CHAPTERS.length ? 'PLAY AGAIN' : done ? 'CONTINUE' : 'START'}</button></div>`;
     showScreen('story'); setScene('story');
   }
-  function chapterCard(i) {
+  function chapterCard(i, auto) {
     const c = CHAPTERS[i], h = cast(), foes = c.foes(h), ally = c.ally && c.ally(h);
     el('storyCard').innerHTML = `<div class="chap">Chapter ${i + 1} of ${CHAPTERS.length}</div><h3>${c.title.toUpperCase()}</h3>${dots(i, i)}
       <p>${fill(c.text)}</p>
       <div class="vs"><span style="border-bottom:3px solid ${FIGHTERS[idx(hero)].color}">${FIGHTERS[idx(hero)].name}${ally ? ' + ' + nameOf(ally) : ''}</span>VS<span style="border-bottom:3px solid #ff5a5a">${foes.map(nameOf).join(' + ')}</span></div>
       <div><button class="big alt" data-act="home">BACK</button><button class="big" data-act="fight" data-i="${i}">FIGHT!</button></div>`;
     showScreen('story'); setScene('story', { foes: foes.map(f => ({ id: f.def ? f.def.id : f.id, big: !!f.def })), ally: ally && ally.id });
+    clearInterval(chapterCard.iv);
+    if (auto) { let n = 5; const b = el('storyCard').querySelector('[data-act="fight"]'); const tick = () => { if (!el('story').classList.contains('on') || !b.isConnected) return clearInterval(chapterCard.iv); if (n <= 0) { clearInterval(chapterCard.iv); fightChapter(i); return; } b.textContent = 'FIGHT! (' + n + ')'; n--; }; tick(); chapterCard.iv = setInterval(tick, 1000); }
   }
   function fightChapter(i) {
     const c = CHAPTERS[i], h = cast(), foes = c.foes(h), ally = c.ally && c.ally(h);
@@ -119,19 +125,24 @@
     const slots = [slot({ id: hero }, 1, 'human')];
     if (ally) slots.push(slot(ally, 1, 'cpu'));
     for (const f of foes) slots.push(slot(f, 2, 'cpu'));
-    while (slots.length < 4) slots.push({ type: 'off' });
-    Sfx.init(); startMatch({ stage: c.stage, stocks: 3, slots, story: { i } });
+    while (slots.length < 8) slots.push({ type: 'off' });
+    clearInterval(chapterCard.iv); Sfx.init(); startMatch({ stage: c.stage, stocks: 3, time: 3, slots, story: { i } });
   }
   function storyResult() {
-    const i = G.cfg.story.i, me = G.fighters[0], won = G.fighters.some(f => f.team === 1 && f.stocks > 0) && !G.fighters.some(f => f.team === 2 && f.stocks > 0);
+    const i = G.cfg.story.i, me = G.fighters[0], side = t => G.fighters.filter(f => f.team === t), sum = (l, k) => l.reduce((a, f) => a + Math.max(0, f[k]), 0);
+    const won = G.timeUp ? (sum(side(1), 'stocks') > sum(side(2), 'stocks') || (sum(side(1), 'stocks') === sum(side(2), 'stocks') && sum(side(1), 'percent') < sum(side(2), 'percent')))
+      : G.fighters.some(f => f.team === 1 && f.stocks > 0) && !G.fighters.some(f => f.team === 2 && f.stocks > 0);
     G.mode = 'results';
     if (won) { const p = prog(); p[hero] = Math.max(p[hero] || 0, i + 1); save.set('story', p); }
     const last = i === CHAPTERS.length - 1;
     el('storyCard').innerHTML = won
       ? (last ? `<div class="chap">The end</div><h3>THE CLOG COMES HOME</h3>${dots(-1, CHAPTERS.length)}<p>${fill(ENDING)}</p><div><button class="big" data-act="hub">MAIN MENU</button></div>`
         : `<div class="chap">Chapter ${i + 1} cleared</div><h3>VICTORY!</h3>${dots(i + 1, i + 1)}<p>${me.stats.kos} KO${me.stats.kos === 1 ? '' : 's'}, ${me.stats.dealt.toFixed(0)}% damage dealt, ${me.stocks} stock${me.stocks === 1 ? '' : 's'} left.</p><div><button class="big alt" data-act="hub">MAIN MENU</button><button class="big" data-act="chapter" data-i="${i + 1}">NEXT CHAPTER</button></div>`)
-      : `<div class="chap">Chapter ${i + 1}</div><h3>SO CLOSE</h3>${dots(i, i)}<p>${CHAPTERS[i].boss ? 'Big Brick is heavy, so he takes a lot of damage before he flies. Stay out of reach of his charge and hit him after he misses.' : 'Shake it off and go again. Use your shield, and save your smash attacks for when their damage is high.'}</p><div><button class="big alt" data-act="hub">MAIN MENU</button><button class="big" data-act="fight" data-i="${i}">TRY AGAIN</button></div>`;
+      : `<div class="chap">Chapter ${i + 1}</div><h3>SO CLOSE</h3>${dots(i, i)}<p>${CHAPTERS[i].boss ? 'Bosses are heavy, so they take a lot of damage before they fly. Stay out of reach, dodge their big swings and punish the misses. Grab items!' : 'Shake it off and go again. Use your shield, and save your smash attacks for when their damage is high.'}</p><div><button class="big alt" data-act="hub">MAIN MENU</button><button class="big" data-act="fight" data-i="${i}">TRY AGAIN</button></div>`;
     showScreen('story'); setScene('story'); if (won) react(hero, 'victory', true);
+    if (won && !last) { // on to the next opponent
+      clearTimeout(storyResult.t); storyResult.t = setTimeout(() => { if (el('story').classList.contains('on') && G.mode === 'results') chapterCard(i + 1, true); }, 2600);
+    }
   }
   el('storyCard').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return; Sfx.init(); Sfx.blip();
