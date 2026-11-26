@@ -425,8 +425,8 @@ const R3 = (() => {
     const J = C.jump;
     switch (S) {
       case 'idle': case 'respawn': case 'shieldDrop': return { c: C.idle, time: f.anim / 60, loop: true };
-      case 'walk': return { c: C.walk, time: f.anim / 60 * 1.3, loop: true };
-      case 'run': return { c: get('run'), time: f.anim / 60 * 1.15, loop: true };
+      case 'walk': return { c: C.walk, time: rig.locoT || 0, loop: true };
+      case 'run': return { c: get('run'), time: rig.locoT || 0, loop: true };
       case 'air': if (f.flipT > 0) return { c: J, time: J.dur * (0.3 + 0.25 * (1 - f.flipT / 24)), loop: false, air: true, keepRot: true }; return f.vy < -1 ? { c: J, time: Math.min(J.dur * 0.55, J.dur * 0.3 + f.t / 60), loop: false, air: true } : { c: C.fall, time: f.anim / 60, loop: true, air: true };
       case 'jumpsquat': return hold(J, Math.min(J.dur * 0.25, 0.05 + f.t / 30));
       case 'land': return hold(J, Math.max(J.dur * 0.08, J.dur * 0.75 - f.t / 40));
@@ -465,6 +465,48 @@ const R3 = (() => {
     return f.grounded ? { c: C.idle, time: f.anim / 60, loop: true } : { c: C.fall, time: f.anim / 60, loop: true, air: true };
   }
 
+  // ---- natural motion layer on top of the clips (after the Game Animation Sample's motion-matching feel):
+  // stride matched to ground speed, lean into acceleration / braking, a pivot step when reversing, landing compression
+  // on a spring, and the head and chest tracking the nearest opponent.
+  const _dq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _ax = new THREE.Vector3(), _wq = new THREE.Quaternion();
+  function worldTurn(bone, axis, ang) { // rotate a bone about a world axis, keeping its parent where it is
+    if (!bone || !bone.parent || Math.abs(ang) < 1e-4) return;
+    bone.parent.getWorldQuaternion(_pq); _dq.setFromAxisAngle(axis, ang);
+    _wq.copy(_pq).invert().multiply(_dq).multiply(_pq); bone.quaternion.premultiply(_wq);
+  }
+  function motionLayer(rig, f) {
+    const m = rig.ml || (rig.ml = { vx: f.vx, lean: 0, dip: 0, dipV: 0, look: 0, lookY: 0, piv: 0, gr: f.grounded, face: f.facing });
+    const run = Math.max(1, f.def.run), S = f.state;
+    // stride: the walk / run clips advance with distance covered, so feet plant instead of sliding
+    const sp = Math.abs(f.vx);
+    if (S === 'walk') rig.locoT = (rig.locoT || 0) + sp / Math.max(1, f.def.walk) / 60 * 1.05;
+    else if (S === 'run') rig.locoT = (rig.locoT || 0) + sp / run / 60 * 1.25;
+    // lean: forward with speed and acceleration, back when braking hard
+    const acc = f.vx - m.vx; m.vx = f.vx;
+    let lean = 0;
+    if (f.grounded && (S === 'run' || S === 'walk' || S === 'idle' || S === 'land')) lean = -(f.vx / run) * 0.1 - acc * 0.35;
+    // pivot: a quick plant-and-turn when reversing direction at speed
+    if (f.facing !== m.face) { if (sp > run * 0.4 && f.grounded) m.piv = 1; m.face = f.facing; }
+    if (m.piv > 0) { m.piv = Math.max(0, m.piv - 0.08); lean += f.facing * 0.25 * Math.sin(m.piv * Math.PI); }
+    m.lean += (Math.max(-0.35, Math.min(0.35, lean)) - m.lean) * 0.12;
+    rig.spin.rotation.z += m.lean;
+    // landing: compress and spring back
+    if (f.grounded && !m.gr && f.state !== 'respawn') m.dipV -= Math.min(10, 2 + Math.abs(f.lvy || 0) * 0.3 + 4);
+    m.gr = f.grounded;
+    m.dipV += -m.dip * 0.25; m.dipV *= 0.72; m.dip += m.dipV;
+    rig.spin.position.y += Math.max(-rig.hipRest * 0.3, m.dip);
+    // look: chest and head turn toward the nearest opponent (not while attacking, so moves keep their shape)
+    let tx = 0, ty = 0;
+    if (['idle', 'walk', 'run', 'shield', 'crouch', 'air', 'land'].includes(S) && G.fighters) {
+      let best = null, bd = 1e9;
+      for (const o of G.fighters) { if (o === f || o.stocks <= 0 || o.state === 'dead' || o.state === 'out') continue; const d = Math.abs(o.x - f.x) + Math.abs(o.y - f.y); if (d < bd) { bd = d; best = o; } }
+      if (best && bd < 900) { const dx = (best.x - f.x) * f.facing, dy = (f.y - f.h * 0.8) - (best.y - best.h * 0.8); ty = Math.max(-0.45, Math.min(0.45, Math.atan2(dy, Math.max(60, Math.abs(dx))))); tx = dx < 0 ? 0.35 : 0; }
+    }
+    m.look += (tx - m.look) * 0.08; m.lookY += (ty - m.lookY) * 0.1;
+    const B = rig.bones;
+    _ax.set(0, 1, 0); worldTurn(B.Spine02, _ax, -f.facing * m.look * 0.6); worldTurn(B.Head, _ax, -f.facing * m.look * 0.5);
+    _ax.set(0, 0, 1); worldTurn(B.neck || B.Head, _ax, f.facing * m.lookY * 0.5); worldTurn(B.Head, _ax, f.facing * m.lookY * 0.4);
+  }
   function poseGlb(rig, pose, rot, facing, f) {
     const [lean, afS, afE, abS, abE, lfH, lfK, lbH, lbK] = pose;
     const nL = facing < 0; // the left side is nearest the camera when facing left
@@ -505,6 +547,7 @@ const R3 = (() => {
     rig.hipNow = rig.hipNow == null || !f ? hip : rig.hipNow + (hip - rig.hipNow) * 0.3;
     rig.spin.position.y = rig.hipNow;
     for (const r of rig.rest) r.b.quaternion.slerp(r.target, k);
+    if (f) motionLayer(rig, f);
   }
 
   function buildRig(def) {

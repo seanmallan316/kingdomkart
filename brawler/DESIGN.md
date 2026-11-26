@@ -109,6 +109,24 @@ the other eight family members one by one (levels rising 2 to 7) including a 2-v
 Family Brawl, the Giant Showdown, and the final boss: Pink Fluff herself. Progress is saved per hero; lose and retry
 the same round.
 
+## Pet skeletons (pets.js)
+River, Rosie and Pink Fluff come from photos and have no skeleton, so pets.js builds one in the vertex shader: weights
+baked from each model's shape for four legs (hip / shoulder and knee pivots), spine, neck and head, tail and (dragon)
+two-part wings. A gait system drives them like real animals: four-beat walk, diagonal trot, gallop / bound with a
+flexing spine, crouch-and-spring jumps with legs reaching and tucking, rear-ups with paw swipes, stomps, buck kicks, a cat
+one-paw swipe, a dog's wagging tail and a cat's slow swish, head look-around and breathing. The gait cycle advances with
+ground speed so paws plant. Every joint eases toward its target (faster in attacks).
+
+## Natural motion layer for the family (render3d.js `motionLayer`)
+After the Unreal Game Animation Sample (motion matching): walk / run clips advance with distance covered (no foot
+sliding), the body leans into acceleration and back when braking, a pivot step when reversing at speed, landings
+compress on a spring, and the chest and head track the nearest opponent (not during attacks).
+
+## Menu music (music.js, music/menu.mp3)
+The family's own song (made with Suno) loops on the title, main menu, fighter select, options, story and Locker
+screens. It starts on the first tap / key, dips under the intro video, fades out for matches and back in on the menus,
+and follows the Options volume.
+
 ## Locker: outfits, hats, back items and weapons (`locker.js`)
 Every fighter has their own: 7 outfits (recolours / materials of the scan: Shadow, Frost, Chrome, Lava, Neon, Gold
 Statue), 7 hats, 5 back items (cape, jetpack, angel wings, dragon wings) and 8 weapons, built in 3D and attached to the
