@@ -358,6 +358,15 @@ const FIGHTERS = [
     weight: 100, walk: 4.0, run: 8.6, air: 4.7, airAcc: 0.5, grav: 0.46, fall: 7.2, ff: 10.2, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
     scale: 1.15, power: 1.0, speed: 1.0, reach: 1.04, sp: { n: 'blaster', s: 'dashStrike', u: 'rocket', d: 'counter' },
   },
+  // ---- the cast ----
+  {
+    // Brent: 3D model from his four photos (Meshy). Height 5'8" assumed (scale 0.2 per foot) until confirmed.
+    // Moves and specials are a placeholder all-rounder set until his moves video arrives.
+    id: 'brent', name: 'BRENT', voice: 'teen', vrate: 1.0, finale: 'rush', trail: ['#6cc8ff', '#3a6fe0'],
+    blurb: 'Spiky-haired all-rounder. Charge punch, dash strike, dive kick.', color: '#3a6fe0', dark: '#16181f', accent: '#6cc8ff', acc: 'kid',
+    weight: 98, walk: 4.2, run: 9.0, air: 4.9, airAcc: 0.54, grav: 0.46, fall: 7.2, ff: 10.4, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
+    scale: 1.133, power: 1.02, speed: 0.95, reach: 1.02, sp: { n: 'chargePunch', s: 'dashStrike', u: 'rocket', d: 'diveKick' },
+  },
 ];
 // ?dummy in the address shows the test dummy in the menus (for testing only)
 if (/[?&]dummy\b/.test(location.search)) for (const d of FIGHTERS) if (d.id === 'dummy') d.hidden = false;
