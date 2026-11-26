@@ -108,7 +108,7 @@
     const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = rate;
     const g = ctx.createGain(); g.gain.value = vol; s.connect(g); g.connect(out);
     if (wet) { const w = ctx.createGain(); w.gain.value = wet; g.connect(w); w.connect(verb); }
-    s.start(); return true;
+    s.start(); return s;
   }
   const vary = a => 1 + (Math.random() * 2 - 1) * a;
   // one(name, sample, volume, pitch variation, reverb, minimum gap in ms)
@@ -152,6 +152,16 @@
     tech: one('tech', 'djump', 0.4, 0.02, 0.1),
     // any packed sample by name (items, the Super Orb, finales)
     announce(n) { if (ctx && bufs[n]) play(n, 1.05, 1, 0.28); }, // the announcer, with arena reverb
+    // the announcer reads out the highlighted menu option; a new one cuts the last one off so fast scrolling never stacks
+    say(key) {
+      const b = ctx && bufs['say_' + key]; if (!b) return false;
+      const t = ctx.currentTime, o = Sfx._say;
+      if (o) { try { o.g.gain.setTargetAtTime(0, t, 0.015); o.s.stop(t + 0.07); } catch (e) {} }
+      const src = ctx.createBufferSource(); src.buffer = b;
+      const g = ctx.createGain(); g.gain.value = 0.95 * (Sfx.voiceVol == null ? 1 : Sfx.voiceVol); src.connect(g); g.connect(out);
+      const w = ctx.createGain(); w.gain.value = 0.16; g.connect(w); w.connect(verb);
+      src.start(t + (o ? 0.03 : 0)); Sfx._say = { s: src, g }; return true;
+    },
     sample(n, v = 0.7, r = 1) { if (ctx && bufs[n]) play(n, v, r * vary(0.03), 0.15); },
     // character voices: kind is atk1 (light effort), atk2 (big effort), hurt, jump or ko
     voice(f, kind, force) {

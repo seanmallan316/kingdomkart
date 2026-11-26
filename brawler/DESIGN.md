@@ -420,3 +420,13 @@ layouts, names and art are this game's own, not copies of any existing game's st
 
 Fighters are 1.35x larger relative to the stages (`FIGHTER_SIZE` in `game.js`) and the camera frames them more tightly.
 The start video now begins fitted to the screen and grows to fill it, so it is not cropped on an upright phone.
+
+## Announcer in the menus, landscape, opening song
+- `announce.js`: the announcer reads out whatever is highlighted in any menu (hover, tap, keyboard or controller focus):
+  hub tiles, every fighter, stages, stocks, time limits, options, story buttons, Locker tabs and items. Clips live in
+  `sfx/say/say_<WORDS>.mp3` (packed into sfx.js), are cut from batched announcer takes and labelled by speech recognition,
+  and `Sfx.say()` cuts the previous line off so fast scrolling never stacks. Options > Menu announcer turns it off.
+- Countdown fix: the "2", "1" and "FIGHT!" clips had been cut to silence; they are now re-cut from the original take.
+- Landscape: on phones/tablets, PLAY / FIGHT goes full screen and locks the screen sideways where the browser allows
+  (Android); otherwise a "turn your phone sideways" card shows while upright. Options > Screen: Landscape / Auto.
+- `music/title.mp3`: the opening song on the title screen, cross-fading to the menu song after.

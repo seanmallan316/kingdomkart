@@ -1,5 +1,5 @@
 'use strict';
-// Music: the family's own songs. The menu song plays on the title, main menu, fighter select, options, story and Locker
+// Music: the family's own songs. The opening song plays when the game first opens (title screen); the menu song plays on the main menu, fighter select, options, story and Locker
 // screens; each stage can have its own song during matches (music/<theme>.mp3, e.g. treehouse). Songs loop, start on
 // the first tap / key (browsers block sound before that), cross-fade when the screen changes, dip under the intro video
 // and follow the sound volume in Options.
@@ -15,7 +15,9 @@
       return { name, k: G.paused ? 0.35 : G.mode === 'results' ? 0.6 : 0.8 };
     }
     const intro = document.getElementById('intro'), vid = intro && intro.classList.contains('vid');
-    return { name: 'menu', k: vid ? 0.15 : 1 };
+    // the opening song on the title screen (and under the intro), the menu song everywhere else
+    const t = document.getElementById('title'), onTitle = SRC.title && (vid || (t && t.classList.contains('on')));
+    return { name: onTitle ? 'title' : 'menu', k: vid ? 0.15 : 1 };
   }
   function start() { if (started) return; started = true; const w = want(); const t = w.name && track(w.name); if (t) t.a.play().catch(() => { started = false; }); }
   addEventListener('pointerdown', start, true); addEventListener('keydown', start, true); addEventListener('gamepadconnected', start);
@@ -27,7 +29,7 @@
       t.v += (target - t.v) * Math.min(1, dt * (target > t.v ? 1.4 : 3));
       if (Math.abs(t.v - target) < 0.002) t.v = target;
       t.a.volume = Math.max(0, Math.min(1, t.v));
-      if (target > 0 && t.a.paused) { if (name !== 'menu' && t.a.currentTime > 0 && t.v < 0.01) t.a.currentTime = 0; t.a.play().catch(() => {}); }
+      if (target > 0 && t.a.paused) { if (name !== 'menu' && name !== 'title' && t.a.currentTime > 0 && t.v < 0.01) t.a.currentTime = 0; t.a.play().catch(() => {}); }
       if (t.v <= 0.003 && target === 0 && !t.a.paused) t.a.pause();
     }
   }, 50);
