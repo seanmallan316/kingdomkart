@@ -245,7 +245,7 @@ const R3 = (() => {
     for (const id of ids) {
       try {
         const str = atob(src[id]), buf = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) buf[i] = str.charCodeAt(i);
-        loader.parse(buf.buffer, '', g => { if (window.RESKIN && !/[?&]rawskin/.test(location.search)) window.RESKIN(g.scene); MODELS[id] = g.scene; delete pCache[id]; fin(); }, e => { console.warn('model failed', id, e); fin(); });
+        loader.parse(buf.buffer, '', g => { if (window.RESKIN && !/[?&]rawskin/.test(location.search)) window.RESKIN(g.scene, id); MODELS[id] = g.scene; delete pCache[id]; fin(); }, e => { console.warn('model failed', id, e); fin(); });
       } catch (e) { console.warn('model failed', id, e); fin(); }
     }
   }
@@ -348,9 +348,15 @@ const R3 = (() => {
   // per-fighter moves motion-captured from their own videos (anims_mc_<id>.js): { <id>: { jab1: '<prefix>_Jab', ... } }
   // keys: jab1 jab2 jab3 ftilt utilt dtilt fsmash usmash dsmash nair fair bair uair dair nspec sspec uspec dspec dash
   //       shoot pulseA pulseB pulseS counterStrike getupAtk ledgeAtk
-  const OWN_MC = {};
-  const VICTORY_MC = {}; // { <id>: '<prefix>_Victory' }: their own celebration from the end of their video
-  const SPIN_MC = new Set([]); // clips that flip or spin the whole body (the clip keeps its own rotation)
+  const OWN_MC = {
+    // Super Joe, from his two videos (mocap/joe_moves.json, mocap/joe_fly.json)
+    joe: { jab1: 'jo_Jab', jab2: 'jo_Cross', jab3: 'jo_Hook', ftilt: 'jo_FrontKick', utilt: 'jo_Uppercut', dtilt: 'jo_LungePunch', fsmash: 'jo_LungePunch',
+      usmash: 'jo_RisingUpper', dsmash: 'jf_GroundPound', nair: 'jo_Spin', fair: 'jf_FlyPunch', bair: 'jo_Spin', uair: 'jo_RisingUpper', dair: 'jf_GroundPound',
+      nspec: 'jo_Blast', shoot: 'jo_Blast', sspec: 'jf_FlyPunch', uspec: 'jf_Launch', dspec: 'jf_GroundPound', dash: 'jo_FlyingKnee',
+      pulseA: 'jo_Spin', pulseB: 'jo_Blast', pulseS: 'jf_GroundPound', counterStrike: 'jo_Cross', getupAtk: 'jo_Knee', ledgeAtk: 'jo_FrontKick' },
+  };
+  const VICTORY_MC = { joe: 'jo_Victory' }; // { <id>: '<prefix>_Victory' }: their own celebration from the end of their video
+  const SPIN_MC = new Set(['jo_Spin']); // clips that flip or spin the whole body (the clip keeps its own rotation)
   function pickClip(rig, f) {
     const C = rig.clips; if (!C || !f) return null;
     const own = CHAR_CLIP[rig.def.id] || {}, S = f.state, t = f.t / 60;

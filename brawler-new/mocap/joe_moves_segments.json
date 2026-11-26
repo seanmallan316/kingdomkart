@@ -1,0 +1,15 @@
+{
+  "jo_Jab": [0.85, 1.45],
+  "jo_Cross": [1.35, 2.1],
+  "jo_Hook": [2.4, 3.05],
+  "jo_Uppercut": [2.85, 3.3],
+  "jo_Knee": [3.05, 3.6],
+  "jo_FrontKick": [3.55, 4.45],
+  "jo_Spin": [5.6, 6.6],
+  "jo_RisingUpper": [6.45, 7.35],
+  "jo_GroundSlam": [7.75, 8.6],
+  "jo_LungePunch": [8.85, 9.55],
+  "jo_FlyingKnee": [9.4, 10.6],
+  "jo_Blast": [11.55, 12.5],
+  "jo_Victory": [12.6, 14.6]
+}

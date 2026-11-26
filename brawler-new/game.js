@@ -407,6 +407,15 @@ const FIGHTERS = [
     weight: 88, walk: 4.4, run: 9.8, air: 5.0, airAcc: 0.58, grav: 0.46, fall: 7.2, ff: 10.6, jump: 12.4, hop: 7.9, djump: 11.8, jumps: 2,
     scale: 0.933, power: 0.95, speed: 0.9, reach: 0.98, sp: { n: 'blaster', s: 'cannonball', u: 'spiral', d: 'diveKick' },
   },
+  {
+    // Super Joe: 3D model from his three photos (Meshy; the shorts logo and shoe heel text were painted out). His moves
+    // are motion-captured from his own two videos (mocap/joe_*.json): punches, kicks, tornado spin, flying punch,
+    // ground pound, energy blast. Height 5'10" assumed until confirmed.
+    id: 'joe', name: 'SUPER JOE', cape: true, voice: 'man', vrate: 0.96, finale: 'rush', trail: ['#ffe9a8', '#ffffff'],
+    blurb: 'Towel-caped hero. Energy blast, flying punch, ground pound.', color: '#d9a42b', dark: '#2a2418', accent: '#fff3c2', acc: 'kid',
+    weight: 116, walk: 3.9, run: 8.4, air: 4.6, airAcc: 0.5, grav: 0.48, fall: 7.6, ff: 10.8, jump: 13.0, hop: 8.2, djump: 12.6, jumps: 2,
+    scale: 1.167, power: 1.12, speed: 1.02, reach: 1.06, sp: { n: 'blaster', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
+  },
 ];
 // ?dummy in the address shows the test dummy in the menus (for testing only)
 if (/[?&]dummy\b/.test(location.search)) for (const d of FIGHTERS) if (d.id === 'dummy') d.hidden = false;

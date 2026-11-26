@@ -4,7 +4,7 @@
      Loads the game's own scripts (three, the fighter model, anims, reskin). Use clip=rest for the bind pose. -->
 <script src="../vendor/three-bundle.js"></script>
 <script>const Q = new URLSearchParams(location.search); document.write('<script src="../modeljs/' + Q.get('id') + '.js"><\/script>');</script>
-<script src="../anims.js"></script><script>if (Q.has("lib")) document.write('<script src="../anims_lib.js"><\/script>');</script><script src="../anims_ual.js"></script><script src="../reskin.js"></script>
+<script src="../anims.js"></script><script>if (Q.has("lib")) document.write('<script src="../anims_lib.js"><\/script>');</script><script src="../anims_ual.js"></script><script>if (Q.has("mc")) { document.write('<script src="../anims_mc_' + Q.get("id") + '.js"><\/script>'); document.write('<script src="../anims_mc_' + Q.get("id") + '2.js"><\/script>'); }</script><script src="../reskin.js"></script>
 <script>
 (async () => {
   const T = THREE, id = Q.get('id'), clipName = Q.get('clip') || 'ual_Idle_Loop', t = +(Q.get('t') || 0), view = Q.get('view') || 'side';
@@ -12,8 +12,14 @@
   const sc = new T.Scene(); sc.add(new T.HemisphereLight('#ffffff', '#667', 2.2)); const d = new T.DirectionalLight('#fff', 2); d.position.set(2, 4, 3); sc.add(d);
   const s = atob(CLASH_MODELS[id]), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
   const g = await new Promise((ok, no) => new T.GLTFLoader().parse(u.buffer, '', ok, no)); const m = g.scene;
-  if (window.RESKIN && !Q.has('rawskin')) RESKIN(m);
+  if (Q.has('cape')) window.FIGHTERS = [{ id, cape: true }];
+  if (window.RESKIN && !Q.has('rawskin')) RESKIN(m, id);
   const bones = {}; m.traverse(o => { if (o.isBone) bones[o.name] = o; });
+  if (Q.has('parts')) m.traverse(o => { if (!o.isSkinnedMesh) return; // colour each vertex by the body part it follows most
+    const SI = o.geometry.attributes.skinIndex, SW = o.geometry.attributes.skinWeight, n = SI.count, C = new Float32Array(n * 3), B = o.skeleton.bones;
+    const col = nm => /^Left(Shoulder|Arm|ForeArm|Hand)/.test(nm) ? [1, .2, .2] : /^Right(Shoulder|Arm|ForeArm|Hand)/.test(nm) ? [.2, .4, 1] : /^Left(UpLeg|Leg|Foot|Toe)/.test(nm) ? [1, .8, .1] : /^Right(UpLeg|Leg|Foot|Toe)/.test(nm) ? [.2, .9, .3] : [.85, .85, .85];
+    for (let i = 0; i < n; i++) { const c = col(B[SI.getX(i)].name); C.set(c, i * 3); }
+    o.geometry.setAttribute('color', new T.Float32BufferAttribute(C, 3)); o.material = new T.MeshLambertMaterial({ vertexColors: true }); });
   const all = Object.assign({}, (window.CLASH_ANIMS || {})[id] || {}, (window.CLASH_ANIMS_UAL || {})[id] || {}, (window.CLASH_ANIMS_MC || {})[id] || {});
   const c = all[clipName];
   if (c) {
@@ -24,7 +30,7 @@
   sc.add(m); m.updateMatrixWorld(true); window.__m = m; if (Q.has('bones')) { const sk = new T.SkeletonHelper(m); sk.material.depthTest = false; sk.material.linewidth = 3; sk.material.color = new T.Color('#ff2050'); sc.add(sk); const hh = new T.Box3().setFromObject(m).getSize(new T.Vector3()).y; m.traverse(o => { if (o.isBone) { const s = new T.Mesh(new T.SphereGeometry(hh * 0.012), new T.MeshBasicMaterial({ color: /Left/.test(o.name) ? '#ff2050' : /Right/.test(o.name) ? '#20a0ff' : '#ffe000', depthTest: false })); s.renderOrder = 9; s.position.copy(o.getWorldPosition(new T.Vector3())); sc.add(s); } }); m.traverse(o => { if (o.isMesh) { o.material.transparent = true; o.material.opacity = 0.55; } }); }
   const box = new T.Box3().setFromObject(m), ctr = box.getCenter(new T.Vector3()), h = box.max.y - box.min.y;
   const cam = new T.PerspectiveCamera(30, W / H, 0.001, 100), dist = h * 2.4;
-  const dir = { side: [1, 0.15, 0], front: [0, 0.15, 1], back: [0, 0.15, -1], q: [0.8, 0.25, 0.8] }[view];
+  const dir = { side: [1, 0.15, 0], left: [-1, 0.15, 0], front: [0, 0.15, 1], back: [0, 0.15, -1], q: [0.8, 0.25, 0.8] }[view];
   cam.position.set(ctr.x + dir[0] * dist, ctr.y + dir[1] * dist, ctr.z + dir[2] * dist); cam.lookAt(ctr);
   r.render(sc, cam); document.title = 'ready ' + document.title;
 })();
