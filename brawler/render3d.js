@@ -437,12 +437,27 @@ const R3 = (() => {
       nspec: 'bladespin', sspec: 'thrust', uspec: 'bladespin', dspec: 'block', counterStrike: 'attack' },
   };
   // which clip (and what time in it) shows the fighter's current state; null = use the hand-posed fallback
+  // per-fighter moves motion-captured from their own videos (anims_mc_<id>.js)
+  const OWN_MC = { ollie: { jab1: 'oc_SparkPunch', jab2: 'oc_Cross', jab3: 'oc_BurstPunch', ftilt: 'oc_Kick', utilt: 'oc_RisingSwirl', dtilt: 'oc_LowSwirl',
+    usmash: 'oc_Uppercut', dsmash: 'oc_GroundSlam', nair: 'oc_Handspring', fair: 'oc_SpinStrike', bair: 'oc_Tornado', uair: 'oc_JumpKnee', dair: 'oc_GroundSlam',
+    nspec: 'oc_Beam', shoot: 'oc_Beam', dspec: 'oc_ShieldBurst', pulseA: 'oc_SpinStrike', pulseB: 'oc_Beam', pulseS: 'oc_GroundSlam', counterStrike: 'oc_Cross',
+    getupAtk: 'oc_LowSwirl', ledgeAtk: 'oc_Kick' },
+    norah: { jab1: 'nc_Jab', jab2: 'nc_Jab2', jab3: 'nc_Cross', ftilt: 'nc_Lunge', utilt: 'nc_Knee', dtilt: 'nc_LowSwirl', fsmash: 'nc_PalmBurst',
+    usmash: 'nc_Crescent', dsmash: 'nc_FloorSweep', nair: 'nc_Crescent', fair: 'nc_FlyingKick', bair: 'nc_BackKick', uair: 'nc_JumpKick', dair: 'nc_JumpKick',
+    nspec: 'nc_Beam', shoot: 'nc_Beam', dspec: 'nc_Burst', pulseA: 'nc_PalmBurst', pulseB: 'nc_Beam', pulseS: 'nc_Burst', counterStrike: 'nc_Cross',
+    getupAtk: 'nc_LowSwirl', ledgeAtk: 'nc_Lunge' } };
+  const VICTORY_MC = { ollie: 'oc_PowerUp', norah: 'nc_Victory' }; // their own celebration from the end of their video
+  const SPIN_MC = new Set(['mc_Cartwheel', 'oc_Handspring', 'oc_Tornado']);
   function pickClip(rig, f) {
     const C = rig.clips; if (!C || !f) return null;
     const own = CHAR_CLIP[rig.def.id] || {}, S = f.state, t = f.t / 60;
     const get = n => C[own[n] || n] || C[n];
     const hold = (c, at) => ({ c, time: at, loop: false });
-    if (G.ending && f.stocks > 0 && f.grounded && S === 'idle') return { c: C.ual_Dance_Loop || C.victory, time: G.ending / 60, loop: true };
+    if (G.ending && f.stocks > 0 && f.grounded && S === 'idle') {
+      const vic = C[VICTORY_MC[rig.def.id]];
+      if (vic) return { c: vic, time: Math.min(vic.dur, G.ending / 60), loop: false }; // their own victory from their video, held at the end
+      return { c: C.ual_Dance_Loop || C.victory, time: G.ending / 60, loop: true };
+    }
     const J = C.jump;
     // the Universal Animation Library set (smooth, game-ready motion), when this character has it
     const u = n => C['ual_' + n];
@@ -484,7 +499,9 @@ const R3 = (() => {
         const MC = { jab1: 'LungePunch', jab2: 'Cross', jab3: 'GuardPunch', ftilt: 'SideKick', utilt: 'HighKick', dtilt: 'LowStrike', fsmash: 'LungeStrike',
           usmash: 'HighKick', dsmash: 'PalmSweep', nair: 'Cartwheel', bair: 'Cartwheel', fair: 'FlyingKick', uair: 'JumpKick', dair: 'AxeKick',
           nspec: 'PalmStrike', sspec: 'PalmStrike', pulseB: 'PalmStrike', pulseA: 'LungeStrike', pulseS: 'PalmSweep', counterStrike: 'Cross2', getupAtk: 'LowStrike', ledgeAtk: 'SideKick' };
-        const mcKey = MC[n] && !(sword && MAP[n]) ? 'mc_' + MC[n] : null, mclip = mcKey && C[mcKey];
+        // a fighter's own video moves come first (Ollie: his own routine; he keeps the foam sword on fsmash and sspec)
+        const ownKey = (OWN_MC[rig.def.id] || {})[n];
+        const mcKey = ownKey && C[ownKey] ? ownKey : MC[n] && !(sword && MAP[n]) ? 'mc_' + MC[n] : null, mclip = mcKey && C[mcKey];
         const clip = mclip || (MAP[n] && u(MAP[n]));
         if (clip) {
           const key = mclip ? mcKey : 'ual_' + MAP[n];
@@ -493,7 +510,7 @@ const R3 = (() => {
           const imp = clip.impact != null ? clip.impact : clip.dur * 0.4, lead = Math.min(imp, 0.5);
           // wind-up plays at its own pace up to the hit frame, then the follow-through plays out naturally
           const time = f.mt <= hs ? imp - lead + lead * (f.mt / hs) : imp + (f.mt - hs) / 60 * 1.1;
-          return { c: clip, time, loop: false, air: !f.grounded, keepRot: mcKey === 'mc_Cartwheel' };
+          return { c: clip, time, loop: false, air: !f.grounded, keepRot: SPIN_MC.has(mcKey) };
         }
       }
     }
@@ -521,7 +538,7 @@ const R3 = (() => {
         if (!f.move) return { c: C.idle, time: f.anim / 60, loop: true };
         if (f.move.cine) { // the Family Finale: a clear pose for each phase instead of a frozen frame
           const ph = G.cine && G.cine.f === f && G.cine.phase === 'barrage' ? 'barrage' : f.move.cine, T0 = f.mt / 60;
-          const cl = { intro: C.victory, beam: C.cast, dragon: C.cast, rush: get('run'), storm: C.spin, barrage: C.jab }[ph] || C.idle;
+          const cl = { intro: C[VICTORY_MC[rig.def.id]] || C.victory, beam: C.cast, dragon: C.cast, rush: get('run'), storm: C.spin, barrage: C.jab }[ph] || C.idle;
           if (ph === 'beam' || ph === 'dragon') return hold(cl, Math.min(cl.dur * 0.95, (cl.impact || cl.dur * 0.45) + Math.sin(T0 * 3) * 0.04));
           return { c: cl, time: T0 * (ph === 'barrage' ? 1.4 : ph === 'rush' ? 1.25 : 1), loop: true, air: !f.grounded, keepRot: ph === 'storm' };
         }

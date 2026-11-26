@@ -448,3 +448,7 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
   white core, fighter's colour), as in the video. Off with Options > Glow effects: Light.
 - Landscape phones: player cards use the face close-up, flatter roster tiles, hub in a 3 x 2 grid, cards scroll.
 - Picking a fighter always calls out the name.
+- Per-fighter routines (their own videos): `mocap/ollie_moves.json` -> `anims_mc_ollie.js` (oc_* clips) and
+  `mocap/norah_moves.json` -> `anims_mc_norah.js` (nc_*), mapped by `OWN_MC` in render3d.js ahead of Ray's shared set.
+  Ollie keeps the foam sword on fsmash / side special. The arms-up power-up at the end of each video is their victory
+  pose and the opening of their Family Finale (`VICTORY_MC`).

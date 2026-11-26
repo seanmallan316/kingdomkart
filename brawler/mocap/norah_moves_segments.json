@@ -1,0 +1,17 @@
+{
+  "nc_Jab": [0.3, 0.85],
+  "nc_Jab2": [0.8, 1.3],
+  "nc_Cross": [1.15, 1.7],
+  "nc_BackKick": [2.0, 2.9],
+  "nc_Lunge": [2.8, 3.5],
+  "nc_Knee": [4.3, 4.95],
+  "nc_Crescent": [4.8, 5.6],
+  "nc_JumpKick": [5.5, 6.3],
+  "nc_FloorSweep": [6.3, 7.2],
+  "nc_FlyingKick": [7.1, 7.8],
+  "nc_LowSwirl": [7.9, 8.7],
+  "nc_PalmBurst": [9.0, 9.7],
+  "nc_Beam": [10.2, 10.9],
+  "nc_Burst": [12.0, 12.7],
+  "nc_Victory": [13.3, 14.8]
+}

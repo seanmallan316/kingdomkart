@@ -1,0 +1,17 @@
+{
+  "oc_SparkPunch": [0.6, 1.35],
+  "oc_Cross": [1.35, 2.05],
+  "oc_RisingSwirl": [1.85, 2.6],
+  "oc_Kick": [2.45, 3.3],
+  "oc_LowSwirl": [3.3, 4.2],
+  "oc_SpinStrike": [4.25, 5.0],
+  "oc_JumpKnee": [4.95, 5.85],
+  "oc_BurstPunch": [5.8, 6.5],
+  "oc_Handspring": [6.6, 8.0],
+  "oc_GroundSlam": [7.8, 8.6],
+  "oc_Uppercut": [8.35, 9.1],
+  "oc_Tornado": [9.15, 10.0],
+  "oc_Beam": [10.0, 10.85],
+  "oc_ShieldBurst": [11.1, 12.0],
+  "oc_PowerUp": [12.3, 14.6]
+}
