@@ -114,6 +114,6 @@
     geo.setAttribute('skinWeight', new T.Float32BufferAttribute(SW, 4));
     geo.userData.reskinned = true;
   }
-  window.RESKIN = (scene, id) => { const d = id && typeof FIGHTERS !== 'undefined' && FIGHTERS.find(f => f.id === id), opts = { cape: !!(d && d.cape) };
+  window.RESKIN = (scene, id) => { const d = id && typeof FIGHTERS !== 'undefined' && FIGHTERS.find(f => f.id === id), opts = { cape: !!(d && d.capeSkin) }; // capeSkin: a cape that is part of the scan
     scene.updateMatrixWorld(true); scene.traverse(o => { if (o.isSkinnedMesh) try { reskin(o, opts); } catch (e) { console.warn('reskin failed', e); } }); };
 })();

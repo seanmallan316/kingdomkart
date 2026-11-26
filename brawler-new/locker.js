@@ -160,8 +160,54 @@
     rig.flashKey = null;
     if (E.hat !== 'none') { const h = holder(rig, 'hat'); if (h) { const o = hat(E.hat, s, rig.def.color); o.position.y = -2.2 * s; h.add(o); rig.dress.push(h); } }
     if (E.back !== 'none') { const h = holder(rig, 'back'); if (h) { const o = back(E.back, s, accent); o.position.set(0, E.back === 'cape' ? 6 * s : 2 * s, -5.5 * s); h.add(o); rig.dress.push(h); rig.dressBack = o; } }
+    if (rig.def.cape) towelCape(rig); // a fighter's own cape (Super Joe's towel), separate from Locker items
     if (E.weapon !== 'none') { const h = holder(rig, 'weapon'); if (h) { const o = weapon(E.weapon, s, accent); o.position.y = -1 * s; h.add(o); rig.dress.push(h); rig.dressWeapon = h; rig.noBlades = true; } }
   };
+  // ------------------------------------------------------------ a fighter's own cape, as cloth (def.cape)
+  // Super Joe's towel cape was fused to his arms in the scan, so it was cut off the model (tools/cut_tris.mjs) and is
+  // rebuilt here: a white terry sheet that wraps over both shoulders from the upper back, hangs to the knees, and
+  // swings with the fighter's movement (trails out behind when running, flies up when falling, flutters in the wind).
+  let terry = null;
+  function terryTex() {
+    if (terry) return terry; const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = '#f3f1ea'; g.fillRect(0, 0, 128, 128);
+    for (let k = 0; k < 2600; k++) { const v = 205 + Math.random() * 50 | 0; g.fillStyle = `rgb(${v},${v},${v - 6})`; g.fillRect(Math.random() * 128, Math.random() * 128, 1.6, 1.6); }
+    terry = new T.CanvasTexture(c); terry.wrapS = terry.wrapT = T.RepeatWrapping; terry.repeat.set(3, 5); terry.colorSpace = T.SRGBColorSpace; return terry;
+  }
+  function towelCape(rig) {
+    const h = holder(rig, 'back'); if (!h) return; const u = rig.def.scale, C = rig.def.cape === true ? {} : rig.def.cape;
+    const W = (C.w || 23) * u, L = (C.len || 50) * u, nx = 14, ny = 22;
+    const geo = new T.PlaneGeometry(1, 1, nx, ny), n = geo.attributes.position.count;
+    const base = new Float32Array(n * 2); for (let i = 0; i < n; i++) { base[i * 2] = geo.attributes.position.getX(i) + 0.5; base[i * 2 + 1] = 0.5 - geo.attributes.position.getY(i); } // x 0..1 across, v 0..1 down
+    const m = new T.Mesh(geo, new T.MeshStandardMaterial({ map: terryTex(), color: '#ffffff', roughness: 0.95, metalness: 0, side: T.DoubleSide, envMapIntensity: 0.4 }));
+    m.castShadow = true; m.frustumCulled = false; m.position.set(0, (C.y != null ? C.y : 7) * u, (C.z != null ? C.z : -3) * u);
+    h.add(m); rig.dress.push(h); rig.towel = { m, geo, base, W, L, lift: 0, liftV: 0, side: 0, t: 0 };
+    shapeCape(rig.towel, 0);
+  }
+  function shapeCape(c, dt, f) {
+    // swing: how far the cape is blown back (0 hanging .. 1 streaming), on a soft spring
+    let target = 0.08, side = 0;
+    if (f) { const sp = Math.abs(f.vx) / Math.max(1, f.def.run || 8); target = 0.1 + Math.min(1, sp) * 0.75 + (f.grounded ? 0 : 0.25) + (f.vy > 2 ? 0.35 : 0) + (f.state === 'attack' ? 0.15 : 0); side = -f.vx * f.facing * 0.01; }
+    target = Math.min(0.85, target); c.liftV += (target - c.lift) * 30 * dt; c.liftV *= Math.pow(0.02, dt); c.lift += c.liftV * dt; c.t += dt;
+    const P = c.geo.attributes.position, B = c.base, Lf = c.lift, t = c.t;
+    for (let i = 0; i < P.count; i++) {
+      const a = B[i * 2], v = B[i * 2 + 1], x0 = (a - 0.5);
+      const wrap = Math.pow(Math.abs(x0) * 2, 2.2) * (1 - v) * (1 - v);        // the top corners wrap forward over the shoulders
+      // blown back more toward the hem, while gravity pulls the hem back down (a curve, not a flat board)
+      const ang = (0.08 + Lf * 1.05) * (0.45 + v * 0.75) - Lf * v * v * 0.55;
+      const d = v * c.L * (1 - Lf * 0.15), flut = Math.sin(t * (6 + Lf * 6) + v * 6 + x0 * 5) * (0.02 + Lf * 0.06) * d;
+      const x = x0 * c.W * (0.82 + v * 0.35 - Lf * v * 0.25);                  // gathers a little when streaming
+      const curl = x0 * x0 * c.W * (0.55 - v * 0.2);                            // the sides curve forward around the body
+      const fold = Math.sin(a * Math.PI * 5 + v * 2) * c.W * 0.018 * (0.4 + v);  // soft folds down the length
+      P.setXYZ(i, x, -d * Math.cos(ang) - wrap * c.W * 0.05, -d * Math.sin(ang) + wrap * c.W * 0.32 + curl + fold + flut);
+    }
+    P.needsUpdate = true; c.geo.computeVertexNormals();
+  }
+  let capeLast = performance.now();
+  if (typeof R3 !== 'undefined' && R3.addHook) R3.addHook(() => {
+    const now = performance.now(), dt = Math.min(0.05, (now - capeLast) / 1000); capeLast = now;
+    for (const f of (G.fighters || [])) { const rig = R3.rigOf(f); if (rig && rig.towel) shapeCape(rig.towel, G.paused ? 0 : dt, f); }
+  });
   // little animations (jetpack flames, wings, wand star) and hiding the weapon while an item is held
   if (typeof R3 !== 'undefined' && R3.addHook) R3.addHook(() => {
     const t = performance.now() / 1000;
