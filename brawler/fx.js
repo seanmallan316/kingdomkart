@@ -151,6 +151,7 @@
     od: one('od', 'od', 0.85, 0.02, 0.3),
     tech: one('tech', 'djump', 0.4, 0.02, 0.1),
     // any packed sample by name (items, the Super Orb, finales)
+    announce(n) { if (ctx && bufs[n]) play(n, 1.05, 1, 0.28); }, // the announcer, with arena reverb
     sample(n, v = 0.7, r = 1) { if (ctx && bufs[n]) play(n, v, r * vary(0.03), 0.15); },
     // character voices: kind is atk1 (light effort), atk2 (big effort), hurt, jump or ko
     voice(f, kind, force) {
@@ -302,7 +303,7 @@
       m.st = f.state; m.gr = f.grounded; m.jumps = f.airJumps;
     }
     for (const p of G.projs) { if (p.invisible) continue; const tr = p.fxTrail || (p.fxTrail = []); tr.push({ x: p.x, y: p.y, w: p.r * 1.5 }); if (tr.length > 10) tr.shift(); }
-    if (G.ending === 1 && !G.gameSnd) { G.gameSnd = true; Sfx.game(); }
+    if (G.ending === 1 && !G.gameSnd) { G.gameSnd = true; Sfx.game(); if (!G.timeUp && Sfx.announce) Sfx.announce('annGame'); }
     if (!G.ending) G.gameSnd = false;
   };
   if (window.__clash) window.__clash.step = step;

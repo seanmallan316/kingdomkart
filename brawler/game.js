@@ -1351,8 +1351,10 @@ function step() {
   G.frame++;
   if (G.countdown > 0) {
     G.countdown--;
-    if (G.countdown === 180 || G.countdown === 120 || G.countdown === 60) Sfx.count();
-    if (G.countdown === 0) Sfx.go();
+    // the announcer: "3! 2! 1! FIGHT!" (with the count beeps under it)
+    const ann = n => { if (Sfx.announce) Sfx.announce(n); };
+    if (G.countdown === 180) { Sfx.count(); ann('ann3'); } if (G.countdown === 120) { Sfx.count(); ann('ann2'); } if (G.countdown === 60) { Sfx.count(); ann('ann1'); }
+    if (G.countdown === 0) { Sfx.go(); ann('annFight'); }
   }
   // platforms
   for (const p of G.plats) {
@@ -1392,7 +1394,7 @@ function step() {
   if (G.timeLeft > 0 && G.countdown <= 0 && !G.ending) {
     G.timeLeft--;
     if (G.timeLeft > 0 && G.timeLeft <= 300 && G.timeLeft % 60 === 0) Sfx.count();
-    if (G.timeLeft === 0) { G.timeUp = true; G.ending = 1; G.banner = { text: 'TIME!', t: 999, color: '#ffcf3f', big: true }; Sfx.boom(); }
+    if (G.timeLeft === 0) { G.timeUp = true; G.ending = 1; G.banner = { text: 'TIME!', t: 999, color: '#ffcf3f', big: true }; Sfx.boom(); if (Sfx.announce) Sfx.announce('annTime'); }
   }
   // end
   if (!G.ending) {

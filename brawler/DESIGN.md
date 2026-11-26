@@ -133,6 +133,9 @@ get-up, punch jab / cross / hook combos, slide for dash attacks, overhand throw,
 combos for Ollie, dancing on the victory screen. Kicks and some specials still use the Meshy clips.
 Wind-ups play at their own pace to the hit frame, follow-through plays out naturally, and every change cross-fades.
 
+## Announcer
+A booming arena announcer (generated ElevenLabs voice, not a real person) calls "3! 2! 1! FIGHT!" over the countdown before every match, "GAME!" when a match ends and "TIME!" when the clock runs out (`Sfx.announce`, sfx/ann*.mp3).
+
 ## Clean skin weights (reskin.js)
 Meshy's auto-rig left some clothing tied to the wrong bones, so fabric stuck or stretched as arms and legs moved.
 When each family model loads, every vertex is assigned to one body part (core, left / right arm, left / right leg) by
