@@ -8,7 +8,7 @@ Super Orb finales, up to 8 players or CPUs), with **all-new characters still to 
 (writes `NewChallengers.html`, ignored by git). Keyboard, Bluetooth/wired controllers and touch all work.
 
 **Status**
-- Roster: Brent (3D model from his photos, Universal Animation Library motion; his own moves come from his video).
+- Roster: Brent and Justin (3D models from their photos; Meshy library clips + Universal Animation Library motion; their own moves come from their videos).
   Watch and the Locker all explain that a fighter is needed, and a match can't start without one.
 - Hidden test dummy: `FIGHTERS[0]` (`id: 'dummy'`, `hidden: true`), an original robot mannequin made with Meshy
   text-to-3D + auto-rig (no real person), moving with the CC0 Universal Animation Library. Add `?dummy` to the address

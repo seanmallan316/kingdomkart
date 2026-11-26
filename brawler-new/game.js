@@ -367,6 +367,14 @@ const FIGHTERS = [
     weight: 98, walk: 4.2, run: 9.0, air: 4.9, airAcc: 0.54, grav: 0.46, fall: 7.2, ff: 10.4, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
     scale: 1.133, power: 1.02, speed: 0.95, reach: 1.02, sp: { n: 'chargePunch', s: 'dashStrike', u: 'rocket', d: 'diveKick' },
   },
+  {
+    // Justin: 3D model from his four photos (Meshy; the shirt print and sneaker logos were painted out first, since the
+    // game uses no third-party logos). Height 5'0" assumed until confirmed. Placeholder quick, light moveset until his video.
+    id: 'justin', name: 'JUSTIN', voice: 'boy', vrate: 1.04, finale: 'storm', trail: ['#b49cff', '#6a3fd0'],
+    blurb: 'Quick and light. Three jumps, blaster, sparkle dash, teleport.', color: '#6a3fd0', dark: '#1c1530', accent: '#b49cff', acc: 'kid',
+    weight: 86, walk: 4.5, run: 10.2, air: 5.1, airAcc: 0.58, grav: 0.44, fall: 7.0, ff: 10.2, jump: 12.4, hop: 7.9, djump: 11.4, jumps: 3,
+    scale: 1.0, power: 0.94, speed: 0.88, reach: 0.98, sp: { n: 'blaster', s: 'sparkleDash', u: 'teleport', d: 'counter' },
+  },
 ];
 // ?dummy in the address shows the test dummy in the menus (for testing only)
 if (/[?&]dummy\b/.test(location.search)) for (const d of FIGHTERS) if (d.id === 'dummy') d.hidden = false;
@@ -1685,10 +1693,12 @@ function buildSelect(swapped) {
   const act = cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off');
   if (!act.some(o => o.i === selActive)) selActive = act.length ? act[0].i : 0;
   const pool = rosterIdx(), empty = !pool.length;
-  for (const o of act) if (!slotDef(o.s)) o.s.fighter = -1; // a pick that is no longer in the roster is cleared
+  // a pick that is no longer in the roster is cleared; empty slots get a fighter (P1 the first one, the rest random)
+  for (const o of act) if (!slotDef(o.s)) o.s.fighter = pool.length ? (o.i === 0 ? pool[0] : pickRandom()) : -1;
   $('select').classList.toggle('empty', empty);
   // roster
-  const locks = UNLOCKS.map((u, k) => u.id && fighterUnlocked({ id: u.id }) ? '' : `<button class="rt lock" data-f="lock" data-k="${k}" style="--i:${pool.length + k}" aria-label="Locked fighter"><span class="lk">🔒</span><span class="rn">${u.id ? '???' : 'LOCKED'}</span></button>`).join('');
+  // locked slots give way as real fighters join, so the roster row keeps 12 tiles (fighters + locks + random)
+  const locks = UNLOCKS.slice(0, empty ? UNLOCKS.length : Math.max(0, 11 - pool.length)).map((u, k) => u.id && fighterUnlocked({ id: u.id }) ? '' : `<button class="rt lock" data-f="lock" data-k="${k}" style="--i:${pool.length + k}" aria-label="Locked fighter"><span class="lk">🔒</span><span class="rn">${u.id ? '???' : 'LOCKED'}</span></button>`).join('');
   $('roster').innerHTML = empty
     // no fighters yet: an arena-style "send your first fighter" card instead of an empty grid
     ? `<div class="emptyroster" role="status"><div class="er-ring"><i></i><i></i><i></i><b>?</b></div>

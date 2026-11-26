@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>clip preview</title>
+<style>html,body{margin:0;background:#d8dce4}canvas{display:block}</style><body>
+<!-- Shows one fighter's motion clip up close: tools/clip_preview.html?id=<id>&clip=<clip>&t=<seconds>&view=side|front|back|q
+     Loads the game's own scripts (three, the fighter model, anims, reskin). Use clip=rest for the bind pose. -->
+<script src="../vendor/three-bundle.js"></script>
+<script>const Q = new URLSearchParams(location.search); document.write('<script src="../modeljs/' + Q.get('id') + '.js"><\/script>');</script>
+<script src="../anims.js"></script><script src="../anims_ual.js"></script><script src="../reskin.js"></script>
+<script>
+(async () => {
+  const T = THREE, id = Q.get('id'), clipName = Q.get('clip') || 'ual_Idle_Loop', t = +(Q.get('t') || 0), view = Q.get('view') || 'side';
+  const W = 600, H = 800, r = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H); (document.body || document.documentElement).appendChild(r.domElement);
+  const sc = new T.Scene(); sc.add(new T.HemisphereLight('#ffffff', '#667', 2.2)); const d = new T.DirectionalLight('#fff', 2); d.position.set(2, 4, 3); sc.add(d);
+  const s = atob(CLASH_MODELS[id]), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  const g = await new Promise((ok, no) => new T.GLTFLoader().parse(u.buffer, '', ok, no)); const m = g.scene;
+  if (window.RESKIN && !Q.has('rawskin')) RESKIN(m);
+  const bones = {}; m.traverse(o => { if (o.isBone) bones[o.name] = o; });
+  const all = Object.assign({}, (window.CLASH_ANIMS || {})[id] || {}, (window.CLASH_ANIMS_UAL || {})[id] || {}, (window.CLASH_ANIMS_MC || {})[id] || {});
+  const c = all[clipName];
+  if (c) {
+    const st = atob(c.rot), u8 = new Uint8Array(st.length); for (let i = 0; i < st.length; i++) u8[i] = st.charCodeAt(i);
+    const R = new Int16Array(u8.buffer), nb = c.bones.length, f = Math.min(c.n - 1, Math.round((t % c.dur) / c.dur * (c.n - 1)));
+    c.bones.forEach((b, k) => { const o = (f * nb + k) * 4; if (bones[b]) bones[b].quaternion.set(R[o], R[o + 1], R[o + 2], R[o + 3]).normalize(); });
+  } else if (clipName !== 'rest') document.title = 'missing clip ' + clipName;
+  sc.add(m); m.updateMatrixWorld(true); window.__m = m; if (Q.has('bones')) { const sk = new T.SkeletonHelper(m); sk.material.depthTest = false; sk.material.linewidth = 3; sk.material.color = new T.Color('#ff2050'); sc.add(sk); const hh = new T.Box3().setFromObject(m).getSize(new T.Vector3()).y; m.traverse(o => { if (o.isBone) { const s = new T.Mesh(new T.SphereGeometry(hh * 0.012), new T.MeshBasicMaterial({ color: /Left/.test(o.name) ? '#ff2050' : /Right/.test(o.name) ? '#20a0ff' : '#ffe000', depthTest: false })); s.renderOrder = 9; s.position.copy(o.getWorldPosition(new T.Vector3())); sc.add(s); } }); m.traverse(o => { if (o.isMesh) { o.material.transparent = true; o.material.opacity = 0.55; } }); }
+  const box = new T.Box3().setFromObject(m), ctr = box.getCenter(new T.Vector3()), h = box.max.y - box.min.y;
+  const cam = new T.PerspectiveCamera(30, W / H, 0.001, 100), dist = h * 2.4;
+  const dir = { side: [1, 0.15, 0], front: [0, 0.15, 1], back: [0, 0.15, -1], q: [0.8, 0.25, 0.8] }[view];
+  cam.position.set(ctr.x + dir[0] * dist, ctr.y + dir[1] * dist, ctr.z + dir[2] * dist); cam.lookAt(ctr);
+  r.render(sc, cam); document.title = 'ready ' + document.title;
+})();
+</script>

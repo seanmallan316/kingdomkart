@@ -285,6 +285,7 @@ const R3 = (() => {
   const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), IDENT = new THREE.Quaternion();
 
   // ---- motion clips (Meshy animation library, stored as sampled bone rotations in anims.js)
+  const REAL = {}; // char id -> Set of Meshy library clip names it really has
   const CLIPS = {}; // char id -> clip name -> { n, dur, bones, rot(Int16Array), hy, impact }
   function clipsFor(id) {
     if (CLIPS[id]) return CLIPS[id];
@@ -303,6 +304,7 @@ const R3 = (() => {
       hit: 'Hit_Chest', knock: 'Death01', standup: 'LayToIdle', block: 'Idle_Shield_Loop', roll: 'Roll', grab: 'Punch_Enter', jab: 'Punch_Jab', jab2: 'Punch_Cross',
       round: 'Melee_Hook', kick: 'Melee_Hook', upper: 'Punch_Cross', sweep: 'Slide_Start', smash: 'Melee_Hook', highkick: 'Punch_Cross', spin: 'NinjaJump_Start',
       airpunch: 'Punch_Cross', slam: 'Jump_Land', pitch: 'OverhandThrow', cast: 'Spell_Simple_Shoot', victory: 'Dance_Loop' };
+    REAL[id] = new Set(Object.keys((window.CLASH_ANIMS || {})[id] || {})); // the fighter's genuine Meshy library clips (not borrowed)
     for (const k in ALIAS) if (!out[k] && out['ual_' + ALIAS[k]]) out[k] = out['ual_' + ALIAS[k]];
     if (!out.idle) return (CLIPS[id] = null);
     return (CLIPS[id] = out);
@@ -396,7 +398,12 @@ const R3 = (() => {
           : { jab1: 'Punch_Jab', jab2: 'Punch_Cross', jab3: 'Melee_Hook', ftilt: 'Melee_Hook', dash: 'Slide_Start', nspec: 'Spell_Simple_Shoot', shoot: 'Spell_Simple_Shoot', toss: 'OverhandThrow', throw: 'OverhandThrow', grab: 'Punch_Enter', dashgrab: 'Punch_Enter', fair: 'Punch_Cross', batSwing: 'Sword_Regular_A', batHomer: 'Sword_Regular_C', batAir: 'Sword_Regular_B', pulseB: 'Spell_Simple_Shoot', counterStrike: 'Melee_Hook' };
         // a fighter's own video moves come first; otherwise the library swing for that move
         const ownKey = (OWN_MC[rig.def.id] || {})[n];
-        const mcKey = ownKey && C[ownKey] ? ownKey : null, mclip = mcKey && C[mcKey];
+        // kicks, sweeps, spins and aerials: the fighter's Meshy library clip (as the family's shared captured set did
+        // before), so tilts, smashes and aerials are not all punches; jabs and specials keep the library swings
+        const LIBMOVE = { jab3: 'round', ftilt: 'kick', utilt: 'upper', dtilt: 'sweep', fsmash: 'smash', usmash: 'highkick', dsmash: 'sweep', nair: 'spin', fair: 'airpunch',
+          bair: 'round', uair: 'highkick', dair: 'slam', pulseA: 'slam', pulseS: 'smash', getupAtk: 'sweep', ledgeAtk: 'kick', counterStrike: 'upper', dash: 'kick' };
+        const libKey = !sword && LIBMOVE[n] && REAL[rig.def.id] && REAL[rig.def.id].has(LIBMOVE[n]) ? LIBMOVE[n] : null;
+        const mcKey = ownKey && C[ownKey] ? ownKey : libKey, mclip = mcKey && C[mcKey];
         const clip = mclip || (MAP[n] && u(MAP[n]));
         if (clip) {
           const key = mclip ? mcKey : 'ual_' + MAP[n];
