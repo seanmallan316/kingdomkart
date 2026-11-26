@@ -122,6 +122,17 @@ After the Unreal Game Animation Sample (motion matching): walk / run clips advan
 sliding), the body leans into acceleration and back when braking, a pivot step when reversing at speed, landings
 compress on a spring, and the chest and head track the nearest opponent (not during attacks).
 
+## Universal Animation Library (motion for the family)
+The family now moves with the Quaternius **Universal Animation Library 1 + 2** (CC0 public domain, from
+opengameart.org; ~90 hand-keyed game animations on one humanoid rig). `tools/retarget_ual.js` retargets the clips onto each
+family member's own Meshy skeleton (the library is T-pose, the scans A-pose: each bone's rest direction is aligned before
+its motion is transferred), samples them at 30 fps and writes `anims_ual.js` (`ual_*` clips, merged with the Meshy clips).
+State mapping (render3d.js `pickClip`): idle, walk, jog / sprint by speed, jump start -> jump loop -> land, ninja-jump flip,
+crouch, shield loop and shield hit, shield break, roll / dodge, hit (chest / head) and knockback, lying down and lay-to-idle
+get-up, punch jab / cross / hook combos, slide for dash attacks, overhand throw, spell cast for projectiles, sword A/B/C
+combos for Ollie, dancing on the victory screen. Kicks and some specials still use the Meshy clips.
+Wind-ups play at their own pace to the hit frame, follow-through plays out naturally, and every change cross-fades.
+
 ## Smoothness (frame rate)
 - Adaptive resolution (render3d.js `perfTick`): starts at the screen's pixel ratio capped at 2 (1.5 on touch devices),
   drops by 15% steps (down to 60%) whenever frames average slower than ~45 fps and climbs back when there is room.

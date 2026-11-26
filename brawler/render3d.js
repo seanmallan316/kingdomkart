@@ -382,7 +382,8 @@ const R3 = (() => {
   const CLIPS = {}; // char id -> clip name -> { n, dur, bones, rot(Int16Array), hy, impact }
   function clipsFor(id) {
     if (CLIPS[id]) return CLIPS[id];
-    const src = (window.CLASH_ANIMS || {})[id]; if (!src) return (CLIPS[id] = null);
+    const base = (window.CLASH_ANIMS || {})[id]; if (!base) return (CLIPS[id] = null);
+    const src = Object.assign({}, base, (window.CLASH_ANIMS_UAL || {})[id] || {}); // + the Universal Animation Library, retargeted
     const out = {};
     for (const name in src) {
       const c = src[name], str = atob(c.rot), u8 = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) u8[i] = str.charCodeAt(i);
@@ -441,8 +442,53 @@ const R3 = (() => {
     const own = CHAR_CLIP[rig.def.id] || {}, S = f.state, t = f.t / 60;
     const get = n => C[own[n] || n] || C[n];
     const hold = (c, at) => ({ c, time: at, loop: false });
-    if (G.ending && f.stocks > 0 && f.grounded && S === 'idle') return { c: C.victory, time: G.ending / 60, loop: true };
+    if (G.ending && f.stocks > 0 && f.grounded && S === 'idle') return { c: C.ual_Dance_Loop || C.victory, time: G.ending / 60, loop: true };
     const J = C.jump;
+    // the Universal Animation Library set (smooth, game-ready motion), when this character has it
+    const u = n => C['ual_' + n];
+    if (u('Idle_Loop')) {
+      const play = (c, time, loop, extra) => Object.assign({ c, time, loop }, extra || {});
+      const sword = !!(KIDS[rig.def.id] && KIDS[rig.def.id].sword);
+      switch (S) {
+        case 'idle': case 'respawn': case 'shieldDrop': return play(sword ? u('Sword_Idle') : u('Idle_Loop'), f.anim / 60, true);
+        case 'walk': return play(u('Walk_Loop'), (rig.locoT || 0) * 1.1, true);
+        case 'run': { const fast = Math.abs(f.vx) > f.def.run * 0.85; return play(fast ? u('Sprint_Loop') : u('Jog_Fwd_Loop'), (rig.locoT || 0) * (fast ? 0.9 : 1.1), true); }
+        case 'jumpsquat': return play(u('Jump_Start'), Math.min(0.35, 0.12 + f.t / 30), false);
+        case 'air': {
+          if (f.flipT > 0) return play(u('NinjaJump_Start'), 0.15 + (1 - f.flipT / 24) * 0.7, false, { air: true, keepRot: true });
+          if (f.vy < -1 && f.t < 30) return play(u('Jump_Start'), Math.min(u('Jump_Start').dur * 0.9, 0.35 + f.t / 60), false, { air: true });
+          return play(u('Jump_Loop'), f.anim / 60, true, { air: true });
+        }
+        case 'helpless': return play(u('Jump_Loop'), f.anim / 60, true, { air: true });
+        case 'land': return play(u('Jump_Land'), 0.15 + f.t / 45, false);
+        case 'crouch': return play(u('Crouch_Idle_Loop'), f.anim / 60, true);
+        case 'shield': return play(u('Idle_Shield_Loop'), f.anim / 60, true);
+        case 'shieldstun': return play(u('Shield_OneShot'), Math.min(0.5, f.t / 40), false);
+        case 'shieldbreak': case 'dizzy': case 'stunned': return play(u('Idle_Shield_Break'), (f.anim / 60) % 1.1, true);
+        case 'roll': case 'tech': case 'spotdodge': return play(u('Roll'), Math.min(u('Roll').dur, (f.t / 26) * u('Roll').dur), false);
+        case 'airdodge': return play(u('Roll'), Math.min(0.8, f.t / 40), false, { air: true });
+        case 'hitstun': if (f.tumble) return play(u('Hit_Knockback'), Math.min(u('Hit_Knockback').dur * 0.6, 0.1 + t), false, { air: true, keepRot: true });
+          return play((f.port + (f.lastHitT | 0)) % 2 ? u('Hit_Chest') : u('Hit_Head'), Math.min(0.35, t * 0.8), false, { air: !f.grounded });
+        case 'down': return play(u('Death01'), u('Death01').dur, false);
+        case 'getup': return play(u('LayToIdle'), Math.min(u('LayToIdle').dur, 0.3 + (f.t / 22) * 1.1), false);
+        case 'grabbed': return play(u('Hit_Chest'), 0.1, false);
+        case 'holding': return play(u('Punch_Enter'), 0.5, false);
+      }
+      if (S === 'attack' && f.move && !f.move.cine && !f.move.rollSpin) {
+        const mv = f.move, n = mv.name;
+        const MAP = sword ? { jab1: 'Sword_Regular_A', jab2: 'Sword_Regular_B', jab3: 'Sword_Regular_C', ftilt: 'Sword_Regular_A', fsmash: 'Sword_Regular_C', dash: 'Slide_Start', sspec: 'Sword_Attack', fair: 'Sword_Regular_B', throw: 'OverhandThrow', grab: 'Punch_Enter', dashgrab: 'Punch_Enter', getupAtk: 'Sword_Regular_A', ledgeAtk: 'Sword_Regular_A', batSwing: 'Sword_Regular_A', batHomer: 'Sword_Regular_C', batAir: 'Sword_Regular_B' }
+          : { jab1: 'Punch_Jab', jab2: 'Punch_Cross', jab3: 'Melee_Hook', ftilt: 'Melee_Hook', dash: 'Slide_Start', nspec: 'Spell_Simple_Shoot', shoot: 'Spell_Simple_Shoot', toss: 'OverhandThrow', throw: 'OverhandThrow', grab: 'Punch_Enter', dashgrab: 'Punch_Enter', fair: 'Punch_Cross', batSwing: 'Sword_Regular_A', batHomer: 'Sword_Regular_C', batAir: 'Sword_Regular_B', pulseB: 'Spell_Simple_Shoot', counterStrike: 'Melee_Hook' };
+        const clip = MAP[n] && u(MAP[n]);
+        if (clip) {
+          if (clip.impact == null) findImpacts(rig, { [MAP[n]]: clip });
+          const hbs = mv.hb.concat(f.xhb || []), hs = Math.max(2, hbs.length ? Math.min.apply(null, hbs.map(h => h.f[0])) : mv.len * 0.3);
+          const imp = clip.impact != null ? clip.impact : clip.dur * 0.4, lead = Math.min(imp, 0.5);
+          // wind-up plays at its own pace up to the hit frame, then the follow-through plays out naturally
+          const time = f.mt <= hs ? imp - lead + lead * (f.mt / hs) : imp + (f.mt - hs) / 60 * 1.1;
+          return { c: clip, time, loop: false, air: !f.grounded };
+        }
+      }
+    }
     switch (S) {
       case 'idle': case 'respawn': case 'shieldDrop': return { c: C.idle, time: f.anim / 60, loop: true };
       case 'walk': return { c: C.walk, time: rig.locoT || 0, loop: true };
