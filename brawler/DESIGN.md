@@ -430,3 +430,6 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
 - Landscape: on phones/tablets, PLAY / FIGHT goes full screen and locks the screen sideways where the browser allows
   (Android); otherwise a "turn your phone sideways" card shows while upright. Options > Screen: Landscape / Auto.
 - `music/title.mp3`: the opening song on the title screen, cross-fading to the menu song after.
+
+- `titlebg.mp4`: the animated neon-city background behind the title screen (video only, no audio), cut into a seamless
+  13.5 s loop by crossfading its end into its start; it only plays while the title is on screen.

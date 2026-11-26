@@ -8,7 +8,7 @@ html = open(os.path.join(here, 'index.html'), encoding='utf-8').read()
 def data(name, mime):
     return 'data:%s;base64,%s' % (mime, base64.b64encode(open(os.path.join(here, name), 'rb').read()).decode())
 logo, intro = data('logo.webp', 'image/webp'), data('intro.webm', 'video/webm')
-html = html.replace('src="logo.webp"', 'src="%s"' % logo).replace('src="intro.webm"', 'src="%s"' % intro)
+html = html.replace('src="logo.webp"', 'src="%s"' % logo).replace('src="intro.webm"', 'src="%s"' % intro).replace('src="titlebg.mp4"', 'src="%s"' % data('titlebg.mp4', 'video/mp4'))
 def inline(m):
     js = open(os.path.join(here, m.group(1)), encoding='utf-8').read().replace('</script', '<\\/script')
     return '<script>\n%s\n</script>' % js

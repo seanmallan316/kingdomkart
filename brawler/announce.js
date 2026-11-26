@@ -97,3 +97,12 @@
   }
   addRows(); document.addEventListener('DOMContentLoaded', addRows);
 })();
+
+// the title screen's background video only runs while the title is on screen
+(() => {
+  const v = document.getElementById('titleBg'), t = document.getElementById('title'); if (!v || !t) return;
+  v.muted = true; v.defaultMuted = true; v.volume = 0;
+  const sync = () => { const on = t.classList.contains('on'); if (on && v.paused) v.play().catch(() => {}); else if (!on && !v.paused) v.pause(); };
+  new MutationObserver(sync).observe(t, { attributes: true, attributeFilter: ['class'] });
+  addEventListener('pointerdown', sync, true); sync();
+})();
