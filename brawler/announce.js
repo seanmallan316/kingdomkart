@@ -31,12 +31,13 @@
     return has(first) ? first : null;
   }
   let last = null, lastKey = null, lastT = 0, timer = 0;
-  function speak(el) {
+  function speak(el, force) {
     if (!voiceOn || !el || !inMenu() || typeof Sfx === 'undefined') return;
     const k = keyFor(el); if (!k) return;
     const now = performance.now();
-    if (k === lastKey && now - lastT < 1200) return; // same thing again straight away: stay quiet
+    if (!force && k === lastKey && now - lastT < 1200) return; // same thing again straight away: stay quiet
     clearTimeout(timer);
+    if (force) { lastKey = k; lastT = now; if (k[0] === '!') { if (Sfx.announce) Sfx.announce(k.slice(1)); } else if (Sfx.say) Sfx.say(k); return; }
     // a short wait so sweeping across many options only reads the one you stop on
     timer = setTimeout(() => {
       lastKey = k; lastT = performance.now();
@@ -47,6 +48,13 @@
   document.addEventListener('pointerover', e => { const el = target(e); if (el && el !== last) { last = el; speak(el); } });
   document.addEventListener('pointerout', e => { if (last && !last.contains(e.relatedTarget)) last = null; });
   document.addEventListener('focusin', e => { const el = target(e); if (el && el !== last) { last = el; speak(el); } });
+  // picking a fighter (roster tile, story hero, Locker) always calls out the name, like a fighting game's character select
+  const PICK = '.rt:not(.lock), [data-hero], #lkPick button';
+  document.addEventListener('click', e => {
+    const el = e.target.closest && e.target.closest(PICK); if (!el) return;
+    if (el.matches('.rand')) return speak(el, true); // "Random!"
+    speak(el, true);
+  }, true);
   window.MENU_SAY = { keyFor, speak, get on() { return voiceOn; } };
 
   // ------------------------------------------------------------ landscape

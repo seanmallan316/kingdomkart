@@ -1,0 +1,16 @@
+{
+  "mc_LungePunch": [0.45, 1.15],
+  "mc_Cross": [1.15, 1.95],
+  "mc_SideKick": [2.3, 3.45],
+  "mc_HighKick": [3.45, 4.5],
+  "mc_JumpKick": [4.3, 5.0],
+  "mc_AxeKick": [4.7, 5.6],
+  "mc_PalmSweep": [6.1, 7.0],
+  "mc_PalmStrike": [6.6, 7.5],
+  "mc_GuardPunch": [7.7, 8.45],
+  "mc_LowStrike": [8.4, 9.0],
+  "mc_Cross2": [9.2, 9.9],
+  "mc_LungeStrike": [9.8, 10.6],
+  "mc_Cartwheel": [10.2, 11.0],
+  "mc_FlyingKick": [10.9, 11.8]
+}

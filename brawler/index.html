@@ -341,6 +341,17 @@
     .selbar .acts { width:100%; justify-content:center; } .selbar .acts .big { flex:1; max-width:220px; }
   }
   @media (max-height:520px) { .roster { grid-template-columns:repeat(12, 1fr); } .rt .rn { font-size:8px; padding-top:6px; } .pc { min-height:90px; } .cards { max-height:30vh; } .selhead b { font-size:16px; } }
+  /* short landscape screens (phones turned sideways): flatter roster tiles so the player cards get the height, and the
+     cards show the face close-up (square) fitted to the card instead of the full photo cropped to the top of the head */
+  @media (max-height:560px) and (orientation:landscape) {
+    .roster { grid-template-columns:repeat(12, 1fr); gap:3px; } .rt { aspect-ratio:5/4; }
+    .rt img { object-position:50% 38%; }
+    .cards { max-height:40vh; } .pc { min-height:min(112px, 34vh); }
+    .pc .art img.face { right:0; height:100%; width:auto; min-width:0; aspect-ratio:1/1; object-fit:cover; object-position:50% 30%;
+      -webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 30%); mask-image:linear-gradient(90deg, transparent 0%, #000 30%); }
+    .pc .art img.full { display:none; }
+  }
+  @media not all and (max-height:560px) and (orientation:landscape) { .pc .art img.face { display:none; } }
 
   /* "turn your phone sideways" card (phones held upright when the screen cannot be locked to landscape) */
   #rotate { position: fixed; inset: 0; z-index: 9000; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
@@ -357,6 +368,15 @@
   #title > video.titlebg, #title > .titleshade { position:absolute !important; inset:0; width:100%; height:100%; z-index:0 !important; pointer-events:none; }
   #title > video.titlebg { object-fit:cover; background:#0a0618; }
   #title > .titleshade { background:radial-gradient(120% 80% at 50% 38%, rgba(8,6,20,0) 30%, rgba(8,6,20,.55) 100%), linear-gradient(180deg, rgba(8,6,20,.35), rgba(8,6,20,0) 30%, rgba(8,6,20,0) 60%, rgba(8,6,20,.5)); }
+
+  /* phones turned sideways: the hub's six tiles in a 3 x 2 grid that fits the height; Options and the other cards scroll */
+  @media (max-height:560px) and (orientation:landscape) {
+    #hub .tiles { grid-template-columns:repeat(3, 1fr) !important; grid-auto-rows:minmax(0, calc((100vh - 120px) / 2)) !important; width:min(900px, 96vw) !important; gap:8px; }
+    #hub .tile.tall { grid-row:auto; } #hub .tile.tall .art.hero { opacity:.9; }
+    #hub .tile small { font-size:11px; line-height:1.25; max-width:70% !important; } #hub .tile b { font-size:18px; }
+    .screen > .card { max-height:calc(100vh - 12px); overflow-y:auto; overscroll-behavior:contain; padding-top:10px; padding-bottom:10px; }
+    #options .card h3 { margin:0 0 4px; font-size:20px; } .optrow { padding:6px 0; } #options .optrow p { font-size:11px !important; }
+  }
 </style>
 </head>
 <body>
@@ -467,6 +487,7 @@
 <script src="modeljs/jayson.js"></script>
 <script src="anims.js"></script>
 <script src="anims_ual.js"></script>
+<script src="anims_mc.js"></script>
 <script src="reskin.js"></script>
 <script src="render3d.js"></script>
 <script src="petjs/river.js"></script>
@@ -492,6 +513,7 @@
 <script src="fx.js"></script>
 <script src="items.js"></script>
 <script src="dragon.js"></script>
+<script src="trails.js"></script>
 <script src="menu.js"></script>
 <script src="lux.js"></script>
 <script src="pads.js"></script>

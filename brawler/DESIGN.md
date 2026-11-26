@@ -433,3 +433,18 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
 
 - `titlebg.mp4`: the animated neon-city background behind the title screen (video only, no audio), cut into a seamless
   13.5 s loop by crossfading its end into its start; it only plays while the title is on screen.
+
+## Ray's moves, motion-captured from video (all fighters)
+- `tools/mocap_video.py`: MediaPipe Pose (heavy) tracks the body in every frame of the family's reference video
+  (`mocap/ray_kata.json`: 33 joints in 3D + image positions, 360/361 frames tracked).
+- `tools/retarget_video.js`: joints -> game axes (forward = the striking direction), Gaussian de-jitter, hips/chest
+  solved as full orientations, spine blended, head from the ears, limbs solved down each chain by shortest rotation
+  (no twist build-up), body height from the image. Cut into 14 moves by `mocap/ray_kata_segments.json` and written
+  for all nine family skeletons to `anims_mc.js` (`mc_*` clips).
+- `render3d.js` maps them: jabs (lunge punch, cross, guard punch), ftilt side kick, utilt/usmash vertical high kick,
+  dtilt low strike, fsmash deep lunge strike, dsmash palm sweep, nair/bair cartwheel, fair flying kick, uair jump
+  kick, dair axe kick, specials and pulse attacks palm strike. Sword fighters keep their sword swings.
+- `trails.js`: glowing ribbon trails behind fast hands and feet during any attack (camera-facing, Catmull-Rom smoothed,
+  white core, fighter's colour), as in the video. Off with Options > Glow effects: Light.
+- Landscape phones: player cards use the face close-up, flatter roster tiles, hub in a 3 x 2 grid, cards scroll.
+- Picking a fighter always calls out the name.

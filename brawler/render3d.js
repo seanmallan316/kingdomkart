@@ -383,7 +383,7 @@ const R3 = (() => {
   function clipsFor(id) {
     if (CLIPS[id]) return CLIPS[id];
     const base = (window.CLASH_ANIMS || {})[id]; if (!base) return (CLIPS[id] = null);
-    const src = Object.assign({}, base, (window.CLASH_ANIMS_UAL || {})[id] || {}); // + the Universal Animation Library, retargeted
+    const src = Object.assign({}, base, (window.CLASH_ANIMS_UAL || {})[id] || {}, (window.CLASH_ANIMS_MC || {})[id] || {}); // + Ray's own moves, motion-captured from the family's video // + the Universal Animation Library, retargeted
     const out = {};
     for (const name in src) {
       const c = src[name], str = atob(c.rot), u8 = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) u8[i] = str.charCodeAt(i);
@@ -478,14 +478,22 @@ const R3 = (() => {
         const mv = f.move, n = mv.name;
         const MAP = sword ? { jab1: 'Sword_Regular_A', jab2: 'Sword_Regular_B', jab3: 'Sword_Regular_C', ftilt: 'Sword_Regular_A', fsmash: 'Sword_Regular_C', dash: 'Slide_Start', sspec: 'Sword_Attack', fair: 'Sword_Regular_B', throw: 'OverhandThrow', grab: 'Punch_Enter', dashgrab: 'Punch_Enter', getupAtk: 'Sword_Regular_A', ledgeAtk: 'Sword_Regular_A', batSwing: 'Sword_Regular_A', batHomer: 'Sword_Regular_C', batAir: 'Sword_Regular_B' }
           : { jab1: 'Punch_Jab', jab2: 'Punch_Cross', jab3: 'Melee_Hook', ftilt: 'Melee_Hook', dash: 'Slide_Start', nspec: 'Spell_Simple_Shoot', shoot: 'Spell_Simple_Shoot', toss: 'OverhandThrow', throw: 'OverhandThrow', grab: 'Punch_Enter', dashgrab: 'Punch_Enter', fair: 'Punch_Cross', batSwing: 'Sword_Regular_A', batHomer: 'Sword_Regular_C', batAir: 'Sword_Regular_B', pulseB: 'Spell_Simple_Shoot', counterStrike: 'Melee_Hook' };
-        const clip = MAP[n] && u(MAP[n]);
+        // Ray's martial-arts moves, motion-captured from the family's own reference video (tools/mocap_video.py +
+        // tools/retarget_video.js): deep lunges, chambered kicks, high kicks, palm strikes, a cartwheel and a flying kick.
+        // Sword fighters keep their sword swings and get the kicks for everything else.
+        const MC = { jab1: 'LungePunch', jab2: 'Cross', jab3: 'GuardPunch', ftilt: 'SideKick', utilt: 'HighKick', dtilt: 'LowStrike', fsmash: 'LungeStrike',
+          usmash: 'HighKick', dsmash: 'PalmSweep', nair: 'Cartwheel', bair: 'Cartwheel', fair: 'FlyingKick', uair: 'JumpKick', dair: 'AxeKick',
+          nspec: 'PalmStrike', sspec: 'PalmStrike', pulseB: 'PalmStrike', pulseA: 'LungeStrike', pulseS: 'PalmSweep', counterStrike: 'Cross2', getupAtk: 'LowStrike', ledgeAtk: 'SideKick' };
+        const mcKey = MC[n] && !(sword && MAP[n]) ? 'mc_' + MC[n] : null, mclip = mcKey && C[mcKey];
+        const clip = mclip || (MAP[n] && u(MAP[n]));
         if (clip) {
-          if (clip.impact == null) findImpacts(rig, { [MAP[n]]: clip });
+          const key = mclip ? mcKey : 'ual_' + MAP[n];
+          if (clip.impact == null) findImpacts(rig, { [key]: clip });
           const hbs = mv.hb.concat(f.xhb || []), hs = Math.max(2, hbs.length ? Math.min.apply(null, hbs.map(h => h.f[0])) : mv.len * 0.3);
           const imp = clip.impact != null ? clip.impact : clip.dur * 0.4, lead = Math.min(imp, 0.5);
           // wind-up plays at its own pace up to the hit frame, then the follow-through plays out naturally
           const time = f.mt <= hs ? imp - lead + lead * (f.mt / hs) : imp + (f.mt - hs) / 60 * 1.1;
-          return { c: clip, time, loop: false, air: !f.grounded };
+          return { c: clip, time, loop: false, air: !f.grounded, keepRot: mcKey === 'mc_Cartwheel' };
         }
       }
     }

@@ -1715,6 +1715,12 @@ function fighterArt(def, face) { // the family's own photos (a face close-up for
   if (!portraitURL[def.id] && G.modelsReady && typeof R3 !== 'undefined') { try { const c = document.createElement('canvas'); c.width = 400; c.height = 240; R3.portrait(c, def); portraitURL[def.id] = c.toDataURL(); } catch (e) {} }
   return portraitURL[def.id] ? `<img class="r3" src="${portraitURL[def.id]}" alt="" draggable="false" style="object-position:50% 20%">` : `<span></span>`;
 }
+// player cards carry both the full photo and the face close-up; the CSS shows whichever fits the card's shape
+function cardArt(def) {
+  const F = window.CLASH_FAM || {}, full = F[def.id], face = F['face_' + def.id];
+  if (full && face) return `<img class="full" src="${full}" alt="" draggable="false"><img class="face" src="${face}" alt="" draggable="false">`;
+  return fighterArt(def);
+}
 function humanNo(i) { return cfg.slots.slice(0, i).filter(o => o.type === 'human').length; }
 function buildSelect(swapped) {
   const act = cfg.slots.map((s, i) => ({ s, i })).filter(o => o.s.type !== 'off');
@@ -1732,7 +1738,7 @@ function buildSelect(swapped) {
     const who = s.type === 'human' ? `<button class="t" data-a="type" title="${pad}">${pad && pad.startsWith('🎮') ? '🎮 ' : ''}PLAYER ${hn + 1}</button>`
       : `<button class="t" data-a="type">CPU</button><button class="sm" data-a="ldn">−</button><span class="lv">LV ${s.level}</span><button class="sm" data-a="lup">+</button>`;
     return `<div class="pc ${s.type === 'cpu' ? 'cpu' : ''} ${i === selActive ? 'on' : ''} ${swapped === i ? 'swap' : ''}" data-i="${i}" style="--pc:${PORT_COLORS[i]};--c:${d.color};--c2:${d.accent};--i:${k}">
-      <div class="art">${fighterArt(d)}</div><div class="badge">P${i + 1}</div>${act.length > 1 ? '<button class="x" data-a="off" aria-label="Remove">✕</button>' : ''}
+      <div class="art">${cardArt(d)}</div><div class="badge">P${i + 1}</div>${act.length > 1 ? '<button class="x" data-a="off" aria-label="Remove">✕</button>' : ''}
       <div class="nm">${d.name}</div><div class="who">${who}</div></div>`;
   }).join('') + (act.length < 8 ? `<div class="pc add" data-a="add" style="--i:${act.length}"><div><b>+</b><small>ADD FIGHTER</small></div></div>` : '');
   const wrap = $('slots'); wrap.innerHTML = cards; wrap.style.setProperty('--n', Math.min(8, act.length + (act.length < 8 ? 1 : 0)));
