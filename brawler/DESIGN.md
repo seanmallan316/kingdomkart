@@ -470,3 +470,6 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
   hind legs (up attacks), upright tornado spin (up special), long low claw-dash lunge (fsmash / side special / dash),
   reared-back claw flurry (neutral special, pulses), tail up with a hooked tip when moving, tail flicks at rest, and a
   sit with the tail curled round to win (`catAttack` in pets.js).
+- Rosie's Family Finale is now the clone burst from her video (`clones` in items.js + `clones.js`): she rises upright
+  in an energy ring, eight glowing see-through copies of her 3D model (claw-dash pose, facing their flight) burst out
+  in a ring clawing anyone in their path, swing back to dive at the nearest foes, and everyone hit is launched at once.

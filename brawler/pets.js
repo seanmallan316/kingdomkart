@@ -290,6 +290,7 @@
         if (drg && !mv.cine) { dragonAttack(J, f, mv, nm, on, wind, u, H, t); break; }
         if (dog && !mv.cine && /^(nspec|shoot|pulseB|nair|dtilt|usmash|uspec)/.test(nm)) { dogAttack(J, f, mv, nm, on, wind, u, H); break; }
         if (cat && !mv.cine && /^(jab|ftilt|utilt|usmash|uspec|fsmash|sspec|dash|nspec|shoot|pulse|fair)/.test(nm)) { catAttack(J, f, mv, nm, on, wind, u, H); break; }
+        if (mv.cine === 'clones') { J.pitch = -0.95; J.hip = [1.35, 1.35, -0.4, -0.4]; J.knee = [0.2, 0.2, 0.5, 0.5]; J.hp = -0.5; J.tlift = 0.2; J.tsw = 0.1 * Math.sin(u * 0.2); break; } // Rosie stands tall, paws out, as the clones burst
         if (mv.cine) { if (mv.cine === 'storm') J.flip = u * 0.4; else { gait('gallop', 0.8, 1.0); J.hp = -0.2; } if (drg) { J.a1 = 0.3 + 0.7 * Math.sin(u * 0.3); J.a2 = 0.3 * Math.sin(u * 0.3 - 0.8); } break; }
         if (/^(nair|nspec|uspec|whirl)/.test(nm) || mv.rollSpin) { J.flip = (u / Math.max(1, mv.len)) * TAU * 1.5; J.knee = [1.2, 1.2, 1.2, 1.2]; J.hip = [0.7, 0.7, -0.7, -0.7]; if (drg) J.a1 = -0.4; }
         else if (/^(uair|utilt|usmash)/.test(nm)) { // rears up on the back legs, front paws (or claws) swipe upward

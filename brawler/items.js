@@ -18,7 +18,7 @@
     cookie:   { name: 'Heart Cookie', kind: 'power', w: 2, r: 16 },
   };
   const BOXES = { crate: { hp: 18, r: 28 }, capsule: { hp: 8, r: 20 } };
-  const FINALE = { ray: 'storm', ollie: 'storm', mom: 'storm', norah: 'dragon', tyler: 'rush', layne: 'rush', dad: 'beam', violet: 'beam', jayson: 'beam', river: 'rush', rosie: 'storm', fluff: 'beam' };
+  const FINALE = { ray: 'storm', ollie: 'storm', mom: 'storm', norah: 'dragon', tyler: 'rush', layne: 'rush', dad: 'beam', violet: 'beam', jayson: 'beam', river: 'rush', rosie: 'clones', fluff: 'beam' };
   const pickType = () => { const keys = Object.keys(ITEMS); let s = 0; for (const k of keys) s += ITEMS[k].w; let r = Math.random() * s; for (const k of keys) { r -= ITEMS[k].w; if (r <= 0) return k; } return 'bat'; };
   let uid = 0;
   const on = () => G.cfg && G.cfg.items !== false;
@@ -47,6 +47,7 @@
       finaleDragon: M({ len: 99999, pose: 'jab', special: true, drift: 0, cine: 'dragon' }),
       finaleRush: M({ len: 99999, pose: 'dashkick', special: true, drift: 0, cine: 'rush' }),
       finaleStorm: M({ len: 99999, pose: 'nair', special: true, drift: 0, cine: 'storm' }),
+      finaleClones: M({ len: 99999, pose: 'nair', special: true, drift: 0, cine: 'clones' }),
     };
   }
 
@@ -274,7 +275,7 @@
       f.x = c.px; f.y = c.py; f.vx = f.vy = 0;
       if (c.t >= 78) {
         c.phase = 'act'; c.t = 0;
-        startMove(f, c.type === 'beam' ? 'finaleBeam' : c.type === 'rush' ? 'finaleRush' : c.type === 'dragon' ? 'finaleDragon' : 'finaleStorm');
+        startMove(f, c.type === 'beam' ? 'finaleBeam' : c.type === 'rush' ? 'finaleRush' : c.type === 'dragon' ? 'finaleDragon' : c.type === 'clones' ? 'finaleClones' : 'finaleStorm');
         if (c.type === 'dragon') { const tg = foes(f).sort((a, b) => Math.abs(a.x - f.x) - Math.abs(b.x - f.x)); c.dr = { x: f.x - f.facing * 1500, y: f.y - 1100, z: -1400, vx: f.facing * 16, vy: 4, vz: 10, trail: [], chomp: 0, targets: tg, ti: 0, mode: tg.length ? 'enter' : 'out', mt: 0, t: 0, ot: 0, phase: 0, speed: 18, bank: 0 }; }
         snd(c.type === 'beam' ? 'finaleBeam' : 'finaleCharge', 1, c.type === 'beam' ? 1 : 1.3); G.shake = 14; G.flash = 8;
       }
@@ -345,6 +346,31 @@
       for (const v of c.caught) { if (d.mode === 'out' && d.ot > 30) continue; v.hitstop = 9999; v.x = d.x + nx * 90 - nx * 0; v.y = d.y + 40 + v.h * 0.5 + Math.sin(d.t * 0.2) * 6; v.lvx = v.lvy = 0; }
       if (d.mode === 'out' && d.ot === 30) { for (const v of c.caught) launch(f, v, sgn(d.vx) || f.facing, 65); G.flash = 12; snd('dragonRoar', 0.8, 1.15); }
       if (d.t > 520 || (d.mode === 'out' && d.ot > 80)) { c.dr = null; return endFinale(); }
+      return;
+    }
+    if (c.phase === 'act' && c.type === 'clones') { // Rosie's clone burst (from her video)
+      // 0-22 she rises and the energy ring gathers; 22-58 eight ghost clones burst out in a ring, claws first;
+      // 58-92 they swing back in and dive at the nearest foes; 96 everyone they clawed is launched in one burst
+      f.x = c.px; f.vx = f.vy = 0; f.y = c.py - Math.min(70, c.t * 3);
+      const R = 430 * Math.max(1, f.sc / 1.4), cx = f.x, cy = f.y - f.h / 2, N = 8;
+      if (c.t === 22) {
+        c.clones = []; for (let k = 0; k < N; k++) { const a = (k / N) * TAU + 0.2; c.clones.push({ a, x: cx, y: cy, vx: 0, vy: 0, hit: new Set(), tgt: null }); }
+        snd('finaleCharge', 1, 1.6); G.flash = 10; G.shake = 16; if (Sfx.voice) Sfx.voice(f, 'atk2', true);
+      }
+      for (const cl of c.clones || []) {
+        const px = cl.x, py = cl.y;
+        if (c.t < 58) { const u = (c.t - 22) / 36, e = 1 - Math.pow(1 - u, 3); cl.x = cx + Math.cos(cl.a) * R * e; cl.y = cy + Math.sin(cl.a) * R * 0.75 * e; }
+        else { // home in on the nearest foe (or swing back in), accelerating
+          if (!cl.tgt || !alive(cl.tgt)) { const fs = foes(f); cl.tgt = fs.length ? fs.reduce((b, v) => Math.hypot(v.x - cl.x, v.y - cl.y) < Math.hypot(b.x - cl.x, b.y - cl.y) ? v : b) : null; }
+          const tx = cl.tgt ? cl.tgt.x : cx, ty = cl.tgt ? cl.tgt.y - cl.tgt.h / 2 : cy, k = Math.min(1, (c.t - 58) / 20);
+          cl.x += (tx - cl.x) * (0.08 + 0.12 * k); cl.y += (ty - cl.y) * (0.08 + 0.12 * k);
+        }
+        cl.vx = cl.x - px; cl.vy = cl.y - py;
+        if (G.frame % 2 === 0) fx.spark(cl.x, cl.y, ['#c9a8ff', '#ffffff', f.def.accent][G.frame % 3], 1, 3);
+        for (const v of foes(f)) if (!cl.hit.has(v) && Math.abs(v.x - cl.x) < 90 * f.sc && Math.abs((v.y - v.h / 2) - cl.y) < 110 * f.sc) { cl.hit.add(v); c.hit.add(v); small(f, v, sgn(cl.vx) || 1); Sfx.hit(9); }
+      }
+      G.shake = Math.max(G.shake, c.t > 22 ? 4 : 2);
+      if (c.t >= 96) { for (const v of c.hit) launch(f, v, sgn(v.x - f.x) || 1, 55); G.flash = 14; G.shake = 22; Sfx.boom && Sfx.boom(); c.clones = null; return endFinale(); }
       return;
     }
     if (c.phase === 'act' && c.type === 'storm') {
@@ -543,6 +569,13 @@
       g.fillStyle = 'rgba(255,255,255,.95)'; g.fillRect(r.x1, r.y - hh * 0.18, r.x2 - r.x1, hh * 0.36);
       const ox = f.x + f.facing * 30 * f.sc; const og = g.createRadialGradient(ox, r.y, 0, ox, r.y, hh * 1.8); og.addColorStop(0, '#ffffff'); og.addColorStop(0.4, f.def.accent); og.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = og; g.beginPath(); g.arc(ox, r.y, hh * 1.8, 0, TAU); g.fill();
       g.globalCompositeOperation = 'source-over';
+    }
+    if (c && c.phase === 'act' && c.type === 'clones') { // the energy ring around Rosie, then a flash as the clones burst out
+      const f = c.f, cx = f.x, cy = f.y - f.h / 2, R = 430 * Math.max(1, f.sc / 1.4) * Math.min(1, 0.25 + c.t / 26); g.globalCompositeOperation = 'lighter';
+      g.strokeStyle = '#c9a8ff'; g.globalAlpha = c.t < 60 ? 0.7 : Math.max(0, 0.7 - (c.t - 60) / 40); g.lineWidth = 10; g.beginPath(); g.arc(cx, cy, R * 0.42, 0, TAU); g.stroke();
+      g.strokeStyle = '#ffffff'; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, R * 0.42, 0, TAU); g.stroke();
+      if (c.t >= 20 && c.t < 32) { const a = 1 - (c.t - 20) / 12, rg = g.createRadialGradient(cx, cy, 0, cx, cy, R); rg.addColorStop(0, 'rgba(255,255,255,' + a + ')'); rg.addColorStop(0.4, 'rgba(201,168,255,' + a * 0.7 + ')'); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.globalAlpha = 1; g.fillStyle = rg; g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.fill(); }
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     }
     if (c && c.phase === 'act' && c.type === 'storm') {
       const f = c.f, cx = f.x, cy = f.y - f.h / 2, R = 360 * Math.max(1, f.sc / 1.4); g.globalCompositeOperation = 'lighter';
