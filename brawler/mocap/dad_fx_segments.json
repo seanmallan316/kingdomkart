@@ -1,0 +1,12 @@
+{
+  "dx_FirePunch": [0.7, 1.4],
+  "dx_Slide": [1.3, 2.0],
+  "dx_FireRise": [3.0, 3.8],
+  "dx_Spin": [3.7, 4.4],
+  "dx_OrbPush": [4.4, 5.2],
+  "dx_Fireball": [5.4, 6.3],
+  "dx_Tornado": [6.8, 7.5],
+  "dx_Burst": [7.6, 8.4],
+  "dx_DashStrike": [8.2, 8.9],
+  "dx_Victory": [9.3, 10.0]
+}

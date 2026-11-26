@@ -1,0 +1,15 @@
+{
+  "ly_Jab": [1.8, 2.3],
+  "ly_LungePunch": [2.75, 3.3],
+  "ly_SideKick": [3.75, 4.35],
+  "ly_FrontKick": [4.75, 5.3],
+  "ly_PowerPunch": [5.75, 6.3],
+  "ly_Leap": [6.75, 7.35],
+  "ly_JumpKnee": [7.75, 8.3],
+  "ly_LowGrab": [8.3, 8.85],
+  "ly_Charge": [9.8, 10.3],
+  "ly_SwirlPunch": [10.3, 10.85],
+  "ly_Orbs": [10.85, 11.4],
+  "ly_Spin": [11.8, 12.4],
+  "ly_Victory": [14.0, 15.0]
+}

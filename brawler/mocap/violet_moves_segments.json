@@ -1,0 +1,15 @@
+{
+  "vi_Punch": [1.8, 2.35],
+  "vi_Knee": [2.75, 3.35],
+  "vi_Sweep": [3.8, 4.7],
+  "vi_Swirl": [4.75, 5.3],
+  "vi_FlyingKnee": [5.75, 6.3],
+  "vi_HighKick": [6.3, 6.85],
+  "vi_PillarJump": [7.3, 7.8],
+  "vi_Flip": [7.8, 8.35],
+  "vi_Palm": [9.8, 10.35],
+  "vi_JumpKick": [10.8, 11.3],
+  "vi_Floor": [11.3, 12.2],
+  "vi_Burst": [12.8, 13.4],
+  "vi_Victory": [13.8, 14.8]
+}

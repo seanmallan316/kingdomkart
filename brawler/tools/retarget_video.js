@@ -37,7 +37,12 @@ const floorY = (() => { const ys = []; for (let i = 0; i < N; i++) ys.push(Math.
 const legM = (() => { const h = mid(PS[0][23], PS[0][24]), a = mid(PS[0][29], PS[0][30]); return h[1] - a[1]; })();
 const legI = floorY - mid(IS[0][23], IS[0][24])[1];
 const hipH = IS.map(fr => (floorY - mid(fr[23], fr[24])[1]) * legM / legI);
-const restH = hipH.slice(Math.round(13 * mocap.fps), Math.round(14.5 * mocap.fps)).reduce((a, b) => a + b, 0) / Math.max(1, Math.round(1.5 * mocap.fps)) || hipH[0];
+// standing height: the upper quarter of the hips' height over frames with both feet on the floor (works for any video)
+const restH = (() => {
+  const feetDown = i => Math.min(IS[i][29][1], IS[i][30][1]) > floorY - 0.04;
+  const hs = hipH.filter((h, i) => feetDown(i)).sort((a, b) => a - b);
+  return hs.length ? hs[Math.floor(hs.length * 0.75)] : hipH[0];
+})();
 
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=swiftshader'] }); const p = await b.newPage();

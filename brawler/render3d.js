@@ -445,9 +445,33 @@ const R3 = (() => {
     norah: { jab1: 'nc_Jab', jab2: 'nc_Jab2', jab3: 'nc_Cross', ftilt: 'nc_Lunge', utilt: 'nc_Knee', dtilt: 'nc_LowSwirl', fsmash: 'nc_PalmBurst',
     usmash: 'nc_Crescent', dsmash: 'nc_FloorSweep', nair: 'nc_Crescent', fair: 'nc_FlyingKick', bair: 'nc_BackKick', uair: 'nc_JumpKick', dair: 'nc_JumpKick',
     nspec: 'nc_Beam', shoot: 'nc_Beam', dspec: 'nc_Burst', pulseA: 'nc_PalmBurst', pulseB: 'nc_Beam', pulseS: 'nc_Burst', counterStrike: 'nc_Cross',
-    getupAtk: 'nc_LowSwirl', ledgeAtk: 'nc_Lunge' } };
-  const VICTORY_MC = { ollie: 'oc_PowerUp', norah: 'nc_Victory' }; // their own celebration from the end of their video
-  const SPIN_MC = new Set(['mc_Cartwheel', 'oc_Handspring', 'oc_Tornado']);
+    getupAtk: 'nc_LowSwirl', ledgeAtk: 'nc_Lunge' },
+    dad: { jab1: 'dc_Jab', jab2: 'dc_Cross', jab3: 'dc_Hook', ftilt: 'dc_FrontKick', utilt: 'dx_Spin', dtilt: 'dc_Lunge', fsmash: 'dc_SpinKick',
+    usmash: 'dx_FireRise', dsmash: 'dc_Slam', nair: 'dc_Flip', fair: 'dc_JumpKick', bair: 'dx_Tornado', uair: 'dc_JumpKnee', dair: 'dc_Slam',
+    nspec: 'dx_Fireball', shoot: 'dx_Fireball', sspec: 'dx_FirePunch', uspec: 'dx_FireRise', dspec: 'dc_Charge', dash: 'dx_Slide',
+    pulseA: 'dx_OrbPush', pulseB: 'dx_Burst', pulseS: 'dc_Blast', counterStrike: 'dc_SparkPunch', getupAtk: 'dx_DashStrike', ledgeAtk: 'dc_FrontKick' },
+    jayson: { jab1: 'jc_Jab', jab2: 'jc_Cross', jab3: 'jc_Hook', ftilt: 'jx_FirePunch', utilt: 'jc_Energy', dtilt: 'jc_LowStrike', fsmash: 'jc_SpinKick',
+    usmash: 'jc_Leap', dsmash: 'jc_Slam', nair: 'jc_Backflip', fair: 'jc_JumpKick', bair: 'jx_Tornado', uair: 'jc_JumpKnee', dair: 'jc_Stomp',
+    nspec: 'jc_Blast', shoot: 'jc_Blast', sspec: 'jx_FirePunch', uspec: 'jx_FireRise', dspec: 'jc_GroundPound', dash: 'jx_Slide',
+    pulseA: 'jx_Fireball', pulseB: 'jc_Energy', pulseS: 'jc_Slam', counterStrike: 'jc_Cross', getupAtk: 'jx_DashStrike', ledgeAtk: 'jc_Hook' },
+    mom: { jab1: 'mo_Punch', jab2: 'mo_DoublePalm', jab3: 'mo_Straight', ftilt: 'mr_Kick', utilt: 'mo_Knee', dtilt: 'mo_LowLunge', fsmash: 'mo_SpinKick',
+    usmash: 'mo_JumpKnee', dsmash: 'mr_Crouch', nair: 'mr_Flip', fair: 'mr_TuckJump', bair: 'mo_BackKick', uair: 'mo_JumpKnee', dair: 'mr_TuckJump',
+    nspec: 'mo_DoublePalm', shoot: 'mo_DoublePalm', dspec: 'mr_Crouch', pulseA: 'mo_SpinKick', pulseB: 'mo_DoublePalm', pulseS: 'mr_Crouch',
+    counterStrike: 'mo_Straight', getupAtk: 'mo_LowLunge', ledgeAtk: 'mr_Kick' },
+    layne: { jab1: 'ly_Jab', jab2: 'ly_LungePunch', jab3: 'ly_SwirlPunch', ftilt: 'ly_SideKick', utilt: 'ly_FrontKick', dtilt: 'ly_LowGrab', fsmash: 'ly_PowerPunch',
+    usmash: 'ly_Leap', dsmash: 'ly_Charge', nair: 'ly_Spin', fair: 'ly_JumpKnee', bair: 'ly_Spin', uair: 'ly_JumpKnee', dair: 'ly_Leap',
+    nspec: 'ly_Orbs', shoot: 'ly_Orbs', sspec: 'ly_SwirlPunch', dspec: 'ly_Charge', pulseA: 'ly_PowerPunch', pulseB: 'ly_Orbs', pulseS: 'ly_Charge',
+    counterStrike: 'ly_LungePunch', getupAtk: 'ly_LowGrab', ledgeAtk: 'ly_SideKick' },
+    violet: { jab1: 'vi_Punch', jab2: 'vi_Palm', jab3: 'vi_Swirl', ftilt: 'vi_Knee', utilt: 'vi_Swirl', dtilt: 'vi_Sweep', fsmash: 'vi_HighKick',
+    usmash: 'vi_PillarJump', dsmash: 'vi_Floor', nair: 'vi_Flip', fair: 'vi_FlyingKnee', bair: 'vi_JumpKick', uair: 'vi_FlyingKnee', dair: 'vi_JumpKick',
+    nspec: 'vi_Palm', shoot: 'vi_Palm', dspec: 'vi_Burst', pulseA: 'vi_HighKick', pulseB: 'vi_Palm', pulseS: 'vi_Burst',
+    counterStrike: 'vi_Punch', getupAtk: 'vi_Sweep', ledgeAtk: 'vi_Knee' },
+    tyler: { jab1: 'ty_Jab', jab2: 'ty_Cross', jab3: 'ty_DoublePalm', ftilt: 'ty_Kick', utilt: 'ty_Leap', dtilt: 'ty_Lunge', fsmash: 'ty_Superman',
+    usmash: 'ty_Leap', dsmash: 'ty_Crouch', nair: 'ty_HeelSweep', fair: 'ty_FlyingKick', bair: 'ty_HeelSweep', uair: 'ty_FlyingKick', dair: 'ty_Superman',
+    nspec: 'ty_BeamPunch', shoot: 'ty_BeamPunch', sspec: 'ty_Superman', dspec: 'ty_Charge', pulseA: 'ty_Lightning', pulseB: 'ty_BeamPunch', pulseS: 'ty_Burst',
+    counterStrike: 'ty_Cross', getupAtk: 'ty_Lunge', ledgeAtk: 'ty_Kick' } };
+  const VICTORY_MC = { ollie: 'oc_PowerUp', norah: 'nc_Victory', dad: 'dx_Victory', jayson: 'jc_Victory', mom: 'mo_Victory', layne: 'ly_Victory', violet: 'vi_Victory', tyler: 'ty_Victory' }; // their own celebration from the end of their video
+  const SPIN_MC = new Set(['mc_Cartwheel', 'oc_Handspring', 'oc_Tornado', 'dc_Flip', 'dx_Tornado', 'jc_Backflip', 'jx_Tornado', 'mr_Flip', 'ly_Spin', 'vi_Flip']);
   function pickClip(rig, f) {
     const C = rig.clips; if (!C || !f) return null;
     const own = CHAR_CLIP[rig.def.id] || {}, S = f.state, t = f.t / 60;

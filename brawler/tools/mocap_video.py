@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Video motion capture: tracks the body in every frame of a reference video with MediaPipe Pose (heavy model) and
 writes the 3D joint positions (metres, hip-centred "world" landmarks) plus 2D image positions to JSON.
-Run: python3 tools/mocap_video.py <video.mp4> <pose_landmarker_heavy.task> <out.json>
+Run: python3 tools/mocap_video.py <video.mp4> <pose_landmarker_heavy.task> <out.json> [left|right]
+(with two people in the video, left / right tracks the person on that side, e.g. the attacker in a sparring clip)
 The JSON feeds tools/retarget_video.js, which turns the joints into bone rotations on the family's skeletons."""
 import sys, json, cv2, mediapipe as mp
 from mediapipe.tasks import python as mpt
 from mediapipe.tasks.python import vision
 
-video, model, out = sys.argv[1:4]
+video, model, out = sys.argv[1:4]; side = sys.argv[4] if len(sys.argv) > 4 else None
 opts = vision.PoseLandmarkerOptions(base_options=mpt.BaseOptions(model_asset_path=model), running_mode=vision.RunningMode.VIDEO,
-                                    num_poses=1, min_pose_detection_confidence=0.4, min_tracking_confidence=0.4, output_segmentation_masks=False)
+                                    num_poses=2 if side else 1, min_pose_detection_confidence=0.4, min_tracking_confidence=0.4, output_segmentation_masks=False)
 cap = cv2.VideoCapture(video); fps = cap.get(cv2.CAP_PROP_FPS) or 24
 W, H = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 frames = []
@@ -20,7 +21,11 @@ with vision.PoseLandmarker.create_from_options(opts) as lm:
         if not ok: break
         res = lm.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), int(i * 1000 / fps))
         if res.pose_world_landmarks:
-            w = res.pose_world_landmarks[0]; n = res.pose_landmarks[0]
+            k = 0
+            if side and len(res.pose_landmarks) > 1:  # the person on the chosen side (by hip position in the image)
+                hx = [(p[23].x + p[24].x) / 2 for p in res.pose_landmarks]
+                k = hx.index(min(hx)) if side == 'left' else hx.index(max(hx))
+            w = res.pose_world_landmarks[k]; n = res.pose_landmarks[k]
             frames.append({'t': i / fps, 'w': [[round(p.x, 4), round(p.y, 4), round(p.z, 4), round(p.visibility, 3)] for p in w],
                            'n': [[round(p.x, 4), round(p.y, 4), round(p.z, 4)] for p in n]})
         else:

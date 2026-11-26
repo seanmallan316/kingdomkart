@@ -1,0 +1,17 @@
+{
+  "ty_Jab": [1.8, 2.3],
+  "ty_Cross": [2.75, 3.3],
+  "ty_Kick": [4.25, 4.8],
+  "ty_HeelSweep": [4.8, 5.35],
+  "ty_Crouch": [5.8, 6.35],
+  "ty_Lunge": [6.4, 7.0],
+  "ty_DoublePalm": [7.3, 7.8],
+  "ty_Leap": [8.3, 8.8],
+  "ty_Superman": [8.8, 9.3],
+  "ty_FlyingKick": [9.8, 10.3],
+  "ty_BeamPunch": [10.8, 11.3],
+  "ty_Charge": [11.3, 11.8],
+  "ty_Lightning": [11.8, 12.3],
+  "ty_Burst": [12.8, 13.3],
+  "ty_Victory": [14.4, 15.0]
+}

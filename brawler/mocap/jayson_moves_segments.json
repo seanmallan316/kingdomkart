@@ -1,0 +1,17 @@
+{
+  "jc_Jab": [2.05, 2.6],
+  "jc_Cross": [2.65, 3.1],
+  "jc_Hook": [3.45, 4.0],
+  "jc_SpinKick": [4.6, 5.6],
+  "jc_JumpKnee": [5.8, 6.5],
+  "jc_LowStrike": [6.85, 7.4],
+  "jc_Energy": [7.45, 7.95],
+  "jc_JumpKick": [8.0, 8.6],
+  "jc_Stomp": [8.6, 9.3],
+  "jc_Backflip": [9.9, 10.75],
+  "jc_GroundPound": [10.7, 11.3],
+  "jc_Blast": [11.4, 12.2],
+  "jc_Leap": [12.6, 13.3],
+  "jc_Slam": [13.2, 13.9],
+  "jc_Victory": [14.2, 15.0]
+}

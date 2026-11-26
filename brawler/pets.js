@@ -22,7 +22,9 @@
   const PLAN = {
     dog: { front: [0.17, 0.66], back: [-0.8, -0.31], belly: -0.2, shZ: 0.42, hipZ: -0.57, pivY: 0.02, kneeY: -0.47, neckZ: 0.58, neckY: 0.22, tailZ: -0.74, tailY: 0.08, tailDir: 1 },
     cat: { front: [0.33, 0.63], back: [-0.63, -0.32], belly: -0.27, shZ: 0.48, hipZ: -0.47, pivY: -0.02, kneeY: -0.48, neckZ: 0.6, neckY: 0.12, tailZ: -0.56, tailY: 0.2, tailDir: 1 },
-    dragon: { front: null, back: null, belly: -0.3, shZ: 0.2, hipZ: -0.2, pivY: -0.1, kneeY: -0.35, neckZ: 0.32, neckY: 0.2, tailZ: -0.22, tailY: -0.15, tailDir: -1, wings: true },
+    // Pink Fluff (measured from the model): front feet z 0.36..0.62, hind feet z 0..0.26, belly at y -0.17, feet at -0.43;
+    // the neck rises from the chest (z ~0.45) to the head (z 0.6..0.75); the tail lies on the floor and curls round to the left
+    dragon: { front: [0.33, 0.66], back: [-0.04, 0.29], belly: -0.17, shZ: 0.47, hipZ: 0.13, pivY: -0.06, kneeY: -0.3, neckZ: 0.46, neckY: 0.04, tailZ: -0.04, tailY: -0.15, tailDir: -1, wings: true, drag: true },
   };
   const ss = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
   function bake(geo, P) {
@@ -33,8 +35,18 @@
       const below = ss(P.belly + 0.08, P.belly - 0.06, y);
       if (P.front) { const w = below * ss(P.front[0] - 0.04, P.front[0] + 0.04, z) * (1 - ss(P.front[1] - 0.04, P.front[1] + 0.04, z)); if (x >= 0) fl = w; else fr = w; }
       if (P.back) { const w = below * ss(P.back[0] - 0.04, P.back[0] + 0.04, z) * (1 - ss(P.back[1] - 0.04, P.back[1] + 0.04, z)); if (x >= 0) bl = w; else br = w; }
+      if (P.drag) { const near = 1 - ss(0.36, 0.46, ax); fl *= near; fr *= near; bl *= near; br *= near; } // the curled tail tip is not a foot
       L.set([fl, fr, bl, br], i * 4);
       const legs = fl + fr + bl + br;
+      if (P.drag) { // dragon: tail measured along its curl, wings kept off the legs and the tail
+        const along = Math.max(0, -z) + Math.max(0, ax - 0.2) * (z < 0.05 ? 1 : 0);
+        const tl = ss(0.02, 0.62, along) * ss(-0.13, -0.23, y) * (z < 0.05 ? 1 : 0) * (1 - legs);
+        const hd = ss(P.neckZ - 0.1, P.neckZ + 0.14, z) * (1 - legs) * ss(P.belly + 0.05, P.belly + 0.25, y) * (1 - ss(0.3, 0.42, ax));
+        const inZ = ss(-0.34, -0.2, z) * (1 - ss(0.36, 0.5, z)) * ss(-0.24, -0.12, y) * (1 - legs) * (1 - tl);
+        const w1 = ss(0.22, 0.4, ax) * inZ, w2 = ss(0.5, 0.74, ax) * inZ;
+        B.set([tl, hd * (1 - w1), z, ss(P.kneeY + 0.06, P.kneeY - 0.06, y)], i * 4); K.set([w1, w2], i * 2);
+        continue;
+      }
       const tail = P.tailDir > 0 ? ss(P.tailZ + 0.06, P.tailZ - 0.14, z) * ss(P.tailY - 0.12, P.tailY + 0.05, y) : ss(P.tailZ, P.tailZ - 0.5, z) * (1 - ss(0.0, 0.3, y));
       const head = ss(P.neckZ - 0.12, P.neckZ + 0.08, z) * (1 - legs) * ss(P.belly, P.belly + 0.25, y);
       let wing = 0, wing2 = 0;
@@ -128,13 +140,88 @@
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v), ease = (a, b, k) => a + (b - a) * k;
   const moveName = f => { const mv = f.move; if (!mv) return ''; if (!f._mvn || f._mvn.mv !== mv) f._mvn = { mv, n: Object.keys(f.moves).find(k => f.moves[k] === mv) || '' }; return f._mvn.n; };
 
+  // ---- Pink Fluff, from the family's three dragon videos: a slow snake-like tail curl, half-raised wings at rest,
+  // head-low stalking, powerful asymmetric wingbeats (slow strong downstroke, quick upstroke, outer wing lagging),
+  // coiled bites, breath with the neck stretched and wings raised, rear-up roars with wings fully spread, a take-off
+  // and head-first dive slam with wings flat, and a full on-the-spot tail-whip spin.
+  function flap(J, t, rate, amp, base) {
+    const ph = t * rate, st = Math.cos(ph + 0.45 * Math.sin(ph));
+    J.a1 = base + amp * st; J.a2 = base * 0.5 + amp * 0.7 * Math.cos(ph - 0.9); J.sweep = 0.1 + 0.2 * Math.max(0, Math.sin(ph));
+    return Math.max(0, -Math.sin(ph)); // lift on the downstroke
+  }
+  function dragonPose(J, S, f, t, H, ph) {
+    J.wag = 0.1; J.tspd = 0.05; J.tlift = 0.04;
+    switch (S) {
+      case 'idle': case 'respawn': case 'shieldDrop': case 'getup':
+        if (f && G.ending && f.stocks > 0) { // victory: rears up and roars with the wings spread wide
+          J.pitch = -0.55; J.a1 = 1.05 + 0.08 * Math.sin(t * 0.1); J.a2 = 0.55; J.sweep = -0.2; J.hp = -0.6; J.hl = 0.05; J.tlift = 0.12; J.bob = 0; J.hip = [1.0, 0.9, -0.3, -0.3]; J.knee = [0.5, 0.5, 0.4, 0.4]; break;
+        }
+        J.a1 = 0.35 + 0.06 * Math.sin(t * 0.03); J.a2 = -0.35; J.sweep = 0.35;
+        J.hp = -0.05 + 0.08 * Math.sin(t * 0.02); J.hy = 0.25 * Math.sin(t * 0.009); J.bob = Math.sin(t * 0.05) * H * 0.008;
+        J.hip = [0.05 * Math.sin(t * 0.013), -0.05 * Math.sin(t * 0.013), 0, 0]; break;
+      case 'walk': J.hp = 0.18; J.hy = 0.15 * Math.sin(ph); J.a1 = 0.25; J.a2 = -0.3; J.sweep = 0.45; J.wag = 0.14; J.tspd = 0.12; break; // stalking, head low
+      case 'run': J.a1 = 0.35 + 0.25 * Math.sin(t * 0.25); J.a2 = 0; J.sweep = 0.5; J.hp = 0.12; J.wag = 0.08; J.tspd = 0.2; break;
+      case 'jumpsquat': J.a1 = 0.95; J.a2 = 0.35; J.sweep = 0; J.hp = 0.2; break; // wings up before the leap
+      case 'air': case 'helpless': {
+        const rising = f && f.vy < 0;
+        if (rising || (t % 90) < 40) flap(J, t, rising ? 0.34 : 0.26, rising ? 0.9 : 0.7, 0.25); else { J.a1 = 0.5 + 0.08 * Math.sin(t * 0.05); J.a2 = 0.28; J.sweep = 0.12; } // beat, then glide
+        J.hip = [0.5, 0.5, -0.6, -0.6]; J.knee = [1.0, 1.0, 1.0, 1.0]; J.tlift = -0.05; J.wag = 0.06; J.tspd = 0.1; break;
+      }
+      case 'shield': case 'shieldstun': J.a1 = -0.5; J.a2 = -0.6; J.sweep = -0.6; J.hp = 0.35; break; // wings wrapped forward
+      case 'hitstun': J.a1 = 0.9; J.a2 = 0.5; J.sweep = 0.4; break;
+    }
+  }
+  function dragonAttack(J, f, mv, nm, on, wind, u, H, t) {
+    J.hip = [0, 0, 0, 0]; J.knee = [0, 0, 0, 0]; J.wag = 0.1; J.tspd = 0.08; J.tlift = 0.06; J.tsw = 0;
+    const len = Math.max(1, mv.len || 30), prog = Math.min(1, u / len);
+    if (/^(nair|bair|dtilt)/.test(nm) || mv.rollSpin) { // tail-whip: a full turn on the spot, wings tucked, tail out straight
+      J.yaw = prog * Math.PI * 2; J.a1 = 0.15; J.a2 = -0.4; J.sweep = 0.6; J.wag = 0.02; J.tlift = 0.08; J.hp = 0.1; J.sy = 0.92;
+      J.hip = [0.3, 0.3, -0.3, -0.3]; J.knee = [0.4, 0.4, 0.4, 0.4];
+    } else if (/^(utilt|usmash|uair|uspec)/.test(nm)) { // rears up and roars, wings fully spread, front claws high
+      J.pitch = -0.95 * on - 0.25 * wind; J.a1 = 1.15 * on + 0.4 * wind; J.a2 = 0.55 * on; J.sweep = -0.25; J.hp = -0.7 * on + 0.2 * wind;
+      J.hip = [1.3 * on, 1.1 * on, -0.4 * on, -0.4 * on]; J.knee = [0.4, 0.4, 0.5 * on, 0.5 * on]; J.tlift = 0.12;
+      if (/^uspec/.test(nm) || (f && !f.grounded)) { flap(J, t, 0.45, 1.0, 0.3); J.pitch = -0.4 * on; } // take-off: hard wingbeats
+    } else if (/^(dsmash|dspec|dair)/.test(nm)) { // rises, then dives head-first and slams down, wings flat on the ground
+      J.pitch = 0.45 * on - 0.5 * wind; J.a1 = 1.1 * wind - 0.25 * on; J.a2 = 0.3 * on; J.sweep = -0.1 * on;
+      J.hip = [-0.7 * on + 0.8 * wind, -0.7 * on + 0.8 * wind, 0.3 * on, 0.3 * on]; J.knee = [0.2, 0.2, 0.8 * on, 0.8 * on];
+      J.sy = 1 - 0.18 * on; J.hp = 0.45 * on - 0.3 * wind; J.tlift = 0.2 * on;
+    } else if (/^(nspec|shoot|pulseB)/.test(nm)) { // breath: head rears back with wings up, then the neck stretches forward
+      J.hp = -0.4 * wind + 0.2 * on; J.hl = -0.05 * wind + 0.2 * on; J.arch = -0.2 * wind; J.lunge = -H * 0.12 * on;
+      J.a1 = 0.95 * wind + 0.85 * on; J.a2 = 0.45 * wind + 0.35 * on; J.sweep = 0.3 * on; J.tlift = 0.15;
+      J.hip = [0.2 * on, 0.2 * on, -0.3 * on, -0.3 * on]; J.knee = [0.3, 0.3, 0.6, 0.6];
+    } else if (/^sspec/.test(nm)) { // wing rush: wings swept back like a dart, head forward
+      J.lunge = H * 0.6 * on; J.a1 = 0.1; J.a2 = -0.5; J.sweep = 0.9 * on; J.hp = 0.15; J.hl = 0.12 * on; J.pitch = 0.1 * on;
+      J.hip = [0.8 * on, 0.8 * on, -0.8 * on, -0.8 * on]; J.knee = [0.6, 0.6, 0.6, 0.6];
+    } else if (/^fair/.test(nm)) { // aerial claw swipe with a wing buffet
+      flap(J, t, 0.5, 0.9, 0.3); J.hip = [1.2 * on, 0.9 * on, -0.5, -0.5]; J.knee = [0.3, 0.3, 0.9, 0.9]; J.pitch = -0.3 * on; J.hp = 0.1; J.hl = 0.1 * on;
+    } else { // bite: coils with the head drawn back and wings rising, then lunges, neck stretched, wings flaring back
+      J.sy = 1 - 0.1 * wind; J.lunge = H * (mv.smash ? 0.8 : 0.45) * on; J.hp = -0.35 * wind + 0.3 * on; J.hl = -0.06 * wind + 0.16 * on;
+      J.a1 = 0.7 * wind + 0.75 * on; J.a2 = 0.4 * on; J.sweep = 0.55 * on; J.tlift = 0.1;
+      J.hip = [0.6 * on - 0.3 * wind, 0.5 * on - 0.3 * wind, -0.5 * on + 0.3 * wind, -0.4 * on + 0.3 * wind]; J.knee = [0.3 + 0.6 * wind, 0.3 + 0.6 * wind, 0.7 * wind, 0.7 * wind];
+    }
+  }
+  // River's own moves, from his two videos
+  function dogAttack(J, f, mv, nm, on, wind, u, H) {
+    J.hip = [0, 0, 0, 0]; J.knee = [0, 0, 0, 0];
+    const prog = Math.min(1, u / Math.max(1, mv.len || 30));
+    if (/^(nspec|shoot|pulseB)/.test(nm)) { // bark blast: legs braced wide, head drops, then thrusts forward; the body recoils
+      J.hip = [-0.35, -0.35, 0.35, 0.35]; J.knee = [0.3, 0.3, 0.5, 0.5]; J.sy = 1 - 0.08 * wind;
+      J.hp = 0.35 * wind - 0.15 * on; J.hl = -0.04 * wind + 0.12 * on; J.lunge = -H * 0.15 * on; J.pitch = 0.08 * wind - 0.1 * on; J.wag = 0.02; J.tlift = 0.18;
+    } else if (/^nair/.test(nm)) { // mid-air twist: a full horizontal spin, legs tucked
+      J.yaw = prog * Math.PI * 2; J.hip = [0.6, 0.6, -0.6, -0.6]; J.knee = [1.1, 1.1, 1.1, 1.1]; J.tlift = 0.1;
+    } else if (/^dtilt/.test(nm)) { // play bow, then a low swipe: front end down, rear up, tail wagging hard
+      J.pitch = 0.35 * (on + wind); J.hip = [-0.5 * on + 0.9 * wind, -0.3, 0.2, 0.2]; J.knee = [0.6, 0.9, 0.2, 0.2]; J.lunge = H * 0.3 * on; J.hp = 0.2; J.wag = 0.18; J.tspd = 0.7; J.tlift = 0.16;
+    } else { // usmash / uspec: rears up on the hind legs and howls, front paws up
+      J.pitch = -1.0 * on - 0.3 * wind; J.hip = [1.2 * on, 1.0 * on, -0.4 * on, -0.4 * on]; J.knee = [0.6, 0.6, 0.5 * on, 0.5 * on]; J.hp = -0.8 * on; J.tlift = 0.1;
+    }
+  }
   // targets for the joints this frame
   function pose(rig, f, rot, a, tMenu, once) {
     const H = rig.H, P = rig.plan, dog = rig.pet === 'dog', cat = rig.pet === 'cat', drg = rig.pet === 'dragon';
     const t = f ? f.anim : (tMenu || 0), S = f ? f.state : 'idle';
     // everything below runs in real time, whatever the frame rate (fr = how many 60 Hz frames this draw covers)
     const nowT = performance.now(), fr = Math.max(0, Math.min(6, (nowT - (rig.tLast || nowT)) / 16.667)) * (f && G.paused ? 0 : 1); rig.tLast = nowT;
-    const J = { hip: [0, 0, 0, 0], knee: [0, 0, 0, 0], arch: 0, sway: 0, hp: 0, hy: 0, hl: 0, wag: dog ? 0.06 : 0.035, tlift: 0, tsw: 0, tspd: dog ? 0.35 : 0.06, bob: 0, pitch: 0, flip: 0, lunge: 0, side: 0, sy: 1, a1: 0.2, a2: 0.1, sweep: 0 };
+    const J = { hip: [0, 0, 0, 0], knee: [0, 0, 0, 0], arch: 0, sway: 0, hp: 0, hy: 0, hl: 0, wag: dog ? 0.06 : 0.035, tlift: 0, tsw: 0, tspd: dog ? 0.35 : 0.06, bob: 0, pitch: 0, flip: 0, yaw: 0, lunge: 0, side: 0, sy: 1, a1: 0.2, a2: 0.1, sweep: 0 };
     if (!f && once) rig.happy = 80;
     const speed = f ? Math.abs(f.vx) / Math.max(1, f.def.run) : 0;
     // gait cycle advances with ground speed so the paws plant instead of sliding
@@ -156,7 +243,6 @@
         J.hp = 0.12 * Math.sin(t * 0.017) - 0.05; J.hy = 0.3 * Math.sin(t * 0.011); // looks around
         if (cat) { J.tsw = 0.25 * Math.sin(t * 0.02); J.tlift = 0.1; } else J.tlift = 0.06;
         if (f && G.ending && f.stocks > 0) { J.bob = Math.abs(Math.sin(t * 0.15)) * H * 0.25; J.wag = 0.14; J.tspd = 0.7; J.hp = -0.3; }
-        if (drg) { J.a1 = 0.1 + 0.05 * Math.sin(t * 0.05); J.a2 = -0.3; J.sweep = 0.5; }
         break;
       }
       case 'walk': gait('walk', 0.32, 0.5); J.hy = 0; if (drg) { J.a1 = 0.05; J.a2 = -0.3; J.sweep = 0.5; } break;
@@ -183,6 +269,8 @@
         const he = hbs.length ? Math.max.apply(null, hbs.map(h => h.f[1])) : hs + 6, u = f.mt;
         const s = u < hs ? -(u / hs) : u <= he ? 1 : Math.max(0, 1 - (u - he) / 12), on = Math.max(0, s), wind = Math.max(0, -s);
         const nm = moveName(f);
+        if (drg && !mv.cine) { dragonAttack(J, f, mv, nm, on, wind, u, H, t); break; }
+        if (dog && !mv.cine && /^(nspec|shoot|pulseB|nair|dtilt|usmash|uspec)/.test(nm)) { dogAttack(J, f, mv, nm, on, wind, u, H); break; }
         if (mv.cine) { if (mv.cine === 'storm') J.flip = u * 0.4; else { gait('gallop', 0.8, 1.0); J.hp = -0.2; } if (drg) { J.a1 = 0.3 + 0.7 * Math.sin(u * 0.3); J.a2 = 0.3 * Math.sin(u * 0.3 - 0.8); } break; }
         if (/^(nair|nspec|uspec|whirl)/.test(nm) || mv.rollSpin) { J.flip = (u / Math.max(1, mv.len)) * TAU * 1.5; J.knee = [1.2, 1.2, 1.2, 1.2]; J.hip = [0.7, 0.7, -0.7, -0.7]; if (drg) J.a1 = -0.4; }
         else if (/^(uair|utilt|usmash)/.test(nm)) { // rears up on the back legs, front paws (or claws) swipe upward
@@ -204,6 +292,13 @@
         break;
       }
     }
+    if (drg && S !== 'attack' && !(rig.happy > 0)) dragonPose(J, S, f, t, H, ph);
+    if (dog && !(rig.happy > 0)) { // River, from his videos: tail held up in a gentle wag, head bobbing with each step, sit-and-howl to win
+      if (S === 'walk' || S === 'run') { J.hp += 0.06 * Math.sin(ph * 2); J.tlift = 0.14; }
+      if ((S === 'idle' || S === 'respawn') && f && G.ending && f.stocks > 0) {
+        J.pitch = -0.38; J.hip = [0.15, 0.15, 0.9, 0.9]; J.knee = [0, 0, 1.3, 1.3]; J.hp = -0.85; J.hy = 0; J.bob = 0; J.wag = 0.1; J.tspd = 0.45; J.tlift = -0.05;
+      }
+    }
     // ease every joint toward its target (fast for attacks so hits still read, softer otherwise)
     const M = rig.mem, k = 1 - Math.pow(1 - (S === 'attack' ? 0.4 : 0.2), Math.max(0.2, fr));
     const e = (key, v) => (M[key] = M[key] == null ? v : ease(M[key], v, k));
@@ -219,7 +314,7 @@
     const pitch = e('pitch', J.pitch), lunge = e('lunge', J.lunge), bob = e('bob', J.bob), sy = e('sy', J.sy), side = e('side', J.side);
     const rearUp = Math.min(0, pitch) * -1, back = (rig.len || H * 2) * 0.42;
     rig.body.position.set(0, H * 0.5 + bob + Math.sin(rearUp) * back * 0.9, lunge - (1 - Math.cos(rearUp)) * back);
-    rig.body.rotation.set(pitch + J.flip, 0, side);
+    rig.body.rotation.set(pitch + J.flip, J.yaw, side); // yaw: the dragon's on-the-spot tail-whip spin
     rig.body.scale.set(1 + (1 - sy) * 0.4, sy, 1);
     if (f && a) { rig.root.position.x += f.x - a.ox; rig.root.position.y += a.oy - f.y; }
     rig.spin.rotation.z = 0;

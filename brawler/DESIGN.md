@@ -452,3 +452,17 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
   `mocap/norah_moves.json` -> `anims_mc_norah.js` (nc_*), mapped by `OWN_MC` in render3d.js ahead of Ray's shared set.
   Ollie keeps the foam sword on fsmash / side special. The arms-up power-up at the end of each video is their victory
   pose and the opening of their Family Finale (`VICTORY_MC`).
+- Every family member now has their own captured moveset: Dad (sparring + effects videos: `anims_mc_dad*.js`), Jayson
+  (`anims_mc_jayson*.js`), Mom (two-person sparring; the right-hand Mom is mirrored with `tools/mirror_mocap.py` so her
+  attacks face forward: `anims_mc_mom*.js`), Layne, Violet and Tyler (`anims_mc_<id>.js`). `tools/mocap_video.py ... left`
+  follows the person on one side when two are in shot. Standing height for crouch depth is now measured from the frames
+  with both feet on the floor, so any video works.
+- Pink Fluff (fighter): `pets.js` now gives the dragon four real legs (measured from the model), a tail weighted along
+  its whole curl and wings kept off the legs; `dragonPose` / `dragonAttack` follow the family's three dragon videos:
+  half-raised wings and snake-like tail curl at rest, head-low stalk, beat-and-glide flight with asymmetric wingbeats,
+  coiled bite lunge, breath (rear back, neck forward), rear-up roar with wings spread (up attacks; take-off flaps for up
+  special), rise-and-dive slam with wings flat (down attacks), a full on-the-spot tail-whip spin (nair / bair / dtilt),
+  a dart-like wing rush (side special) and a rear-up roar for the win.
+- River (dog), from his two videos: bark blast with braced legs and a head thrust (neutral special), mid-air twist
+  (nair), play-bow swipe (dtilt), rear-up howl (up smash / up special), tail held up in a wag with a head bob on each
+  step, and sit-and-howl to win (`dogAttack` in pets.js).

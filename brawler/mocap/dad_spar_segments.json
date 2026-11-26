@@ -1,0 +1,15 @@
+{
+  "dc_Jab": [2.2, 2.75],
+  "dc_Cross": [2.6, 3.05],
+  "dc_FrontKick": [3.0, 3.85],
+  "dc_SpinKick": [4.55, 5.35],
+  "dc_JumpKick": [5.3, 5.95],
+  "dc_Lunge": [5.9, 6.75],
+  "dc_JumpKnee": [6.8, 7.5],
+  "dc_Flip": [7.6, 8.4],
+  "dc_Slam": [8.2, 8.85],
+  "dc_Hook": [10.15, 10.75],
+  "dc_SparkPunch": [10.75, 11.35],
+  "dc_Charge": [11.8, 12.6],
+  "dc_Blast": [12.6, 13.2]
+}

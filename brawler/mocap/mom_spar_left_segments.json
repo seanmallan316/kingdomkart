@@ -1,0 +1,11 @@
+{
+  "mo_Punch": [2.3, 2.85],
+  "mo_DoublePalm": [2.8, 3.35],
+  "mo_Knee": [3.7, 4.3],
+  "mo_BackKick": [5.2, 5.8],
+  "mo_SpinKick": [6.7, 7.35],
+  "mo_LowLunge": [7.3, 7.8],
+  "mo_JumpKnee": [8.75, 9.3],
+  "mo_Straight": [11.3, 11.8],
+  "mo_Victory": [14.4, 15.0]
+}
