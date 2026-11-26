@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers (working title) — original platform fighter. All art is drawn in code; all sound is synthesized.
+// Super Family Smash (90's Version) — original platform fighter. All art is drawn in code; all sound is synthesized.
 
 // ---------------------------------------------------------------- utils
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);

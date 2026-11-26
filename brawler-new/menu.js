@@ -1,5 +1,5 @@
 'use strict';
-// Main menu hub, story mode, training and options for New Challengers (working title). Loaded after game.js and fx.js.
+// Main menu hub, story mode, training and options for Super Family Smash (90's Version). Loaded after game.js and fx.js.
 (() => {
   const el = id => document.getElementById(id);
   const save = { get(k, d) { try { const v = localStorage.getItem('ncg_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('ncg_' + k, JSON.stringify(v)); } catch (e) { /* storage can be blocked; the game still works */ } } };

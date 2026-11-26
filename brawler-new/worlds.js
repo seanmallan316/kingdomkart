@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers worlds: full 3D stages with textured surfaces, a sky dome, layered scenery in front of and behind
+// Super Family Smash (90's Version) worlds: full 3D stages with textured surfaces, a sky dome, layered scenery in front of and behind
 // the fight, lighting per world, generated 3D props (window.CLASH_PROPS) and scenery that reacts to the fight.
 // render3d.js calls WORLDS.build(st, api) when a stage loads and WORLDS.update(api) every frame.
 (() => {

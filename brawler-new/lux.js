@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers: the luxury menu layer. Every menu selection wobbles or spins with a burst of gold, a gold selector
+// Super Family Smash (90's Version): the luxury menu layer. Every menu selection wobbles or spins with a burst of gold, a gold selector
 // ring glides to whatever you point at, gold dust drifts behind the menus, the cursor leaves sparkles, screens change
 // with a gold sweep, the winner gets confetti and the 3D menu scene leans with the pointer. Gameplay is untouched.
 (() => {

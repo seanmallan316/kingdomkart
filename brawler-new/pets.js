@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers: animal and creature fighters (def.pet = 'dog', 'cat' or 'dragon'), from rig-less 3D models.
+// Super Family Smash (90's Version): animal and creature fighters (def.pet = 'dog', 'cat' or 'dragon'), from rig-less 3D models.
 // Their 3D bodies come from the family's pictures (Meshy) as single meshes with no skeleton, so this file gives them
 // one in the vertex shader: per-vertex weights are baked from each model's own shape (four legs with hip/shoulder
 // and knee pivots, spine, neck and head, tail, and for the dragon two-part wings), and every frame a gait and pose

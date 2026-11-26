@@ -1,4 +1,4 @@
-# New Challengers (working title) — engine and mechanics
+# Super Family Smash (90's Version) — engine and mechanics
 
 > This folder is a copy of the Super Family Smash engine with the family cast removed (see `README.md` for the current
 > status). The sections below are the engine's history from the first game: they still describe how every system works,

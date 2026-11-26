@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers: energy ribbon trails on every strike, like the glowing swooshes in martial-arts reference videos.
+// Super Family Smash (90's Version): energy ribbon trails on every strike, like the glowing swooshes in martial-arts reference videos.
 // While a fighter attacks, each hand and foot that is moving fast lays down a ribbon: the path is smoothed into a curve
 // (Catmull-Rom), the ribbon always faces the camera, tapers at the tail, fades out over about a quarter of a second,
 // and glows white-hot in the middle and in the fighter's own colour at the edges (additive light).

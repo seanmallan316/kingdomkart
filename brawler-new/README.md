@@ -1,11 +1,11 @@
-# New Challengers (working title)
+# Super Family Smash (90's Version)
 
 A new game built on the Super Family Smash engine (`../brawler/`, which stays untouched): the same original 3D platform
 fighter (damage %, knockback, ring-outs, stocks, ledges, shields, grabs, smash attacks, 4 specials per fighter, items,
 Super Orb finales, up to 8 players or CPUs), with **all-new characters still to come**. The roster starts empty.
 
 **Play:** open `index.html` in Chrome or Edge, or build the one-file version with `python3 tools/build_single.py`
-(writes `NewChallengers.html`, ignored by git). Keyboard, Bluetooth/wired controllers and touch all work.
+(writes `SuperFamilySmash90s.html`, ignored by git). Keyboard, Bluetooth/wired controllers and touch all work.
 
 **Status**
 - Roster: Brent, Justin, Raechel, Chris, Blaine, Sean. Roster tiles and player cards use their school portraits (portraits/). Title: "90's Version!" under the logo.

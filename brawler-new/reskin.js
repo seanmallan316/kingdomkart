@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers: clean skin weights for the scanned fighter models.
+// Super Family Smash (90's Version): clean skin weights for the scanned fighter models.
 // Meshy's automatic rig left patches of sleeve and trouser tied to the wrong bones, so clothes stuck to the body (or
 // to the other limb) and stretched as arms and legs moved. This recomputes every vertex's bone weights from the bones
 // themselves, once per model when it loads:

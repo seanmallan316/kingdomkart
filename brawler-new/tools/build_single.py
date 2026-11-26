@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Builds one self-contained playable file: every script (and any supplied logo / intro / title video) is inlined into a
-single HTML page. Usage: python3 tools/build_single.py [output.html]   (default: NewChallengers.html next to index.html)
-NewChallengers.html is the working title; rename OUT_NAME once the game has its real name."""
+single HTML page. Usage: python3 tools/build_single.py [output.html]   (default: SuperFamilySmash90s.html next to index.html)
+The game is Super Family Smash (90's Version): same name, logo, intro and title video as the original."""
 import base64, os, re, sys
-OUT_NAME = 'NewChallengers.html'
+OUT_NAME = 'SuperFamilySmash90s.html'
 here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, OUT_NAME)
 html = open(os.path.join(here, 'index.html'), encoding='utf-8').read()

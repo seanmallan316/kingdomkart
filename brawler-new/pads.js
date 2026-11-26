@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers: controllers. Works with any controller the browser sees, wired or Bluetooth (Xbox, PlayStation,
+// Super Family Smash (90's Version): controllers. Works with any controller the browser sees, wired or Bluetooth (Xbox, PlayStation,
 // Switch Pro, 8BitDo and generic pads), up to 8 players.
 // - Each human player slot takes the next connected controller in order (P1 the first pad, the next human the second...),
 //   plus keyboard (first two humans) and touch (first human).

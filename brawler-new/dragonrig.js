@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers: a real 3D skeleton for a rig-less creature fighter (built for a dragon). A scanned creature with no rig gets one fitted
+// Super Family Smash (90's Version): a real 3D skeleton for a rig-less creature fighter (built for a dragon). A scanned creature with no rig gets one fitted
 // to the model when it loads, from the shape itself (the part masks pets.js bakes: legs, tail, neck/head, wings):
 //   hips + a 3-bone spine to the chest; a 5-bone neck curving up to the head; a 10-bone tail along its real curl (the
 //   centre line of the tail, traced from root to tip); 4 bones along each wing's leading edge (shoulder, elbow, wrist,

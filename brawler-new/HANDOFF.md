@@ -1,7 +1,7 @@
 # Handoff: building a new-cast game on the Super Family Smash engine
 
 > **Status (brawler-new/):** steps 1, 2 and 4's working title are done. The family cast is removed, the roster is
-> empty with a hidden test dummy (`?dummy` shows it), and `tools/build_single.py` writes `NewChallengers.html`.
+> empty with a hidden test dummy (`?dummy` shows it), and `tools/build_single.py` writes `SuperFamilySmash90s.html`.
 > Next: the user's name for the game, and the first characters. See README.md.
 
 This file is for a **new Claude session** that builds a second, separate game from this one: same engine, same

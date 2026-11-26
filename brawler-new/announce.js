@@ -1,5 +1,5 @@
 'use strict';
-// New Challengers: the announcer reads out whatever menu option is highlighted (mouse, touch, keyboard or controller),
+// Super Family Smash (90's Version): the announcer reads out whatever menu option is highlighted (mouse, touch, keyboard or controller),
 // and the game turns sideways into landscape on phones and tablets.
 (() => {
   const SEL = 'button, .tile, .pc';
@@ -70,7 +70,7 @@
     check();
   }
   const card = document.createElement('div'); card.id = 'rotate';
-  card.innerHTML = '<div class="ph">📱</div><b>TURN YOUR PHONE SIDEWAYS</b><small>New Challengers plays best in landscape.</small>' + (screen.orientation && screen.orientation.lock ? '<button id="rotGo" data-say="LANDSCAPE">ROTATE FOR ME</button>' : '') + '<button id="rotKeep">KEEP UPRIGHT</button>';
+  card.innerHTML = '<div class="ph">📱</div><b>TURN YOUR PHONE SIDEWAYS</b><small>Super Family Smash (90\'s Version) plays best in landscape.</small>' + (screen.orientation && screen.orientation.lock ? '<button id="rotGo" data-say="LANDSCAPE">ROTATE FOR ME</button>' : '') + '<button id="rotKeep">KEEP UPRIGHT</button>';
   document.body.appendChild(card);
   let dismissed = false;
   const portrait = () => innerHeight > innerWidth * 1.1;
