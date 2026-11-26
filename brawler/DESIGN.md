@@ -466,3 +466,7 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
 - River (dog), from his two videos: bark blast with braced legs and a head thrust (neutral special), mid-air twist
   (nair), play-bow swipe (dtilt), rear-up howl (up smash / up special), tail held up in a wag with a head bob on each
   step, and sit-and-howl to win (`dogAttack` in pets.js).
+- Rosie (cat), from her two videos: big overhead alternating paw swipes (jabs / ftilt / fair), standing boxing on the
+  hind legs (up attacks), upright tornado spin (up special), long low claw-dash lunge (fsmash / side special / dash),
+  reared-back claw flurry (neutral special, pulses), tail up with a hooked tip when moving, tail flicks at rest, and a
+  sit with the tail curled round to win (`catAttack` in pets.js).

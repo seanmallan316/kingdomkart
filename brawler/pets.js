@@ -200,6 +200,24 @@
       J.hip = [0.6 * on - 0.3 * wind, 0.5 * on - 0.3 * wind, -0.5 * on + 0.3 * wind, -0.4 * on + 0.3 * wind]; J.knee = [0.3 + 0.6 * wind, 0.3 + 0.6 * wind, 0.7 * wind, 0.7 * wind];
     }
   }
+  // Rosie's own moves, from her two videos
+  function catAttack(J, f, mv, nm, on, wind, u, H) {
+    J.hip = [0, 0, 0, 0]; J.knee = [0, 0, 0, 0]; J.tsw = 0; J.wag = 0.02; J.tlift = 0.15;
+    const prog = Math.min(1, u / Math.max(1, mv.len || 30));
+    if (/^(utilt|usmash)/.test(nm)) { // stands up on the hind legs and bats with both paws, boxing
+      const b = Math.sin(u * 0.6); J.pitch = -1.1 * (on + wind * 0.6); J.hip = [1.2 + 0.5 * b * on, 1.2 - 0.5 * b * on, -0.45, -0.45]; J.knee = [0.3, 0.3, 0.6, 0.6]; J.hp = -0.4 * on;
+    } else if (/^uspec/.test(nm)) { // upright tornado spin
+      J.pitch = -0.9; J.yaw = prog * Math.PI * 4; J.hip = [1.0, 1.0, -0.3, -0.3]; J.knee = [0.4, 0.4, 0.5, 0.5]; J.tlift = 0.2;
+    } else if (/^(fsmash|sspec|dash)/.test(nm)) { // claw dash: a long low lunge, one paw stretched far forward, tail straight out
+      J.lunge = H * 0.8 * on; J.sy = 1 - 0.12 * (on + wind); J.pitch = 0.08 * on + 0.12 * wind;
+      J.hip = [1.45 * on - 0.3 * wind, 0.4 * on, -0.9 * on + 0.4 * wind, -0.8 * on + 0.4 * wind]; J.knee = [0.1, 0.5, 0.9 * wind, 0.9 * wind]; J.hp = 0.05; J.hl = 0.05 * on; J.tlift = 0.05;
+    } else if (/^(nspec|shoot|pulse)/.test(nm)) { // claw flurry: rapid alternating swipes, reared back
+      const sw = Math.floor(u / 4) % 2; J.pitch = -0.35; J.hip[sw] = 1.7 - 0.9 * ((u % 4) / 4); J.hip[1 - sw] = 0.6; J.hip[2] = J.hip[3] = -0.2; J.knee = [0.2, 0.2, 0.5, 0.5]; J.hp = 0.1; J.tsw = 0.15 * Math.sin(u * 0.5);
+    } else { // jab / ftilt / fair: a big overhead swipe, the paw raised high then raked down, alternating paws
+      const sw = Math.floor(u / 16) % 2; J.pitch = -0.35 * (wind + on * 0.7); J.hip[sw] = 1.8 * wind + 0.7 * on; J.hip[1 - sw] = 0.25;
+      J.hip[2] = J.hip[3] = -0.25; J.knee[sw] = 0.15; J.knee[2] = J.knee[3] = 0.4; J.lunge = H * 0.22 * on; J.hp = 0.15 * on - 0.1 * wind; J.tsw = 0.2;
+    }
+  }
   // River's own moves, from his two videos
   function dogAttack(J, f, mv, nm, on, wind, u, H) {
     J.hip = [0, 0, 0, 0]; J.knee = [0, 0, 0, 0];
@@ -271,6 +289,7 @@
         const nm = moveName(f);
         if (drg && !mv.cine) { dragonAttack(J, f, mv, nm, on, wind, u, H, t); break; }
         if (dog && !mv.cine && /^(nspec|shoot|pulseB|nair|dtilt|usmash|uspec)/.test(nm)) { dogAttack(J, f, mv, nm, on, wind, u, H); break; }
+        if (cat && !mv.cine && /^(jab|ftilt|utilt|usmash|uspec|fsmash|sspec|dash|nspec|shoot|pulse|fair)/.test(nm)) { catAttack(J, f, mv, nm, on, wind, u, H); break; }
         if (mv.cine) { if (mv.cine === 'storm') J.flip = u * 0.4; else { gait('gallop', 0.8, 1.0); J.hp = -0.2; } if (drg) { J.a1 = 0.3 + 0.7 * Math.sin(u * 0.3); J.a2 = 0.3 * Math.sin(u * 0.3 - 0.8); } break; }
         if (/^(nair|nspec|uspec|whirl)/.test(nm) || mv.rollSpin) { J.flip = (u / Math.max(1, mv.len)) * TAU * 1.5; J.knee = [1.2, 1.2, 1.2, 1.2]; J.hip = [0.7, 0.7, -0.7, -0.7]; if (drg) J.a1 = -0.4; }
         else if (/^(uair|utilt|usmash)/.test(nm)) { // rears up on the back legs, front paws (or claws) swipe upward
@@ -293,6 +312,14 @@
       }
     }
     if (drg && S !== 'attack' && !(rig.happy > 0)) dragonPose(J, S, f, t, H, ph);
+    if (cat && !(rig.happy > 0)) { // Rosie, from her videos: tail up with a hooked tip on the move, slow swish and flick at rest, sit to win
+      if (S === 'walk' || S === 'run') { J.tlift = 0.2; J.tsw = 0.06 * Math.sin(ph); J.wag = 0.02; }
+      if (S === 'idle' && f && !G.ending && (t % 200) < 14) J.tsw += 0.25 * Math.sin((t % 200) * 0.45); // a tail flick now and then
+      if ((S === 'idle' || S === 'respawn') && f && G.ending && f.stocks > 0) {
+        J.pitch = -0.42; J.hip = [0.1, 0.1, 0.95, 0.95]; J.knee = [0, 0, 1.35, 1.35]; J.hp = 0.05; J.hy = 0.25 * Math.sin(t * 0.02); J.bob = 0;
+        J.tlift = -0.08; J.tsw = 0.35; J.wag = 0.015; J.tspd = 0.03; // sits, tail curled round the paws
+      }
+    }
     if (dog && !(rig.happy > 0)) { // River, from his videos: tail held up in a gentle wag, head bobbing with each step, sit-and-howl to win
       if (S === 'walk' || S === 'run') { J.hp += 0.06 * Math.sin(ph * 2); J.tlift = 0.14; }
       if ((S === 'idle' || S === 'respawn') && f && G.ending && f.stocks > 0) {
