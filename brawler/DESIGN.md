@@ -96,6 +96,9 @@ Statue), 7 hats, 5 back items (cape, jetpack, angel wings, dragon wings) and 8 w
 model's bones. Bought with Stars (20 per match + 15 per KO + 60 for a win, 100 for a story win; 300 to start).
 Weapons add 6% reach. LOCKER tile on the main menu; drag the preview to spin the fighter.
 
+## Holding things
+Held items and Locker weapons use a grip worked out from each model's rest pose: the handle sits in the palm and the item runs across the fist, pointing forward and slightly up (`gripCalc` in locker.js), sized to the fighter.
+
 ## Finale poses
 Every Family Finale phase plays a real motion clip (celebrate, power pose, run, spin, punch flurry) instead of a frozen frame.
 
@@ -265,7 +268,7 @@ squash, cones get knocked flying, the basketball rolls, birds scatter, fairy lig
 updateCam, render) and draws its models through `R3.addHook`. Set `cfg.items = false` to turn items off.
 - **Item boxes** drop from the sky every 8-13 s (at most 4 loose items): a wooden **crate** (hit it to break it, 1-2
   items) or a **capsule** (break it, or pick it up and throw it; it pops open on impact).
-- **Controls:** Attack (or Grab) next to an item picks it up. With a weapon, Attack uses it; Grab throws it
+- **Controls:** Attack next to an item picks it up; **Grab** next to a crate or capsule lifts it over your head, then Attack or Grab throws it (it bursts open where it lands or on whoever it hits). With a weapon, Attack uses it; Grab throws it
   (hold up to throw up, down to drop). Unclaimed items blink and vanish after ~18 s.
 - **Weapons:** Slugger Bat (swing, a chargeable home-run smash, and an air swing), Foam Blaster (16 darts),
   Water Balloon (throw it; it bursts in a splash). **Power-ups:** Mega Mallet (8 s of auto-swinging, can only move and

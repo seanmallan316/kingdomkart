@@ -83,7 +83,7 @@
   }
   function landThrown(it) {
     if (it.type === 'balloon') return splash(it);
-    if (it.type === 'capsule') return openBox(it);
+    if (it.box) return openBox(it);
     it.thrown = null;
   }
   function splash(it) {
@@ -96,10 +96,10 @@
 
   // ------------------------------------------------------------ picking up, using, throwing
   const canUse = f => ['idle', 'walk', 'run', 'crouch', 'air', 'land'].includes(f.state);
-  function nearItem(f) {
+  function nearItem(f, boxes) {
     let best = null, bd = 1e9;
     for (const it of G.items) {
-      if (it.dead || it.held || it.thrown || it.type === 'crate') continue;
+      if (it.dead || it.held || it.thrown || (it.box && !boxes)) continue;
       const dx = Math.abs(it.x - f.x), dy = Math.abs(it.y - f.y);
       if (dx < f.w / 2 + it.r + 26 && dy < f.h * 0.9 && dx + dy < bd) { best = it; bd = dx + dy; }
     }
@@ -107,7 +107,7 @@
   }
   function pickUp(f, it) {
     const d = ITEMS[it.type]; Sfx.grab(); snd('itemGet', 0.7);
-    if (it.type === 'capsule') { it.held = f; f.item = it; return; }
+    if (it.box) { it.held = f; f.item = it; it.hits = new WeakMap(); return; }
     note(f.x, f.y - f.h - 30, d.name.toUpperCase() + '!', '#ffffff', 1);
     if (d.kind === 'weapon' || d.kind === 'throw') { it.held = f; f.item = it; return; }
     it.dead = true;
@@ -122,9 +122,9 @@
   function release(f, dirX, dirY) {
     const it = f.item; if (!it) return; f.item = null; it.held = null;
     if (it.type === 'mallet') { it.dead = true; return; }
-    it.x = f.x + f.facing * 26 * f.sc; it.y = f.y - f.h * 0.55; it.grounded = false;
+    it.x = f.x + f.facing * 26 * f.sc; it.y = f.y - f.h * (it.box ? 0.9 : 0.55); it.grounded = false;
     if (dirY > 0.5) { it.vx = 0; it.vy = 2; return; } // drop
-    it.thrown = f; it.vx = dirY < -0.5 ? 0 : (dirX || f.facing) * 17; it.vy = dirY < -0.5 ? -17 : -4;
+    const pw = it.box ? 0.8 : 1; it.thrown = f; it.vx = dirY < -0.5 ? 0 : (dirX || f.facing) * 17 * pw; it.vy = dirY < -0.5 ? -17 * pw : (it.box ? -7 : -4);
     Sfx.throw_ && Sfx.throw_();
   }
   function fire(f) {
@@ -145,14 +145,16 @@
       const smash = consume(f, 'smash'), atk = smash || consume(f, 'attack');
       if (atk) {
         if (Math.abs(i.x) > 0.3) f.facing = sgn(i.x);
-        if (it.type === 'bat') startMove(f, !f.grounded ? 'batAir' : (smash || i.flick) ? 'batHomer' : 'batSwing');
+        if (it.box) { startMove(f, 'toss'); release(f, f.facing, i.y < -0.5 ? -1 : 0); }
+        else if (it.type === 'bat') startMove(f, !f.grounded ? 'batAir' : (smash || i.flick) ? 'batHomer' : 'batSwing');
         else if (it.type === 'blaster') { if (it.ammo > 0) startMove(f, 'shoot'); else { startMove(f, 'toss'); release(f, f.facing, 0); } }
         else { startMove(f, 'toss'); release(f, f.facing, i.y < -0.5 ? -1 : 0); }
         return true;
       }
       return false;
     }
-    if (f.buf.attack > 0 || f.buf.grab > 0) { const n = nearItem(f); if (n) { f.buf.attack = 0; f.buf.grab = 0; pickUp(f, n); return true; } }
+    if (f.buf.grab > 0 && f.grounded) { const n = nearItem(f, true); if (n) { f.buf.grab = 0; pickUp(f, n); return true; } } // Grab lifts boxes too
+    if (f.buf.attack > 0) { const n = nearItem(f, false); if (n) { f.buf.attack = 0; pickUp(f, n); return true; } }
     return false;
   }
   const baseGA = groundActions, baseAA = airActions;
@@ -236,7 +238,7 @@
         if (!circRect(it.x, it.y - it.r, it.r + 6, hurtRect(v))) continue;
         if (it.type === 'balloon') { splash(it); break; }
         applyHit(it.thrown, v, { d: it.type === 'bat' ? 12 : it.box ? 14 : 8, a: 45, b: 35, g: 80 }, sgn(it.vx) || 1, { projectile: true, px: it.x, py: it.y - it.r });
-        if (it.type === 'capsule') { openBox(it); break; }
+        if (it.box) { openBox(it); break; }
         it.vx *= -0.3; it.vy = -5; it.thrown = null; break;
       }
     }
@@ -474,7 +476,8 @@
           r.attack = (best.box || Math.abs(best.x - f.x) < 40) && Math.abs(best.y - f.y) < 80 && Math.abs(best.x - f.x) < 70 && press;
         }
       }
-      if (f.item && f.item.type === 'balloon' && near && press) r.attack = true;
+      if (f.item && (f.item.type === 'balloon' || f.item.box) && near && press) r.attack = true;
+      if (!f.item && !near && press && Math.random() < 0.02) { const b = G.items.find(it => it.box && !it.dead && !it.held && !it.thrown && Math.abs(it.x - f.x) < 70 && Math.abs(it.y - f.y) < 40); if (b) r.grab = true; }
       const a = f.ai || (f.ai = {});
       if (a.pulseB) { r[a.pulseB] = true; r.x = 0; if (--a.pulseN <= 0) a.pulseB = null; return r; }
       if (near && f.pcd && Math.random() < 0.004 * lvl) { const ready = Object.keys(PULSE).filter(b => f.pcd[b] <= 0); if (ready.length) { a.pulseB = ready[Math.floor(Math.random() * ready.length)]; a.pulseN = HOLD + 4; } }
@@ -665,6 +668,7 @@
   }
   function holderFor(rig) {
     if (rig.itemHolder && rig.itemHolder.parent) return rig.itemHolder;
+    if (window.GRIP_HOLDER) { const g = window.GRIP_HOLDER(rig); if (g) { rig.itemHolder = g; return g; } }
     const hand = rig.bones && rig.bones.RightHand, fore = rig.bones && rig.bones.RightForeArm; if (!hand || !fore) return null;
     rig.root.updateMatrixWorld(true);
     const P = b => b.getWorldPosition(new T3.Vector3());
@@ -683,12 +687,19 @@
       if (!m) { m = { root: new T3.Group(), spin: new T3.Group(), model: build(it.type) }; m.root.add(m.spin); m.spin.add(m.model); meshes.set(it.id, m); }
       const scale = 1.25;
       if (it.held) {
-        const f = it.held, rig = R3.rigOf(f), h = rig && rig.glb ? holderFor(rig) : null;
+        const f = it.held, rig = R3.rigOf(f), h = rig && rig.glb && !it.box ? holderFor(rig) : null;
+        if (it.box) { // crates and capsules are carried over the head with both hands
+          if (m.model.parent !== m.spin) m.spin.add(m.model);
+          m.root.visible = true; if (m.root.parent !== group) group.add(m.root);
+          const ks = 0.6 * f.sc, ia = 1 - (G.alpha == null ? 1 : G.alpha), fx_ = f.px != null && Math.abs(f.x - f.px) < 160 ? f.x - (f.x - f.px) * ia : f.x, fy = f.py != null && Math.abs(f.y - f.py) < 160 ? f.y - (f.y - f.py) * ia : f.y;
+          m.root.position.set(fx_, -(fy - f.h * 0.96), 0); m.spin.rotation.set(0, 0.3 * f.facing, Math.sin(G.frame * 0.12) * 0.05); m.model.position.set(0, 0, 0); m.model.rotation.set(0, 0, 0); m.model.scale.setScalar(ks); continue;
+        }
         if (h) {
           if (m.model.parent !== h) h.add(m.model);
-          m.model.position.set(0, it.type === 'blaster' ? -4 : -6, 0); m.model.rotation.set(0, 0, 0); m.model.scale.setScalar(scale * (f.sc / f.baseSc));
-          if (it.type === 'mallet') m.model.rotation.x = Math.sin(G.frame * 0.35) * 0.9;
-          if (it.type === 'blaster') m.model.rotation.x = -1.2;
+          // size held things to the fighter (a kid's bat is smaller than Dad's) and put the handle in the palm
+          const GRIPY = { bat: -4, blaster: -3, mallet: -10, balloon: -20, candy: -26, juice: -19, cookie: -22, sneakers: -6 };
+          m.model.position.set(0, GRIPY[it.type] || -6, 0); m.model.rotation.set(0, 0, 0); m.model.scale.setScalar((it.type === 'mallet' ? 0.5 : it.type === 'bat' ? 0.42 : 0.34) * f.sc);
+          if (it.type === 'mallet') m.model.rotation.z = Math.sin(G.frame * 0.35) * 0.5;
           for (const b of rig.blades) b.visible = false;
           m.root.visible = false; continue;
         }

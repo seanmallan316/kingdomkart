@@ -120,16 +120,32 @@
     const bq = B[bone].getWorldQuaternion(new T.Quaternion()).invert();
     return { bone, q: bq.multiply(qw), s: 1 / (B[bone].getWorldScale(new T.Vector3()).x / Math.max(0.01, rig.root.scale.x)) };
   }
+  // a natural grip: the held thing runs across the closed fist (perpendicular to the forearm), pointing forward and a
+  // little up, with its handle in the palm rather than at the wrist joint. Worked out once in the rest pose.
+  function gripCalc(rig) {
+    const B = rig.bones; if (!B.RightHand || !B.RightForeArm) return null;
+    rig.root.updateMatrixWorld(true);
+    const P = n => B[n].getWorldPosition(new T.Vector3());
+    const wrist = P('RightHand'), fore = wrist.clone().sub(P('RightForeArm')), L = fore.length(), dir = fore.clone().normalize();
+    let fwd = B.headfront && B.Head ? P('headfront').sub(P('Head')) : new T.Vector3(0, 0, 1); fwd.y = 0; if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1); fwd.normalize();
+    const up = fwd.clone().add(new T.Vector3(0, 0.55, 0)); up.addScaledVector(dir, -up.dot(dir)).normalize();
+    const z = new T.Vector3().crossVectors(dir, up).normalize();
+    const qw = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(dir, up, z));
+    const bq = B.RightHand.getWorldQuaternion(new T.Quaternion()).invert();
+    const palm = B.RightHand.worldToLocal(wrist.clone().addScaledVector(dir, L * 0.24));
+    return { bone: 'RightHand', q: bq.multiply(qw), s: 1 / (B.RightHand.getWorldScale(new T.Vector3()).x / Math.max(0.01, rig.root.scale.x)), p: palm };
+  }
+  window.GRIP_HOLDER = rig => { if (!rig.attach) return null; if (!rig.attach.grip) return null; const h = holder(rig, 'grip'); return h; };
   function holder(rig, slot) {
     const a = rig.attach[slot]; if (!a) return null;
-    const h = new T.Group(); h.quaternion.copy(a.q); h.scale.setScalar(a.s); rig.bones[a.bone].add(h); return h;
+    const h = new T.Group(); h.quaternion.copy(a.q); h.scale.setScalar(a.s); if (a.p) h.position.copy(a.p); rig.bones[a.bone].add(h); return h;
   }
 
   // ------------------------------------------------------------ dress a rig in its fighter's equipped look
   window.DRESS = function (rig) {
     if (!rig || !rig.glb || !rig.bones) return;
     const id = rig.def.id, E = eqOf(id), s = rig.def.scale, accent = rig.def.accent || '#ff6ad5';
-    if (!rig.attach) rig.attach = { hat: calc(rig, 'head_end', 'Head', 'head_end', 'Head', 'headfront'), back: calc(rig, 'Spine', 'Spine', 'neck', 'Head', 'headfront'), weapon: calc(rig, 'RightHand', 'RightForeArm', 'RightHand', null, null) };
+    if (!rig.attach) rig.attach = { hat: calc(rig, 'head_end', 'Head', 'head_end', 'Head', 'headfront'), back: calc(rig, 'Spine', 'Spine', 'neck', 'Head', 'headfront'), weapon: gripCalc(rig) }; rig.attach.grip = rig.attach.weapon;
     if (rig.dress) for (const o of rig.dress) if (o.parent) o.parent.remove(o);
     rig.dress = []; rig.noBlades = false; rig.dressWeapon = null;
     // outfit: re-colour the scanned model's materials
