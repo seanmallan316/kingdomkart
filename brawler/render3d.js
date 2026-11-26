@@ -353,6 +353,7 @@ const R3 = (() => {
       const sw = makeSword(def, side); sw.position.y = 2; sw.rotation.x = 0; holder.add(sw); holder.scale.setScalar(def.scale / (k * 0.01)); holder.userData.sword = side;
       hand.add(holder); rig.blades.push(holder);
     }
+    if (window.DRESS) try { window.DRESS(rig); } catch (e) { console.warn('dress failed', e); }
     return rig;
   }
   const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), IDENT = new THREE.Quaternion();
@@ -444,6 +445,12 @@ const R3 = (() => {
       case 'grabbed': return hold(C.hit, C.hit.dur * 0.3);
       case 'attack': {
         if (!f.move) return { c: C.idle, time: f.anim / 60, loop: true };
+        if (f.move.cine) { // the Family Finale: a clear pose for each phase instead of a frozen frame
+          const ph = G.cine && G.cine.f === f && G.cine.phase === 'barrage' ? 'barrage' : f.move.cine, T0 = f.mt / 60;
+          const cl = { intro: C.victory, beam: C.cast, dragon: C.cast, rush: get('run'), storm: C.spin, barrage: C.jab }[ph] || C.idle;
+          if (ph === 'beam' || ph === 'dragon') return hold(cl, Math.min(cl.dur * 0.95, (cl.impact || cl.dur * 0.45) + Math.sin(T0 * 3) * 0.04));
+          return { c: cl, time: T0 * (ph === 'barrage' ? 1.4 : ph === 'rush' ? 1.25 : 1), loop: true, air: !f.grounded, keepRot: ph === 'storm' };
+        }
         const mv = f.move, c = get(mv.name) || C[MOVE_CLIP[mv.name]]; const cc = C[own[mv.name]] || C[MOVE_CLIP[mv.name]];
         const GEN = { nspec: 'cast', sspec: 'airpunch', uspec: 'highkick', dspec: 'slam' };
         const clip = cc || C[GEN[mv.name]] || C[mv.air ? 'airpunch' : 'smash'];
@@ -461,7 +468,7 @@ const R3 = (() => {
   function poseGlb(rig, pose, rot, facing, f) {
     const [lean, afS, afE, abS, abE, lfH, lfK, lbH, lbK] = pose;
     const nL = facing < 0; // the left side is nearest the camera when facing left
-    for (const b of rig.blades) b.visible = b.userData.sword === (nL ? 'L' : 'R');
+    for (const b of rig.blades) b.visible = !rig.noBlades && b.userData.sword === (nL ? 'L' : 'R');
     const pick = pickClip(rig, f) || (!f && rig.clips && rig.clips.idle ? { c: rig.clips.idle, time: 0.4, loop: true } : null);
     let hip = rig.hipRest;
     if (pick && pick.c) {
@@ -501,6 +508,7 @@ const R3 = (() => {
   }
 
   function buildRig(def) {
+    if (def.pet && window.PETRIG) return window.PETRIG.build(def);
     if (MODELS[def.id]) return buildGlbRig(def);
     const look = (LOOKS[def.id] || lookGeneric)(def);
     const rig = { def, look, arm: {}, leg: {}, turnY: TURN, blades: [] };
@@ -572,7 +580,7 @@ const R3 = (() => {
     if (f.state === 'ledge') want = f.facing * (Math.PI / 2 + 0.5); // hang facing the wall
     rig.turnY += (want - rig.turnY) * 0.35; rig.turn.rotation.y = rig.turnY;
     if (!rig.glb && f.state === 'attack' && f.move && f.move.twirl && f.mt > 4 && f.mt < f.move.len - 8) rig.turn.rotation.y = rig.turnY + f.mt * 0.75;
-    if (rig.glb) poseGlb(rig, pose, rot, f.facing, f); else poseRig(rig, pose, rot, f.facing, a.hipH, G.frame);
+    if (rig.pet) window.PETRIG.pose(rig, f, rot, a); else if (rig.glb) poseGlb(rig, pose, rot, f.facing, f); else poseRig(rig, pose, rot, f.facing, a.hipH, G.frame);
     // flashes: invincible blink, hurt tint, overdrive glow
     let col = 0x000000, k = 0;
     if ((f.invinc > 0 && G.frame % 6 < 3) || (f.intang > 0 && f.state !== 'ledge' && G.frame % 4 < 2)) { col = 0xffffff; k = 0.55; }
@@ -614,7 +622,7 @@ const R3 = (() => {
           pScene = new THREE.Scene(); lights(pScene, false); pCamera = new THREE.PerspectiveCamera(24, 400 / 240, 10, 2000);
         }
         const rig = buildRig(def); rig.turn.rotation.y = rig.glb ? 0.35 : 0.5;
-        if (rig.glb) { poseGlb(rig, POSES.idle, 0, 1, null); rig.root.position.y = 0; } else poseRig(rig, POSES.idle, 0, 1, 33 * def.scale, 20);
+        if (rig.pet) window.PETRIG.pose(rig, null, 0, null, 0); else if (rig.glb) { poseGlb(rig, POSES.idle, 0, 1, null); rig.root.position.y = 0; } else poseRig(rig, POSES.idle, 0, 1, 33 * def.scale, 20);
         pScene.add(rig.root);
         const h = (rig.glb ? 86 : 100) * def.scale; pCamera.position.set(0, h * 0.52, h * 2.5); pCamera.lookAt(0, h * 0.5, 0);
         pRenderer.render(pScene, pCamera);
@@ -665,7 +673,7 @@ const R3 = (() => {
     show(true); fighterGroup.visible = false; menuGroup.visible = true; menuT++;
     for (const m of menuList) {
       const rig = m.rig; m.x += (m.tx - m.x) * 0.14; m.t += 1 / 60;
-      rig.root.position.set(m.x, 0, m.z); rig.root.scale.setScalar(rig.glb ? m.scale : rig.def.scale * m.scale);
+      rig.root.position.set(m.x, 0, m.z); rig.root.scale.setScalar(rig.glb || rig.pet ? m.scale : rig.def.scale * m.scale);
       rig.turn.rotation.y += (m.face - rig.turn.rotation.y) * 0.15;
       if (rig.glb && rig.clips) {
         let c = rig.clips.idle, time = m.t, loop = true;
@@ -675,8 +683,8 @@ const R3 = (() => {
         const hy = sampleClip(rig, c, time, loop);
         rig.spin.position.y = clamp(rig.hipRest + hy * rig.unit, rig.hipRest * 0.3, rig.hipRest * 1.6); rig.spin.rotation.z = 0;
         for (const r of rig.rest) r.b.quaternion.slerp(r.target, 0.3);
-        for (const b of rig.blades) b.visible = b.userData.sword === 'R';
-      } else poseRig(rig, POSES.idle, 0, 1, 33 * rig.def.scale, menuT);
+        for (const b of rig.blades) b.visible = !rig.noBlades && b.userData.sword === 'R';
+      } else if (rig.pet) { window.PETRIG.pose(rig, null, 0, null, menuT, m.once); m.once = null; } else poseRig(rig, POSES.idle, 0, 1, 33 * rig.def.scale, menuT);
     }
     if (menuCamT) for (const k in menuCamT) menuCam[k] += (menuCamT[k] - menuCam[k]) * 0.07;
     const sway = Math.sin(menuT * 0.006) * 22;
@@ -696,5 +704,7 @@ const R3 = (() => {
     return out;
   }
   const hooks = [];
-  return { addHook: fn => hooks.push(fn), rigOf: f => rigs.get(f), init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, menuSet, menuReact, menuRender, get ok() { return ok; } };
+  // re-apply a fighter's outfit / hat / back item / weapon to every rig of that fighter (match and menus)
+  function redress(id) { if (!window.DRESS) return; for (const r of rigs.values()) if (r.glb && r.def.id === id) window.DRESS(r); for (const m of menuRigs.values()) if (m.rig.glb && m.rig.def.id === id) window.DRESS(m.rig); for (const k in pCache) if (k === id) delete pCache[k]; }
+  return { redress, addHook: fn => hooks.push(fn), rigOf: f => rigs.get(f), init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, menuSet, menuReact, menuRender, get ok() { return ok; } };
 })();

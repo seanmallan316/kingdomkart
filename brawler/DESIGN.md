@@ -77,6 +77,28 @@ Laid out like a classic platform-fighter select screen, in the game's own style:
   Tap a card to choose who you're picking for; the chosen card glows and says CHOOSING. A new pick slides in with a burst.
 - With controllers, each controller picks for its own player. Stage, stocks, BACK and FIGHT! sit along the bottom.
 
+## Unlockable fighters: the family pets (`pets.js`, `pets/`, `petjs/`)
+3D models made with Meshy multi-image-to-3d from the family's own pictures. They have no skeleton, so `pets.js`
+animates the whole body procedurally from the fighter's state (trot bob, pounce lunges, rearing up, flips, squash and
+stretch). Hurtboxes are wider and lower (`hw`/`hh`). Voices are dog / cat / dragon sound effects.
+- **River** (the shaggy dog): unlocked by winning 3 matches. Bark wave, pounce, zoomies. Finale: rush.
+- **Rosie** (the tabby cat): unlocked by finishing Story mode. Three jumps, claw flurry, pounce. Finale: storm.
+- **Pink Fluff** (Norah's spirit dragon): unlocked by landing Norah's Family Finale. Heavy, four wing-beat jumps.
+- A "NEW CHALLENGER!" card, burst and confetti show when one unlocks. 7 locked slots remain for future fighters.
+
+## Norah's Family Finale: Pink Fluff (`dragon.js`)
+Norah shouts "Spirit animal, ACTIVATED!", then Pink Fluff (the same 3D model) flies in on a swooping path, snaps up
+each opponent one by one (chomp sound, lunge), carries them off and hurls them away with a roar.
+
+## Locker: outfits, hats, back items and weapons (`locker.js`)
+Every fighter has their own: 7 outfits (recolours / materials of the scan: Shadow, Frost, Chrome, Lava, Neon, Gold
+Statue), 7 hats, 5 back items (cape, jetpack, angel wings, dragon wings) and 8 weapons, built in 3D and attached to the
+model's bones. Bought with Stars (20 per match + 15 per KO + 60 for a win, 100 for a story win; 300 to start).
+Weapons add 6% reach. LOCKER tile on the main menu; drag the preview to spin the fighter.
+
+## Finale poses
+Every Family Finale phase plays a real motion clip (celebrate, power pose, run, spin, punch flurry) instead of a frozen frame.
+
 ## Family banner on the opening screen (`fam.js`, `fam/`, `famjs.js`)
 The family's banner photo (supplied by the family) is cut into nine panels (`fam/*.webp`, packed into `famjs.js` by
 `tools/build_fam.py`) and shown as leaning photo cards along the bottom of the title screen, behind the logo and Play:

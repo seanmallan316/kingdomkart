@@ -169,7 +169,8 @@
   const VMEM = {}, VN = [1, 2, 3];
   // generic generated voices, shared by build; the rate shifts the pitch so family members sharing a set sound different
   const VOICES = { ray: { g: 'boy', rate: 1.0 }, ollie: { g: 'boy', rate: 1.08 }, norah: { g: 'girl', rate: 1.0 }, tyler: { g: 'teen', rate: 0.97 }, jayson: { g: 'teen', rate: 1.05 },
-    layne: { g: 'teen', rate: 0.9 }, violet: { g: 'ywoman', rate: 1.0 }, dad: { g: 'man', rate: 1.0 }, mom: { g: 'woman', rate: 1.0 } };
+    layne: { g: 'teen', rate: 0.9 }, violet: { g: 'ywoman', rate: 1.0 }, dad: { g: 'man', rate: 1.0 }, mom: { g: 'woman', rate: 1.0 },
+    river: { g: 'dog', rate: 1.0 }, rosie: { g: 'cat', rate: 1.0 }, fluff: { g: 'dragon', rate: 1.0 } };
 })();
 
 // ================================================================ VISUALS

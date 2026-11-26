@@ -18,7 +18,7 @@
     cookie:   { name: 'Heart Cookie', kind: 'power', w: 2, r: 16 },
   };
   const BOXES = { crate: { hp: 18, r: 28 }, capsule: { hp: 8, r: 20 } };
-  const FINALE = { ray: 'storm', ollie: 'storm', mom: 'storm', norah: 'rush', tyler: 'rush', layne: 'rush', dad: 'beam', violet: 'beam', jayson: 'beam' };
+  const FINALE = { ray: 'storm', ollie: 'storm', mom: 'storm', norah: 'dragon', tyler: 'rush', layne: 'rush', dad: 'beam', violet: 'beam', jayson: 'beam', river: 'rush', rosie: 'storm', fluff: 'beam' };
   const pickType = () => { const keys = Object.keys(ITEMS); let s = 0; for (const k of keys) s += ITEMS[k].w; let r = Math.random() * s; for (const k of keys) { r -= ITEMS[k].w; if (r <= 0) return k; } return 'bat'; };
   let uid = 0;
   const on = () => G.cfg && G.cfg.items !== false;
@@ -39,13 +39,14 @@
       batAir: M({ len: 34, air: true, ll: 8, pose: 'nair', hb: [H(5, 12, 42, -48, 32, 10, 361, 26, 95)] }),
       shoot: M({ len: 18, pose: 'jab', special: true, drift: 1, landLag: 2, onFrame: (f, t) => { if (t === 5) fire(f); } }),
       toss: M({ len: 20, pose: 'throw', special: true, drift: 1 }),
-      finale: M({ len: 99999, pose: 'smashF', special: true, drift: 0 }),
+      finale: M({ len: 99999, pose: 'smashF', special: true, drift: 0, cine: 'intro' }),
       pulseA: M({ len: 34, pose: 'smashD', special: true, drift: 0.5, onFrame: (f, t) => { if (t === 7) pulse(f, 'attack'); } }),
       pulseB: M({ len: 36, pose: 'smashU', special: true, drift: 0.5, onFrame: (f, t) => { if (t === 7) pulse(f, 'special'); } }),
       pulseS: M({ len: 40, pose: 'smashF', special: true, drift: 0.5, onFrame: (f, t) => { if (t === 9) pulse(f, 'smash'); } }),
-      finaleBeam: M({ len: 99999, pose: 'jab', special: true, drift: 0 }),
-      finaleRush: M({ len: 99999, pose: 'dashkick', special: true, drift: 0 }),
-      finaleStorm: M({ len: 99999, pose: 'nair', special: true, drift: 0 }),
+      finaleBeam: M({ len: 99999, pose: 'jab', special: true, drift: 0, cine: 'beam' }),
+      finaleDragon: M({ len: 99999, pose: 'jab', special: true, drift: 0, cine: 'dragon' }),
+      finaleRush: M({ len: 99999, pose: 'dashkick', special: true, drift: 0, cine: 'rush' }),
+      finaleStorm: M({ len: 99999, pose: 'nair', special: true, drift: 0, cine: 'storm' }),
     };
   }
 
@@ -117,7 +118,7 @@
     else if (it.type === 'mallet') { const m = spawnItem('mallet', f.x, f.y); m.held = f; f.item = m; f.malletT = d.dur; }
     fx.ring(f.x, f.y - f.h / 2, '#ffffff', 60);
   }
-  function grow(f, k) { f.sc = f.baseSc * k; f.w = 34 * f.sc; f.h = 80 * f.sc; }
+  function grow(f, k) { f.sc = f.baseSc * k; f.w = 34 * f.sc * (f.def.hw || 1); f.h = 80 * f.sc * (f.def.hh || 1); }
   function release(f, dirX, dirY) {
     const it = f.item; if (!it) return; f.item = null; it.held = null;
     if (it.type === 'mallet') { it.dead = true; return; }
@@ -248,7 +249,7 @@
     G.cine = { f, t: 0, type, phase: 'intro', caught: [], hit: new Set(), px: f.x, py: f.y, bt: 0 };
     startMove(f, 'finale'); f.vx = f.vy = 0;
     snd('finaleCharge', 1); Sfx.od && Sfx.od(); G.flash = 10; G.banner = null;
-    if (Sfx.voice) Sfx.voice(f, 'atk2', true);
+    if (type === 'dragon') { snd('v_norah_spirit', 1.1); setTimeout(() => snd('dragonRoar', 0.9), 1100); } else if (Sfx.voice) Sfx.voice(f, 'atk2', true);
   }
   function endFinale() {
     const c = G.cine, f = c.f; G.cine = null;
@@ -271,7 +272,8 @@
       f.x = c.px; f.y = c.py; f.vx = f.vy = 0;
       if (c.t >= 78) {
         c.phase = 'act'; c.t = 0;
-        startMove(f, c.type === 'beam' ? 'finaleBeam' : c.type === 'rush' ? 'finaleRush' : 'finaleStorm');
+        startMove(f, c.type === 'beam' ? 'finaleBeam' : c.type === 'rush' ? 'finaleRush' : c.type === 'dragon' ? 'finaleDragon' : 'finaleStorm');
+        if (c.type === 'dragon') { const tg = foes(f).sort((a, b) => Math.abs(a.x - f.x) - Math.abs(b.x - f.x)); c.dr = { x: f.x - f.facing * 1700, y: f.y - 900, vx: f.facing * 20, vy: 6, trail: [], jaw: 0.2, chomp: 0, targets: tg, ti: 0, mode: tg.length ? 'hunt' : 'out', t: 0, ot: 0, flap: 0 }; }
         snd(c.type === 'beam' ? 'finaleBeam' : 'finaleCharge', 1, c.type === 'beam' ? 1 : 1.3); G.shake = 14; G.flash = 8;
       }
       return;
@@ -297,6 +299,30 @@
       f.y = c.py;
       if (c.t % 5 === 0) for (const v of c.caught) { small(f, v, f.facing); v.hitstop = 9999; G.shake = 8; }
       if (c.t >= 72) { for (const v of c.caught) launch(f, v, f.facing, 45); G.flash = 12; snd('homeRun', 1, 0.8); return endFinale(); }
+      return;
+    }
+    if (c.phase === 'act' && c.type === 'dragon') { // Spirit Dragon: flies in, chomps each foe, then hurls them all away
+      const d = c.dr; d.t++; f.x = c.px; f.y = c.py; f.vx = f.vy = 0;
+      let tx, ty, sp = 30;
+      const tgt = d.mode === 'hunt' ? d.targets[d.ti] : null;
+      if (tgt && (tgt.state === 'dead' || tgt.state === 'out')) { d.ti++; }
+      if (d.mode === 'hunt' && tgt) { tx = tgt.x; ty = tgt.y - tgt.h * 0.55; }
+      else { d.mode = 'out'; d.ot++; tx = d.x + (d.vx >= 0 ? 1 : -1) * 900; ty = G.stage.blast.t - 600; sp = 26; }
+      // steer: a curving, swooping flight rather than a straight line
+      const dx = tx - d.x, dy = ty - d.y, dist = Math.hypot(dx, dy) || 1, wob = Math.sin(d.t * 0.12) * 0.35;
+      const wx = dx / dist * Math.cos(wob) - dy / dist * Math.sin(wob), wy = dx / dist * Math.sin(wob) + dy / dist * Math.cos(wob);
+      d.vx += (wx * sp - d.vx) * 0.09; d.vy += (wy * sp - d.vy) * 0.09; d.x += d.vx; d.y += d.vy;
+      d.trail.unshift({ x: d.x, y: d.y }); if (d.trail.length > 70) d.trail.pop();
+      d.jaw += ((d.mode === 'hunt' && dist < 520 ? 1 : 0.15) - d.jaw) * 0.2; if (d.chomp > 0) { d.chomp--; d.jaw = 0; }
+      if (G.frame % 2 === 0) fx.spark(d.x, d.y, ['#ff6ad5', '#b46cff', '#ffd23f'][d.t % 3], 2, 6);
+      if (d.mode === 'hunt' && tgt && dist < 95) { // CHOMP
+        d.chomp = 10; d.ti++; c.caught.push(tgt); tgt.hitstop = 0; small(f, tgt, sgn(d.vx) || 1); small(f, tgt, sgn(d.vx) || 1); tgt.percent = Math.min(999, tgt.percent + 8);
+        snd('dragonChomp', 1); G.shake = 14; G.flash = 6; fx.ring(tgt.x, tgt.y - tgt.h / 2, '#ff6ad5', 80);
+        if (d.ti >= d.targets.length) d.mode = 'out';
+      }
+      for (const v of c.caught) { if (d.mode === 'out' && d.ot > 26) continue; v.hitstop = 9999; v.x = d.x + sgn(d.vx || 1) * 20; v.y = d.y + v.h * 0.5; v.lvx = v.lvy = 0; }
+      if (d.mode === 'out' && d.ot === 26) { for (const v of c.caught) launch(f, v, sgn(d.vx) || f.facing, 65); G.flash = 12; snd('dragonRoar', 0.8, 1.15); }
+      if (d.t > 400 || (d.mode === 'out' && d.ot > 70)) { c.dr = null; return endFinale(); }
       return;
     }
     if (c.phase === 'act' && c.type === 'storm') {
@@ -464,6 +490,7 @@
     let tx, ty, tz, k = 0.22;
     if (c.phase === 'intro') { const f = c.f; tx = f.x + f.facing * 8; ty = f.y - f.h * 0.62; tz = 3.3 / Math.max(1, f.sc / 1.6); }
     else if (c.phase === 'barrage' && c.caught[0]) { const v = c.caught[0]; tx = (v.x + c.f.x) / 2; ty = v.y - v.h * 0.6; tz = 2.6; }
+    else if (c.phase === 'act' && c.type === 'dragon' && c.dr) { const f = c.f, d = c.dr; tx = (f.x + d.x) / 2; ty = (f.y - f.h / 2 + d.y) / 2; tz = Math.max(0.45, Math.min(1.1, 900 / (Math.abs(d.x - f.x) + 500))); k = 0.1; }
     else if (c.phase === 'act' && c.type === 'beam') { const f = c.f; tx = f.x + f.facing * 420; ty = f.y - f.h * 0.5; tz = Math.min(G.cam.z, 1.0); k = 0.08; }
     else return;
     G.cam.x = lerp(prev.x, tx, k); G.cam.y = lerp(prev.y, ty, k); G.cam.z = lerp(prev.z, tz, k);

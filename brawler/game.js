@@ -395,6 +395,22 @@ const FIGHTERS = [
     id: 'jayson', name: 'JAYSON', blurb: 'Fast, agile brawler. Blaster, cannonball, dive kick.', color: '#8fa0b8', dark: '#20242e', accent: '#ff7a6b', acc: 'kid',
     weight: 98, walk: 4.3, run: 9.2, air: 5.0, airAcc: 0.56, grav: 0.46, fall: 7.2, ff: 10.4, jump: 12.6, hop: 8.0, djump: 12.2, jumps: 2,
     scale: 1.133, power: 1.0, speed: 0.92, reach: 1.04, sp: { n: 'blaster', s: 'cannonball', u: 'rocket', d: 'diveKick' },
+  },
+  // unlockable fighters: the family's pets (3D models from their photos, animated in pets.js)
+  {
+    id: 'river', name: 'RIVER', blurb: 'The shaggy family dog. Bark wave, pounce, zoomies.', color: '#6a7480', dark: '#2a2e36', accent: '#9fd8ff', acc: 'pet', pet: 'dog', hw: 2.1, hh: 0.85,
+    weight: 104, walk: 4.4, run: 10.4, air: 4.7, airAcc: 0.52, grav: 0.5, fall: 7.6, ff: 11.0, jump: 12.6, hop: 8.0, djump: 11.4, jumps: 2,
+    scale: 0.62, power: 1.04, speed: 1.0, reach: 1.0, sp: { n: 'waveSlash', s: 'dashStrike', u: 'rocket', d: 'quake' },
+  },
+  {
+    id: 'rosie', name: 'ROSIE', blurb: 'The family cat. Three jumps, claw flurry, pounce.', color: '#8a6a46', dark: '#3a2a1a', accent: '#ffd27a', acc: 'pet', pet: 'cat', hw: 2.0, hh: 0.9,
+    weight: 72, walk: 4.0, run: 9.8, air: 5.2, airAcc: 0.6, grav: 0.38, fall: 6.2, ff: 9.6, jump: 12.0, hop: 8.0, djump: 10.0, jumps: 3,
+    scale: 0.44, power: 0.88, speed: 1.1, reach: 0.92, sp: { n: 'whirl', s: 'sparkleDash', u: 'spiral', d: 'diveKick' },
+  },
+  {
+    id: 'fluff', name: 'PINK FLUFF', blurb: "Norah's spirit dragon. Fireballs, wing rush, four wing-beat jumps.", color: '#c8508a', dark: '#4a1430', accent: '#ff9ae6', acc: 'pet', pet: 'dragon', hw: 2.4, hh: 1.1,
+    weight: 140, walk: 3.8, run: 8.4, air: 4.8, airAcc: 0.5, grav: 0.4, fall: 6.8, ff: 10.0, jump: 12.8, hop: 8.0, djump: 11.0, jumps: 4,
+    scale: 1.0, power: 1.2, speed: 0.95, reach: 1.25, sp: { n: 'chargeShot', s: 'dashStrike', u: 'rocket', d: 'quake' },
   }
 ];
 
@@ -425,7 +441,7 @@ const G = {
 function newFighter(def, port, ctrl, cpu, lvl) {
   return {
     def, port, ctrl, cpu, lvl, moves: buildMoves(def), sc: def.scale,
-    w: 34 * def.scale, h: 80 * def.scale,
+    w: 34 * def.scale * (def.hw || 1), h: 80 * def.scale * (def.hh || 1),
     x: 0, y: 0, vx: 0, vy: 0, lvx: 0, lvy: 0, facing: 1, grounded: false, ground: null,
     airJumps: def.jumps - 1, state: 'air', t: 0, lag: 0, move: null, mt: 0, mtHold: false, hitIds: new Map(), xhb: null,
     hitstop: 0, hitstun: 0, tumble: false, intang: 0, invinc: 0, shieldHP: 50, percent: 0, stocks: 3,
@@ -1668,7 +1684,13 @@ const cfg = {
 // ---------------------------------------------------------------- fighter select: a roster grid on top, a card per player below
 let selActive = 0;
 // room for 10 unlockable fighters: each gets a locked tile until it is added to FIGHTERS and unlocked
-const UNLOCKS = Array.from({ length: 10 }, (_, i) => ({ name: '', hint: 'A secret fighter joins the family soon.' }));
+const UNLOCKS = [
+  { id: 'river', hint: 'Win 3 matches to unlock River the dog!' },
+  { id: 'rosie', hint: 'Finish Story mode once to unlock Rosie the cat!' },
+  { id: 'fluff', hint: "Land Norah's Spirit Dragon finale to unlock Pink Fluff!" },
+  ...Array.from({ length: 7 }, () => ({ id: null, hint: 'A secret fighter joins the family soon.' })),
+];
+const fighterUnlocked = d => !UNLOCKS.some(u => u.id === d.id) || (typeof isUnlocked === 'function' && isUnlocked(d.id));
 const portraitURL = {};
 function fighterArt(def, face) { // the family's own photos (a face close-up for roster tiles); 3D renders for everyone else
   const F = window.CLASH_FAM || {}, fam = (face && F['face_' + def.id]) || F[def.id];
@@ -1682,9 +1704,10 @@ function buildSelect(swapped) {
   if (!act.some(o => o.i === selActive)) selActive = act.length ? act[0].i : 0;
   // roster
   $('roster').innerHTML = FIGHTERS.map((d, k) => {
+    if (!fighterUnlocked(d)) return '';
     const toks = act.filter(o => o.s.fighter === k).map(o => `<i style="--pc:${PORT_COLORS[o.i]}">P${o.i + 1}</i>`).join('');
     return `<button class="rt" data-f="${k}" style="--c:${d.color};--i:${k}" aria-label="${d.name}">${fighterArt(d, true)}<span class="toks">${toks}</span><span class="rn">${d.name}</span></button>`;
-  }).join('') + UNLOCKS.map((u, k) => `<button class="rt lock" data-f="lock" data-k="${k}" style="--i:${FIGHTERS.length + k}" aria-label="Locked fighter"><span class="lk">🔒</span><span class="rn">${u.name || 'LOCKED'}</span></button>`).join('')
+  }).join('') + UNLOCKS.map((u, k) => u.id && fighterUnlocked({ id: u.id }) ? '' : `<button class="rt lock" data-f="lock" data-k="${k}" style="--i:${FIGHTERS.length + k}" aria-label="Locked fighter"><span class="lk">🔒</span><span class="rn">${u.id ? '???' : 'LOCKED'}</span></button>`).join('')
     + `<button class="rt rand" data-f="rand" style="--i:${FIGHTERS.length + UNLOCKS.length}" aria-label="Random"><b>?</b><span class="rn">RANDOM</span></button>`;
   // player cards
   const cards = act.map(({ s, i }, k) => {
@@ -1709,7 +1732,8 @@ $('roster').onclick = e => {
   let i = selActive;
   if (window.__padK != null) { const hi = cfg.slots.findIndex((s, k) => s.type === 'human' && humanNo(k) === window.__padK); if (hi >= 0) i = hi; }
   const s = cfg.slots[i]; if (!s || s.type === 'off') return;
-  s.fighter = b.dataset.f === 'rand' ? Math.floor(Math.random() * FIGHTERS.length) : +b.dataset.f;
+  const pool = FIGHTERS.map((d, k) => k).filter(k => fighterUnlocked(FIGHTERS[k]));
+  s.fighter = b.dataset.f === 'rand' ? pool[Math.floor(Math.random() * pool.length)] : +b.dataset.f;
   buildSelect(i);
 };
 $('slots').onclick = e => {
