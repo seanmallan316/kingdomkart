@@ -153,7 +153,7 @@ surface with UV seams welded, keeping the four strongest bones. `?rawskin` in th
 - Options > Show FPS displays the frame rate and current render resolution.
 
 ## Music (music.js, music/*.mp3, tools/build_music.py)
-Stage songs: `music/<theme>.mp3` plays during matches on that stage (treehouse.mp3 for the Treehouse), quieter when paused, cross-fading with the menu song.
+Stage songs: `music/<theme>.mp3` plays during matches on that stage (treehouse.mp3 for the Treehouse, bedroom.mp3 for Bunk Beds), quieter when paused, cross-fading with the menu song.
 
 ### Menu music
 The family's own song (made with Suno) loops on the title, main menu, fighter select, options, story and Locker
