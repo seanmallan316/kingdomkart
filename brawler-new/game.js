@@ -375,6 +375,14 @@ const FIGHTERS = [
     weight: 86, walk: 4.5, run: 10.2, air: 5.1, airAcc: 0.58, grav: 0.44, fall: 7.0, ff: 10.2, jump: 12.4, hop: 7.9, djump: 11.4, jumps: 3,
     scale: 1.0, power: 0.94, speed: 0.88, reach: 0.98, sp: { n: 'blaster', s: 'sparkleDash', u: 'teleport', d: 'counter' },
   },
+  {
+    // Raechel: 3D model from her four photos (Meshy). Height 4'6" assumed until confirmed. Placeholder floaty,
+    // sparkly moveset until her moves video arrives.
+    id: 'raechel', name: 'RAECHEL', voice: 'girl', vrate: 1.0, finale: 'beam', trail: ['#ff4fa8', '#ffe23a'],
+    blurb: 'Bright and floaty. Three jumps, star toss, sparkle dash, dive kick.', color: '#e8338f', dark: '#2a1030', accent: '#ffe23a', acc: 'kid',
+    weight: 84, walk: 4.4, run: 9.8, air: 5.3, airAcc: 0.6, grav: 0.38, fall: 6.4, ff: 9.6, jump: 12.0, hop: 7.6, djump: 10.8, jumps: 3,
+    scale: 0.9, power: 0.92, speed: 0.88, reach: 0.96, sp: { n: 'starToss', s: 'sparkleDash', u: 'rocket', d: 'diveKick' },
+  },
 ];
 // ?dummy in the address shows the test dummy in the menus (for testing only)
 if (/[?&]dummy\b/.test(location.search)) for (const d of FIGHTERS) if (d.id === 'dummy') d.hidden = false;
