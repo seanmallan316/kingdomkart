@@ -393,6 +393,14 @@
   @media (max-aspect-ratio: 6/5) { .emptyroster { flex-direction:column; text-align:center; } .er-steps { justify-content:center; } .er-slots { grid-template-columns:repeat(5, 1fr); } }
   @media (prefers-reduced-motion: reduce) { .emptyroster, .emptyroster::after, .er-ring i, .er-ring b, .pc.blank .nobody { animation:none !important; } }
 
+  /* "90's Version!" under the title: a neon tag in the jackets' colours */
+  #title .sub.nineties { font-family:"Arial Black", Impact, sans-serif; font-style:italic; font-weight:900; letter-spacing:2px; text-transform:none;
+    font-size:clamp(20px, 3.6vw, 40px); margin-top:4px; transform:rotate(-4deg); color:#fff; opacity:1;
+    background:linear-gradient(90deg, #ff2fa0, #ffe23a 35%, #22d3e6 65%, #8b5cff); -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(3px 3px 0 #1a0f2e) drop-shadow(0 0 14px rgba(255,47,160,.55)); animation:ninetiesPop 2.4s ease-in-out infinite; }
+  @keyframes ninetiesPop { 0%,100% { scale:1; } 50% { scale:1.06; } }
+  @media (prefers-reduced-motion: reduce) { #title .sub.nineties { animation:none; } }
+  @media (max-height:560px) and (orientation:landscape) { #title .sub.nineties { font-size:18px; margin:0 0 6px; } #title .logo { margin-top:0; } }
 </style>
 </head>
 <body>
@@ -406,9 +414,9 @@
 <div id="title" class="screen on">
   <i class="titleshade"></i>
   <div class="logo" aria-label="New Challengers (working title)"><span class="l1" data-t="NEW">NEW</span><span class="l2" data-t="CHALLENGERS">CHALLENGERS</span><svg class="star" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4l13 30 32 3-24 21 7 32-28-16-28 16 7-32L5 37l32-3z"/></svg></div>
-  <div class="sub">platform fighter · working title</div>
+  <div class="sub nineties">90's Version!</div>
   <button class="big" id="bPlay">PLAY</button>
-  <div class="tap" id="titleTap">the arena is open · send your first fighter</div>
+  <div class="tap" id="titleTap">six challengers have entered the arena</div>
   <div class="help">
     <b>P1</b> A/D/W/S move · Space jump · J attack · K special · I smash · L shield · U grab &nbsp;|&nbsp;
     <b>P2</b> Arrows · Num0 jump · Num1 atk · Num2 spc · Num5 smash · Num3 shield · Num4 grab<br>
@@ -497,7 +505,12 @@
 <script src="modeljs/brent.js"></script>
 <script src="modeljs/justin.js"></script>
 <script src="modeljs/raechel.js"></script>
+<script src="modeljs/chris.js"></script>
+<script src="modeljs/blaine.js"></script>
+<script src="modeljs/sean.js"></script>
 <script src="anims.js"></script>
+<!-- one fighter's Meshy library clips retargeted onto fighters who did not buy their own (tools/retarget_meshy.js) -->
+<script src="anims_lib.js"></script>
 <script src="anims_ual.js"></script>
 <!-- each fighter's own motion-captured moves go here: anims_mc_<id>.js -->
 <script src="reskin.js"></script>

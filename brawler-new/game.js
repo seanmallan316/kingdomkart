@@ -383,6 +383,30 @@ const FIGHTERS = [
     weight: 84, walk: 4.4, run: 9.8, air: 5.3, airAcc: 0.6, grav: 0.38, fall: 6.4, ff: 9.6, jump: 12.0, hop: 7.6, djump: 10.8, jumps: 3,
     scale: 0.9, power: 0.92, speed: 0.88, reach: 0.96, sp: { n: 'starToss', s: 'sparkleDash', u: 'rocket', d: 'diveKick' },
   },
+  {
+    // Chris: 3D model from her three photos (Meshy). Height 5'5" assumed until confirmed. Placeholder hard-hitting
+    // all-rounder until her moves video arrives.
+    id: 'chris', name: 'CHRIS', voice: 'ywoman', vrate: 1.0, finale: 'rush', trail: ['#3ff0c8', '#14a38b'],
+    blurb: 'Hard-hitting and steady. Charge shot, dash strike, quake.', color: '#14a38b', dark: '#0e1a1c', accent: '#7fffe0', acc: 'kid',
+    weight: 104, walk: 4.0, run: 8.8, air: 4.7, airAcc: 0.5, grav: 0.47, fall: 7.4, ff: 10.6, jump: 12.6, hop: 8.0, djump: 12.0, jumps: 2,
+    scale: 1.083, power: 1.08, speed: 1.0, reach: 1.04, sp: { n: 'chargeShot', s: 'dashStrike', u: 'rocket', d: 'quake' },
+  },
+  {
+    // Blaine: 3D model from three of his photos (Meshy; the sneaker swoosh was painted out and the back view's boots
+    // recoloured to match his white sneakers). Height 5'10" assumed until confirmed. Placeholder heavy bruiser moveset.
+    id: 'blaine', name: 'BLAINE', voice: 'man', vrate: 1.04, finale: 'beam', trail: ['#ffb347', '#3d5a80'],
+    blurb: 'Heavy bruiser. Charge punch, armoured charge, quake.', color: '#3d5a80', dark: '#141c2a', accent: '#ffb347', acc: 'kid',
+    weight: 122, walk: 3.6, run: 7.6, air: 4.2, airAcc: 0.44, grav: 0.52, fall: 7.9, ff: 11.1, jump: 12.8, hop: 8.2, djump: 12.4, jumps: 2,
+    scale: 1.167, power: 1.14, speed: 1.08, reach: 1.06, sp: { n: 'chargePunch', s: 'shoulder', u: 'rocketHeavy', d: 'quake' },
+  },
+  {
+    // Sean: 3D model from his four photos (Meshy; the sneaker and jacket logos were painted out first). Height 4'8"
+    // assumed until confirmed. Placeholder fast, rolling moveset until his moves video arrives.
+    id: 'sean', name: 'SEAN', voice: 'boy', vrate: 0.97, finale: 'storm', trail: ['#9b5cff', '#1597a8'],
+    blurb: 'Fast and fearless. Blaster, cannonball, spiral, dive kick.', color: '#1597a8', dark: '#121a2a', accent: '#9b5cff', acc: 'kid',
+    weight: 88, walk: 4.4, run: 9.8, air: 5.0, airAcc: 0.58, grav: 0.46, fall: 7.2, ff: 10.6, jump: 12.4, hop: 7.9, djump: 11.8, jumps: 2,
+    scale: 0.933, power: 0.95, speed: 0.9, reach: 0.98, sp: { n: 'blaster', s: 'cannonball', u: 'spiral', d: 'diveKick' },
+  },
 ];
 // ?dummy in the address shows the test dummy in the menus (for testing only)
 if (/[?&]dummy\b/.test(location.search)) for (const d of FIGHTERS) if (d.id === 'dummy') d.hidden = false;
