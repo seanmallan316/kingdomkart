@@ -40,9 +40,11 @@
       const legs = fl + fr + bl + br;
       if (P.drag) { // dragon: tail measured along its curl, wings kept off the legs and the tail
         const along = Math.max(0, -z) + Math.max(0, ax - 0.2) * (z < 0.05 ? 1 : 0);
-        const tl = ss(0.02, 0.62, along) * ss(-0.13, -0.23, y) * (z < 0.05 ? 1 : 0) * (1 - legs);
+        // out past the body (where the wing fingers hang) the tail is only what lies on the floor, below the lowest wing tip
+        const out = ss(0.38, 0.46, ax), tl = ss(0.02, 0.62, along) * ss(-0.13, -0.23, y) * (1 - out + out * ss(-0.29, -0.33, y)) * (z < 0.05 ? 1 : 0) * (1 - legs);
         const hd = ss(P.neckZ - 0.1, P.neckZ + 0.14, z) * (1 - legs) * ss(P.belly + 0.05, P.belly + 0.25, y) * (1 - ss(0.3, 0.42, ax));
-        const inZ = ss(-0.34, -0.2, z) * (1 - ss(0.36, 0.5, z)) * ss(-0.24, -0.12, y) * (1 - legs) * (1 - tl);
+        // the wing reaches down to its finger tips, but only outside the body's width (so the thighs don't follow the wings)
+        const inZ = ss(-0.34, -0.2, z) * (1 - ss(0.36, 0.5, z)) * Math.max(ss(-0.24, -0.12, y), ss(0.4, 0.48, ax) * ss(-0.34, -0.29, y)) * (1 - legs) * (1 - tl);
         const w1 = ss(0.22, 0.4, ax) * inZ, w2 = ss(0.5, 0.74, ax) * inZ;
         B.set([tl, hd * (1 - w1), z, ss(P.kneeY + 0.06, P.kneeY - 0.06, y)], i * 4); K.set([w1, w2], i * 2);
         continue;
@@ -124,16 +126,20 @@
       const m = scene.clone(true); m.updateMatrixWorld(true);
       const parts = []; m.traverse(o => { if (o.isMesh) parts.push(o); });
       const box = new T.Box3().setFromObject(m), size = box.getSize(new T.Vector3()), c = box.getCenter(new T.Vector3()), norm = 1.9 / Math.max(size.x, size.y, size.z);
-      const grp = new T.Group();
+      const grp = new T.Group(), skinned = P.drag && window.DRAGONRIG, geos = [], meshes = [];
       for (const o of parts) {
-        const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.translate(-c.x, -c.y, -c.z); geo.scale(norm, norm, norm); bake(geo, P);
+        const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.translate(-c.x, -c.y, -c.z); geo.scale(norm, norm, norm); bake(geo, P); geos.push(geo);
         const mat = o.material.clone(); mat.metalness = 0; mat.roughness = 0.85; mat.envMapIntensity = 0.45; if (P.wings) mat.side = T.DoubleSide;
-        mat.onBeforeCompile = sh => { Object.assign(sh.uniforms, U); sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT).replace('#include <begin_vertex>', BODY); };
-        const mm = new T.Mesh(geo, mat); mm.castShadow = true; mm.receiveShadow = true; mm.frustumCulled = false; grp.add(mm); rig.look.mats.push(mat);
+        if (!skinned) mat.onBeforeCompile = sh => { Object.assign(sh.uniforms, U); sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT).replace('#include <begin_vertex>', BODY); };
+        meshes.push([geo, mat]); rig.look.mats.push(mat);
       }
+      // Pink Fluff gets a real skeleton (dragonrig.js): ~40 bones fitted to the model, skinned, moving in 3D
+      const drig = skinned ? window.DRAGONRIG.make(geos, grp) : null;
+      for (const [geo, mat] of meshes) { const mm = drig ? new T.SkinnedMesh(geo, mat) : new T.Mesh(geo, mat); mm.castShadow = true; mm.receiveShadow = true; mm.frustumCulled = false; grp.add(mm); }
       const k = H / (size.y * norm); grp.scale.setScalar(k); grp.position.y = (size.y * norm / 2) * k; // feet on the ground
       rig.len = Math.max(size.x, size.z) * norm * k;
       inner.add(grp); inner.position.y = -H * 0.5; body.position.y = H * 0.5;
+      if (drig) { root.updateMatrixWorld(true); const sk = new T.Skeleton(drig.bones); grp.traverse(o => { if (o.isSkinnedMesh) o.bind(sk); }); rig.drig = drig; }
     });
     return rig;
   }
@@ -338,6 +344,8 @@
     U.uHead.value.set(e('hp', J.hp), e('hy', J.hy), e('hl', J.hl), 0);
     U.uSpine.value.set(e('arch', J.arch), e('sway', J.sway), Math.sin(t * 0.07), P.neckZ);
     U.uWing.value.set(e('a1', J.a1), e('a2', J.a2), e('swp', J.sweep), P.neckY);
+    if (rig.drig) DRAGONRIG.drive(rig.drig, { hip: [M.h0, M.h1, M.h2, M.h3], knee: [M.k0, M.k1, M.k2, M.k3], wag: M.wag, tl: M.tl, tsw: M.tsw, tailT: rig.tailT,
+      hp: M.hp, hy: M.hy, hl: M.hl, arch: M.arch, sway: M.sway, a1: M.a1, a2: M.a2, swp: M.swp }, t, S, rig);
     // whole body: bob, lunge, pitch (rears up about the hind feet), flips spin about the middle
     const pitch = e('pitch', J.pitch), lunge = e('lunge', J.lunge), bob = e('bob', J.bob), sy = e('sy', J.sy), side = e('side', J.side);
     const rearUp = Math.min(0, pitch) * -1, back = (rig.len || H * 2) * 0.42;

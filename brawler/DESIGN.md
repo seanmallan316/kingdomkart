@@ -473,3 +473,11 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
 - Rosie's Family Finale is now the clone burst from her video (`clones` in items.js + `clones.js`): she rises upright
   in an energy ring, eight glowing see-through copies of her 3D model (claw-dash pose, facing their flight) burst out
   in a ring clawing anyone in their path, swing back to dive at the nearest foes, and everyone hit is launched at once.
+- Pink Fluff (fighter) has a real 44-bone skeleton (`dragonrig.js`), fitted to the model when it loads: hips + 3-bone
+  spine, a 5-bone neck and head, a 10-bone tail traced along its real curl (path length through the shape, not a
+  straight line), 4 bones along each wing's leading edge, 4 per leg. Skin weights per body part by distance to each
+  bone segment; out past the body, wing vs tail is decided by distance across the mesh surface (so the wing's trailing
+  edge never sticks to the tail under it); the skull moves as one piece. The pose system's targets now drive the bones
+  with 3D layers on top: neck S-curve that coils and strikes and turns to look at the camera, a tail wave in both side
+  and up-down directions, wings that raise, sweep and fold at the elbow and wrist with the outer part lagging, spine
+  flex and sway, and three-joint legs. (The old vertex-shader hinges remain for River and Rosie.)
