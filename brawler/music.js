@@ -1,30 +1,35 @@
 'use strict';
-// Menu music: the family's own song plays on the title screen, the main menu and fighter select, looping. It starts on
-// the first tap or key (browsers block sound before that), dips under the intro video, fades out when a match starts
-// and fades back in on the menus. It follows the sound volume in Options.
+// Music: the family's own songs. The menu song plays on the title, main menu, fighter select, options, story and Locker
+// screens; each stage can have its own song during matches (music/<theme>.mp3, e.g. treehouse). Songs loop, start on
+// the first tap / key (browsers block sound before that), cross-fade when the screen changes, dip under the intro video
+// and follow the sound volume in Options.
 (() => {
-  const src = window.CLASH_MUSIC && window.CLASH_MUSIC.menu; if (!src) return;
-  const a = new Audio(src); a.loop = true; a.preload = 'auto'; a.volume = 0;
-  let want = 0, cur = 0, started = false;
+  const SRC = window.CLASH_MUSIC || {}; if (!Object.keys(SRC).length) return;
+  const tracks = {}; let started = false, last = performance.now();
+  const track = name => { if (!SRC[name]) return null; if (!tracks[name]) { const a = new Audio(SRC[name]); a.loop = true; a.preload = 'auto'; a.volume = 0; tracks[name] = { a, v: 0 }; } return tracks[name]; };
   const vol = () => { try { return (typeof Sfx !== 'undefined' && Sfx.volume != null ? Sfx.volume : 1) * 0.55; } catch (e) { return 0.55; } };
-  function target() {
-    const fight = typeof G !== 'undefined' && (G.mode === 'fight' || G.mode === 'results');
+  function want() {
+    if (typeof G === 'undefined') return { name: 'menu', k: 1 };
+    if (G.mode === 'fight' || G.mode === 'results') {
+      const th = G.stage && G.stage.theme; const name = th && SRC[th] ? th : null;
+      return { name, k: G.paused ? 0.35 : G.mode === 'results' ? 0.6 : 0.8 };
+    }
     const intro = document.getElementById('intro'), vid = intro && intro.classList.contains('vid');
-    const menus = ['title', 'hub', 'select', 'options', 'locker', 'story'].some(id => { const e = document.getElementById(id); return e && e.classList.contains('on'); });
-    return !fight && menus ? (vid ? 0.15 : 1) : 0;
+    return { name: 'menu', k: vid ? 0.15 : 1 };
   }
-  function start() { if (started) return; started = true; a.play().catch(() => { started = false; }); }
-  addEventListener('pointerdown', start, true); addEventListener('keydown', start, true);
-  addEventListener('gamepadconnected', start);
-  let last = performance.now();
+  function start() { if (started) return; started = true; const w = want(); const t = w.name && track(w.name); if (t) t.a.play().catch(() => { started = false; }); }
+  addEventListener('pointerdown', start, true); addEventListener('keydown', start, true); addEventListener('gamepadconnected', start);
   setInterval(() => {
     const now = performance.now(), dt = Math.min(1000, now - last) / 1000; last = now;
-    want = target() * vol();
-    cur += (want - cur) * Math.min(1, dt * (want > cur ? 1.4 : 3)); // about 1.5 s fade in, 0.7 s fade out
-    if (Math.abs(cur - want) < 0.002) cur = want;
-    a.volume = Math.max(0, Math.min(1, cur));
-    if (started && cur > 0.003 && a.paused) a.play().catch(() => {});
-    if (cur <= 0.003 && !a.paused && want === 0) a.pause();
+    const w = want(); if (w.name) track(w.name);
+    for (const name in tracks) {
+      const t = tracks[name], target = started && name === w.name ? w.k * vol() : 0;
+      t.v += (target - t.v) * Math.min(1, dt * (target > t.v ? 1.4 : 3));
+      if (Math.abs(t.v - target) < 0.002) t.v = target;
+      t.a.volume = Math.max(0, Math.min(1, t.v));
+      if (target > 0 && t.a.paused) { if (name !== 'menu' && t.a.currentTime > 0 && t.v < 0.01) t.a.currentTime = 0; t.a.play().catch(() => {}); }
+      if (t.v <= 0.003 && target === 0 && !t.a.paused) t.a.pause();
+    }
   }, 50);
-  window.MENU_MUSIC = a;
+  window.MENU_MUSIC = track('menu').a; window.MUSIC = tracks;
 })();

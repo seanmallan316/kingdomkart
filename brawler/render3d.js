@@ -339,7 +339,7 @@ const R3 = (() => {
     for (const id of ids) {
       try {
         const str = atob(src[id]), buf = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) buf[i] = str.charCodeAt(i);
-        loader.parse(buf.buffer, '', g => { MODELS[id] = g.scene; delete pCache[id]; fin(); }, e => { console.warn('model failed', id, e); fin(); });
+        loader.parse(buf.buffer, '', g => { if (window.RESKIN && !/[?&]rawskin/.test(location.search)) window.RESKIN(g.scene); MODELS[id] = g.scene; delete pCache[id]; fin(); }, e => { console.warn('model failed', id, e); fin(); });
       } catch (e) { console.warn('model failed', id, e); fin(); }
     }
   }
