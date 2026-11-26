@@ -122,6 +122,15 @@ After the Unreal Game Animation Sample (motion matching): walk / run clips advan
 sliding), the body leans into acceleration and back when braking, a pivot step when reversing at speed, landings
 compress on a spring, and the chest and head track the nearest opponent (not during attacks).
 
+## Smoothness (frame rate)
+- Adaptive resolution (render3d.js `perfTick`): starts at the screen's pixel ratio capped at 2 (1.5 on touch devices),
+  drops by 15% steps (down to 60%) whenever frames average slower than ~45 fps and climbs back when there is room.
+  Touch devices also get 2048 shadows, about half the grass, and a 1.5x HUD canvas.
+- Every animation runs in real time between game ticks: clip times include the fraction to the next tick (`G.alpha`),
+  the walk / run stride and the pets' gait, tail and joint easing use real elapsed time, and bone blending is frame-rate
+  independent. (Before, a slow phone made characters both choppy and slower.)
+- Options > Show FPS displays the frame rate and current render resolution.
+
 ## Menu music (music.js, music/menu.mp3)
 The family's own song (made with Suno) loops on the title, main menu, fighter select, options, story and Locker
 screens. It starts on the first tap / key, dips under the intro video, fades out for matches and back in on the menus,

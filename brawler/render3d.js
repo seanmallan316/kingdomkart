@@ -21,7 +21,7 @@ const R3 = (() => {
     sc.add(new THREE.HemisphereLight(0xe6eeff, 0x4a3d55, 2.1));
     const d = new THREE.DirectionalLight(0xfff1dc, 2.6); d.position.set(-420, 900, 700);
     if (forStage) {
-      d.castShadow = true; d.shadow.mapSize.set(4096, 4096); d.shadow.radius = 3;
+      d.castShadow = true; const sm = matchMedia('(pointer: coarse)').matches ? 2048 : 4096; d.shadow.mapSize.set(sm, sm); d.shadow.radius = 3;
       const c = d.shadow.camera; c.left = -800; c.right = 800; c.top = 800; c.bottom = -400; c.near = 100; c.far = 3000;
       d.shadow.bias = -0.0025; d.shadow.normalBias = 4.5;
     }
@@ -67,17 +67,37 @@ const R3 = (() => {
   }
   let lastT = 0;
   function present() {
+    perfTick();
     const now = performance.now(), dt = now - lastT; lastT = now;
     if (worldOn && aoOn && ensureComposer()) {
       if (dt > 0 && dt < 200) { slow = dt > 26 ? slow + 1 : Math.max(0, slow - 2); if (slow > 120) { aoOn = false; console.info('AO switched off for speed'); } }
       composer.render();
     } else renderer.render(scene, camera);
   }
+  // ---- adaptive quality: keep the frame rate up by lowering the render resolution when frames run slow
+  // (phones with very sharp screens were drawing millions of pixels a frame) and raising it again when there is room
+  const MOBILE = matchMedia('(pointer: coarse)').matches;
+  const PR_MAX = Math.min(MOBILE ? 1.5 : 2, window.devicePixelRatio || 1);
+  let prNow = PR_MAX, ema = 16.7, nFr = 0, lastPerf = performance.now(), fpsShown = 60, fpsN = 0, fpsT = performance.now();
+  const fpsEl = document.createElement('div'); fpsEl.id = 'fpsMeter';
+  fpsEl.style.cssText = 'position:fixed;right:8px;top:8px;z-index:70;font:800 12px Trebuchet MS,sans-serif;color:#fff;background:rgba(0,0,0,.55);padding:3px 8px;border-radius:8px;pointer-events:none;display:none';
+  document.body.appendChild(fpsEl);
+  function perfTick() {
+    const now = performance.now(), dt = now - lastPerf; lastPerf = now;
+    if (dt > 0) ema += (Math.min(dt, 120) - ema) * 0.08;
+    fpsN++; if (now - fpsT > 500) { fpsShown = Math.round(fpsN * 1000 / (now - fpsT)); fpsN = 0; fpsT = now; fpsEl.textContent = fpsShown + ' FPS · ' + Math.round(prNow * 100) + '% res'; }
+    fpsEl.style.display = window.SHOW_FPS ? 'block' : 'none';
+    if (++nFr < 30) return; nFr = 0;
+    let nxt = prNow;
+    if (ema > 22 && prNow > 0.6) nxt = Math.max(0.6, prNow - 0.15);       // under ~45 fps: drop resolution
+    else if (ema < 14.5 && prNow < PR_MAX) nxt = Math.min(PR_MAX, prNow + 0.1); // smooth with room to spare: sharpen
+    if (nxt !== prNow) { prNow = nxt; resize(); }
+  }
   function resize() {
     if (!ok) return;
-    renderer.setPixelRatio(Math.min(2.5, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(prNow);
     renderer.setSize(innerWidth, innerHeight, false);
-    if (composer) { composer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1)); composer.setSize(innerWidth, innerHeight); }
+    if (composer) { composer.setPixelRatio(Math.min(1.5, prNow)); composer.setSize(innerWidth, innerHeight); }
   }
   addEventListener('resize', resize);
 
@@ -479,8 +499,10 @@ const R3 = (() => {
     const run = Math.max(1, f.def.run), S = f.state;
     // stride: the walk / run clips advance with distance covered, so feet plant instead of sliding
     const sp = Math.abs(f.vx);
-    if (S === 'walk') rig.locoT = (rig.locoT || 0) + sp / Math.max(1, f.def.walk) / 60 * 1.05;
-    else if (S === 'run') rig.locoT = (rig.locoT || 0) + sp / run / 60 * 1.25;
+    const now = performance.now(), rdt = Math.min(0.1, (now - (m.tNow || now)) / 1000); m.tNow = now;
+    const simRate = G.paused ? 0 : 60 * (G.speed || 0.8); // sim frames per real second
+    if (S === 'walk') rig.locoT = (rig.locoT || 0) + sp / Math.max(1, f.def.walk) / 60 * 1.05 * simRate * rdt;
+    else if (S === 'run') rig.locoT = (rig.locoT || 0) + sp / run / 60 * 1.25 * simRate * rdt;
     // lean: forward with speed and acceleration, back when braking hard
     const acc = f.vx - m.vx; m.vx = f.vx;
     let lean = 0;
@@ -515,7 +537,7 @@ const R3 = (() => {
     let hip = rig.hipRest;
     if (pick && pick.c) {
       for (const r of rig.rest) r.target.copy(r.local);
-      const adv = pick.loop || (f && f.state === 'attack') ? (G.alpha || 0) / 60 : 0;
+      const adv = f && !G.paused ? (G.alpha || 0) / 60 : 0; // between game ticks, so motion is continuous at any frame rate
       if (rig.lastClip !== pick.c) { rig.lastClip = pick.c; rig.blendT = 0; }
       const hy = sampleClip(rig, pick.c, pick.time + adv, pick.loop);
       if (!pick.air) hip = clamp(rig.hipRest + hy * rig.unit, rig.hipRest * 0.18, rig.hipRest * 1.6);
@@ -543,7 +565,8 @@ const R3 = (() => {
     // ease every bone toward its target so moves flow into each other
     // a new clip fades in over a few frames (faster for attacks so hits still read instantly)
     rig.blendT = (rig.blendT || 0) + 1;
-    const fast = f && f.state === 'attack', k = !f ? 1 : Math.min(1, (fast ? 0.32 : 0.2) + rig.blendT * (fast ? 0.06 : 0.035));
+    const nowT = performance.now(), fr = Math.max(0.2, Math.min(6, (nowT - (rig.tLast || nowT)) / 16.667)); rig.tLast = nowT;
+    const fast = f && f.state === 'attack', k0 = !f ? 1 : Math.min(1, (fast ? 0.32 : 0.2) + rig.blendT * (fast ? 0.06 : 0.035)), k = 1 - Math.pow(1 - k0, fr); // frame-rate independent blend
     rig.hipNow = rig.hipNow == null || !f ? hip : rig.hipNow + (hip - rig.hipNow) * 0.3;
     rig.spin.position.y = rig.hipNow;
     for (const r of rig.rest) r.b.quaternion.slerp(r.target, k);
@@ -734,7 +757,7 @@ const R3 = (() => {
     camera.aspect = innerWidth / innerHeight; camera.far = 14000;
     const par = window.MENU_PARALLAX || { x: 0, y: 0 };
     camera.position.set(menuCam.x + sway + par.x * 46, menuCam.y - par.y * 26, menuCam.d); camera.lookAt(menuCam.lx, menuCam.ly, 0); camera.updateProjectionMatrix();
-    renderer.render(scene, camera); return true;
+    perfTick(); renderer.render(scene, camera); return true;
   }
 
   // world positions (sim coordinates) of a fighter's hands, feet and sword tip, for motion trails

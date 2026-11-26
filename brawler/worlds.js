@@ -414,7 +414,7 @@
       // hedges, trees and the street beyond
       const hedge = M('#3f8f45', { roughness: 1 }), hedge2 = M('#57a85a', { roughness: 1 });
       for (let k = 0; k < 14; k++) { const x = -2200 + k * 340; if (Math.abs(x) > 600) canopy(g, x, 80, -1150 + (k % 2) * 40, 170, 120, 130, ['#1f4d22', '#3b8a3c', '#86c25a'], 220, 70, 'hedge'); }
-      grassField(g, -2600, 2600, 190, 320, 2600, -8, 11); grassField(g, -2600, 2600, -1150, -185, 7000, -8, 17);
+      const gq = matchMedia('(pointer: coarse)').matches ? 0.45 : 1; grassField(g, -2600, 2600, 190, 320, Math.round(2600 * gq), -8, 11); grassField(g, -2600, 2600, -1150, -185, Math.round(7000 * gq), -8, 17);
       const kerb = M('#c9c5bb', { roughness: 0.9 }); add(g, rbox(m.x2 - m.x1 + 40, 16, 22, 5), kerb, 0, -2, 171); add(g, rbox(m.x2 - m.x1 + 40, 16, 22, 5), kerb, 0, -2, -171);
       tree(g, -2300, -10, -1700, 1300, 70, ['#5a4a1e', '#a0782e', '#ffc25a'], 200); tree(g, 2400, -10, -1800, 1250, 70, ['#3d5a22', '#7c9a3a', '#e0c060'], 200);
       const ball = add(g, new T.SphereGeometry(36, 24, 18), M('#ff7a1e', { roughness: 0.6 }), m.x1 + 160, 36, -120); world.ball = { o: ball, x: m.x1 + 160, vx: 0, vy: 0, y: 36, spin: 0, min: m.x1 + 40, max: m.x2 - 40 };

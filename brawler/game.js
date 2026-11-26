@@ -1404,7 +1404,7 @@ function step() {
 // ---------------------------------------------------------------- render
 const cv = document.getElementById('c'); let ctx = cv.getContext('2d'); const mainCtx = ctx;
 let VW = 0, VH = 0, DPR = 1;
-function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); VW = innerWidth; VH = innerHeight; cv.width = VW * DPR; cv.height = VH * DPR; }
+function resize() { DPR = Math.min(matchMedia('(pointer: coarse)').matches ? 1.5 : 2, window.devicePixelRatio || 1); VW = innerWidth; VH = innerHeight; cv.width = VW * DPR; cv.height = VH * DPR; }
 addEventListener('resize', resize); resize();
 
 function updateCam() {

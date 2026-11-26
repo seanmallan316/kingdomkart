@@ -274,6 +274,10 @@
   const fxBtns = () => el('optFx').querySelectorAll('button').forEach(b => b.classList.toggle('on', (b.dataset.q === '1') === G.fxLow));
   el('optFx').onclick = e => { const b = e.target.closest('button'); if (!b) return; G.fxLow = b.dataset.q === '1'; save.set('fxLow', G.fxLow); fxBtns(); Sfx.blip(); };
   fxBtns();
+  window.SHOW_FPS = !!save.get('fps', false);
+  const fpsBtns = () => el('optFps').querySelectorAll('button').forEach(b => b.classList.toggle('on', (b.dataset.f === '1') === window.SHOW_FPS));
+  el('optFps').onclick = e => { const b = e.target.closest('button'); if (!b) return; window.SHOW_FPS = b.dataset.f === '1'; save.set('fps', window.SHOW_FPS); fpsBtns(); Sfx.blip(); };
+  fpsBtns();
   G.speed = +save.get('speed', 0.8) || 0.8;
   const spBtns = () => el('optSpeed').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.s === G.speed));
   el('optSpeed').onclick = e => { const b = e.target.closest('button'); if (!b) return; G.speed = +b.dataset.s; save.set('speed', G.speed); spBtns(); Sfx.blip(); };

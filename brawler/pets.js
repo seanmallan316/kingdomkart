@@ -132,12 +132,14 @@
   function pose(rig, f, rot, a, tMenu, once) {
     const H = rig.H, P = rig.plan, dog = rig.pet === 'dog', cat = rig.pet === 'cat', drg = rig.pet === 'dragon';
     const t = f ? f.anim : (tMenu || 0), S = f ? f.state : 'idle';
+    // everything below runs in real time, whatever the frame rate (fr = how many 60 Hz frames this draw covers)
+    const nowT = performance.now(), fr = Math.max(0, Math.min(6, (nowT - (rig.tLast || nowT)) / 16.667)) * (f && G.paused ? 0 : 1); rig.tLast = nowT;
     const J = { hip: [0, 0, 0, 0], knee: [0, 0, 0, 0], arch: 0, sway: 0, hp: 0, hy: 0, hl: 0, wag: dog ? 0.06 : 0.035, tlift: 0, tsw: 0, tspd: dog ? 0.35 : 0.06, bob: 0, pitch: 0, flip: 0, lunge: 0, side: 0, sy: 1, a1: 0.2, a2: 0.1, sweep: 0 };
     if (!f && once) rig.happy = 80;
     const speed = f ? Math.abs(f.vx) / Math.max(1, f.def.run) : 0;
     // gait cycle advances with ground speed so the paws plant instead of sliding
     const gaitHz = S === 'run' ? 0.03 + speed * 0.05 : S === 'walk' ? 0.025 : 0;
-    rig.ph = (rig.ph + gaitHz) % 1;
+    rig.ph = (rig.ph + gaitHz * fr * (G.speed || 0.8) / 0.8) % 1;
     const ph = rig.ph * TAU, sn = o => Math.sin(ph + o * TAU), lift = o => Math.max(0, Math.sin(ph + o * TAU + Math.PI / 2));
     function gait(kind, A, K) {
       // order: FL, FR, BL, BR. walk: four-beat (BL, FL, BR, FR). trot: diagonal pairs. gallop/bound: front pair then back pair.
@@ -203,12 +205,12 @@
       }
     }
     // ease every joint toward its target (fast for attacks so hits still read, softer otherwise)
-    const M = rig.mem, k = S === 'attack' ? 0.4 : 0.2;
+    const M = rig.mem, k = 1 - Math.pow(1 - (S === 'attack' ? 0.4 : 0.2), Math.max(0.2, fr));
     const e = (key, v) => (M[key] = M[key] == null ? v : ease(M[key], v, k));
     const U = rig.U;
     U.uHip.value.set(e('h0', J.hip[0]), e('h1', J.hip[1]), e('h2', J.hip[2]), e('h3', J.hip[3]));
     U.uKnee.value.set(e('k0', J.knee[0]), e('k1', J.knee[1]), e('k2', J.knee[2]), e('k3', J.knee[3]));
-    rig.tailT += J.tspd;
+    rig.tailT += J.tspd * fr;
     U.uTail.value.set(rig.tailT, e('wag', J.wag), e('tl', J.tlift), e('tsw', J.tsw));
     U.uHead.value.set(e('hp', J.hp), e('hy', J.hy), e('hl', J.hl), 0);
     U.uSpine.value.set(e('arch', J.arch), e('sway', J.sway), Math.sin(t * 0.07), P.neckZ);
