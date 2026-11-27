@@ -390,7 +390,7 @@
     if (!G.items) reset();
     if (G.countdown > 0 || G.ending) { cinePost(); return; }
     cinePost();
-    if (on() && !G.cine) {
+    if (on() && !G.cine && !(G.net && G.net.guest)) { // online: items and the Super Orb come from the host
       const loose = G.items.filter(i => !i.dead && !i.held).length;
       if (--G.boxT <= 0) { if (loose < 4) spawnBox(); G.boxT = rand(480, 780); }
       if (!G.orb && !G.fighters.some(f => f.final) && --G.orbT <= 0) spawnOrb();

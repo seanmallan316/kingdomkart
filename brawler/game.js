@@ -1397,7 +1397,7 @@ function step() {
     if (G.timeLeft === 0) { G.timeUp = true; G.ending = 1; G.banner = { text: 'TIME!', t: 999, color: '#ffcf3f', big: true }; Sfx.boom(); if (Sfx.announce) Sfx.announce('annTime'); }
   }
   // end
-  if (!G.ending) {
+  if (!G.ending && !(G.net && G.net.guest)) { // online: the host decides the result
     const left = G.fighters.filter(alive), sides = new Set(left.map(f => f.team || 'solo' + f.port));
     if (G.cfg.training ? false : G.fighters.length > 1 ? sides.size <= 1 : left.length === 0) { G.ending = 1; G.banner = { text: 'GAME!', t: 999, color: '#ffcf3f', big: true }; Sfx.boom(); }
   } else if (++G.ending > 150) showResults();
@@ -1789,6 +1789,7 @@ $('bFight').onclick = () => {
   Sfx.init(); startMatch(JSON.parse(JSON.stringify(cfg)));
 };
 function togglePause() {
+  if (G.net) return; // no pausing an online match
   if (G.ending) return;
   G.paused = !G.paused; showScreen(G.paused ? 'pause' : null);
   if (!G.paused && Touch.on) $('touch').classList.add('on');

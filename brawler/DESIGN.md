@@ -481,3 +481,16 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
   with 3D layers on top: neck S-curve that coils and strikes and turns to look at the camera, a tail wave in both side
   and up-down directions, wings that raise, sweep and fold at the elbow and wrist with the outer part lagging, spine
   flex and sway, and three-joint legs. (The old vertex-shader hinges remain for River and Rosie.)
+
+## Online play with room codes (`net.js`) and the shareable link
+- The game is published as a claude.ai Artifact (multi-file; the page is index.html in body-content form) with the
+  `room` capability. `net.js` adds an ONLINE tile: CREATE ROOM makes a 4-letter code (a named room `sfs-<code>`),
+  JOIN enters one. Lobby: everyone picks a fighter; the host picks stage, stocks, time and CPUs, then starts.
+- Built on presence only (any admitted viewer may set it): guests publish their controller (held buttons + a press
+  counter per button so taps are never lost); the host runs the real match and publishes a compact snapshot
+  (fighters, items, Super Orb, finale, timer, result, CPU inputs; about 0.8 KB, under the 4 KB presence limit).
+  Every screen simulates from everyone's inputs and guests are corrected by the host's snapshot. Guests don't spawn
+  items or decide the result; no pausing online.
+- Limits: players must open the Claude link signed in and have the page shared with them (public-link visitors can't
+  join rooms); up to 8 slots. Tested with two browser tabs against a stand-in for the room service, not yet with
+  two real devices.

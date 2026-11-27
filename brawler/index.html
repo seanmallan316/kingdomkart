@@ -371,7 +371,7 @@
 
   /* phones turned sideways: the hub's six tiles in a 3 x 2 grid that fits the height; Options and the other cards scroll */
   @media (max-height:560px) and (orientation:landscape) {
-    #hub .tiles { grid-template-columns:repeat(3, 1fr) !important; grid-auto-rows:minmax(0, calc((100vh - 120px) / 2)) !important; width:min(900px, 96vw) !important; gap:8px; }
+    #hub .tiles { grid-template-columns:repeat(4, 1fr) !important; grid-auto-rows:minmax(0, calc((100vh - 120px) / 2)) !important; width:min(900px, 96vw) !important; gap:8px; }
     #hub .tile.tall { grid-row:auto; } #hub .tile.tall .art.hero { opacity:.9; }
     #hub .tile small { font-size:11px; line-height:1.25; max-width:70% !important; } #hub .tile b { font-size:18px; }
     .screen > .card { max-height:calc(100vh - 12px); overflow-y:auto; overscroll-behavior:contain; padding-top:10px; padding-bottom:10px; }
@@ -536,5 +536,6 @@
 <script src="musicjs.js"></script>
 <script src="music.js"></script>
 <script src="announce.js"></script>
+<script src="net.js"></script>
 </body>
 </html>
