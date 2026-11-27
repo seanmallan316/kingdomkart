@@ -494,3 +494,8 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
 - Limits: players must open the Claude link signed in and have the page shared with them (public-link visitors can't
   join rooms); up to 8 slots. Tested with two browser tabs against a stand-in for the room service, not yet with
   two real devices.
+- Public web address (Macaly app "Super Family Smash", chat id ytdg3kpr8ur785v7swa6qoqg): the game's files live in the
+  app's public/sfs (copied from this branch), the home route redirects to /sfs/index.html and hands it the app's
+  Convex URL. There `macaly-room.js` supplies the room interface over Convex (`convex/rooms.ts`: list / set / leave on
+  the `sfsPresence` table, rows refreshed ~10 times a second, quiet rows expire). To update the site: push here, then
+  in the app's workspace re-copy brawler/ files into public/sfs and publish.
