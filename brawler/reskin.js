@@ -38,12 +38,13 @@
     const bm = mesh.bindMatrix, v = new T.Vector3(), ab = new T.Vector3(), av = new T.Vector3();
     const W = new Float32Array(n * nb);
     const SI0 = geo.attributes.skinIndex, SW0 = geo.attributes.skinWeight;
+    const comp = (a, i, c) => (c === 0 ? a.getX(i) : c === 1 ? a.getY(i) : c === 2 ? a.getZ(i) : a.getW(i)); // (this three.js build has no getComponent)
     const partSum = { core: 0, armL: 0, armR: 0, legL: 0, legR: 0 };
     for (let i = 0; i < n; i++) {
       v.fromBufferAttribute(P, i).applyMatrix4(bm);
       // the body part Meshy mostly gave this vertex to
       for (const k in partSum) partSum[k] = 0;
-      for (let c = 0; c < 4; c++) { const w = SW0.getComponent(i, c); if (w > 0) partSum[seg[SI0.getComponent(i, c)].part] += w; }
+      for (let c = 0; c < 4; c++) { const w = comp(SW0, i, c); if (w > 0) partSum[seg[comp(SI0, i, c)].part] += w; }
       let part = 'core', pw = -1; for (const k in partSum) if (partSum[k] > pw) { pw = partSum[k]; part = k; }
       // within that part: Meshy's weights (cross-part pulls removed) mixed with distance-to-bone weights
       const allowed = j => seg[j].part === part || (part !== 'core' && /^(Spine|Hips)$/.test(bones[j].name) && (part.startsWith('arm') ? bones[j].name === 'Spine' : bones[j].name === 'Hips'));
@@ -54,7 +55,7 @@
         const t = Math.max(0, Math.min(1, av.dot(ab) / L2)); const d = av.addScaledVector(ab, -t).length() + 1e-3;
         let w = 1 / Math.pow(d, 4); if (seg[j].part !== part) w *= 0.25; D.push([j, w]); dtot += w;
       }
-      for (let c = 0; c < 4; c++) { const j = SI0.getComponent(i, c), w = SW0.getComponent(i, c); if (w > 0 && allowed(j)) { W[i * nb + j] += w * 0.5; tot += w * 0.5; } }
+      for (let c = 0; c < 4; c++) { const j = comp(SI0, i, c), w = comp(SW0, i, c); if (w > 0 && allowed(j)) { W[i * nb + j] += w * 0.5; tot += w * 0.5; } }
       if (tot > 0) for (let j = 0; j < nb; j++) W[i * nb + j] *= 0.5 / tot; // Meshy half, normalised to 0.5
       for (const [j, w] of D) W[i * nb + j] += (dtot > 0 ? w / dtot : 0) * (tot > 0 ? 0.5 : 1);
     }

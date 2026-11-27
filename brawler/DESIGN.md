@@ -527,3 +527,28 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
   boulders on slopes, wildflower drifts and a reflective lake. Counts halve on touch devices.
 - Used by Treehouse (valley, lake, forests, peaks) and Driveway (lawn flattening into rolling autumn country).
   Kitchen Table and Bunk Beds are indoors and unchanged.
+
+## Effekseer effects (`efk.js`, `efkjs.js`, `vendor/effekseer.min.js`)
+- The real Effekseer WebGL runtime (wasm, MIT) draws official Effekseer sample effects into the game canvas after the
+  frame (`R3.addPost`), through the game camera. `efkjs.js` packs the runtime + effects + textures/models/materials as
+  data; at boot they become blob URLs (with the file name after `#`, because the runtime tells images from data by
+  extension) and effects load ONE AT A TIME (the runtime tracks a single effect being loaded).
+- Triggers: hits -> ToonHit sized by damage; heavy hits add Blow1; KOs -> Light pillar; respawn / power-ups / getting
+  the finale -> Cure1; pulse attacks -> Ring1. The Laser samples are skipped (they need a sound file not packed).
+  Off with Options > Glow effects: Light.
+- Only compiled effects (.efk / .efkefc) can be played; the big sample pack ships as editor projects (.efkproj) that
+  need the Effekseer editor or EffekseerCore (.NET) to compile.
+
+## Recast crowd (`crowd.js`, `vendor/recast.bundle.js`)
+- recast-navigation-js (wasm, MIT). On the Driveway, a navmesh is generated from the yard's geometry (lawn minus the
+  driveway slab, hoop pole and bike) and a Detour crowd walks a flock of chickens along real paths: wander, peck,
+  avoid each other, and scatter from big hits. Timers are in seconds (the test renderer runs ~1 fps).
+
+## Destructible voxel towers (`voxels.js`)
+- Voxel Tools is Godot-only; this is a native voxel grid. Two themed towers per stage (6 x 11 x up to 3 cubes).
+  Attacks, pulses, fast props and launched fighters carve cubes; a flood fill from the ground row drops anything
+  unsupported; every removed cube becomes a Jolt rigid body (`PHYS.cube`). Scenery only, rebuilt each match.
+
+## Fix: clean skin weights now really run
+- `reskin.js` called `getComponent`, which this three.js build doesn't have, so the clothing-weight cleanup had been
+  failing silently on every model (a caught warning). It now uses getX/getY/getZ/getW.

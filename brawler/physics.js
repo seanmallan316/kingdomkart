@@ -195,7 +195,7 @@
       }
     }
     for (let i = PH.debris.length - 1; i >= 0; i--) { const d = PH.debris[i]; if (++d.t > d.life) { kill(d.b); group.remove(d.mesh); d.mesh.geometry.dispose(); d.mesh.material.dispose(); PH.debris.splice(i, 1); } else if (d.t > d.life - 40) d.mesh.material.opacity = (d.life - d.t) / 40; }
-    while (PH.debris.length > 44) { const d = PH.debris.shift(); kill(d.b); group.remove(d.mesh); }
+    while (PH.debris.length > 100) { const d = PH.debris.shift(); kill(d.b); group.remove(d.mesh); }
   }
   function physStep() {
     if (!PH.ready || !PH.on || !group) return;
@@ -225,6 +225,14 @@
     for (const p of PH.props) put(p); for (const d of PH.debris) put(d);
   });
 
+  // a loose cube of rubble (voxel towers use this): a real rigid body that tumbles, settles and fades
+  PH.cube = (x, y, z, h, color, vx, vy, vz) => {
+    if (!PH.ready || !PH.on || !group || PH.debris.length > 90) return;
+    const b = body(box(h * S, h * S, h * S), x * S, -y * S, z * S, J.EMotionType_Dynamic, { mass: 0.5, rest: 0.25, fric: 0.7, damp: 0.1, adamp: 0.35 });
+    BI.SetLinearVelocity(b.GetID(), V(vx, vy, vz || 0)); BI.SetAngularVelocity(b.GetID(), V((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12));
+    const mesh = new T.Mesh(new T.BoxGeometry(h * 2, h * 2, h * 2), new T.MeshStandardMaterial({ color, roughness: 0.7, transparent: true })); mesh.castShadow = true; group.add(mesh);
+    PH.debris.push({ b, mesh, t: 0, life: 200 + Math.random() * 80 });
+  };
   // ---------------------------------------------------------------- online: host's props are the truth
   const r2 = v => Math.round(v * 100) / 100;
   PH.netOut = () => PH.props.slice(0, 8).map(p => { const a = p.b.GetPosition(), r = p.b.GetRotation(), v = p.b.GetLinearVelocity(); return [r2(a.GetX()), r2(a.GetY()), r2(a.GetZ()), r2(r.GetX()), r2(r.GetY()), r2(r.GetZ()), r2(r.GetW()), r2(v.GetX()), r2(v.GetY())]; });

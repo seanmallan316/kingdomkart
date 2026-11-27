@@ -73,6 +73,7 @@ const R3 = (() => {
       if (dt > 0 && dt < 200) { slow = dt > 26 ? slow + 1 : Math.max(0, slow - 2); if (slow > 120) { aoOn = false; console.info('AO switched off for speed'); } }
       composer.render();
     } else renderer.render(scene, camera);
+    for (const h of postHooks) { try { h(renderer, camera, dt); } catch (e) { console.warn('post hook failed', e); } } // drawn over the finished frame (Effekseer)
   }
   // ---- adaptive quality: keep the frame rate up by lowering the render resolution when frames run slow
   // (phones with very sharp screens were drawing millions of pixels a frame) and raising it again when there is room
@@ -864,8 +865,8 @@ const R3 = (() => {
     for (const h of rig.blades) if (h.visible) { _lp.set(0, -(12 + 34 * rig.def.reach), 0); h.localToWorld(_lp); out.Blade = { x: _lp.x, y: -_lp.y }; }
     return out;
   }
-  const hooks = [];
+  const hooks = [], postHooks = [];
   // re-apply a fighter's outfit / hat / back item / weapon to every rig of that fighter (match and menus)
   function redress(id) { if (!window.DRESS) return; for (const r of rigs.values()) if (r.glb && r.def.id === id) window.DRESS(r); for (const m of menuRigs.values()) if (m.rig.glb && m.rig.def.id === id) window.DRESS(m.rig); for (const k in pCache) if (k === id) delete pCache[k]; }
-  return { redress, addHook: fn => hooks.push(fn), rigOf: f => rigs.get(f), init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, menuSet, menuReact, menuRender, get ok() { return ok; } };
+  return { redress, addHook: fn => hooks.push(fn), addPost: fn => postHooks.push(fn), rigOf: f => rigs.get(f), init, buildStage, resetRigs, render, portrait, show, loadModels, limbPoints, menuSet, menuReact, menuRender, get ok() { return ok; } };
 })();
