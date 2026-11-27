@@ -49,7 +49,7 @@
     R = await rm.join('sfs-' + code); N.code = code; N.role = role;
     N.me = (meP() || {}).peer || null;
     R.onPeers(onPeers, () => leaveRoom('The connection to the room was lost.'));
-    setP({ sfs: 1, role, fi: N.fi, nick: N.nick || '' });
+    setP({ sfs: 1, role, fi: N.fi, nick: N.nick || '', jt: Date.now() });
     return R;
   }
   async function leaveRoom(msg) {
@@ -62,7 +62,7 @@
   function hostLobby() {
     const L = N.lobby || (N.lobby = { stage: cfg.stage, stocks: cfg.stocks, time: cfg.time, cpus: [], start: 0, speed: G.speed || 0.8 });
     // slots: the host first, then guests in the order they arrived, then CPUs (up to 8)
-    const me = meP(), guests = peers().filter(p => !p.sameTab && p.presence && p.presence.sfs && p.presence.role === 'guest').sort((a, b) => a.updatedAt - b.updatedAt);
+    const me = meP(), guests = peers().filter(p => !p.sameTab && p.presence && p.presence.sfs && p.presence.role === 'guest').sort((a, b) => (a.presence.jt || 0) - (b.presence.jt || 0)) // by when they joined;
     const slots = [{ peer: me ? me.peer : 'host', fi: N.fi, kind: 'host' }];
     for (const g of guests) if (slots.length < 8) slots.push({ peer: g.peer, fi: g.presence.fi | 0, kind: 'guest' });
     for (const c of L.cpus) if (slots.length < 8) slots.push({ peer: null, fi: c.fi, kind: 'cpu', lv: c.lv });
@@ -265,7 +265,7 @@
       setTimeout(() => { if (N.role === 'guest' && !host()) leaveRoom('No room with that code. Check it and try again.'); }, 6000);
     } catch (e) { noRoom(); }
   }
-  function noRoom() { toast('Online play works when this game is opened from its Claude link while signed in.'); $('onlSub').textContent = 'Online play needs this game opened from its Claude link while you are signed in to Claude. Local play works everywhere.'; }
+  function noRoom() { toast('Online play could not connect. Check your internet and try again.'); $('onlSub').textContent = 'Online play could not connect right now. Local play still works.'; }
   $('onlCreate').onclick = create; $('onlJoin').onclick = join;
   $('onlCode').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
   $('onlGo').onclick = hostStart;
