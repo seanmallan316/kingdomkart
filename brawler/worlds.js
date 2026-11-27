@@ -247,6 +247,89 @@
     for (const sx of [-1, 1]) canopy(g, sx * h * 0.36, h * 0.98, sx * 30, cr * 0.85, cr * 0.6, cr * 0.75, pal, Math.round(leaves * 0.7), cr * 0.45);
     return g;
   }
+
+  // ------------------------------------------------------------ sculpted terrain (a three.js take on Terrain3D)
+  // A heightmap landscape: layered noise (rolling hills, ridged mountains far out, a carved valley for water),
+  // kept flat wherever the stage needs it; coloured per vertex by height and slope (meadow, dry grass, dirt, rock,
+  // snow) over a tiling detail texture; then dressed with instanced forests, rocks, flower drifts and a lake.
+  // opts: { x1,x2,z1,z2 (extent), nx,nz (grid), base (ground height), amp (hill height), mtn (far mountain height),
+  //         flat: [{x,z,rx,rz,y}] (areas pressed flat to y), lake (water level or null), seed, pal, trees, rocks, flowers }
+  function terrain(parent, o) {
+    const seed = o.seed || 7;
+    const hash = (x, z) => { const n = Math.sin(x * 127.1 + z * 311.7 + seed * 74.7) * 43758.5453; return n - Math.floor(n); };
+    const vnoise = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi, u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+      return (hash(xi, zi) * (1 - u) + hash(xi + 1, zi) * u) * (1 - v) + (hash(xi, zi + 1) * (1 - u) + hash(xi + 1, zi + 1) * u) * v; };
+    const fbm = (x, z, oct) => { let a = 0.5, f = 1, s = 0, n = 0; for (let i = 0; i < oct; i++) { s += a * vnoise(x * f, z * f); n += a; a *= 0.5; f *= 2.03; } return s / n; };
+    const ridge = (x, z) => { let a = 0.5, f = 1, s = 0, n = 0; for (let i = 0; i < 4; i++) { const r = 1 - Math.abs(vnoise(x * f, z * f) * 2 - 1); s += a * r * r; n += a; a *= 0.5; f *= 2.1; } return s / n; };
+    const ss = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const zFar = o.z1, zNear = o.z2, depth = zNear - zFar;
+    function heightAt(x, z) {
+      const far = ss(o.rise0 == null ? 0.2 : o.rise0, o.rise1 == null ? 0.85 : o.rise1, (zNear - z) / depth); // 0 near the stage, 1 at the horizon
+      let h = o.base + (fbm(x / 1700, z / 1700, 5) - 0.45) * o.amp * (0.5 + far * 1.2) + far * (o.lift || 0); // the land climbs toward the horizon, so it shows behind the fight
+      h += ridge(x / 2600 + 3.1, z / 2600) * (o.mtn || 0) * far * far;       // mountains rise toward the horizon
+      if (o.lake != null) { const v = Math.abs(vnoise(x / 2300 + 9.2, z / 1500 + 4.4) - 0.5); h -= (1 - ss(0.0, 0.12, v)) * o.amp * 0.55 * (1 - far * 0.7); } // a winding valley
+      for (const f of o.flat || []) { const d = Math.hypot((x - f.x) / f.rx, (z - f.z) / f.rz), k = 1 - ss(0.75, 1.25, d); h = h * (1 - k) + f.y * k; }
+      return h;
+    }
+    const nx = o.nx || 150, nz = o.nz || 100, geo = new T.PlaneGeometry(o.x2 - o.x1, depth, nx, nz); geo.rotateX(-Math.PI / 2); geo.translate((o.x1 + o.x2) / 2, 0, (zFar + zNear) / 2);
+    const P = geo.attributes.position; for (let i = 0; i < P.count; i++) P.setY(i, heightAt(P.getX(i), P.getZ(i)));
+    geo.computeVertexNormals();
+    const pal = Object.assign({ grass: '#5fae4a', grass2: '#8fcf63', dry: '#b9b25a', dirt: '#8a6a45', rock: '#8d8a84', snow: '#f4f7fb', sand: '#d9c58f' }, o.pal || {});
+    const C = {}; for (const k in pal) C[k] = new T.Color(pal[k]);
+    const N = geo.attributes.normal, col = new Float32Array(P.count * 3), c = new T.Color(), snowLine = o.base + (o.lift || 0) + (o.mtn || 1e9) * 0.55; // snow only on the far peaks
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i), slope = 1 - N.getY(i), patch = fbm(x / 420 + 20, z / 420, 3), dryP = fbm(x / 900 - 7, z / 900 + 3, 2);
+      c.copy(C.grass).lerp(C.grass2, patch);
+      c.lerp(C.dry, ss(0.52, 0.72, dryP) * 0.7);
+      if (o.lake != null) c.lerp(C.sand, 1 - ss(o.lake + 10, o.lake + 90, y));
+      c.lerp(C.dirt, ss(0.14, 0.26, slope)); c.lerp(C.rock, ss(0.26, 0.44, slope));
+      c.lerp(C.rock, ss(snowLine - 500, snowLine - 100, y) * 0.8); c.lerp(C.snow, ss(snowLine, snowLine + 260, y) * (1 - ss(0.3, 0.55, slope) * 0.6));
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new T.BufferAttribute(col, 3));
+    const dt = canvasTex('terrDetail', 256, 256, (g, bg, w, h) => { bg.fillStyle = '#808080'; bg.fillRect(0, 0, w, h); noise(bg, w, h, 4200, 0.22); g.fillStyle = '#c8c8c8'; g.fillRect(0, 0, w, h); noise(g, w, h, 5200, 0.16); noise(g, w, h, 2600, 0.14, 'rgba(255,255,255,0.12)'); for (let i = 0; i < 520; i++) { g.strokeStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},${0.05 + Math.random() * 0.08})`; g.lineWidth = 1; const x = Math.random() * w, y = Math.random() * h; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (Math.random() - 0.5) * 5, y - 3 - Math.random() * 7); g.stroke(); } }, (o.x2 - o.x1) / 260, depth / 260);
+    for (const t of [dt.map, dt.bump]) { t.repeat.set((o.x2 - o.x1) / 260, depth / 260); t.needsUpdate = true; }
+    const mat = new T.MeshStandardMaterial({ vertexColors: true, map: dt.map, bumpMap: dt.bump, bumpScale: 2.5, roughness: 0.96, metalness: 0, envMapIntensity: 0.35 });
+    const mesh = new T.Mesh(geo, mat); mesh.receiveShadow = true; parent.add(mesh);
+    // water in the valley
+    if (o.lake != null) { const w = new T.Mesh(new T.PlaneGeometry(o.x2 - o.x1, depth), new T.MeshStandardMaterial({ color: o.water || '#3f8fd0', roughness: 0.12, metalness: 0.55, transparent: true, opacity: 0.86, envMapIntensity: 1.4 })); w.rotation.x = -Math.PI / 2; w.position.set((o.x1 + o.x2) / 2, o.lake, (zFar + zNear) / 2); parent.add(w); }
+    const lite = matchMedia('(pointer: coarse)').matches ? 0.5 : 1, obj = new T.Object3D(), tc = new T.Color();
+    const spots = (n, test) => { const out = []; let tries = 0; while (out.length < n && tries++ < n * 30) { const x = R(o.x1, o.x2), z = R(zFar, zNear), y = heightAt(x, z), e = 40, sl = Math.hypot(heightAt(x + e, z) - y, heightAt(x, z + e) - y) / e; if ((o.lake == null || y > o.lake + 30) && !(o.flat || []).some(f => Math.hypot((x - f.x) / f.rx, (z - f.z) / f.rz) < 1.3) && test(x, y, z, sl)) out.push([x, y, z]); } return out; };
+    // forests: instanced conifers and round broadleaf trees, clumped by a noise mask, thinning out with height
+    const nT = Math.round((o.trees == null ? 520 : o.trees) * lite);
+    if (nT) {
+      const forest = spots(nT, (x, y, z, sl) => sl < 0.5 && y < snowLine - 250 && fbm(x / 1300 + 40, z / 1300 + 11, 3) > 0.47);
+      const trunk = new T.InstancedMesh(new T.CylinderGeometry(0.06, 0.1, 1, 6).translate(0, 0.5, 0), M('#5a4028', { roughness: 1 }), forest.length);
+      const cone = new T.ConeGeometry(0.34, 1, 7).translate(0, 0.5, 0), blob = new T.IcosahedronGeometry(0.42, 1);
+      const pine = new T.InstancedMesh(cone, new T.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), forest.length * 2), leaf = new T.InstancedMesh(blob, new T.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), forest.length * 2);
+      const pc = (o.pines || ['#1f5a34', '#2c7242', '#3d8a4c']).map(h => new T.Color(h)), lc = (o.leaves || ['#3f8f3c', '#69b04a', '#9fca5a', '#d9a53a']).map(h => new T.Color(h));
+      let ip = 0, il = 0;
+      forest.forEach(([x, y, z], i) => {
+        const h = R(150, 300) * (o.treeScale || 1), isPine = hash(x * 0.01, z * 0.01) < (o.pineMix == null ? 0.55 : o.pineMix), ry = R(0, TAU);
+        obj.position.set(x, y - 6, z); obj.rotation.set(0, ry, 0); obj.scale.set(h * 0.9, h * (isPine ? 0.35 : 0.5), h * 0.9); obj.updateMatrix(); trunk.setMatrixAt(i, obj.matrix);
+        if (isPine) for (let k = 0; k < 2; k++) { obj.position.set(x, y + h * (0.22 + k * 0.3), z); obj.scale.set(h * (1 - k * 0.3), h * (0.62 - k * 0.1), h * (1 - k * 0.3)); obj.updateMatrix(); pine.setMatrixAt(ip, obj.matrix); pine.setColorAt(ip++, tc.copy(pc[i % pc.length]).multiplyScalar(R(0.85, 1.12))); }
+        else for (let k = 0; k < 2; k++) { obj.position.set(x + (k ? R(-0.16, 0.16) * h : 0), y + h * (0.62 + k * 0.2), z + (k ? R(-0.16, 0.16) * h : 0)); obj.scale.set(h * (1 - k * 0.32), h * (0.8 - k * 0.25), h * (1 - k * 0.32)); obj.updateMatrix(); leaf.setMatrixAt(il, obj.matrix); leaf.setColorAt(il++, tc.copy(lc[i % lc.length]).multiplyScalar(R(0.85, 1.12))); }
+      });
+      pine.count = ip; leaf.count = il; for (const im of [trunk, pine, leaf]) { im.castShadow = true; im.receiveShadow = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; parent.add(im); }
+    }
+    // boulders on the slopes
+    const nR = Math.round((o.rocks == null ? 160 : o.rocks) * lite);
+    if (nR) {
+      const rg = new T.IcosahedronGeometry(1, 1), rp = rg.attributes.position; for (let i = 0; i < rp.count; i++) { const k = 0.78 + hash(rp.getX(i) * 9, rp.getY(i) * 9 + rp.getZ(i) * 5) * 0.44; rp.setXYZ(i, rp.getX(i) * k, rp.getY(i) * k * 0.72, rp.getZ(i) * k); } rg.computeVertexNormals();
+      const rocks = spots(nR, (x, y, z, sl) => sl > 0.12 || hash(x * 0.02, z * 0.02) > 0.86), im = new T.InstancedMesh(rg, new T.MeshStandardMaterial({ color: pal.rock, roughness: 1, flatShading: true }), rocks.length);
+      rocks.forEach(([x, y, z], i) => { const r = R(18, 70) * (hash(x, z) > 0.92 ? 2.4 : 1); obj.position.set(x, y + r * 0.2, z); obj.rotation.set(R(0, 0.5), R(0, TAU), R(0, 0.5)); obj.scale.setScalar(r); obj.updateMatrix(); im.setMatrixAt(i, obj.matrix); im.setColorAt(i, tc.set(pal.rock).multiplyScalar(R(0.75, 1.15))); });
+      im.castShadow = true; im.receiveShadow = true; parent.add(im);
+    }
+    // drifts of wildflowers in the meadows
+    const nF = Math.round((o.flowers == null ? 900 : o.flowers) * lite);
+    if (nF) {
+      const fl = spots(nF, (x, y, z, sl) => sl < 0.18 && y < snowLine - 500 && fbm(x / 520 + 70, z / 520 - 30, 2) > 0.56), fc = (o.flowerCols || ['#ffffff', '#ffd43b', '#ff8fb1', '#b197fc', '#ff6b6b']).map(h => new T.Color(h));
+      const im = new T.InstancedMesh(new T.IcosahedronGeometry(1, 0), new T.MeshStandardMaterial({ roughness: 0.8, emissive: '#ffffff', emissiveIntensity: 0.08 }), fl.length);
+      fl.forEach(([x, y, z], i) => { obj.position.set(x, y + 9, z); obj.rotation.set(0, 0, 0); obj.scale.setScalar(R(5, 10)); obj.updateMatrix(); im.setMatrixAt(i, obj.matrix); im.setColorAt(i, fc[Math.floor(fbm(x / 300, z / 300, 2) * 7 + i * 0.07) % fc.length]); });
+      parent.add(im);
+    }
+    return { mesh, heightAt };
+  }
   // ------------------------------------------------------------ props generated with Meshy (base64 GLBs)
   const propScenes = {}, propWait = {};
   function loadProp(name, cb) {
@@ -332,7 +415,11 @@
       tree(g, 1900, -1400, -1900, 2300, 120, ['#2f5e33', '#4f9150', '#a4d27a'], 220); tree(g, -2000, -1400, -2100, 2200, 115, ['#2f5e33', '#4f9150', '#a4d27a'], 220);
       // distant hills and clouds
       const hill = M('#7cc46a', { roughness: 1 }), hill2 = M('#9fd88a', { roughness: 1 }), leafC = M('#2f7d3f', { roughness: 0.9 });
-      for (let k = -3; k <= 3; k++) { const h = softBlob(900, k % 2 ? hill : hill2, k * 1500, -1300, -3200, 1.4, 0.55, 0.6); g.add(h); }
+      // the valley below the treehouse: meadows, a winding lake, forests and snow-capped mountains on the horizon
+      api.scene.fog = new T.Fog('#cfe6fb', 3600, 15000);
+      terrain(g, { x1: -8500, x2: 8500, z1: -7000, z2: 900, nx: 170, nz: 120, base: -1420, amp: 640, lift: 1250, mtn: 1900, lake: -1640, seed: 11, rise0: 0.34, rise1: 1.0, treeScale: 1.5,
+        flat: [{ x: 0, z: -500, rx: 700, rz: 500, y: -1400 }, { x: 1900, z: -1900, rx: 260, rz: 260, y: -1400 }, { x: -2000, z: -2100, rx: 260, rz: 260, y: -1400 }],
+        trees: 620, rocks: 150, flowers: 1100, pineMix: 0.5 });
       const cloud = M('#ffffff', { roughness: 1, emissive: '#ffffff', emissiveIntensity: 0.15 });
       for (let k = 0; k < 7; k++) { const c = new T.Group(); [[0, 0, 160], [170, 30, 120], [-160, 20, 120], [70, 80, 110]].forEach(([dx, dy, r]) => c.add(softBlob(r, cloud, dx, dy, 0, 1.3, 0.75, 1))); c.position.set(-3000 + k * 1000, 650 + (k % 3) * 260, -2400); g.add(c); world.drift.push({ o: c, vx: 0.25 + (k % 3) * 0.1, wrap: 3600 }); }
       // foreground leaves at the bottom corners, out of focus
@@ -400,7 +487,12 @@
       mainSlab(g, m, asphalt, texMat(TEX.asphalt(), { color: '#9a9aa2' }), 320, 60, 8);
       const chalk = TEX.chalk(); const cm = new T.MeshStandardMaterial({ map: chalk.map, transparent: true, roughness: 1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }); const ch = add(g, new T.PlaneGeometry(m.x2 - m.x1 - 20, 200), cm, 0, 0.6, 10, false); ch.rotation.x = -Math.PI / 2;
       // lawn, kerb and the house
-      const grass = texMat(TEX.grass(), { roughness: 1 }); const lawn = add(g, new T.PlaneGeometry(12000, 7000), grass, 0, -8, -1500, false); lawn.rotation.x = -Math.PI / 2;
+      // the neighbourhood sits in rolling country: a flat lawn around the house, then hills, woods and a ridge catching the sunset
+      api.scene.fog = new T.Fog('#f7b98a', 3800, 16000);
+      terrain(g, { x1: -9000, x2: 9000, z1: -7000, z2: 1200, nx: 170, nz: 120, base: -8, amp: 560, lift: 600, mtn: 2600, lake: null, seed: 23, rise0: 0.4, rise1: 1.0, treeScale: 1.5,
+        flat: [{ x: 0, z: -700, rx: 3300, rz: 1500, y: -8 }],
+        pal: { grass: '#5c9a3e', grass2: '#8fbd55', dry: '#c9a64e', dirt: '#8a6238', rock: '#9a8a80', snow: '#ffd9b8' },
+        trees: 520, rocks: 110, flowers: 700, pineMix: 0.25, leaves: ['#3d7a2e', '#7c9a3a', '#e0a23a', '#d9772f', '#a8452a'] });
       const brick = texMat(TEX.brick(), { bumpScale: 3 });
       add(g, rbox(3000, 1100, 80, 6), brick, 0, 520, -1400);
       const door = add(g, rbox(1100, 720, 30, 12), M('#f2f2ee', { roughness: 0.5 }), 0, 360, -1350); for (let k = 1; k < 6; k++) add(g, rbox(1100, 6, 8, 3), M('#cfcfc9'), 0, k * 120, -1332);

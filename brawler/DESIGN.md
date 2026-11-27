@@ -517,3 +517,13 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
 - Online: host's props ride in the snapshot (`PHYS.netOut` / `netIn`); guests simulate and are corrected, and don't
   deal prop damage themselves.
 - Site updates: `sh brawler/tools/publish_pages.sh` rebuilds the gh-pages branch.
+
+## Sculpted terrain backdrops (`terrain()` in worlds.js)
+- Terrain3D is a Godot plugin and can't load in three.js, so this is a native equivalent: a heightmap mesh from layered
+  noise (rolling hills, ridged mountains toward the horizon, an optional carved lake valley), pressed flat wherever
+  the stage needs it (`flat`), climbing with distance (`lift`, `rise0/1`) so it shows behind a side-on camera.
+- Vertex colours by height and slope (meadow, dry grass, sand at the water, dirt, rock, snow on the far peaks) over a
+  tiling detail + bump texture. Dressed with instanced forests (pines and broadleaf, clumped by a noise mask),
+  boulders on slopes, wildflower drifts and a reflective lake. Counts halve on touch devices.
+- Used by Treehouse (valley, lake, forests, peaks) and Driveway (lawn flattening into rolling autumn country).
+  Kitchen Table and Bunk Beds are indoors and unchanged.
