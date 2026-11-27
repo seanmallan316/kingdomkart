@@ -115,7 +115,8 @@
     const ci = {}; G.fighters.forEach((f, k) => { if (f.cpu && f.prevRaw) ci[k] = packInput(f.prevRaw, (f._ncnt || (f._ncnt = counter())).cnt); });
     const c = G.cine; const C = c ? [c.type, c.phase, c.t, G.fighters.indexOf(c.f)] : 0;
     const O = G.orb ? [r1(G.orb.x), r1(G.orb.y), G.orb.hp | 0] : 0;
-    return { m: N.matchId, fr: G.frame, cd: G.countdown, tl: G.timeLeft, en: G.ending, F, I, O, C, ci };
+    const P = window.PHYS && PHYS.ready ? PHYS.netOut() : 0; // physics props
+    return { m: N.matchId, fr: G.frame, cd: G.countdown, tl: G.timeLeft, en: G.ending, F, I, O, C, ci, P };
   }
   function applySnap(g) {
     N.dbg = N.dbg || { n: 0, skip: 0 }; if (!g || g.m !== N.matchId) { N.dbg.skip++; N.dbg.why = g ? g.m + ' vs ' + N.matchId : 'none'; return; } N.dbg.n++; N.dbg.fr = g.fr;
@@ -155,6 +156,7 @@
     }
     // the Super Orb and finales
     if (g.O) { if (!G.orb && ITEMS.spawnOrb) ITEMS.spawnOrb(); if (G.orb) { G.orb.x += (g.O[0] - G.orb.x) * 0.5; G.orb.y += (g.O[1] - G.orb.y) * 0.5; G.orb.hp = g.O[2]; } } else if (G.orb) G.orb = null;
+    if (g.P && window.PHYS) PHYS.netIn(g.P);
     if (g.C && !G.cine) { const f = G.fighters[g.C[3]]; if (f && ITEMS.startFinale) ITEMS.startFinale(f); }
   }
   function tick() {

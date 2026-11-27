@@ -503,3 +503,17 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
   the game's runtime files at its root). To update the site: rebuild that branch from brawler/ (the files index.html
   loads, plus logo.webp, intro.webm, titlebg.mp4, thumb.jpg, .nojekyll) and push it. Online rooms there use
   `online-config.js` -> the Convex backend of the (unpublished) Macaly app.
+
+## Jolt physics (`physics.js`, `vendor/jolt.bundle.js`)
+- Jolt Physics (WebAssembly build, MIT; bundled to one classic script exposing `window.JoltInit`) simulates the world
+  around the fighters at 60 Hz, stepped with the game. Fighter movement stays hand-tuned (it must be exact and
+  repeatable); each fighter is a kinematic capsule in the physics world, so they shove things aside.
+- Per-stage props on the fight line (`KIT`: basketballs, cones, mugs, fruit, toaster, toy blocks, teddy, acorns,
+  birdhouse; GLB props reuse `CLASH_PROPS`), full 3D rigid bodies kept near the fight line by invisible walls.
+- Attacks launch props along the move's knockback angle (stronger move = faster; ground props are in reach of any swing
+  above them). A launched prop is live for ~1.6 s: hitting another fighter above 5.5 m/s deals speed-scaled damage and
+  knockback credited to the launcher ("BONK!"). Pulse attacks blow props outward. Props that leave the stage drop back in.
+- Item crates burst into 11 tumbling planks that settle and fade.
+- Online: host's props ride in the snapshot (`PHYS.netOut` / `netIn`); guests simulate and are corrected, and don't
+  deal prop damage themselves.
+- Site updates: `sh brawler/tools/publish_pages.sh` rebuilds the gh-pages branch.
