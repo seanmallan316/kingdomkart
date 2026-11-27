@@ -1,0 +1,61 @@
+[23:07:29.626] can't create cubeb audio api
+[23:07:29.626] can't create cubeb audio api
+[23:07:29.631] ------- Init Cemu 2.6 -------
+[23:07:29.631] Init Wii U memory space (base: 0x00007d448c000000)
+[23:07:29.631] mlc01 path: /home/runner/.local/share/Cemu/mlc01
+[23:07:29.631] CPU: AMD EPYC 9V45 96-Core Processor                
+[23:07:29.631] RAM: 15983MB
+[23:07:29.631] Platform: Linux
+[23:07:29.631] Used CPU extensions: SSSE3, SSE4.1, AVX, AVX2, LZCNT, MOVBE, BMI2, AES-NI, INVARIANT-TSC
+[23:07:29.633] Unable to open or create PlayStats.dat
+[23:07:29.633] IOSU_CRYPTO: No otp.bin found. Online mode cannot be used
+[23:07:29.633] IOSU_CRYPTO: No Seeprom.bin found. Online mode cannot be used
+[23:07:30.836] Mounting title 0005000012345678
+[23:07:30.836] Base: /home/runner/work/kingdomkart/kingdomkart/title [Folder]
+[23:07:30.836] Update: Not present
+[23:07:30.836] DLC: Not present
+[23:07:30.875] COS: System fonts found. Generated shareddata (26609KB)
+[23:07:30.929] Recompiler initialized
+[23:07:31.108] RPLLoader: Section 11 uncompresses to 32 bytes but sectionSize is 44
+[23:07:31.109] RPLLoader: Section 20 uncompresses to 24 bytes but sectionSize is 27
+[23:07:31.288] ------- Init Vulkan graphics backend -------
+[23:07:31.349] Vulkan instance version: 1.4
+[23:07:31.355] Using GPU: llvmpipe (LLVM 21.1.8, 256 bits)
+[23:07:31.355] Driver version: Mesa 26.0.8-1ubuntu0.3 (LLVM 21.1.8)
+[23:07:31.355] Vulkan: present_wait extension: unsupported
+[23:07:31.355] VulkanLimits: UBAlignment 16 nonCoherentAtomSize 64
+[23:07:32.402] Using available debug function: vkCreateDebugUtilsMessengerEXT()
+[23:07:32.402] Vulkan device memory info:
+[23:07:32.402] Heap 0 - Size 15983MB Flags 0x00000001
+[23:07:32.402] Memory 0 - HeapIndex 0 Flags 0x0000000f
+[23:07:32.402] VK_FORMAT_R4G4_UNORM_PACK8 not supported
+[23:07:32.659] ------- Loaded title -------
+[23:07:32.659] TitleId: 00050000-12345678
+[23:07:32.659] TitleVersion: v0
+[23:07:32.659] Save path:   /home/runner/.local/share/Cemu/mlc01/usr/save/00050000/12345678/user/ (not present)
+[23:07:32.659] Shader cache file: shaderCache/transferable/0005000012345678.bin
+[23:07:32.659] gameprofile path:  (not present)
+[23:07:32.659] RPX hash (updated): d689c115
+[23:07:32.659] RPX hash (base): d689c115
+[23:07:32.665] Loaded module 'kingdomkart' with checksum 0x62c639ea
+[23:07:32.665] RPL link time: 6ms
+[23:07:32.667] HLE scan time: 1ms
+[23:07:32.667] ------- Active settings -------
+[23:07:32.667] CPU-Mode: 3
+[23:07:32.667] Load shared libraries: true
+[23:07:32.667] Use precompiled shaders: 0
+[23:07:32.667] Full sync at GX2DrawDone: true
+[23:07:32.667] Strict shader mul: true
+[23:07:32.667] Async compile: true
+[23:07:32.667] Console language: 1
+[23:07:32.803] ------- Activate graphic packs -------
+[23:07:32.803] ------- Init Audio backend -------
+[23:07:32.803] DirectSound: not supported
+[23:07:32.803] XAudio 2.8: not supported
+[23:07:32.803] XAudio 2.7: not supported
+[23:07:32.803] Cubeb: not supported
+[23:07:32.803] ------- Init Audio input backend -------
+[23:07:32.803] Cubeb: not supported
+[23:07:32.803] ------- Run title -------
+[23:07:33.671] Loading RPL: /cafeLibs/glslcompiler.rpl
+[23:07:33.756] Loaded module 'glslcompiler' with checksum 0x133d4fab
