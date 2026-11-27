@@ -499,3 +499,7 @@ The start video now begins fitted to the screen and grows to fill it, so it is n
   Convex URL. There `macaly-room.js` supplies the room interface over Convex (`convex/rooms.ts`: list / set / leave on
   the `sfsPresence` table, rows refreshed ~10 times a second, quiet rows expire). To update the site: push here, then
   in the app's workspace re-copy brawler/ files into public/sfs and publish.
+- Live public address: https://seanmallan316.github.io/kingdomkart/ (GitHub Pages, branch `gh-pages`, which holds only
+  the game's runtime files at its root). To update the site: rebuild that branch from brawler/ (the files index.html
+  loads, plus logo.webp, intro.webm, titlebg.mp4, thumb.jpg, .nojekyll) and push it. Online rooms there use
+  `online-config.js` -> the Convex backend of the (unpublished) Macaly app.
