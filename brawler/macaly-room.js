@@ -7,6 +7,7 @@
   if (window.claude && window.claude.use) return; // inside claude.ai: the real room service is used
   let url = null;
   try { const m = location.hash.match(/cx=([^&]+)/); if (m) { url = decodeURIComponent(m[1]); localStorage.setItem('sfs_cx', url); history.replaceState(null, '', location.pathname); } else url = localStorage.getItem('sfs_cx'); } catch (e) {}
+  if (!url && window.SFS_CX && location.protocol !== 'file:') url = window.SFS_CX;
   const lib = () => window.convex;
   const me = 'p' + Math.random().toString(36).slice(2, 12);
   let client = null;
